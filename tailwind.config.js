@@ -1,0 +1,67 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['DM Sans', 'sans-serif'],
+        mono: ['DM Mono', 'monospace'],
+      },
+      colors: {
+        primary: {
+          50:  '#EEEEFF',
+          100: '#D5D4FF',
+          200: '#ADABFF',
+          300: '#8A87FF',
+          400: '#6C68FF',
+          500: '#5B57F5',
+          600: '#4642D9',
+          700: '#332FBD',
+          800: '#2220A0',
+          900: '#141276',
+        },
+        neutral: {
+          0:   '#FFFFFF',
+          50:  '#F8F9FE',
+          100: '#EBEBF5',
+          200: '#D9D9ED',
+          300: '#B8B8D1',
+          400: '#9898B3',
+          500: '#6E6E8A',
+          600: '#4A4A6A',
+          700: '#2E2E50',
+          800: '#1C1C3A',
+          900: '#0D0D1F',
+        },
+        positive: '#2ED47A',
+        negative: '#FC5A5A',
+        warning:  '#FFAB2E',
+        info:     '#4B8BF4',
+        cat: {
+          transport: '#FF6B6B',
+          food:      '#FFB347',
+          sport:     '#4ECDC4',
+          education: '#A29BFE',
+          entertain: '#FD79A8',
+          household: '#6C5CE7',
+          bills:     '#00B894',
+          subscript: '#E17055',
+        },
+      },
+      borderRadius: {
+        sm:   '8px',
+        md:   '12px',
+        lg:   '16px',
+        xl:   '20px',
+        '2xl': '24px',
+      },
+      boxShadow: {
+        sm:   '0 2px 8px rgba(91,87,245,0.08)',
+        md:   '0 4px 16px rgba(91,87,245,0.12)',
+        lg:   '0 8px 32px rgba(91,87,245,0.16)',
+        card: '0 2px 12px rgba(28,28,58,0.07)',
+      },
+    },
+  },
+  plugins: [],
+}

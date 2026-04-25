@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Dashboard — Design System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── ROOT TOKENS ─────────────────────────────────────────── */
+  :root {
+    /* Primary palette */
+    --primary-50:  #EEEEFF;
+    --primary-100: #D5D4FF;
+    --primary-200: #ADABFF;
+    --primary-300: #8A87FF;
+    --primary-400: #6C68FF;
+    --primary-500: #5B57F5;   /* main */
+    --primary-600: #4642D9;
+    --primary-700: #332FBD;
+    --primary-800: #2220A0;
+    --primary-900: #141276;
+
+    /* Semantic */
+    --color-positive:   #2ED47A;
+    --color-negative:   #FC5A5A;
+    --color-warning:    #FFAB2E;
+    --color-info:       #4B8BF4;
+
+    /* Neutrals */
+    --neutral-0:   #FFFFFF;
+    --neutral-50:  #F8F9FE;
+    --neutral-100: #EBEBF5;
+    --neutral-200: #D9D9ED;
+    --neutral-300: #B8B8D1;
+    --neutral-400: #9898B3;
+    --neutral-500: #6E6E8A;
+    --neutral-600: #4A4A6A;
+    --neutral-700: #2E2E50;
+    --neutral-800: #1C1C3A;
+    --neutral-900: #0D0D1F;
+
+    /* Category colors */
+    --cat-transport: #FF6B6B;
+    --cat-food:      #FFB347;
+    --cat-sport:     #4ECDC4;
+    --cat-education: #A29BFE;
+    --cat-entertain: #FD79A8;
+    --cat-household: #6C5CE7;
+    --cat-bills:     #00B894;
+    --cat-subscript: #E17055;
+
+    /* Typography */
+    --font-sans: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+
+    /* Spacing */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Radius */
+    --radius-sm:   8px;
+    --radius-md:   12px;
+    --radius-lg:   16px;
+    --radius-xl:   20px;
+    --radius-2xl:  24px;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-sm:  0 2px 8px rgba(91,87,245,0.08);
+    --shadow-md:  0 4px 16px rgba(91,87,245,0.12);
+    --shadow-lg:  0 8px 32px rgba(91,87,245,0.16);
+    --shadow-card: 0 2px 12px rgba(28,28,58,0.07);
+  }
+
+  /* ─── RESET & BASE ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--neutral-50);
+    color: var(--neutral-800);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+
+  /* ─── PAGE SHELL ───────────────────────────────────────────── */
+  .ds-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .ds-header {
+    margin-bottom: 56px;
+    border-bottom: 1px solid var(--neutral-100);
+    padding-bottom: 32px;
+  }
+  .ds-header h1 {
+    font-size: 32px; font-weight: 700; color: var(--neutral-900);
+    letter-spacing: -0.5px;
+  }
+  .ds-header p { color: var(--neutral-400); margin-top: 6px; font-size: 15px; }
+  .ds-badge {
+    display: inline-block; background: var(--primary-500); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase;
+    padding: 3px 10px; border-radius: var(--radius-full); margin-bottom: 12px;
+  }
+
+  /* ─── SECTION LAYOUT ──────────────────────────────────────── */
+  .ds-section { margin-bottom: 64px; }
+  .ds-section-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--neutral-400); margin-bottom: 24px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ds-section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--neutral-100);
+  }
+  .ds-grid { display: grid; gap: 16px; }
+  .ds-grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .ds-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .ds-grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .ds-grid-auto { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+  .ds-label {
+    font-size: 10px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--neutral-400); margin-top: 8px;
+    font-family: var(--font-mono);
+  }
+  .ds-value {
+    font-family: var(--font-mono); font-size: 11px; color: var(--neutral-500);
+    margin-top: 2px;
+  }
+
+  /* ─── COLOR SWATCHES ──────────────────────────────────────── */
+  .swatch-row { display: flex; gap: 4px; align-items: stretch; }
+  .swatch {
+    flex: 1; height: 56px; border-radius: var(--radius-sm);
+    position: relative; cursor: default;
+    transition: transform 0.15s;
+  }
+  .swatch:hover { transform: scaleY(1.08); }
+  .swatch-lg {
+    height: 80px; border-radius: var(--radius-md);
+    display: flex; align-items: flex-end; padding: 8px 12px;
+    font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .swatch-card {
+    background: #fff; border-radius: var(--radius-md); padding: 12px;
+    box-shadow: var(--shadow-card);
+  }
+  .swatch-dot {
+    width: 48px; height: 48px; border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .semantic-row { display: flex; gap: 12px; }
+  .semantic-chip {
+    flex: 1; border-radius: var(--radius-md); padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .semantic-chip .chip-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; opacity: 0.7;
+  }
+  .semantic-chip .chip-value {
+    font-size: 22px; font-weight: 700;
+  }
+  .semantic-chip .chip-hex {
+    font-family: var(--font-mono); font-size: 11px; opacity: 0.6;
+  }
+
+  /* ─── TYPOGRAPHY ──────────────────────────────────────────── */
+  .type-row {
+    display: flex; align-items: baseline; gap: 20px; padding: 16px 0;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .type-row:last-child { border-bottom: none; }
+  .type-meta {
+    min-width: 160px; font-family: var(--font-mono); font-size: 11px;
+    color: var(--neutral-400); flex-shrink: 0;
+  }
+  .type-sample { flex: 1; color: var(--neutral-800); }
+  .t-display  { font-size: 36px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; }
+  .t-h1       { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .t-h2       { font-size: 22px; font-weight: 600; }
+  .t-h3       { font-size: 18px; font-weight: 600; }
+  .t-body-lg  { font-size: 16px; font-weight: 400; }
+  .t-body     { font-size: 14px; font-weight: 400; }
+  .t-small    { font-size: 12px; font-weight: 400; color: var(--neutral-400); }
+  .t-label    { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.2px; color: var(--neutral-400); }
+  .t-amount   { font-size: 28px; font-weight: 700; color: var(--neutral-900); letter-spacing: -0.5px; }
+  .t-amount-sm{ font-size: 20px; font-weight: 700; color: var(--neutral-900); }
+  .t-positive { color: var(--color-positive); font-weight: 600; }
+  .t-negative { color: var(--color-negative); font-weight: 600; }
+
+  /* ─── CARDS ──────────────────────────────────────────────── */
+  .card {
+    background: var(--neutral-0);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+  }
+  .card-sm { padding: var(--space-4); border-radius: var(--radius-xl); }
+
+  /* KPI stat card */
+  .stat-card {
+    background: var(--neutral-0);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    min-width: 140px;
+  }
+  .stat-card .stat-label {
+    font-size: 10px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--neutral-400);
+  }
+  .stat-card .stat-value {
+    font-size: 26px; font-weight: 700; color: var(--neutral-900);
+    letter-spacing: -0.5px; line-height: 1;
+  }
+  .stat-card .stat-sub {
+    font-size: 12px; color: var(--neutral-400);
+  }
+  .stat-card.accent {
+    background: var(--primary-500); 
+  }
+  .stat-card.accent .stat-label,
+  .stat-card.accent .stat-value,
+  .stat-card.accent .stat-sub { color: rgba(255,255,255,0.85); }
+  .stat-card.accent .stat-value { color: #fff; }
+
+  /* Budget card (purple hero) */
+  .budget-hero {
+    background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-700) 100%);
+    border-radius: var(--radius-2xl);
+    padding: 20px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .budget-hero::before {
+    content: '';
+    position: absolute; right: -30px; top: -30px;
+    width: 120px; height: 120px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 50%;
+  }
+  .budget-hero::after {
+    content: '';
+    position: absolute; right: 20px; bottom: -40px;
+    width: 100px; height: 100px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+  }
+  .budget-hero .bh-label { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; font-weight: 500; }
+  .budget-hero .bh-value { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin: 6px 0; }
+  .budget-hero .bh-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  .budget-hero .bh-sub { font-size: 12px; opacity: 0.7; }
+  .budget-hero .bh-btn {
+    background: #fff; color: var(--primary-500);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 6px 14px; border-radius: var(--radius-full);
+    border: none; cursor: pointer;
+    text-transform: uppercase;
+  }
+  .budget-hero .bh-progress {
+    margin-top: 14px; height: 5px;
+    background: rgba(255,255,255,0.2);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .budget-hero .bh-progress-fill {
+    height: 100%; border-radius: var(--radius-full);
+    background: #fff;
+  }
+  .budget-hero .bh-footer {
+    display: flex; justify-content: space-between;
+    font-size: 11px; opacity: 0.7; margin-top: 6px;
+  }
+
+  /* Account pill */
+  .account-pill {
+    background: var(--neutral-0);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .account-pill .ap-avatar {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+    margin-bottom: 8px;
+  }
+  .account-pill .ap-name { font-size: 11px; color: var(--neutral-400); }
+  .account-pill .ap-value { font-size: 15px; font-weight: 700; color: var(--neutral-800); }
+  .account-pill .ap-tag { font-size: 10px; color: var(--neutral-300); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ─── PROGRESS BARS ──────────────────────────────────────── */
+  .progress-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .progress-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .progress-name { font-size: 14px; font-weight: 500; color: var(--neutral-700); }
+  .progress-amount { font-size: 14px; font-weight: 600; color: var(--primary-500); }
+  .progress-sub { display: flex; justify-content: space-between; }
+  .progress-sub span { font-size: 11px; color: var(--neutral-400); }
+  .progress-track {
+    height: 7px; background: var(--neutral-100);
+    border-radius: var(--radius-full); overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; border-radius: var(--radius-full);
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .progress-fill.blue   { background: linear-gradient(90deg, var(--primary-400), var(--primary-500)); }
+  .progress-fill.green  { background: linear-gradient(90deg, #2ED47A, #00C48C); }
+  .progress-fill.red    { background: linear-gradient(90deg, #FF647C, #FC5A5A); }
+  .progress-fill.orange { background: linear-gradient(90deg, #FFAB2E, #FF9F43); }
+
+  /* ─── BUDGET LIST ITEM ───────────────────────────────────── */
+  .budget-item {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .budget-item:last-child { border-bottom: none; }
+  .budget-item-top { display: flex; justify-content: space-between; align-items: center; }
+  .budget-item-left { display: flex; align-items: center; gap: 12px; }
+  .budget-item-icon {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .budget-item-name { font-size: 14px; font-weight: 500; color: var(--neutral-700); }
+  .budget-item-sub { font-size: 11px; color: var(--neutral-400); margin-top: 1px; }
+  .budget-item-amount { font-size: 15px; font-weight: 700; color: var(--primary-500); }
+
+  /* ─── CATEGORY LIST ITEM ─────────────────────────────────── */
+  .category-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .category-item:last-child { border-bottom: none; }
+  .cat-icon {
+    width: 40px; height: 40px; border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .cat-body { flex: 1; }
+  .cat-name { font-size: 14px; font-weight: 600; color: var(--neutral-800); }
+  .cat-left { font-size: 11px; color: var(--neutral-400); margin-top: 1px; }
+  .cat-right { text-align: right; }
+  .cat-total { font-size: 15px; font-weight: 700; color: var(--neutral-900); }
+  .cat-budget { font-size: 11px; color: var(--neutral-400); }
+
+  /* ─── TRANSACTION ITEM ───────────────────────────────────── */
+  .txn-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .txn-item:last-child { border-bottom: none; }
+  .txn-icon {
+    width: 38px; height: 38px; border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+    background: var(--neutral-100);
+  }
+  .txn-body { flex: 1; }
+  .txn-name { font-size: 13px; font-weight: 500; color: var(--neutral-700); }
+  .txn-time { font-size: 11px; color: var(--neutral-300); margin-top: 1px; }
+  .txn-amount { font-size: 14px; font-weight: 700; }
+  .txn-amount.neg { color: var(--color-negative); }
+  .txn-amount.pos { color: var(--color-positive); }
+
+  /* ─── TAB SELECTOR ───────────────────────────────────────── */
+  .tab-group {
+    display: inline-flex; background: var(--neutral-100);
+    border-radius: var(--radius-full); padding: 3px; gap: 2px;
+  }
+  .tab-item {
+    padding: 7px 18px; border-radius: var(--radius-full);
+    font-size: 13px; font-weight: 500; color: var(--neutral-400);
+    cursor: pointer; transition: all 0.2s; border: none; background: none;
+  }
+  .tab-item.active {
+    background: var(--primary-500); color: #fff;
+    box-shadow: 0 2px 8px rgba(91,87,245,0.3);
+  }
+
+  /* ─── FAB ────────────────────────────────────────────────── */
+  .fab {
+    width: 52px; height: 52px;
+    background: var(--primary-500);
+    border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 24px; line-height: 1;
+    box-shadow: 0 4px 16px rgba(91,87,245,0.4);
+    cursor: pointer; border: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(91,87,245,0.5); }
+  .fab-sm {
+    width: 40px; height: 40px; font-size: 20px;
+    background: var(--primary-500);
+    border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; box-shadow: 0 3px 12px rgba(91,87,245,0.35);
+    cursor: pointer; border: none;
+  }
+
+  /* ─── BOTTOM NAV ─────────────────────────────────────────── */
+  .bottom-nav {
+    display: flex; align-items: center; justify-content: space-around;
+    background: var(--neutral-0);
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    padding: 12px 16px 16px;
+    box-shadow: 0 -4px 20px rgba(28,28,58,0.06);
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; padding: 4px 12px; border-radius: var(--radius-lg);
+    transition: background 0.15s;
+  }
+  .nav-item:hover { background: var(--neutral-50); }
+  .nav-item .nav-icon { font-size: 20px; color: var(--neutral-300); }
+  .nav-item .nav-label { font-size: 10px; font-weight: 500; color: var(--neutral-300); text-transform: uppercase; letter-spacing: 0.5px; }
+  .nav-item.active .nav-icon { color: var(--primary-500); }
+  .nav-item.active .nav-label { color: var(--primary-500); }
+  .nav-item.active { position: relative; }
+  .nav-item.active::after {
+    content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+    width: 20px; height: 2px; background: var(--primary-500); border-radius: 1px;
+  }
+
+  /* ─── CHART CARD ─────────────────────────────────────────── */
+  .chart-card {
+    background: var(--neutral-0);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+    padding: 20px;
+    overflow: hidden;
+  }
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .chart-title { font-size: 16px; font-weight: 600; color: var(--neutral-800); }
+  .chart-sub { font-size: 11px; color: var(--neutral-400); margin-top: 2px; }
+  .chart-badge {
+    background: var(--primary-50); color: var(--primary-500);
+    font-size: 12px; font-weight: 600; padding: 4px 10px;
+    border-radius: var(--radius-full);
+  }
+  .chart-badge.pos { background: #EAFAF3; color: var(--color-positive); }
+  .chart-badge.neg { background: #FFF0F0; color: var(--color-negative); }
+  svg.chart { width: 100%; height: 140px; overflow: visible; }
+
+  /* ─── SECTION HEADER (in-app) ────────────────────────────── */
+  .section-hd {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 16px 0 8px;
+  }
+  .section-hd-icon {
+    width: 32px; height: 32px;
+    background: var(--primary-50);
+    border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .section-hd-title { font-size: 15px; font-weight: 700; color: var(--neutral-800); text-transform: uppercase; letter-spacing: 0.3px; }
+  .section-hd-sub { font-size: 12px; color: var(--neutral-400); margin-top: 2px; }
+
+  /* ─── SPACING ────────────────────────────────────────────── */
+  .space-demo {
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  }
+  .space-block {
+    background: var(--primary-100);
+    border-radius: 3px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+
+  /* ─── RADIUS ─────────────────────────────────────────────── */
+  .radius-demo { display: flex; gap: 16px; flex-wrap: wrap; }
+  .radius-block {
+    width: 60px; height: 60px;
+    background: var(--primary-100);
+    border: 2px solid var(--primary-200);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 10px; color: var(--primary-500);
+    text-align: center;
+  }
+
+  /* ─── SHADOW ─────────────────────────────────────────────── */
+  .shadow-demo { display: flex; gap: 20px; flex-wrap: wrap; }
+  .shadow-block {
+    width: 80px; height: 80px; background: #fff;
+    border-radius: var(--radius-xl);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 10px; color: var(--neutral-400);
+  }
+
+  /* ─── MOBILE SCREEN PREVIEW ─────────────────────────────── */
+  .phone-frame {
+    width: 280px;
+    background: var(--neutral-50);
+    border-radius: 32px;
+    padding: 12px;
+    box-shadow: 0 12px 48px rgba(28,28,58,0.15), 0 0 0 1.5px var(--neutral-200);
+    flex-shrink: 0;
+  }
+  .phone-screen {
+    background: var(--neutral-0);
+    border-radius: 24px;
+    overflow: hidden;
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone-status {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px 6px;
+    font-size: 11px; font-weight: 600; color: var(--neutral-700);
+  }
+  .phone-content { flex: 1; padding: 0 14px 14px; overflow: hidden; }
+  .phone-page-title {
+    font-size: 20px; font-weight: 700; color: var(--neutral-900);
+    padding: 8px 0 16px; letter-spacing: -0.3px;
+  }
+  .phone-back {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 14px; font-weight: 500; color: var(--neutral-700);
+    padding: 8px 0 12px;
+  }
+
+  /* ─── COMPLETE SCREENS ──────────────────────────────────── */
+  .screens-row { display: flex; gap: 24px; flex-wrap: wrap; }
+
+  /* ─── ALERTS / BADGES ───────────────────────────────────── */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: var(--radius-full);
+    font-size: 12px; font-weight: 600;
+  }
+  .chip.primary  { background: var(--primary-50);  color: var(--primary-500); }
+  .chip.positive { background: #EAFAF3; color: var(--color-positive); }
+  .chip.negative { background: #FFF0F0; color: var(--color-negative); }
+  .chip.warning  { background: #FFF8EC; color: var(--color-warning); }
+  .chip.neutral  { background: var(--neutral-100); color: var(--neutral-500); }
+
+  .alert-banner {
+    border-radius: var(--radius-lg); padding: 14px 16px;
+    font-size: 13px; font-weight: 500;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .alert-banner.warning { background: #FFF8EC; color: var(--color-warning); border-left: 3px solid var(--color-warning); }
+  .alert-banner.danger  { background: #FFF0F0; color: var(--color-negative); border-left: 3px solid var(--color-negative); }
+  .alert-banner.info    { background: var(--primary-50); color: var(--primary-500); border-left: 3px solid var(--primary-500); }
+  .alert-banner.success { background: #EAFAF3; color: var(--color-positive); border-left: 3px solid var(--color-positive); }
+
+  /* ─── DETAILS BUTTON ─────────────────────────────────────── */
+  .btn {
+    padding: 9px 20px; border-radius: var(--radius-full);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; transition: all 0.2s;
+    letter-spacing: 0.2px;
+  }
+  .btn-primary { background: var(--primary-500); color: #fff; box-shadow: 0 3px 12px rgba(91,87,245,0.35); }
+  .btn-primary:hover { background: var(--primary-600); box-shadow: 0 4px 16px rgba(91,87,245,0.45); }
+  .btn-outline { background: transparent; color: var(--primary-500); border: 1.5px solid var(--primary-200); }
+  .btn-ghost   { background: var(--primary-50); color: var(--primary-500); }
+  .btn-sm { padding: 6px 14px; font-size: 11px; }
+  .btn-white { background: #fff; color: var(--primary-500); box-shadow: var(--shadow-sm); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ─── MINI CHART SVG ─────────────────────────────────────── */
+  .mini-chart { width: 100%; height: 60px; }
+
+  /* ─── SCROLLBAR ──────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--neutral-200); border-radius: 3px; }
+
+  /* ─── DIVIDER ────────────────────────────────────────────── */
+  .divider { height: 1px; background: var(--neutral-100); margin: 4px 0; }
+
+  /* ─── ICON AVATAR ────────────────────────────────────────── */
+  .icon-avatar {
+    width: 40px; height: 40px;
+    border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+</style>
+</head>
+<body>
+<div class="ds-page">
+
+  <!-- HEADER -->
+  <div class="ds-header">
+    <span class="ds-badge">Design System</span>
+    <h1>Budget Dashboard UI Kit</h1>
+    <p>Système de design complet — tokens, composants et patterns pour le dashboard de pilotage budgétaire.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       1. COULEURS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">01 — Couleurs</div>
+
+    <p style="font-size:13px;color:var(--neutral-400);margin-bottom:20px;">Palette primaire violette/bleue + couleurs sémantiques et neutrals.</p>
+
+    <!-- Primary scale -->
+    <div style="margin-bottom:24px;">
+      <div class="ds-label" style="margin-bottom:10px;">Primary — Violet</div>
+      <div class="swatch-row">
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-50);border:1px solid var(--neutral-100);"></div>
+          <div class="ds-label">50</div><div class="ds-value">#EEEEFF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-100);"></div>
+          <div class="ds-label">100</div><div class="ds-value">#D5D4FF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-200);"></div>
+          <div class="ds-label">200</div><div class="ds-value">#ADABFF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-300);"></div>
+          <div class="ds-label">300</div><div class="ds-value">#8A87FF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-400);"></div>
+          <div class="ds-label">400</div><div class="ds-value">#6C68FF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch swatch-lg" style="background:var(--primary-500);">500</div>
+          <div class="ds-label">500 ★</div><div class="ds-value">#5B57F5</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-600);"></div>
+          <div class="ds-label">600</div><div class="ds-value">#4642D9</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-700);"></div>
+          <div class="ds-label">700</div><div class="ds-value">#332FBD</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-800);"></div>
+          <div class="ds-label">800</div><div class="ds-value">#2220A0</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--primary-900);"></div>
+          <div class="ds-label">900</div><div class="ds-value">#141276</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semantic -->
+    <div style="margin-bottom:24px;">
+      <div class="ds-label" style="margin-bottom:10px;">Couleurs sémantiques</div>
+      <div class="semantic-row">
+        <div class="semantic-chip" style="background:#EAFAF3;color:var(--color-positive);">
+          <span class="chip-label">Positif</span>
+          <span class="chip-value">+$1,493</span>
+          <span class="chip-hex">#2ED47A</span>
+        </div>
+        <div class="semantic-chip" style="background:#FFF0F0;color:var(--color-negative);">
+          <span class="chip-label">Négatif</span>
+          <span class="chip-value">−$350</span>
+          <span class="chip-hex">#FC5A5A</span>
+        </div>
+        <div class="semantic-chip" style="background:#FFF8EC;color:var(--color-warning);">
+          <span class="chip-label">Attention</span>
+          <span class="chip-value">−$312</span>
+          <span class="chip-hex">#FFAB2E</span>
+        </div>
+        <div class="semantic-chip" style="background:#EBF2FF;color:var(--color-info);">
+          <span class="chip-label">Info</span>
+          <span class="chip-value">$2,350</span>
+          <span class="chip-hex">#4B8BF4</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Neutral -->
+    <div style="margin-bottom:24px;">
+      <div class="ds-label" style="margin-bottom:10px;">Neutrals</div>
+      <div class="swatch-row">
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-0);border:1px solid var(--neutral-100);"></div>
+          <div class="ds-label">0</div><div class="ds-value">#FFFFFF</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-50);border:1px solid var(--neutral-100);"></div>
+          <div class="ds-label">50</div><div class="ds-value">#F8F9FE</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-100);"></div>
+          <div class="ds-label">100</div><div class="ds-value">#EBEBF5</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-200);"></div>
+          <div class="ds-label">200</div><div class="ds-value">#D9D9ED</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-300);"></div>
+          <div class="ds-label">300</div><div class="ds-value">#B8B8D1</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-400);"></div>
+          <div class="ds-label">400</div><div class="ds-value">#9898B3</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-500);"></div>
+          <div class="ds-label">500</div><div class="ds-value">#6E6E8A</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-600);"></div>
+          <div class="ds-label">600</div><div class="ds-value">#4A4A6A</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-700);"></div>
+          <div class="ds-label">700</div><div class="ds-value">#2E2E50</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-800);"></div>
+          <div class="ds-label">800</div><div class="ds-value">#1C1C3A</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+          <div class="swatch" style="background:var(--neutral-900);"></div>
+          <div class="ds-label">900</div><div class="ds-value">#0D0D1F</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category colors -->
+    <div>
+      <div class="ds-label" style="margin-bottom:10px;">Couleurs de catégories</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-transport);"></div>
+          <div><div class="ds-label">Transport</div><div class="ds-value">#FF6B6B</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-food);"></div>
+          <div><div class="ds-label">Alimentation</div><div class="ds-value">#FFB347</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-sport);"></div>
+          <div><div class="ds-label">Sport</div><div class="ds-value">#4ECDC4</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-education);"></div>
+          <div><div class="ds-label">Education</div><div class="ds-value">#A29BFE</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-entertain);"></div>
+          <div><div class="ds-label">Loisirs</div><div class="ds-value">#FD79A8</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-household);"></div>
+          <div><div class="ds-label">Maison</div><div class="ds-value">#6C5CE7</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-bills);"></div>
+          <div><div class="ds-label">Factures</div><div class="ds-value">#00B894</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--cat-subscript);"></div>
+          <div><div class="ds-label">Abonnements</div><div class="ds-value">#E17055</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       2. TYPOGRAPHIE
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">02 — Typographie</div>
+    <p style="font-size:13px;color:var(--neutral-400);margin-bottom:20px;">
+      Police principale : <strong>DM Sans</strong> — lisibilité optimale sur mobile.<br>
+      Monospace (valeurs, codes) : <strong>DM Mono</strong>.
+    </p>
+
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:24px;">
+      <div class="type-row">
+        <div class="type-meta">Display / Hero<br>36px · 700 · -1px</div>
+        <div class="type-sample t-display">$1,893.00</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">H1 / Amount<br>28px · 700 · -0.5px</div>
+        <div class="type-sample t-h1">$893.90</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">H2 / Section<br>22px · 600</div>
+        <div class="type-sample t-h2">Auto & Transport</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">H3 / Card title<br>18px · 600</div>
+        <div class="type-sample t-h3">Your Budgets</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Body large<br>16px · 400</div>
+        <div class="type-sample t-body-lg">Billing &amp; Utilities — Left $12</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Body<br>14px · 400</div>
+        <div class="type-sample t-body">Auto insurance · Subscriptions · Food &amp; Drinks</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Small / Caption<br>12px · 400</div>
+        <div class="type-sample t-small">Left $90 · Monthly Budget $2,983 · 14 more days</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Label<br>11px · 500 · uppercase · +1.2px</div>
+        <div class="type-sample t-label">Monthly Budget · Left to spend</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Amount positive<br>14px · 600 · green</div>
+        <div class="type-sample t-positive">+$120.00</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Amount negative<br>14px · 600 · red</div>
+        <div class="type-sample t-negative">−$231.00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       3. SPACING, RADIUS, SHADOWS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">03 — Espacement, Radius & Ombres</div>
+    <div class="ds-grid ds-grid-3" style="gap:32px;">
+
+      <!-- Spacing -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Espacement</div>
+        <div class="space-demo">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:4px;height:4px;"></div>
+            <div class="ds-value">4px</div><div class="ds-label">--1</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:8px;height:8px;"></div>
+            <div class="ds-value">8px</div><div class="ds-label">--2</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:12px;height:12px;"></div>
+            <div class="ds-value">12px</div><div class="ds-label">--3</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:16px;height:16px;"></div>
+            <div class="ds-value">16px</div><div class="ds-label">--4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:20px;height:20px;"></div>
+            <div class="ds-value">20px</div><div class="ds-label">--5</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:24px;height:24px;"></div>
+            <div class="ds-value">24px</div><div class="ds-label">--6</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="space-block" style="width:32px;height:32px;"></div>
+            <div class="ds-value">32px</div><div class="ds-label">--8</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Border radius -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Border Radius</div>
+        <div class="radius-demo">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-sm);"></div>
+            <div class="ds-value">8px</div><div class="ds-label">sm</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-md);"></div>
+            <div class="ds-value">12px</div><div class="ds-label">md</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-lg);"></div>
+            <div class="ds-value">16px</div><div class="ds-label">lg</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-xl);"></div>
+            <div class="ds-value">20px</div><div class="ds-label">xl</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-2xl);"></div>
+            <div class="ds-value">24px</div><div class="ds-label">2xl</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div class="radius-block" style="border-radius:var(--radius-full);width:56px;height:56px;"></div>
+            <div class="ds-value">∞</div><div class="ds-label">full</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shadows -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Ombres</div>
+        <div class="shadow-demo">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div class="shadow-block" style="box-shadow:var(--shadow-sm);">sm</div>
+            <div class="ds-label">sm</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div class="shadow-block" style="box-shadow:var(--shadow-md);">md</div>
+            <div class="ds-label">md</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div class="shadow-block" style="box-shadow:var(--shadow-lg);">lg</div>
+            <div class="ds-label">lg</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div class="shadow-block" style="box-shadow:var(--shadow-card);">card</div>
+            <div class="ds-label">card</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       4. COMPOSANTS — CARTES KPI
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">04 — Cartes KPI (Stat Cards)</div>
+    <div class="ds-grid ds-grid-4" style="gap:12px;">
+      <div>
+        <div class="stat-card">
+          <div class="stat-label">Reste utile</div>
+          <div class="stat-value">$583.00</div>
+          <div class="stat-sub">Left to spend</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Default — fond blanc</div>
+      </div>
+      <div>
+        <div class="stat-card">
+          <div class="stat-label">Monthly Budget</div>
+          <div class="stat-value" style="color:var(--primary-500);">$2,983</div>
+          <div class="stat-sub">Monthly Budget</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Valeur en primary</div>
+      </div>
+      <div>
+        <div class="stat-card">
+          <div class="stat-label">Fin de mois</div>
+          <div class="stat-value" style="color:var(--color-negative);">−$350</div>
+          <div class="stat-sub">Dépassement prévu</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Valeur négative</div>
+      </div>
+      <div>
+        <div class="stat-card accent">
+          <div class="stat-label">Solde réel</div>
+          <div class="stat-value">$8,755</div>
+          <div class="stat-sub">Compte courant</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Accent violet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       5. CARTE BUDGET HERO
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">05 — Carte Budget Hero (gradient)</div>
+    <div style="max-width:320px;">
+      <div class="budget-hero">
+        <div class="bh-label">Budget</div>
+        <div class="bh-row" style="margin-top:4px;">
+          <div>
+            <div style="font-size:11px;opacity:0.7;">Left</div>
+            <div class="bh-value">$893.90</div>
+          </div>
+          <button class="bh-btn">Details</button>
+        </div>
+        <div class="bh-progress"><div class="bh-progress-fill" style="width:45%;"></div></div>
+        <div class="bh-footer">
+          <span>14 days · −$312/day</span>
+          <span>sur $5,500</span>
+        </div>
+      </div>
+    </div>
+    <div class="ds-label" style="margin-top:8px;">gradient: primary-500 → primary-700 · +135°</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       6. BARRES DE PROGRESSION
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">06 — Barres de progression</div>
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:24px;max-width:480px;">
+
+      <div class="progress-wrap" style="margin-bottom:20px;">
+        <div class="progress-header">
+          <span class="progress-name">Auto &amp; Transport</span>
+          <span class="progress-amount">$900.00</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill blue" style="width:72%;"></div></div>
+        <div class="progress-sub">
+          <span>$345.00 spent</span><span>Left $555</span>
+        </div>
+      </div>
+
+      <div class="progress-wrap" style="margin-bottom:20px;">
+        <div class="progress-header">
+          <span class="progress-name">Alimentation</span>
+          <span class="progress-amount">$300.00</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill green" style="width:35%;"></div></div>
+        <div class="progress-sub">
+          <span>$105.00 spent</span><span>Left $195</span>
+        </div>
+      </div>
+
+      <div class="progress-wrap" style="margin-bottom:20px;">
+        <div class="progress-header">
+          <span class="progress-name">Abonnements</span>
+          <span class="progress-amount">$250.00</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill red" style="width:88%;"></div></div>
+        <div class="progress-sub">
+          <span>$220.00 spent</span><span style="color:var(--color-negative);">Left $30 ⚠</span>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-header">
+          <span class="progress-name">Sport &amp; Loisirs</span>
+          <span class="progress-amount">$150.00</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill orange" style="width:55%;"></div></div>
+        <div class="progress-sub">
+          <span>$82.50 spent</span><span>Left $67.50</span>
+        </div>
+      </div>
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Track height: 7px · border-radius: full · 4 états: blue / green / red / orange</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       7. LISTE DE DÉPENSES
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">07 — Liste Budget (avec icônes)</div>
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:20px 20px 4px;max-width:400px;">
+
+      <div class="budget-item">
+        <div class="budget-item-top">
+          <div class="budget-item-left">
+            <div class="budget-item-icon">🚗</div>
+            <div>
+              <div class="budget-item-name">Auto &amp; Transport</div>
+              <div class="budget-item-sub">Left $580</div>
+            </div>
+          </div>
+          <div class="budget-item-amount">$900.00</div>
+        </div>
+        <div class="progress-track"><div class="progress-fill blue" style="width:36%;"></div></div>
+      </div>
+
+      <div class="budget-item">
+        <div class="budget-item-top">
+          <div class="budget-item-left">
+            <div class="budget-item-icon">🍔</div>
+            <div>
+              <div class="budget-item-name">Food &amp; Drinks</div>
+              <div class="budget-item-sub">Left $195</div>
+            </div>
+          </div>
+          <div class="budget-item-amount">$300.00</div>
+        </div>
+        <div class="progress-track"><div class="progress-fill green" style="width:35%;"></div></div>
+      </div>
+
+      <div class="budget-item">
+        <div class="budget-item-top">
+          <div class="budget-item-left">
+            <div class="budget-item-icon">📱</div>
+            <div>
+              <div class="budget-item-name">Subscriptions</div>
+              <div class="budget-item-sub" style="color:var(--color-negative);">Left $30 — dépassement proche</div>
+            </div>
+          </div>
+          <div class="budget-item-amount">$250.00</div>
+        </div>
+        <div class="progress-track"><div class="progress-fill red" style="width:88%;"></div></div>
+      </div>
+
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Icon container: 36×36px · radius-md · bg = couleur catégorie à 12% opacité</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       8. LISTE CATÉGORIES (vue Budgets)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">08 — Liste Catégories (vue Budgets)</div>
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:20px 20px 4px;max-width:420px;">
+
+      <div class="category-item">
+        <div class="cat-icon" style="background:rgba(255,107,107,0.12);">🚗</div>
+        <div class="cat-body">
+          <div class="cat-name">Auto &amp; Transport</div>
+          <div class="cat-left">$490 left of $900</div>
+        </div>
+        <div class="cat-right">
+          <div class="cat-total">$321.54</div>
+          <div class="cat-budget">$490 restants / 2 300</div>
+        </div>
+      </div>
+
+      <div class="category-item">
+        <div class="cat-icon" style="background:rgba(255,179,71,0.12);">🍔</div>
+        <div class="cat-body">
+          <div class="cat-name">Food &amp; Drinks</div>
+          <div class="cat-left">$1,450 left of 1,500</div>
+        </div>
+        <div class="cat-right">
+          <div class="cat-total">$1,954</div>
+          <div class="cat-budget">$1,450 left / 1,500</div>
+        </div>
+      </div>
+
+      <div class="category-item">
+        <div class="cat-icon" style="background:rgba(78,205,196,0.12);">💪</div>
+        <div class="cat-body">
+          <div class="cat-name">Sport</div>
+          <div class="cat-left">150 € left of 900</div>
+        </div>
+        <div class="cat-right">
+          <div class="cat-total">$954</div>
+          <div class="cat-budget" style="color:var(--color-negative);">150 € — critique</div>
+        </div>
+      </div>
+
+      <div class="category-item">
+        <div class="cat-icon" style="background:rgba(162,155,254,0.12);">📚</div>
+        <div class="cat-body">
+          <div class="cat-name">Education</div>
+          <div class="cat-left">20 € left of 1,000</div>
+        </div>
+        <div class="cat-right">
+          <div class="cat-total">$1,350</div>
+          <div class="cat-budget">20 € left / 1,000</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Icon: 40×40px circle · bg couleur catégorie 12% · séparateur 1px neutral-100</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       9. TRANSACTIONS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">09 — Transactions</div>
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:20px 20px 4px;max-width:400px;">
+
+      <div style="font-size:12px;font-weight:600;color:var(--neutral-400);margin-bottom:8px;">Sunday, 12 Apr 2021</div>
+
+      <div class="txn-item">
+        <div class="txn-icon" style="background:rgba(255,107,107,0.1);">🚗</div>
+        <div class="txn-body">
+          <div class="txn-name">Auto &amp; Transport</div>
+          <div class="txn-time">Fuel · 10:52 pm</div>
+        </div>
+        <div class="txn-amount neg">−$231.00</div>
+      </div>
+
+      <div class="txn-item">
+        <div class="txn-icon" style="background:rgba(255,179,71,0.1);">☕</div>
+        <div class="txn-body">
+          <div class="txn-name">Food &amp; Drinks</div>
+          <div class="txn-time">Coffee · 12:34 pm</div>
+        </div>
+        <div class="txn-amount neg">−$45.09</div>
+      </div>
+
+      <div style="font-size:12px;font-weight:600;color:var(--neutral-400);margin:12px 0 8px;">Monday, 08 Apr 2021</div>
+
+      <div class="txn-item">
+        <div class="txn-icon" style="background:rgba(46,212,122,0.1);">💰</div>
+        <div class="txn-body">
+          <div class="txn-name">Remboursement</div>
+          <div class="txn-time">Virement · 9:00 am</div>
+        </div>
+        <div class="txn-amount pos">+$120.00</div>
+      </div>
+
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Group header: 12px · 600 · neutral-400 · Date en texte complet</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       10. GRAPHIQUE
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">10 — Graphique (Line Chart Card)</div>
+    <div style="max-width:480px;">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Money Status</div>
+            <div class="chart-sub">Jan → Aug 2021</div>
+          </div>
+          <span class="chart-badge pos">+6.6%</span>
+        </div>
+
+        <!-- SVG Line Chart -->
+        <svg class="chart" viewBox="0 0 440 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#5B57F5" stop-opacity="0.25"/>
+              <stop offset="100%" stop-color="#5B57F5" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FC5A5A" stop-opacity="0.15"/>
+              <stop offset="100%" stop-color="#FC5A5A" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <!-- Grid lines -->
+          <line x1="0" y1="110" x2="440" y2="110" stroke="#EBEBF5" stroke-width="1"/>
+          <line x1="0" y1="80"  x2="440" y2="80"  stroke="#EBEBF5" stroke-width="1"/>
+          <line x1="0" y1="50"  x2="440" y2="50"  stroke="#EBEBF5" stroke-width="1"/>
+          <line x1="0" y1="20"  x2="440" y2="20"  stroke="#EBEBF5" stroke-width="1"/>
+          <!-- Y labels -->
+          <text x="0" y="113" font-size="9" fill="#9898B3" font-family="DM Mono">0</text>
+          <text x="0" y="83"  font-size="9" fill="#9898B3" font-family="DM Mono">25k</text>
+          <text x="0" y="53"  font-size="9" fill="#9898B3" font-family="DM Mono">50k</text>
+          <text x="0" y="23"  font-size="9" fill="#9898B3" font-family="DM Mono">100k</text>
+          <!-- Area blue -->
+          <path d="M20,100 C60,95 80,70 120,65 C160,60 180,80 220,72 C260,64 300,30 340,25 C380,20 420,28 440,24 L440,110 L20,110 Z"
+                fill="url(#blueGrad)"/>
+          <!-- Area red -->
+          <path d="M20,90 C60,88 80,85 120,78 C160,70 180,75 220,68 C260,60 300,55 340,50 C380,44 420,38 440,32 L440,110 L20,110 Z"
+                fill="url(#redGrad)"/>
+          <!-- Line blue (income) -->
+          <path d="M20,100 C60,95 80,70 120,65 C160,60 180,80 220,72 C260,64 300,30 340,25 C380,20 420,28 440,24"
+                stroke="#5B57F5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- Line red (outcome) -->
+          <path d="M20,90 C60,88 80,85 120,78 C160,70 180,75 220,68 C260,60 300,55 340,50 C380,44 420,38 440,32"
+                stroke="#FC5A5A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 2"/>
+          <!-- Dot highlight -->
+          <circle cx="220" cy="72" r="4" fill="#5B57F5"/>
+          <circle cx="220" cy="72" r="7" fill="#5B57F5" opacity="0.2"/>
+          <!-- Tooltip -->
+          <rect x="195" y="50" width="66" height="20" rx="5" fill="#1C1C3A"/>
+          <text x="228" y="64" font-size="10" fill="#fff" text-anchor="middle" font-family="DM Sans" font-weight="600">$9.04</text>
+          <!-- X labels -->
+          <text x="20"  y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">Jan</text>
+          <text x="80"  y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">Feb</text>
+          <text x="140" y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">Mar</text>
+          <text x="200" y="128" font-size="9" fill="#5B57F5" font-family="DM Sans" text-anchor="middle" font-weight="600">Apr</text>
+          <text x="260" y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">May</text>
+          <text x="320" y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">June</text>
+          <text x="380" y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">July</text>
+          <text x="430" y="128" font-size="9" fill="#9898B3" font-family="DM Sans" text-anchor="middle">Aug</text>
+        </svg>
+
+        <!-- Legend -->
+        <div style="display:flex;gap:20px;margin-top:12px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:16px;height:3px;background:var(--primary-500);border-radius:2px;"></div>
+            <span style="font-size:12px;color:var(--neutral-400);">Income</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:16px;height:3px;background:var(--color-negative);border-radius:2px;border-top:2px dashed var(--color-negative);background:none;"></div>
+            <span style="font-size:12px;color:var(--neutral-400);">Expenses</span>
+          </div>
+          <div style="margin-left:auto;text-align:right;">
+            <div style="font-size:11px;color:var(--neutral-400);">Income</div>
+            <div style="font-size:16px;font-weight:700;color:var(--neutral-800);">$1,493.00</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:var(--neutral-400);">Expenses</div>
+            <div style="font-size:16px;font-weight:700;color:var(--color-negative);">$3,890</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Income = primary-500 plein · Expenses = negative en pointillé · gradient fill opacité 0→25%</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       11. ACCOUNT PILLS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">11 — Account Pills</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div class="account-pill">
+          <div class="ap-avatar" style="background:var(--primary-500);">LB</div>
+          <div class="ap-tag">USD</div>
+          <div class="ap-value">2,983.00</div>
+          <div class="ap-name">Lance Bugral</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Primary avatar</div>
+      </div>
+      <div>
+        <div class="account-pill">
+          <div class="ap-avatar" style="background:var(--color-warning);">GB</div>
+          <div class="ap-tag">EUR</div>
+          <div class="ap-value">1,233.00</div>
+          <div class="ap-name">Gunther Beard</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Warning avatar</div>
+      </div>
+      <div>
+        <div class="account-pill">
+          <div class="ap-avatar" style="background:var(--color-positive);">FM</div>
+          <div class="ap-tag">GBP</div>
+          <div class="ap-value">900.00</div>
+          <div class="ap-name">Maxime</div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;">Positive avatar</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       12. ÉLÉMENTS D'INTERFACE
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">12 — Boutons, Tabs, FAB, Chips</div>
+
+    <div style="display:flex;flex-direction:column;gap:24px;">
+
+      <!-- Buttons -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Boutons</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-primary">Details</button>
+          <button class="btn btn-primary btn-sm">Manage</button>
+          <button class="btn btn-outline">Voir tout</button>
+          <button class="btn btn-ghost">Filtrer</button>
+          <div style="background:var(--primary-600);padding:8px;border-radius:12px;display:inline-block;">
+            <button class="btn btn-white">Details</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab selector -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Tab Selector (period)</div>
+        <div class="tab-group">
+          <button class="tab-item">Day</button>
+          <button class="tab-item active">Month</button>
+          <button class="tab-item">Yearly</button>
+        </div>
+      </div>
+
+      <!-- FAB -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">FAB — Floating Action Button</div>
+        <div style="display:flex;gap:16px;align-items:center;">
+          <button class="fab">+</button>
+          <button class="fab-sm">+</button>
+          <div class="ds-label">52px principal · 40px secondaire · shadow primary 40%</div>
+        </div>
+      </div>
+
+      <!-- Chips -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Chips / Badges</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <span class="chip primary">En cours</span>
+          <span class="chip positive">+$120</span>
+          <span class="chip negative">−$231</span>
+          <span class="chip warning">Attention</span>
+          <span class="chip neutral">14 jours</span>
+        </div>
+      </div>
+
+      <!-- Alert banners -->
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Alertes (banners)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;max-width:480px;">
+          <div class="alert-banner info">📊 Projection : vous serez à +6.6% en fin de mois.</div>
+          <div class="alert-banner warning">⚠️ Dépassement probable de $585 si le rythme se maintient.</div>
+          <div class="alert-banner danger">🚨 Budget Abonnements à 88% — critique.</div>
+          <div class="alert-banner success">✅ Budget Alimentation bien tenu.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       13. NAVIGATION BASSE
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">13 — Navigation Basse</div>
+    <div style="max-width:360px;">
+      <div class="bottom-nav">
+        <div class="nav-item active">
+          <div class="nav-icon">🏠</div>
+          <div class="nav-label">Home</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">📁</div>
+          <div class="nav-label">Budgets</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon" style="width:52px;height:52px;background:var(--primary-500);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 4px 16px rgba(91,87,245,0.4);margin-top:-14px;">+</div>
+          <div class="nav-label" style="opacity:0;font-size:0;">add</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">📈</div>
+          <div class="nav-label">Stats</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">👤</div>
+          <div class="nav-label">Profil</div>
+        </div>
+      </div>
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Fond blanc · radius 24px top · FAB centré surélevé · active = primary-500 · inactive = neutral-300</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       14. EN-TÊTES DE SECTIONS (in-app)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">14 — En-têtes de sections</div>
+    <div style="background:#fff;border-radius:var(--radius-2xl);box-shadow:var(--shadow-card);padding:16px 20px;max-width:380px;">
+      <div class="section-hd">
+        <div class="section-hd-icon">📊</div>
+        <div>
+          <div class="section-hd-title">Pilotage instantané</div>
+          <div class="section-hd-sub">Cap, solde et contrôle de fin de mois.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-hd">
+        <div class="section-hd-icon">📈</div>
+        <div>
+          <div class="section-hd-title">Trajectoire</div>
+          <div class="section-hd-sub">Suivi du rythme par rapport au plan.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-hd">
+        <div class="section-hd-icon">🔮</div>
+        <div>
+          <div class="section-hd-title">Prévisions</div>
+          <div class="section-hd-sub">Programmations et épargne en un regard.</div>
+        </div>
+      </div>
+    </div>
+    <div class="ds-label" style="margin-top:8px;">Icon bg: primary-50 · radius-md 32×32px · Title: 15px/700/uppercase · Sub: 12px/neutral-400</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       15. APERÇU ÉCRAN COMPLET
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">15 — Aperçu : écrans assemblés</div>
+    <div class="screens-row">
+
+      <!-- Screen 1: Home -->
+      <div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>9:41</span>
+              <span>●●●</span>
+            </div>
+            <div class="phone-content">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 12px;">
+                <span style="font-size:13px;color:var(--neutral-400);">≡</span>
+                <div class="phone-page-title" style="padding:0;font-size:17px;">Home</div>
+                <div style="width:28px;height:28px;"></div>
+              </div>
+
+              <!-- Premium label -->
+              <div style="font-size:10px;color:var(--neutral-400);text-transform:uppercase;letter-spacing:1px;">Premium</div>
+              <div style="font-size:14px;font-weight:700;color:var(--neutral-800);">Diplomat</div>
+              <div style="font-size:10px;color:var(--neutral-400);margin-bottom:12px;">Auto · renewal: 5 Apr 2021</div>
+
+              <!-- Accounts -->
+              <div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:8px;">Accounts</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
+                <div class="account-pill" style="padding:10px 10px;">
+                  <div class="ap-avatar" style="background:var(--primary-500);width:24px;height:24px;font-size:9px;margin-bottom:4px;">LB</div>
+                  <div style="font-size:12px;font-weight:700;color:var(--neutral-800);">2,983</div>
+                  <div style="font-size:9px;color:var(--neutral-400);">USD</div>
+                </div>
+                <div class="account-pill" style="padding:10px 10px;">
+                  <div class="ap-avatar" style="background:var(--color-warning);width:24px;height:24px;font-size:9px;margin-bottom:4px;">GB</div>
+                  <div style="font-size:12px;font-weight:700;color:var(--neutral-800);">1,233</div>
+                  <div style="font-size:9px;color:var(--neutral-400);">EUR</div>
+                </div>
+                <div class="account-pill" style="padding:10px 10px;">
+                  <div class="ap-avatar" style="background:var(--color-positive);width:24px;height:24px;font-size:9px;margin-bottom:4px;">FM</div>
+                  <div style="font-size:12px;font-weight:700;color:var(--neutral-800);">900</div>
+                  <div style="font-size:9px;color:var(--neutral-400);">GBP</div>
+                </div>
+              </div>
+
+              <!-- Budget card -->
+              <div class="budget-hero" style="padding:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div>
+                    <div class="bh-label">Budget · Left</div>
+                    <div style="font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.3px;margin:4px 0;">$893.90</div>
+                  </div>
+                  <button class="bh-btn">Details</button>
+                </div>
+                <div class="bh-progress"><div class="bh-progress-fill" style="width:45%;"></div></div>
+                <div class="bh-footer">
+                  <span>14 days · −$312/day</span>
+                  <span>sur $5,500</span>
+                </div>
+              </div>
+            </div>
+            <!-- Nav -->
+            <div class="bottom-nav" style="padding:8px 8px 10px;">
+              <div class="nav-item active" style="padding:2px 8px;">
+                <div class="nav-icon" style="font-size:16px;">🏠</div>
+              </div>
+              <div class="nav-item" style="padding:2px 8px;">
+                <div class="nav-icon" style="font-size:16px;">📁</div>
+              </div>
+              <div style="width:40px;height:40px;background:var(--primary-500);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;margin-top:-10px;box-shadow:0 3px 12px rgba(91,87,245,0.4);">+</div>
+              <div class="nav-item" style="padding:2px 8px;">
+                <div class="nav-icon" style="font-size:16px;">📈</div>
+              </div>
+              <div class="nav-item" style="padding:2px 8px;">
+                <div class="nav-icon" style="font-size:16px;">👤</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;text-align:center;">Home</div>
+      </div>
+
+      <!-- Screen 2: Expenses list -->
+      <div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>9:41</span>
+              <span>●●●</span>
+            </div>
+            <div class="phone-content">
+              <div class="phone-back">← Expenses</div>
+              <div style="font-size:11px;color:var(--neutral-400);text-align:center;margin-bottom:2px;">November 2021</div>
+              <div style="font-size:22px;font-weight:700;color:var(--neutral-900);text-align:center;letter-spacing:-0.5px;margin-bottom:12px;">$1,893.00</div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+                <span style="color:var(--neutral-400);">Left to spend</span>
+                <span style="color:var(--neutral-400);">Monthly Budget</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;">
+                <span style="color:var(--neutral-800);">$583.00</span>
+                <span style="color:var(--primary-500);">$2,983</span>
+              </div>
+              <div class="progress-track" style="margin-bottom:14px;"><div class="progress-fill blue" style="width:80%;"></div></div>
+
+              <!-- List items -->
+              <div class="budget-item" style="padding:10px 0;">
+                <div class="budget-item-top">
+                  <div class="budget-item-left">
+                    <div class="budget-item-icon">🚗</div>
+                    <div><div style="font-size:12px;font-weight:500;color:var(--neutral-700);">Auto &amp; Transport</div></div>
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:var(--primary-500);">$900</div>
+                </div>
+                <div class="progress-track"><div class="progress-fill blue" style="width:38%;"></div></div>
+              </div>
+              <div class="budget-item" style="padding:10px 0;">
+                <div class="budget-item-top">
+                  <div class="budget-item-left">
+                    <div class="budget-item-icon">💡</div>
+                    <div><div style="font-size:12px;font-weight:500;color:var(--neutral-700);">Billing &amp; Utilities</div></div>
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:var(--primary-500);">$300</div>
+                </div>
+                <div class="progress-track"><div class="progress-fill green" style="width:25%;"></div></div>
+              </div>
+              <div class="budget-item" style="padding:10px 0;">
+                <div class="budget-item-top">
+                  <div class="budget-item-left">
+                    <div class="budget-item-icon">📱</div>
+                    <div><div style="font-size:12px;font-weight:500;color:var(--neutral-700);">Subscriptions</div></div>
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:var(--primary-500);">$250</div>
+                </div>
+                <div class="progress-track"><div class="progress-fill red" style="width:82%;"></div></div>
+              </div>
+            </div>
+            <!-- Nav -->
+            <div class="bottom-nav" style="padding:8px 8px 10px;">
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">🏠</div></div>
+              <div class="nav-item active" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">📁</div></div>
+              <div style="width:40px;height:40px;background:var(--primary-500);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;margin-top:-10px;box-shadow:0 3px 12px rgba(91,87,245,0.4);">+</div>
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">📈</div></div>
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">👤</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;text-align:center;">Expenses</div>
+      </div>
+
+      <!-- Screen 3: Chart -->
+      <div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>9:41</span>
+              <span>●●●</span>
+            </div>
+            <div class="phone-content">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;">
+                <span style="font-size:13px;color:var(--neutral-400);">≡</span>
+                <div style="font-size:17px;font-weight:700;color:var(--neutral-900);">Home</div>
+                <div style="width:28px;"></div>
+              </div>
+              <div class="tab-group" style="margin-bottom:12px;">
+                <button class="tab-item" style="padding:5px 12px;font-size:12px;">Day</button>
+                <button class="tab-item active" style="padding:5px 12px;font-size:12px;">Month</button>
+                <button class="tab-item" style="padding:5px 12px;font-size:12px;">Yearly</button>
+              </div>
+              <div style="font-size:22px;font-weight:700;color:var(--neutral-900);letter-spacing:-0.5px;">$893.90</div>
+              <div style="font-size:11px;color:var(--neutral-400);margin-bottom:8px;">Morning balance</div>
+              <!-- Mini SVG chart -->
+              <svg width="100%" height="80" viewBox="0 0 240 80">
+                <defs>
+                  <linearGradient id="miniGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#5B57F5" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#5B57F5" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0,60 C30,55 50,35 80,30 C110,25 130,45 160,38 C190,30 220,15 240,10 L240,75 L0,75 Z" fill="url(#miniGrad)"/>
+                <path d="M0,60 C30,55 50,35 80,30 C110,25 130,45 160,38 C190,30 220,15 240,10" stroke="#5B57F5" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <circle cx="80" cy="30" r="3" fill="#5B57F5"/>
+                <rect x="62" y="17" width="36" height="14" rx="4" fill="#1C1C3A"/>
+                <text x="80" y="28" font-size="8" fill="#fff" text-anchor="middle" font-family="DM Sans" font-weight="600">$9.04</text>
+              </svg>
+              <div style="font-size:12px;color:var(--neutral-400);margin-bottom:10px;">Your Budgets · April</div>
+              <div style="display:flex;gap:8px;">
+                <div class="card card-sm" style="flex:1;padding:10px;">
+                  <div style="font-size:10px;color:var(--neutral-400);">Airbnb</div>
+                  <div style="font-size:14px;font-weight:700;color:var(--neutral-800);">$983.00</div>
+                </div>
+                <div class="card card-sm" style="flex:1;padding:10px;">
+                  <div style="font-size:10px;color:var(--neutral-400);">Mobile</div>
+                  <div style="font-size:14px;font-weight:700;color:var(--neutral-800);">$1,904</div>
+                </div>
+              </div>
+            </div>
+            <div class="bottom-nav" style="padding:8px 8px 10px;">
+              <div class="nav-item active" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">🏠</div></div>
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">📁</div></div>
+              <div style="width:40px;height:40px;background:var(--primary-500);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;margin-top:-10px;box-shadow:0 3px 12px rgba(91,87,245,0.4);">+</div>
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">📈</div></div>
+              <div class="nav-item" style="padding:2px 8px;"><div class="nav-icon" style="font-size:16px;">👤</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="ds-label" style="margin-top:8px;text-align:center;">Chart</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       16. CSS VARIABLES RÉCAPITULATIF
+  ══════════════════════════════════════════════════════════ -->
+  <div class="ds-section">
+    <div class="ds-section-title">16 — Récapitulatif CSS Variables</div>
+    <div style="background:var(--neutral-800);border-radius:var(--radius-2xl);padding:28px;overflow-x:auto;">
+      <pre style="font-family:var(--font-mono);font-size:12px;line-height:1.8;color:#E8E8FF;white-space:pre-wrap;">:root {
+  /* Primary */
+  --primary-500: #5B57F5;   /* ★ couleur principale */
+  --primary-600: #4642D9;   /* hover states */
+  --primary-700: #332FBD;   /* gradient end */
+  --primary-50:  #EEEEFF;   /* backgrounds subtils */
+
+  /* Sémantiques */
+  --color-positive: #2ED47A;
+  --color-negative: #FC5A5A;
+  --color-warning:  #FFAB2E;
+  --color-info:     #4B8BF4;
+
+  /* Neutrals */
+  --neutral-0:   #FFFFFF;   /* card bg */
+  --neutral-50:  #F8F9FE;   /* page bg */
+  --neutral-100: #EBEBF5;   /* tracks, séparateurs */
+  --neutral-400: #9898B3;   /* labels secondaires */
+  --neutral-700: #2E2E50;   /* texte */
+  --neutral-800: #1C1C3A;   /* texte principal */
+  --neutral-900: #0D0D1F;   /* heading */
+
+  /* Typographie */
+  --font-sans: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  /* Radius */
+  --radius-sm:   8px;    /* icônes, badges */
+  --radius-md:   12px;   /* items, petites cartes */
+  --radius-lg:   16px;   /* cartes moyennes */
+  --radius-xl:   20px;   /* cartes */
+  --radius-2xl:  24px;   /* grandes cartes, screens */
+  --radius-full: 9999px; /* pills, avatars, FAB */
+
+  /* Ombres */
+  --shadow-card: 0 2px 12px rgba(28,28,58,0.07);
+  --shadow-md:   0 4px 16px rgba(91,87,245,0.12);
+  --shadow-lg:   0 8px 32px rgba(91,87,245,0.16);
+}</pre>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

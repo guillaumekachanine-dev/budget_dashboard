@@ -1,0 +1,3 @@
+- [Profil utilisateur](user_profile.md) — développeur solo, projet perso de suivi financier
+- [Projet dashboard_budget](project_dashboard_budget.md) — contexte, objectifs, décisions clés
+- [Feedback & préférences](feedback.md) — préférences de travail collectées
