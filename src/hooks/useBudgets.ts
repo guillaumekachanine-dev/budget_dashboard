@@ -4,14 +4,14 @@ import type { Budget, BudgetPeriod, CategoryBudgetSummary } from '@/lib/types'
 
 async function fetchCurrentPeriod(year: number, month: number): Promise<BudgetPeriod | null> {
   const { data, error } = await supabase
+    .schema('budget_dashboard')
     .from('budget_periods')
     .select('*')
     .eq('period_year', year)
     .eq('period_month', month)
-    .single()
 
   if (error) return null
-  return data
+  return data?.[0] ?? null
 }
 
 async function fetchBudgetSummaries(year: number, month: number): Promise<CategoryBudgetSummary[]> {

@@ -138,6 +138,48 @@ export interface CategoryBudgetSummary {
   percentage: number
 }
 
+export interface AnalyticsMonthlyMetrics {
+  month_start: string
+  period_year: number
+  period_month: number
+  variable_expense_total: number
+  fixed_expense_total: number
+  expense_total: number
+  income_total: number
+  savings_capacity_observed: number
+  refreshed_at: string
+}
+
+export interface AnalyticsMonthlyCategoryMetrics {
+  month_start: string
+  period_year: number
+  period_month: number
+  category_id: string
+  category_name: string
+  parent_category_id: string | null
+  parent_category_name: string | null
+  category_path: string
+  flow_type: FlowType
+  budget_behavior: BudgetBehavior
+  amount_total: number
+  refreshed_at: string
+}
+
+export interface AnalyticsVariableCategorySummary {
+  category_id: string
+  category_name: string
+  parent_category_id: string | null
+  parent_category_name: string | null
+  category_path: string
+  active_months_count: number
+  avg_monthly_amount: number
+  median_monthly_amount: number
+  min_monthly_amount: number
+  max_monthly_amount: number
+  total_amount: number
+  refreshed_at: string
+}
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>
   Insert: Insert & Record<string, unknown>
@@ -155,8 +197,16 @@ export type Database = {
       transactions: TableDef<Transaction, Omit<Transaction, 'id' | 'created_at' | 'updated_at'>, Partial<Transaction>>
       income_sources: TableDef<IncomeSource, Omit<IncomeSource, 'id' | 'created_at' | 'updated_at'>, Partial<IncomeSource>>
       recurring_obligations: TableDef<RecurringObligation, Omit<RecurringObligation, 'id' | 'created_at' | 'updated_at'>, Partial<RecurringObligation>>
+      analytics_monthly_metrics: TableDef<AnalyticsMonthlyMetrics, Omit<AnalyticsMonthlyMetrics, never>, Partial<AnalyticsMonthlyMetrics>>
+      analytics_monthly_category_metrics: TableDef<AnalyticsMonthlyCategoryMetrics, Omit<AnalyticsMonthlyCategoryMetrics, never>, Partial<AnalyticsMonthlyCategoryMetrics>>
+      analytics_variable_category_summary: TableDef<AnalyticsVariableCategorySummary, Omit<AnalyticsVariableCategorySummary, never>, Partial<AnalyticsVariableCategorySummary>>
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      refresh_budget_analytics: {
+        Args: { p_user_id: string }
+        Returns: null
+      }
+    }
   }
 }

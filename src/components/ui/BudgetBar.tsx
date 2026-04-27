@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { formatCurrency, clamp, getCategoryColor } from '@/lib/utils'
+import { formatCurrency, clamp } from '@/lib/utils'
 import type { CategoryBudgetSummary } from '@/lib/types'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 interface BudgetBarProps {
   summary: CategoryBudgetSummary
@@ -17,7 +18,6 @@ function progressClass(pct: number): string {
 export function BudgetBar({ summary, index }: BudgetBarProps) {
   const { category, budget_amount, spent_amount, remaining, percentage } = summary
   const pct = clamp(percentage, 0, 100)
-  const catColor = getCategoryColor(category.color_token, index)
   const isNearLimit = percentage >= 80
 
   return (
@@ -31,9 +31,8 @@ export function BudgetBar({ summary, index }: BudgetBarProps) {
         <div className="budget-item-left">
           <div
             className="budget-item-icon"
-            style={{ backgroundColor: catColor + '22' }}
           >
-            {category.icon_name ?? '💰'}
+            <CategoryIcon categoryName={category.name} size={20} />
           </div>
           <div>
             <div className="budget-item-name">{category.name}</div>

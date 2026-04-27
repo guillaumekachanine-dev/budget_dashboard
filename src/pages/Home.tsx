@@ -1,11 +1,12 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useAccounts, useCheckingAccount } from '@/hooks/useAccounts'
+import { ChevronLeft, ChevronRight, Menu } from 'lucide-react'
+import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { accountTypeLabel, getCurrentPeriod, getMonthLabel } from '@/lib/utils'
 import { HeroCard } from '@/components/ui/HeroCard'
 import { AccountSlideCard } from '@/components/ui/AccountSlideCard'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import type { SlideCardData } from '@/components/ui/AccountSlideCard'
 import type { AccountWithBalance } from '@/lib/types'
 
@@ -27,7 +28,7 @@ export function Home() {
   const { year, month } = getCurrentPeriod()
   const { data: accounts, isLoading: loadingAccounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
-  const checking = useCheckingAccount(accounts)
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
   const totalSpent  = summaries?.reduce((s, b) => s + b.spent_amount, 0) ?? 0
@@ -59,12 +60,42 @@ export function Home() {
     })
   }, [accounts])
 
+  const preferredDefaultAccount = useMemo(() => {
+    if (!accounts?.length) return null
+    return (
+      accounts.find((a) => a.name === 'Compte courant principal') ??
+      accounts.find((a) => a.account_type === 'checking' && a.name.toLowerCase().includes('principal')) ??
+      accounts.find((a) => a.account_type === 'checking') ??
+      accounts[0]
+    )
+  }, [accounts])
+
+  useEffect(() => {
+    if (!accounts?.length) {
+      setSelectedAccountId(null)
+      return
+    }
+    const selectedStillExists = selectedAccountId && accounts.some((a) => a.id === selectedAccountId)
+    if (selectedStillExists) return
+    setSelectedAccountId(preferredDefaultAccount?.id ?? accounts[0].id)
+  }, [accounts, preferredDefaultAccount, selectedAccountId])
+
+  const selectedAccount = useMemo(() => {
+    if (!accounts?.length) return null
+    return accounts.find((a) => a.id === selectedAccountId) ?? preferredDefaultAccount ?? accounts[0]
+  }, [accounts, preferredDefaultAccount, selectedAccountId])
+
+  const carouselCards = useMemo(
+    () => accountSlides.filter((card) => card.id !== selectedAccount?.id),
+    [accountSlides, selectedAccount?.id],
+  )
+
   useEffect(() => {
     setActiveCardIndex((prev) => {
-      const max = Math.max(0, accountSlides.length - 1)
+      const max = Math.max(0, carouselCards.length - 1)
       return Math.min(prev, max)
     })
-  }, [accountSlides.length])
+  }, [carouselCards.length])
 
   const scrollCarousel = (dir: 'left' | 'right') => {
     if (!carouselRef.current) return
@@ -74,48 +105,88 @@ export function Home() {
   const handleCarouselScroll = () => {
     if (!carouselRef.current) return
     const index = Math.round(carouselRef.current.scrollLeft / CAROUSEL_STEP)
-    const clamped = Math.max(0, Math.min(index, accountSlides.length - 1))
+    const clamped = Math.max(0, Math.min(index, carouselCards.length - 1))
     setActiveCardIndex(clamped)
   }
 
+  const handleSelectAccount = (accountId: string) => {
+    if (!carouselRef.current || accountId === selectedAccount?.id) return
+    setSelectedAccountId(accountId)
+    carouselRef.current.scrollTo({ left: 0, behavior: 'smooth' })
+    setActiveCardIndex(0)
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        style={{ padding: '28px 20px 0' }}
+        style={{ padding: '18px 16px 0' }}
       >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <button
+            type="button"
+            aria-label="Menu"
+            style={{
+              width: 32,
+              height: 32,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--neutral-900)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+          >
+            <Menu size={18} />
+          </button>
+          <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--neutral-900)', margin: 0 }}>Home</h1>
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: 'var(--primary-100)',
+            color: 'var(--primary-700)',
+            fontSize: 11,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            GU
+          </div>
+        </div>
         <p style={{
-          fontSize: 11, fontWeight: 500, color: 'var(--neutral-400)',
-          textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 4,
+          textAlign: 'center',
+          fontSize: 10,
+          color: 'var(--neutral-400)',
+          marginBottom: 2,
         }}>
           {getMonthLabel(year, month)}
         </p>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.4px', margin: 0 }}>
-          Accueil
-        </h1>
-        <motion.p
-          initial={{ opacity: 0, x: -6 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.12, duration: 0.35 }}
-          style={{
-            fontSize: 32, fontWeight: 700, color: 'var(--neutral-700)',
-            marginTop: 8, letterSpacing: '-0.4px', lineHeight: 1.04,
-          }}
-        >
-          Bonjour Guillaume
-        </motion.p>
+        <p style={{
+          textAlign: 'center',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 38,
+          fontWeight: 700,
+          color: 'var(--neutral-900)',
+          margin: 0,
+          lineHeight: 1.1,
+        }}>
+          {selectedAccount ? `${Math.round(selectedAccount.current_balance)}€` : '—'}
+        </p>
       </motion.div>
 
       {/* ── Mes comptes ────────────────────────────────────────── */}
-      <section style={{ marginTop: 36 }}>
+      <section style={{ marginTop: 18 }}>
         {/* Section header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 20px', marginBottom: 14,
+          padding: '0 16px', marginBottom: 10,
         }}>
           <h2 style={{
             fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
@@ -124,12 +195,12 @@ export function Home() {
             Mes comptes
           </h2>
           {/* Scroll arrows — desktop/tablet hint */}
-          {accountSlides.length > 1 && (
-            <div style={{ display: 'flex', gap: 6 }}>
+          {carouselCards.length > 0 && (
+          <div style={{ display: 'flex', gap: 4 }}>
               <button
                 onClick={() => scrollCarousel('left')}
                 style={{
-                  width: 28, height: 28, borderRadius: '50%',
+                  width: 26, height: 26, borderRadius: '50%',
                   background: 'var(--neutral-100)', border: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', color: 'var(--neutral-500)',
@@ -140,7 +211,7 @@ export function Home() {
               <button
                 onClick={() => scrollCarousel('right')}
                 style={{
-                  width: 28, height: 28, borderRadius: '50%',
+                  width: 26, height: 26, borderRadius: '50%',
                   background: 'var(--neutral-100)', border: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', color: 'var(--neutral-500)',
@@ -154,18 +225,18 @@ export function Home() {
 
         {/* Carousel */}
         {loadingAccounts ? (
-          <div style={{ display: 'flex', gap: 12, padding: '0 20px', overflowX: 'hidden' }}>
+          <div style={{ display: 'flex', gap: 10, padding: '0 16px', overflowX: 'hidden' }}>
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse" style={{
-                width: 176, minWidth: 176, height: 136,
-                borderRadius: 'var(--radius-2xl)', background: 'var(--neutral-100)',
+                width: 164, minWidth: 164, height: 122,
+                borderRadius: 'var(--radius-card)', background: 'var(--neutral-100)',
                 flexShrink: 0,
               }} />
             ))}
           </div>
-        ) : accountSlides.length === 0 ? (
+        ) : carouselCards.length === 0 ? (
           <div style={{
-            margin: '0 20px',
+            margin: '0 16px',
             borderRadius: 'var(--radius-xl)',
             border: '1px dashed var(--neutral-200)',
             padding: '18px 14px',
@@ -180,7 +251,7 @@ export function Home() {
               display: 'flex',
               gap: 12,
               overflowX: 'auto',
-              padding: '4px 20px 12px',
+              padding: '4px 16px 12px',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
               WebkitOverflowScrolling: 'touch',
@@ -189,18 +260,22 @@ export function Home() {
             onScroll={handleCarouselScroll}
             className="scrollbar-hide"
           >
-            {accountSlides.map((card, i) => (
+            {carouselCards.map((card, i) => (
               <div key={card.id} style={{ scrollSnapAlign: 'start' }}>
-                <AccountSlideCard card={card} index={i} />
+                <AccountSlideCard
+                  card={card}
+                  index={i}
+                  onSelect={() => handleSelectAccount(card.id)}
+                />
               </div>
             ))}
           </div>
         )}
 
         {/* Dots indicator */}
-        {accountSlides.length > 1 && (
+        {carouselCards.length > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6 }}>
-            {accountSlides.map((card, i) => (
+            {carouselCards.map((card, i) => (
               <div
                 key={card.id}
                 style={{
@@ -217,20 +292,20 @@ export function Home() {
       </section>
 
       {/* ── Budget héro ────────────────────────────────────────── */}
-      <section style={{ padding: '24px 20px 0' }}>
+      <section style={{ padding: '18px 16px 0' }}>
         <h2 style={{
           fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
           textTransform: 'uppercase', letterSpacing: '1.5px',
           margin: '0 0 12px',
         }}>
-          Compte courant
+          {selectedAccount?.name ?? 'Compte sélectionné'}
         </h2>
 
-        {loadingSummaries || !checking ? (
+        {loadingSummaries || !selectedAccount ? (
           <div className="animate-pulse" style={{ height: 130, borderRadius: 24, background: 'var(--neutral-100)' }} />
         ) : (
           <HeroCard
-            account={checking}
+            account={selectedAccount}
             totalSpent={totalSpent}
             totalBudget={totalBudget}
           />
@@ -239,7 +314,7 @@ export function Home() {
 
       {/* ── Top catégories (mini) ───────────────────────────────── */}
       {!loadingSummaries && (summaries?.length ?? 0) > 0 && (
-        <section style={{ padding: '24px 20px 0' }}>
+        <section style={{ padding: '18px 16px 0' }}>
           <h2 style={{
             fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
             textTransform: 'uppercase', letterSpacing: '1.5px',
@@ -256,19 +331,19 @@ export function Home() {
                 transition={{ delay: 0.05 * i, duration: 0.3 }}
                 style={{
                   background: '#fff',
-                  borderRadius: 20,
+                  borderRadius: 'var(--radius-card)',
                   boxShadow: 'var(--shadow-card)',
-                  padding: '14px 14px',
-                  minWidth: 110,
+                  padding: '12px 10px',
+                  minWidth: 96,
                   flexShrink: 0,
                   display: 'flex', flexDirection: 'column', gap: 6,
                 }}
               >
-                <span style={{ fontSize: 20 }}>{s.category.icon_name ?? '💰'}</span>
-                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-600)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>
+                <CategoryIcon categoryName={s.category.name} size={20} />
+                <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--neutral-600)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 88 }}>
                   {s.category.name}
                 </p>
-                <p style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)', margin: 0 }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)', margin: 0 }}>
                   {s.spent_amount.toFixed(0)}€
                 </p>
                 <div style={{ height: 3, background: 'var(--neutral-100)', borderRadius: 9999, overflow: 'hidden' }}>

@@ -6,6 +6,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { useAddTransaction } from '@/hooks/useTransactions'
 import { useAuth } from '@/hooks/useAuth'
 import type { Direction, FlowType, BudgetBehavior } from '@/lib/types'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 interface AddTransactionModalProps {
   open: boolean
@@ -50,6 +51,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const [isRecurring, setIsRecurring] = useState(false)
 
   const { data: categories } = useCategories(tab)
+  const selectedCategory = (categories ?? []).find((c) => c.id === categoryId) ?? null
 
   useEffect(() => {
     if (accounts?.length && !accountId) {
@@ -210,18 +212,26 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
 
                 {/* Category select */}
                 {tab !== 'savings' && (
-                  <div className="relative">
-                    <select
-                      value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
-                      className="w-full px-4 py-3 pr-10 rounded-xl bg-neutral-50 border border-neutral-200 text-sm focus:outline-none focus:border-primary-400 appearance-none"
-                    >
-                      <option value="">Catégorie (optionnel)</option>
-                      {(categories ?? []).map((c) => (
-                        <option key={c.id} value={c.id}>{c.icon_name} {c.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                  <div>
+                    <div className="relative">
+                      <select
+                        value={categoryId}
+                        onChange={(e) => setCategoryId(e.target.value)}
+                        className="w-full px-4 py-3 pr-10 rounded-xl bg-neutral-50 border border-neutral-200 text-sm focus:outline-none focus:border-primary-400 appearance-none"
+                      >
+                        <option value="">Catégorie (optionnel)</option>
+                        {(categories ?? []).map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                    </div>
+                    {selectedCategory && (
+                      <div className="mt-2 px-1 flex items-center gap-2 text-xs text-neutral-500">
+                        <CategoryIcon categoryName={selectedCategory.name} size={16} />
+                        <span>{selectedCategory.name}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 

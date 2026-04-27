@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { useTransactions } from '@/hooks/useTransactions'
 import { getCurrentPeriod, getMonthLabel, formatCurrency, getCategoryColor } from '@/lib/utils'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 type Period = 'month' | 'quarter' | 'year'
 
@@ -42,12 +43,11 @@ export function Charts() {
 
   // Expenses by category (pie)
   const expenses = (txns ?? []).filter((t) => t.flow_type === 'expense')
-  const byCat = expenses.reduce<Record<string, { name: string; value: number; color: string; icon: string }>>((acc, t) => {
+  const byCat = expenses.reduce<Record<string, { name: string; value: number; color: string }>>((acc, t) => {
     const catId = t.category_id ?? 'other'
     const catName = t.category?.name ?? 'Autre'
-    const catIcon = t.category?.icon_name ?? '💰'
     if (!acc[catId]) {
-      acc[catId] = { name: catName, value: 0, color: getCategoryColor(t.category?.color_token ?? null, Object.keys(acc).length), icon: catIcon }
+      acc[catId] = { name: catName, value: 0, color: getCategoryColor(t.category?.color_token ?? null, Object.keys(acc).length) }
     }
     acc[catId].value += Number(t.amount)
     return acc
@@ -150,7 +150,10 @@ export function Charts() {
               {pieData.slice(0, 5).map((d, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                  <span className="text-xs text-neutral-600 truncate flex-1">{d.icon} {d.name}</span>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <CategoryIcon categoryName={d.name} size={14} fallback="💰" />
+                    <span className="text-xs text-neutral-600 truncate">{d.name}</span>
+                  </div>
                   <span className="font-amount text-xs font-semibold text-neutral-800 flex-shrink-0">
                     {formatCurrency(d.value)}
                   </span>

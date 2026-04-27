@@ -8,18 +8,35 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    let mounted = true
+
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        setSession(session)
+        setUser(session?.user ?? null)
+      } catch (err) {
+        console.error('[auth] Failed to get session', err)
+        if (!mounted) return
+        setSession(null)
+        setUser(null)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    void init()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {

@@ -5,6 +5,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { getCurrentPeriod, getMonthLabel, formatCurrency } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 type Period = 'this_month' | 'last_month' | 'last_3' | 'ytd'
 
@@ -228,7 +229,14 @@ export function Activite() {
                         fontFamily: 'var(--font-sans)',
                       }}
                     >
-                      {'icon_name' in cat && cat.icon_name ? `${cat.icon_name} ` : ''}{cat.name}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {cat.id === 'all' ? (
+                          <span aria-hidden="true">✨</span>
+                        ) : (
+                          <CategoryIcon categoryName={cat.name} size={14} fallback={null} />
+                        )}
+                        {cat.name}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -327,8 +335,6 @@ export function Activite() {
               }}>
                 {dayTxns.map((t, ti) => {
                   const label = t.normalized_label ?? t.raw_label ?? 'Opération'
-                  const icon  = t.category?.icon_name ?? '💳'
-                  const catColor = t.category?.color_token ?? 'var(--neutral-100)'
 
                   return (
                     <div
@@ -341,12 +347,10 @@ export function Activite() {
                     >
                       <div style={{
                         width: 38, height: 38,
-                        borderRadius: 'var(--radius-full)',
-                        background: catColor,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 17, flexShrink: 0,
+                        flexShrink: 0,
                       }}>
-                        {icon}
+                        <CategoryIcon categoryName={t.category?.name} size={20} fallback="💳" />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--neutral-700)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

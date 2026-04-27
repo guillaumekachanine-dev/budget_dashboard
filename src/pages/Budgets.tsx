@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Check, X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell, LabelList,
@@ -8,8 +8,12 @@ import {
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { getCurrentPeriod, formatCurrency, formatCompact, clamp, getCategoryColor } from '@/lib/utils'
+import { getCurrentPeriod, formatCurrency, formatCompact, clamp } from '@/lib/utils'
+import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
+import { supabase } from '@/lib/supabase'
 import type { Category } from '@/lib/types'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { BudgetAnalyticsPanel } from '@/features/budget/components/BudgetAnalyticsPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PeriodKey    = 'semaine' | 'mois' | 'annee' | 'custom'
@@ -37,9 +41,21 @@ interface TopTransaction {
 interface SubCatData {
   id:    string
   name:  string
+  parentCategoryName?: string | null
   icon:  string
   total: number
   topTx: TopTransaction | null
+}
+
+type SubCatTrend = 'up' | 'down' | 'equal'
+
+interface SubCategoryTrendItem {
+  id: string
+  name: string
+  parentCategoryName: string | null
+  currentMonthAmount: number
+  threeMonthAvg: number
+  trend: SubCatTrend
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -282,7 +298,7 @@ interface CatItem {
   id: string; name: string; icon_name: string | null; color_token: string | null
 }
 
-const ALL_ITEM: CatItem = { id: 'all', name: 'Toutes', icon_name: '✨', color_token: null }
+const ALL_ITEM: CatItem = { id: 'all', name: 'Toutes', icon_name: null, color_token: null }
 
 interface CategorySheetProps {
   open:       boolean
@@ -334,15 +350,8 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
 
             {/* Grid 4 per row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px 6px' }}>
-              {items.map((cat, idx) => {
+              {items.map((cat) => {
                 const isSelected = cat.id === selectedId
-                const rawColor   = cat.id === 'all' ? 'var(--primary-100)' : getCategoryColor(cat.color_token, idx - 1)
-                // hex color + 20% opacity suffix (e.g. #FF6B6B33)
-                const circleBg   = isSelected
-                  ? 'var(--primary-500)'
-                  : cat.id === 'all'
-                    ? 'var(--primary-50)'
-                    : `${rawColor}30`
 
                 return (
                   <motion.button
@@ -355,28 +364,10 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
                       WebkitTapHighlightColor: 'transparent',
                     }}
                   >
-                    <div style={{
-                      width: 56, height: 56, borderRadius: '50%',
-                      background: circleBg,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 24, position: 'relative',
-                      boxShadow: isSelected ? '0 4px 14px rgba(91,87,245,0.38)' : '0 2px 8px rgba(28,28,58,0.06)',
-                      border: `2.5px solid ${isSelected ? 'var(--primary-400)' : 'transparent'}`,
-                      transition: 'all 0.2s',
-                    }}>
-                      {cat.icon_name ?? '💰'}
-                      {isSelected && (
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 16 }}
-                          style={{
-                            position: 'absolute', bottom: -2, right: -2,
-                            width: 18, height: 18, borderRadius: '50%',
-                            background: 'var(--primary-500)', border: '2px solid white',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        >
-                          <Check size={9} color="white" strokeWidth={3.5} />
-                        </motion.div>
-                      )}
+                    <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {cat.id === 'all'
+                        ? '✨'
+                        : <CategoryIcon categoryName={cat.name} size={30} fallback="💰" />}
                     </div>
                     <span style={{
                       fontSize: 10, fontWeight: isSelected ? 700 : 500, textAlign: 'center',
@@ -483,77 +474,129 @@ function KPICard({ monthlyBudget, currentSpent, recurringSpent, projectedEOM }: 
   )
 }
 
-// ─── Analyse Section ──────────────────────────────────────────────────────────
-interface AnalyseSectionProps {
-  threeMonthAvg:  number
-  monthlyBudget:  number
-  categoryName:   string
-  onDetailsClick: () => void
+// ─── Sub-categories Section ───────────────────────────────────────────────────
+interface SubCategoriesSectionProps {
+  rows: SubCategoryTrendItem[]
+  onAnalyseClick: () => void
 }
 
-function AnalyseSection({ threeMonthAvg, monthlyBudget, categoryName, onDetailsClick }: AnalyseSectionProps) {
-  const now = new Date()
-  const labelM3  = new Date(now.getFullYear(), now.getMonth() - 3, 1)
-    .toLocaleDateString('fr-FR', { month: 'long' })
-  const labelM1  = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    .toLocaleDateString('fr-FR', { month: 'long' })
+function getTrendVisual(trend: SubCatTrend): { symbol: string; color: string } {
+  if (trend === 'down') return { symbol: '↓', color: 'var(--color-positive)' }
+  if (trend === 'up') return { symbol: '↑', color: 'var(--color-negative)' }
+  return { symbol: '=', color: '#8B6A3C' }
+}
 
-  const isOverAvg = threeMonthAvg > 0 && monthlyBudget > 0 && threeMonthAvg > monthlyBudget
-  const hasData   = threeMonthAvg > 0
-
-  const placeholderText = isOverAvg
-    ? `Sur 3 mois, le poste "${categoryName}" dépasse en moyenne son enveloppe de ${formatCurrency(threeMonthAvg - monthlyBudget)}/mois. L'analyse recommandera de revoir ce budget à la hausse.`
-    : `L'analyse étudiera tes habitudes sur 3 mois et proposera des recommandations personnalisées pour optimiser ce poste.`
-
+function SubCategoriesSection({ rows, onAnalyseClick }: SubCategoriesSectionProps) {
   return (
     <div style={{
-      borderRadius: 'var(--radius-xl)',
-      border: '1.5px dashed var(--neutral-200)',
-      padding: '13px 16px',
       background: 'var(--neutral-0)',
+      borderRadius: 'var(--radius-2xl)',
+      boxShadow: 'var(--shadow-card)',
+      padding: '16px 16px',
     }}>
-      {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14 }}>🔬</span>
-          <div>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '0.3px' }}>
-              Analyse M-3
-            </p>
-            <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--neutral-400)' }}>
-              {labelM3} → {labelM1}
-            </p>
-          </div>
+        <div>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Sous-catégories
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
+            Tri décroissant · mois en cours
+          </p>
         </div>
         <button
-          onClick={onDetailsClick}
+          onClick={onAnalyseClick}
           style={{
-            fontSize: 11, fontWeight: 700, letterSpacing: '0.2px',
-            color: 'var(--primary-500)', background: 'var(--primary-50)',
-            padding: '5px 12px', borderRadius: 'var(--radius-full)',
-            border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)',
-            transition: 'all 0.15s',
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.2px',
+            color: 'var(--primary-500)',
+            background: 'var(--primary-50)',
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-sans)',
           }}
         >
-          Détails →
+          Analyse
         </button>
       </div>
 
-      {/* Placeholder text */}
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.6, fontStyle: 'italic' }}>
-        {placeholderText}
-      </p>
-
-      {/* 3-month avg preview */}
-      {hasData && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--neutral-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 11, color: 'var(--neutral-400)' }}>Moy. 3 derniers mois</span>
-          <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
-            color: isOverAvg ? 'var(--color-negative)' : 'var(--color-positive)',
+      {rows.length > 0 ? (
+        <div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto auto 20px',
+            gap: 8,
+            paddingBottom: 6,
+            borderBottom: '1px solid var(--neutral-100)',
           }}>
-            {formatCurrency(threeMonthAvg)}/mois
-          </span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>Nom</span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'right' }}>Mois</span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'right' }}>Moy. 3m</span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'center' }}>T</span>
+          </div>
+          {rows.map((row, i) => {
+            const trendVisual = getTrendVisual(row.trend)
+            return (
+              <div
+                key={row.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto auto 20px',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '10px 0',
+                  borderBottom: i < rows.length - 1 ? '1px solid var(--neutral-100)' : 'none',
+                }}
+              >
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--neutral-700)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {row.name}
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--neutral-800)',
+                  textAlign: 'right',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                  {formatCurrency(row.currentMonthAmount)}
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--neutral-500)',
+                  textAlign: 'right',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                  {formatCurrency(row.threeMonthAvg)}
+                </span>
+                <span style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: trendVisual.color,
+                  textAlign: 'center',
+                  lineHeight: 1,
+                }}>
+                  {trendVisual.symbol}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div style={{ padding: '24px 0', textAlign: 'center' }}>
+          <p style={{ fontSize: 13, color: 'var(--neutral-400)', margin: '0 0 4px' }}>Aucune sous-catégorie</p>
+          <p style={{ fontSize: 11, color: 'var(--neutral-300)', fontStyle: 'italic', margin: 0 }}>
+            Aucune dépense sous-catégorisée sur la période
+          </p>
         </div>
       )}
     </div>
@@ -565,8 +608,6 @@ interface AnalyseModalProps {
   open:           boolean
   onClose:        () => void
   categoryName:   string
-  categoryIcon:   string
-  categoryColor:  string   // hex string, e.g. "#FF6B6B"
   monthlyAvg:     number
   monthlyBudgetToDate: number
   monthlyHistory: MonthlyBucket[]
@@ -610,12 +651,15 @@ function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
 
       {/* Category icon */}
       <div style={{
-        width: 38, height: 38, borderRadius: '50%',
-        background: 'var(--neutral-100)',
+        width: 38, height: 38,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 18, flexShrink: 0,
+        flexShrink: 0,
       }}>
-        {data.icon}
+        <CategoryIcon
+          categoryName={data.parentCategoryName || data.name}
+          size={20}
+          fallback={data.icon || '💰'}
+        />
       </div>
 
       {/* Name + top transaction */}
@@ -652,7 +696,7 @@ function formatBarLabel(value: number): string {
 
 function AnalyseModal({
   open, onClose,
-  categoryName, categoryIcon, categoryColor,
+  categoryName,
   monthlyAvg, monthlyBudgetToDate, monthlyHistory, subCategories,
 }: AnalyseModalProps) {
   const todayLabel = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
@@ -708,14 +752,7 @@ function AnalyseModal({
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: '50%',
-                    background: `${categoryColor}22`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 20, flexShrink: 0,
-                  }}>
-                    {categoryIcon}
-                  </div>
+                  <CategoryIcon categoryName={categoryName} size={22} fallback="✨" />
                   <div>
                     <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--neutral-800)' }}>Analyse</h2>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--neutral-400)' }}>{categoryName}</p>
@@ -878,7 +915,11 @@ function AnalyseModal({
 
                 {subCategories.length > 0 ? (
                   subCategories.map((sc, i) => (
-                    <SubCatRow key={sc.id} rank={i + 1} data={sc} />
+                    <SubCatRow
+                      key={sc.id}
+                      rank={i + 1}
+                      data={{ ...sc, parentCategoryName: sc.parentCategoryName ?? categoryName }}
+                    />
                   ))
                 ) : (
                   <div style={{ padding: '28px 0', textAlign: 'center' }}>
@@ -924,9 +965,23 @@ export function Budgets() {
   const [showCatSheet,     setShowCatSheet]     = useState(false)
   const [showAnalyseModal, setShowAnalyseModal] = useState(false)
 
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      void debugBudgetSupabaseConnection(supabase)
+    }
+  }, [])
+
   // ── Queries ───────────────────────────────────────────────
   const { data: summaries }        = useBudgetSummaries(year, month)
   const { data: categories = [] }  = useCategories('expense')
+  const rootExpenseCategories = useMemo(
+    () => categories.filter((c) => c.parent_id === null),
+    [categories],
+  )
+  const expenseSubCategories = useMemo(
+    () => categories.filter((c) => c.parent_id !== null),
+    [categories],
+  )
 
   const range = useMemo(
     () => getPeriodRange(periodKey, customState),
@@ -950,6 +1005,13 @@ export function Budgets() {
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const { data: currentMonthTxns } = useTransactions({
     startDate: currentMonthStart, endDate: todayStr(), flowType: 'expense', categoryId: catFilter,
+  })
+  const { data: currentMonthAllExpenseTxns } = useTransactions({
+    startDate: currentMonthStart, endDate: todayStr(), flowType: 'expense',
+  })
+  const threeMonthRollingStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10)
+  const { data: rollingThreeMonthAllExpenseTxns } = useTransactions({
+    startDate: threeMonthRollingStart, endDate: todayStr(), flowType: 'expense',
   })
   const historyStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10)
   const { data: historyTxns } = useTransactions({
@@ -1009,11 +1071,54 @@ export function Budgets() {
     [categories, selectedCat],
   )
 
-  // Hex color for the Analyse modal header icon background
-  const categoryHexColor = useMemo(
-    () => selectedCatInfo ? getCategoryColor(selectedCatInfo.color_token, 0) : '#5B57F5',
-    [selectedCatInfo],
-  )
+  const subCategoryRows = useMemo<SubCategoryTrendItem[]>(() => {
+    const visibleSubCategories = selectedCat === 'all'
+      ? expenseSubCategories
+      : expenseSubCategories.filter((c) => c.parent_id === selectedCat)
+
+    if (!visibleSubCategories.length) return []
+
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
+
+    const currentMonthByCategory = (currentMonthAllExpenseTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
+      if (!tx.category_id) return acc
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+
+    const rollingThreeMonthsByCategory = (rollingThreeMonthAllExpenseTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
+      if (!tx.category_id) return acc
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+
+    return visibleSubCategories
+      .map((subCat) => {
+        const currentMonthAmount = currentMonthByCategory.get(subCat.id) ?? 0
+        const threeMonthAvg = (rollingThreeMonthsByCategory.get(subCat.id) ?? 0) / 3
+
+        let trend: SubCatTrend = 'equal'
+        if (currentMonthAmount > threeMonthAvg + 0.01) trend = 'up'
+        if (currentMonthAmount < threeMonthAvg - 0.01) trend = 'down'
+
+        return {
+          id: subCat.id,
+          name: subCat.name,
+          parentCategoryName: subCat.parent_id ? categoryNameById.get(subCat.parent_id) ?? null : null,
+          currentMonthAmount,
+          threeMonthAvg,
+          trend,
+        }
+      })
+      .filter((row) => row.currentMonthAmount > 0 || row.threeMonthAvg > 0)
+      .sort((a, b) => (b.currentMonthAmount - a.currentMonthAmount) || (b.threeMonthAvg - a.threeMonthAvg))
+  }, [
+    selectedCat,
+    expenseSubCategories,
+    categories,
+    currentMonthAllExpenseTxns,
+    rollingThreeMonthAllExpenseTxns,
+  ])
 
   // Monthly history (last 3 months including current month)
   const monthlyHistory = useMemo<MonthlyBucket[]>(() => {
@@ -1040,7 +1145,7 @@ export function Budgets() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
 
       {/* ── Header ──────────────────────────────────────────── */}
       <motion.div
@@ -1161,16 +1266,9 @@ export function Budgets() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* Category icon */}
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: selectedCat === 'all'
-                ? 'var(--primary-50)'
-                : `${getCategoryColor(selectedCatInfo?.color_token ?? null, 0)}30`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 18, flexShrink: 0,
-            }}>
-              {selectedCat === 'all' ? '✨' : (selectedCatInfo?.icon_name ?? '💰')}
-            </div>
+            {selectedCat === 'all'
+              ? <span aria-hidden="true">✨</span>
+              : <CategoryIcon categoryName={selectedCatInfo?.name} size={20} fallback="💰" />}
             <div style={{ textAlign: 'left' }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)' }}>
                 {selectedCat === 'all' ? 'Toutes les catégories' : selectedCatInfo?.name ?? 'Catégorie'}
@@ -1197,17 +1295,23 @@ export function Budgets() {
         />
       </motion.div>
 
-      {/* ── Analyse Section ───────────────────────────────────── */}
+      {/* ── Sous-catégories ───────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}
         style={{ margin: '10px 20px 0' }}
       >
-        <AnalyseSection
-          threeMonthAvg={threeMonthAvg}
-          monthlyBudget={totalMonthlyBudget}
-          categoryName={selectedCat === 'all' ? 'toutes catégories' : (selectedCatInfo?.name ?? 'cette catégorie')}
-          onDetailsClick={() => setShowAnalyseModal(true)}
+        <SubCategoriesSection
+          rows={subCategoryRows}
+          onAnalyseClick={() => setShowAnalyseModal(true)}
         />
+      </motion.div>
+
+      {/* ── Budget Analytics (debug panel) ───────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}
+        style={{ margin: '10px 20px 0' }}
+      >
+        <BudgetAnalyticsPanel year={year} />
       </motion.div>
 
       {/* ── Analyse Modal ────────────────────────────────────── */}
@@ -1215,12 +1319,17 @@ export function Budgets() {
         open={showAnalyseModal}
         onClose={() => setShowAnalyseModal(false)}
         categoryName={selectedCat === 'all' ? 'Toutes catégories' : (selectedCatInfo?.name ?? 'Catégorie')}
-        categoryIcon={selectedCat === 'all' ? '✨' : (selectedCatInfo?.icon_name ?? '💰')}
-        categoryColor={categoryHexColor}
         monthlyAvg={threeMonthAvg}
         monthlyBudgetToDate={budgetToDate}
         monthlyHistory={monthlyHistory}
-        subCategories={[]}
+        subCategories={subCategoryRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          parentCategoryName: row.parentCategoryName,
+          icon: '💰',
+          total: row.currentMonthAmount,
+          topTx: null,
+        }))}
       />
 
       {/* ── Sheets ───────────────────────────────────────────── */}
@@ -1233,7 +1342,7 @@ export function Budgets() {
       <CategorySheet
         open={showCatSheet}
         selectedId={selectedCat}
-        categories={categories}
+        categories={rootExpenseCategories}
         onClose={() => setShowCatSheet(false)}
         onSelect={setSelectedCat}
       />

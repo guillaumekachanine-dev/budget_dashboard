@@ -15,7 +15,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="app-shell flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin" />
       </div>
     )
@@ -24,7 +24,7 @@ export default function App() {
   if (!user) return <Login />
 
   return (
-    <div className="min-h-screen bg-neutral-50 max-w-lg mx-auto">
+    <div className="app-shell">
       <Routes>
         <Route path="/"         element={<Home />} />
         <Route path="/activite" element={<Activite />} />
