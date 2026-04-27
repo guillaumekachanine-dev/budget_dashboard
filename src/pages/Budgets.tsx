@@ -13,7 +13,7 @@ import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
 import type { Category } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
-import { BudgetAnalyticsPanel } from '@/features/budget/components/BudgetAnalyticsPanel'
+import { BudgetAnalyticsMiniPanel } from '@/features/budget/components/BudgetAnalyticsMiniPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PeriodKey    = 'semaine' | 'mois' | 'annee' | 'custom'
@@ -1306,12 +1306,12 @@ export function Budgets() {
         />
       </motion.div>
 
-      {/* ── Budget Analytics (debug panel) ───────────────────── */}
+      {/* ── Budget Analytics (mini panel) ───────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}
         style={{ margin: '10px 20px 0' }}
       >
-        <BudgetAnalyticsPanel year={year} />
+        <BudgetAnalyticsMiniPanel year={year} />
       </motion.div>
 
       {/* ── Analyse Modal ────────────────────────────────────── */}
