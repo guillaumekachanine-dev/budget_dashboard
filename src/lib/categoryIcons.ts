@@ -1,3 +1,5 @@
+import toutesCategoriesIcon from '@/assets/category_icons/single_raw/toutes_categories.png'
+
 const iconModules = import.meta.glob('../../icones_categories_budget/*.png', {
   eager: true,
   import: 'default',
@@ -42,6 +44,10 @@ export function getCategoryIconSrc(categoryName?: string | null): string | null 
 
   const key = normalizeKey(categoryName)
   if (!key) return null
+
+  if (key === 'toutescategories' || key === 'toutes' || key === 'all') {
+    return toutesCategoriesIcon
+  }
 
   const direct = categoryIconMap[key]
   if (direct) return direct

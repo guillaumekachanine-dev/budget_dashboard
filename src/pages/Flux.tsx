@@ -776,7 +776,9 @@ export function Flux() {
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>✨</div>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
+                        <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
+                      </div>
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
                     {rootCategories.map((cat) => (
