@@ -1,22 +1,22 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, X } from 'lucide-react'
+import { X, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Cell, LabelList,
+  ResponsiveContainer, Cell, LabelList, PieChart, Pie,
 } from 'recharts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { getCurrentPeriod, formatCurrency, formatCompact, clamp } from '@/lib/utils'
+import { getCurrentPeriod, formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
-import type { Category } from '@/lib/types'
+import type { Category, Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
-import { BudgetAnalyticsMiniPanel } from '@/features/budget/components/BudgetAnalyticsMiniPanel'
+import { KpiCard } from '@/components'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type PeriodKey    = 'semaine' | 'mois' | 'annee' | 'custom'
+type PeriodKey    = 'semaine' | 'mois' | 'trimestre' | 'annee' | 'custom'
 type CustomMode   = 'fixed' | 'rolling'
 
 interface CustomState {
@@ -30,6 +30,7 @@ interface MonthlyBucket {
   month:  string    // label court, ex : "Jan"
   amount: number
   budget: number
+  evolutionPct: number | null
 }
 
 interface TopTransaction {
@@ -54,13 +55,36 @@ interface SubCategoryTrendItem {
   name: string
   parentCategoryName: string | null
   currentMonthAmount: number
+  previousMonthAmount: number
   threeMonthAvg: number
   trend: SubCatTrend
+}
+
+interface PieDatum {
+  id: string
+  name: string
+  value: number
+  color: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function formatMoney(amount: number): string {
+  if (!Number.isFinite(amount)) return formatCurrencyRounded(0)
+  return formatCurrencyRounded(Math.floor(amount))
+}
+
+function formatTxDateDayMonth(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '--/--'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
+
+function txLabel(tx: Transaction): string {
+  return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
 }
 
 function getPeriodRange(key: PeriodKey, custom: CustomState): { startDate: string; endDate: string } {
@@ -77,6 +101,13 @@ function getPeriodRange(key: PeriodKey, custom: CustomState): { startDate: strin
         startDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
         endDate: todayStr(),
       }
+    case 'trimestre': {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
+      return {
+        startDate: new Date(now.getFullYear(), quarterStartMonth, 1).toISOString().slice(0, 10),
+        endDate: todayStr(),
+      }
+    }
     case 'annee':
       return { startDate: `${now.getFullYear()}-01-01`, endDate: todayStr() }
     case 'custom':
@@ -104,14 +135,9 @@ function scaleBudget(monthlyBudget: number, key: PeriodKey, custom: CustomState)
   const now = new Date()
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   if (key === 'annee') return monthlyBudget * 12
+  if (key === 'trimestre') return monthlyBudget * 3
   const range = getPeriodRange(key, custom)
   return (monthlyBudget / daysInMonth) * getDaysBetween(range.startDate, range.endDate)
-}
-
-function getRingColor(pct: number): string {
-  if (pct <= 80)  return '#2ED47A'
-  if (pct <= 100) return '#FFAB2E'
-  return '#FC5A5A'
 }
 
 function fmtDayShort(dateStr: string): string {
@@ -129,6 +155,11 @@ function getPeriodLabel(key: PeriodKey, custom: CustomState): string {
       const now = new Date()
       return now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     }
+    case 'trimestre': {
+      const now = new Date()
+      const quarter = Math.floor(now.getMonth() / 3) + 1
+      return `T${quarter} ${now.getFullYear()}`
+    }
     case 'annee':
       return `Année ${new Date().getFullYear()}`
     case 'custom':
@@ -139,29 +170,13 @@ function getPeriodLabel(key: PeriodKey, custom: CustomState): string {
 }
 
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 
-// ─── DonutRing ────────────────────────────────────────────────────────────────
-function DonutRing({ pct, color, size = 230 }: { pct: number; color: string; size?: number }) {
-  const sw   = 22
-  const r    = (size - sw) / 2
-  const circ = 2 * Math.PI * r
-  const off  = circ * (1 - clamp(pct, 0, 100) / 100)
-
-  return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', display: 'block', flexShrink: 0 }}>
-      {/* Track */}
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--neutral-100)" strokeWidth={sw} />
-      {/* Progress */}
-      <motion.circle
-        cx={size / 2} cy={size / 2} r={r}
-        fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"
-        strokeDasharray={circ}
-        initial={{ strokeDashoffset: circ }}
-        animate={{ strokeDashoffset: off }}
-        transition={{ duration: 0.9, ease: 'easeOut', delay: 0.1 }}
-      />
-    </svg>
-  )
+function accentFromLabel(label: string): string {
+  const key = label.trim().toLowerCase()
+  let hash = 0
+  for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
+  return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
 }
 
 // ─── CustomPeriodSheet ────────────────────────────────────────────────────────
@@ -188,7 +203,7 @@ function CustomPeriodSheet({ open, value, onClose, onApply }: CustomPeriodSheetP
     borderRadius: 'var(--radius-md)',
     border: '1.5px solid var(--neutral-200)',
     fontSize: 14, color: 'var(--neutral-800)',
-    fontFamily: 'var(--font-sans)', outline: 'none', background: '#fff',
+    fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--neutral-0)',
   }
 
   return (
@@ -206,7 +221,7 @@ function CustomPeriodSheet({ open, value, onClose, onApply }: CustomPeriodSheetP
             transition={{ type: 'spring', damping: 30, stiffness: 340 }}
             style={{
               position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 101,
-              background: '#fff', borderRadius: '24px 24px 0 0',
+              background: 'var(--neutral-0)', borderRadius: '24px 24px 0 0',
               padding: '0 20px 44px', maxWidth: 512, margin: '0 auto',
             }}
           >
@@ -228,7 +243,7 @@ function CustomPeriodSheet({ open, value, onClose, onApply }: CustomPeriodSheetP
                   flex: 1, padding: '9px 0', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, transition: 'all 0.2s', fontFamily: 'var(--font-sans)',
                   background: draft.mode === m ? 'var(--primary-500)' : 'transparent',
-                  color:      draft.mode === m ? '#fff' : 'var(--neutral-500)',
+                  color:      draft.mode === m ? 'var(--neutral-0)' : 'var(--neutral-500)',
                 }}>
                   {m === 'fixed' ? '📌 Période fixe' : '🔄 Glissante'}
                 </button>
@@ -281,8 +296,8 @@ function CustomPeriodSheet({ open, value, onClose, onApply }: CustomPeriodSheetP
             <button onClick={() => { onApply(draft); onClose() }} style={{
               marginTop: 28, width: '100%', padding: '14px', borderRadius: 'var(--radius-full)',
               border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
-              fontFamily: 'var(--font-sans)', background: 'var(--primary-500)', color: '#fff',
-              boxShadow: '0 4px 16px rgba(91,87,245,0.3)',
+              fontFamily: 'var(--font-sans)', background: 'var(--primary-500)', color: 'var(--neutral-0)',
+              boxShadow: 'var(--shadow-md)',
             }}>
               Appliquer
             </button>
@@ -389,220 +404,6 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
   )
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-interface KPICardProps {
-  monthlyBudget:  number   // enveloppe allouée
-  currentSpent:   number   // consommé ce mois
-  recurringSpent: number   // opérations planifiées / récurrentes
-  projectedEOM:   number   // projection fin de mois
-}
-
-function KPICard({ monthlyBudget, currentSpent, recurringSpent, projectedEOM }: KPICardProps) {
-  const remaining   = monthlyBudget - currentSpent
-  const isOver      = remaining < 0
-
-  const projRatio   = monthlyBudget > 0 ? projectedEOM / monthlyBudget : 0
-  const projColor   = projRatio <= 0.80 ? '#2ED47A' : projRatio <= 1.00 ? '#FFAB2E' : '#FC5A5A'
-
-  const colLabel: React.CSSProperties = {
-    margin: '0 0 5px', fontSize: 10, opacity: 0.55,
-    textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600,
-  }
-  const colValue: React.CSSProperties = {
-    margin: 0, fontFamily: 'var(--font-mono)', fontSize: 21,
-    fontWeight: 700, letterSpacing: '-0.5px', lineHeight: 1,
-  }
-
-  return (
-    <div style={{
-      background: 'linear-gradient(142deg, var(--primary-400) 0%, var(--primary-700) 100%)',
-      borderRadius: 'var(--radius-2xl)', padding: '18px 20px',
-      color: '#fff', position: 'relative', overflow: 'hidden',
-    }}>
-      {/* Decorative circles */}
-      <div style={{ position: 'absolute', right: -30, top: -38, width: 150, height: 150, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', right: 40, bottom: -48, width: 130, height: 130, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
-
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* Section label */}
-        <p style={{ margin: '0 0 14px', fontSize: 10, opacity: 0.58, textTransform: 'uppercase', letterSpacing: '1.8px', fontWeight: 600 }}>
-          Budget mensuel
-        </p>
-
-        {/* ── ROW 1 : Enveloppe | Disponible / Dépassement ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <p style={colLabel}>Enveloppe</p>
-            <p style={colValue}>{formatCurrency(monthlyBudget)}</p>
-          </div>
-
-          {/* Vertical separator */}
-          <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.18)', margin: '0 20px', flexShrink: 0 }} />
-
-          <div style={{ flex: 1 }}>
-            <p style={colLabel}>{isOver ? 'Dépassement' : 'Disponible'}</p>
-            <p style={{ ...colValue, color: isOver ? '#FC5A5A' : '#2ED47A' }}>
-              {isOver ? '−' : '+'}{formatCurrency(Math.abs(remaining))}
-            </p>
-          </div>
-        </div>
-
-        {/* Horizontal divider */}
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '16px 0' }} />
-
-        {/* ── ROW 2 : Planifié | Projection EOM ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <p style={colLabel}>Planifié ce mois</p>
-            <p style={{ ...colValue, fontSize: 18 }}>
-              {recurringSpent > 0 ? formatCurrency(recurringSpent) : '—'}
-            </p>
-          </div>
-
-          {/* Vertical separator */}
-          <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.18)', margin: '0 20px', flexShrink: 0 }} />
-
-          <div style={{ flex: 1 }}>
-            <p style={colLabel}>Projection EOM</p>
-            <p style={{ ...colValue, fontSize: 18, color: projColor }}>
-              {formatCurrency(projectedEOM)}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Sub-categories Section ───────────────────────────────────────────────────
-interface SubCategoriesSectionProps {
-  rows: SubCategoryTrendItem[]
-  onAnalyseClick: () => void
-}
-
-function getTrendVisual(trend: SubCatTrend): { symbol: string; color: string } {
-  if (trend === 'down') return { symbol: '↓', color: 'var(--color-positive)' }
-  if (trend === 'up') return { symbol: '↑', color: 'var(--color-negative)' }
-  return { symbol: '=', color: '#8B6A3C' }
-}
-
-function SubCategoriesSection({ rows, onAnalyseClick }: SubCategoriesSectionProps) {
-  return (
-    <div style={{
-      background: 'var(--neutral-0)',
-      borderRadius: 'var(--radius-2xl)',
-      boxShadow: 'var(--shadow-card)',
-      padding: '16px 16px',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Sous-catégories
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
-            Tri décroissant · mois en cours
-          </p>
-        </div>
-        <button
-          onClick={onAnalyseClick}
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.2px',
-            color: 'var(--primary-500)',
-            background: 'var(--primary-50)',
-            padding: '5px 12px',
-            borderRadius: 'var(--radius-full)',
-            border: 'none',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-sans)',
-          }}
-        >
-          Analyse
-        </button>
-      </div>
-
-      {rows.length > 0 ? (
-        <div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto auto 20px',
-            gap: 8,
-            paddingBottom: 6,
-            borderBottom: '1px solid var(--neutral-100)',
-          }}>
-            <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>Nom</span>
-            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'right' }}>Mois</span>
-            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'right' }}>Moy. 3m</span>
-            <span style={{ fontSize: 10, color: 'var(--neutral-400)', textAlign: 'center' }}>T</span>
-          </div>
-          {rows.map((row, i) => {
-            const trendVisual = getTrendVisual(row.trend)
-            return (
-              <div
-                key={row.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto auto 20px',
-                  gap: 8,
-                  alignItems: 'center',
-                  padding: '10px 0',
-                  borderBottom: i < rows.length - 1 ? '1px solid var(--neutral-100)' : 'none',
-                }}
-              >
-                <span style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--neutral-700)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {row.name}
-                </span>
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: 'var(--neutral-800)',
-                  textAlign: 'right',
-                  fontFamily: 'var(--font-mono)',
-                }}>
-                  {formatCurrency(row.currentMonthAmount)}
-                </span>
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--neutral-500)',
-                  textAlign: 'right',
-                  fontFamily: 'var(--font-mono)',
-                }}>
-                  {formatCurrency(row.threeMonthAvg)}
-                </span>
-                <span style={{
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: trendVisual.color,
-                  textAlign: 'center',
-                  lineHeight: 1,
-                }}>
-                  {trendVisual.symbol}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div style={{ padding: '24px 0', textAlign: 'center' }}>
-          <p style={{ fontSize: 13, color: 'var(--neutral-400)', margin: '0 0 4px' }}>Aucune sous-catégorie</p>
-          <p style={{ fontSize: 11, color: 'var(--neutral-300)', fontStyle: 'italic', margin: 0 }}>
-            Aucune dépense sous-catégorisée sur la période
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Analyse Modal ────────────────────────────────────────────────────────────
 interface AnalyseModalProps {
   open:           boolean
@@ -618,13 +419,13 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: 'var(--primary-600, #4844d4)',
+      background: 'var(--primary-600)',
       borderRadius: 'var(--radius-md)',
       padding: '5px 11px',
-      boxShadow: '0 4px 14px rgba(91,87,245,0.35)',
+      boxShadow: 'var(--shadow-md)',
     }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: '#fff' }}>
-        {formatCurrency(payload[0].value)}
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)' }}>
+        {formatMoney(payload[0].value)}
       </span>
     </div>
   )
@@ -642,7 +443,7 @@ function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
       <div style={{
         width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
         background: isFirst ? 'var(--primary-500)' : 'var(--neutral-100)',
-        color:      isFirst ? '#fff'                : 'var(--neutral-400)',
+        color:      isFirst ? 'var(--neutral-0)' : 'var(--neutral-400)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 10, fontWeight: 700,
       }}>
@@ -677,11 +478,11 @@ function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
       {/* Total + max amount */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--neutral-800)', lineHeight: 1.2 }}>
-          {formatCurrency(data.total)}
+          {formatMoney(data.total)}
         </p>
         {data.topTx && (
           <p style={{ margin: '3px 0 0', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--neutral-400)' }}>
-            max {formatCurrency(data.topTx.amount)}
+            max {formatMoney(data.topTx.amount)}
           </p>
         )}
       </div>
@@ -691,7 +492,7 @@ function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
 
 function formatBarLabel(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return ''
-  return formatCompact(value)
+  return formatMoney(value)
 }
 
 function AnalyseModal({
@@ -803,7 +604,7 @@ function AnalyseModal({
                         lineHeight: 1,
                       }}
                     >
-                      {monthlyAvg > 0 ? formatCurrency(monthlyAvg) : '—'}
+                      {monthlyAvg > 0 ? formatMoney(monthlyAvg) : '—'}
                     </motion.p>
                     <p style={{
                       margin: '4px 0 0',
@@ -888,7 +689,7 @@ function AnalyseModal({
                           key={`cell-${i}`}
                           fill={
                             entry.budget > 0 && entry.amount > entry.budget
-                              ? '#FC5A5A'
+                              ? 'var(--color-error)'
                               : 'var(--primary-500)'
                           }
                           fillOpacity={i === monthlyHistory.length - 1 ? 1 : 0.38}
@@ -939,12 +740,119 @@ function AnalyseModal({
   )
 }
 
+interface SubCategoryTransactionsModalProps {
+  open: boolean
+  onClose: () => void
+  title: string
+  transactions: Transaction[]
+  loading: boolean
+}
+
+function SubCategoryTransactionsModal({
+  open,
+  onClose,
+  title,
+  transactions,
+  loading,
+}: SubCategoryTransactionsModalProps) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
+          />
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+            style={{
+              position: 'fixed',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 221,
+              width: '100%',
+              maxWidth: 512,
+              margin: '0 auto',
+              background: 'var(--neutral-0)',
+              borderRadius: '24px 24px 0 0',
+              maxHeight: '82dvh',
+              overflow: 'hidden',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{title}</p>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  border: 'none',
+                  background: 'var(--neutral-100)',
+                  color: 'var(--neutral-600)',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 'var(--radius-full)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                aria-label="Fermer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div style={{ maxHeight: 'calc(82dvh - 66px)', overflowY: 'auto' }}>
+              {loading ? (
+                <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
+              ) : transactions.length === 0 ? (
+                <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
+              ) : (
+                transactions.map((tx) => (
+                  <div
+                    key={tx.id}
+                    style={{
+                      borderBottom: '1px solid var(--neutral-200)',
+                      padding: 'var(--space-3) var(--space-5)',
+                      display: 'grid',
+                      gridTemplateColumns: '52px minmax(0,1fr) auto',
+                      alignItems: 'center',
+                      gap: 'var(--space-3)',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                      {formatTxDateDayMonth(tx.transaction_date)}
+                    </span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
+                      {txLabel(tx)}
+                    </span>
+                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      {formatMoney(Number(tx.amount))}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
-  { key: 'semaine', label: 'Semaine' },
-  { key: 'mois',    label: 'Mois'    },
-  { key: 'annee',   label: 'Année'   },
-  { key: 'custom',  label: 'Définir' },
+  { key: 'mois',      label: 'Mois' },
+  { key: 'trimestre', label: 'Trimestre' },
+  { key: 'annee',     label: 'Année' },
 ]
 
 const DEFAULT_CUSTOM: CustomState = {
@@ -964,6 +872,7 @@ export function Budgets() {
   const [showCustomSheet,  setShowCustomSheet]  = useState(false)
   const [showCatSheet,     setShowCatSheet]     = useState(false)
   const [showAnalyseModal, setShowAnalyseModal] = useState(false)
+  const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategoryTrendItem | null>(null)
   const debugRanRef = useRef(false)
 
   useEffect(() => {
@@ -984,30 +893,36 @@ export function Budgets() {
     () => categories.filter((c) => c.parent_id !== null),
     [categories],
   )
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
   const range = useMemo(
     () => getPeriodRange(periodKey, customState),
     [periodKey, customState],
   )
 
-  // Transactions for the donut (selected period + optional category filter)
-  const catFilter = selectedCat !== 'all' ? selectedCat : undefined
-  const { data: periodTxns, isLoading: loadingPeriod } = useTransactions({
-    ...range, flowType: 'expense', categoryId: catFilter,
+  const selectedCategoryIds = useMemo(() => {
+    if (selectedCat === 'all') return undefined
+    const ids = [selectedCat]
+    expenseSubCategories.forEach((c) => {
+      if (c.parent_id === selectedCat) ids.push(c.id)
+    })
+    return ids
+  }, [expenseSubCategories, selectedCat])
+
+  // Transactions for the selected period and selected category scope
+  const { data: periodTxns } = useTransactions({
+    ...range, flowType: 'expense', categoryIds: selectedCategoryIds,
   })
 
   // Last 3 full months for the KPI average
   const threeMonthStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10)
   const lastMonthEnd    = new Date(now.getFullYear(), now.getMonth(),    0).toISOString().slice(0, 10)
   const { data: threeMonthTxns } = useTransactions({
-    startDate: threeMonthStart, endDate: lastMonthEnd, flowType: 'expense', categoryId: catFilter,
+    startDate: threeMonthStart, endDate: lastMonthEnd, flowType: 'expense', categoryIds: selectedCategoryIds,
   })
 
   // Current month for KPI projection (may be same as periodTxns when key==='mois')
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const { data: currentMonthTxns } = useTransactions({
-    startDate: currentMonthStart, endDate: todayStr(), flowType: 'expense', categoryId: catFilter,
-  })
   const { data: currentMonthAllExpenseTxns } = useTransactions({
     startDate: currentMonthStart, endDate: todayStr(), flowType: 'expense',
   })
@@ -1017,7 +932,17 @@ export function Budgets() {
   })
   const historyStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10)
   const { data: historyTxns } = useTransactions({
-    startDate: historyStart, endDate: todayStr(), flowType: 'expense', categoryId: catFilter,
+    startDate: historyStart, endDate: todayStr(), flowType: 'expense', categoryIds: selectedCategoryIds,
+  })
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10)
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
+  const { data: prevMonthAllExpenseTxns } = useTransactions({
+    startDate: prevMonthStart, endDate: prevMonthEnd, flowType: 'expense',
+  })
+  const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
+    ...range,
+    flowType: 'expense',
+    categoryIds: selectedSubCategory ? [selectedSubCategory.id] : ['__none__'],
   })
 
   // ── Derived values ────────────────────────────────────────
@@ -1037,32 +962,14 @@ export function Budgets() {
     [periodTxns],
   )
 
-  const pct       = periodBudget > 0 ? clamp((periodSpent / periodBudget) * 100, 0, 200) : 0
-  const ringColor = getRingColor(Math.min(pct, 100))
-
   // 3-month average per month (last 3 full months)
   const threeMonthAvg = useMemo(() => {
     if (!threeMonthTxns?.length) return 0
     return threeMonthTxns.reduce((s, t) => s + Number(t.amount), 0) / 3
   }, [threeMonthTxns])
 
-  // Current month stats
-  const currentSpent = useMemo(
-    () => (currentMonthTxns ?? []).reduce((s, t) => s + Number(t.amount), 0),
-    [currentMonthTxns],
-  )
-
-  // Opérations planifiées = transactions récurrentes du mois en cours
-  const recurringSpent = useMemo(
-    () => (currentMonthTxns ?? [])
-      .filter((t) => t.is_recurring)
-      .reduce((s, t) => s + Number(t.amount), 0),
-    [currentMonthTxns],
-  )
-
   const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const daysElapsed  = now.getDate()
-  const projectedEOM = daysElapsed > 0 ? (currentSpent / daysElapsed) * daysInMonth : 0
   const budgetToDate = daysElapsed > 0
     ? (totalMonthlyBudget / daysInMonth) * daysElapsed
     : 0
@@ -1093,21 +1000,28 @@ export function Budgets() {
       acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
       return acc
     }, new Map<string, number>())
+    const previousMonthByCategory = (prevMonthAllExpenseTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
+      if (!tx.category_id) return acc
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
 
     return visibleSubCategories
       .map((subCat) => {
         const currentMonthAmount = currentMonthByCategory.get(subCat.id) ?? 0
+        const previousMonthAmount = previousMonthByCategory.get(subCat.id) ?? 0
         const threeMonthAvg = (rollingThreeMonthsByCategory.get(subCat.id) ?? 0) / 3
 
         let trend: SubCatTrend = 'equal'
-        if (currentMonthAmount > threeMonthAvg + 0.01) trend = 'up'
-        if (currentMonthAmount < threeMonthAvg - 0.01) trend = 'down'
+        if (currentMonthAmount > previousMonthAmount + 0.01) trend = 'up'
+        if (currentMonthAmount < previousMonthAmount - 0.01) trend = 'down'
 
         return {
           id: subCat.id,
           name: subCat.name,
           parentCategoryName: subCat.parent_id ? categoryNameById.get(subCat.parent_id) ?? null : null,
           currentMonthAmount,
+          previousMonthAmount,
           threeMonthAvg,
           trend,
         }
@@ -1119,12 +1033,13 @@ export function Budgets() {
     expenseSubCategories,
     categories,
     currentMonthAllExpenseTxns,
+    prevMonthAllExpenseTxns,
     rollingThreeMonthAllExpenseTxns,
   ])
 
   // Monthly history (last 3 months including current month)
   const monthlyHistory = useMemo<MonthlyBucket[]>(() => {
-    return [-2, -1, 0].map((offset) => {
+    const base = [-2, -1, 0].map((offset) => {
       const d = new Date(nowYear, nowMonth + offset, 1)
       const m = d.getMonth()
       const y = d.getFullYear()
@@ -1135,185 +1050,388 @@ export function Budgets() {
       }, 0)
       return { month: MONTHS_FR_SHORT[m], amount, budget: totalMonthlyBudget }
     })
+    return base.map((row, idx) => {
+      if (idx === 0) return { ...row, evolutionPct: null }
+      const prev = base[idx - 1].amount
+      if (prev <= 0) return { ...row, evolutionPct: null }
+      return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
+    })
   }, [historyTxns, totalMonthlyBudget, nowMonth, nowYear])
+
+  const pieData = useMemo<PieDatum[]>(() => {
+    const txs = periodTxns ?? []
+    const amounts = new Map<string, number>()
+
+    txs.forEach((tx) => {
+      const categoryId = tx.category_id
+      if (!categoryId) return
+      const category = categoryById.get(categoryId)
+      if (!category) return
+
+      if (selectedCat === 'all') {
+        const rootId = category.parent_id ?? category.id
+        amounts.set(rootId, (amounts.get(rootId) ?? 0) + Number(tx.amount))
+        return
+      }
+
+      if (category.parent_id === selectedCat || category.id === selectedCat) {
+        amounts.set(category.id, (amounts.get(category.id) ?? 0) + Number(tx.amount))
+      }
+    })
+
+    return Array.from(amounts.entries())
+      .map(([id, value]) => ({
+        id,
+        name: categoryById.get(id)?.name ?? 'Catégorie',
+        value,
+        color: accentFromLabel(categoryById.get(id)?.name ?? id),
+      }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [categoryById, periodTxns, selectedCat])
+
+  const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
+  const chartRatioPct = periodBudget > 0 ? (periodSpent / periodBudget) * 100 : 0
 
   // ── Handle period tab click ───────────────────────────────
   const handlePeriodTab = (key: PeriodKey) => {
-    if (key === 'custom') {
-      setShowCustomSheet(true)
-    } else {
-      setPeriodKey(key)
-    }
+    setPeriodKey(key)
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
+  const periodRemaining = periodBudget - periodSpent
+  const subCategoryModalTitle = selectedSubCategory
+    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey, customState)}`
+    : ''
 
-      {/* ── Header ──────────────────────────────────────────── */}
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-6)',
+        padding: 'var(--space-6)',
+        paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-        style={{ padding: '28px 20px 0' }}
+        style={{ display: 'grid', gap: 'var(--space-4)' }}
       >
-        <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 4 }}>
-          {getPeriodLabel(periodKey, customState)}
-        </p>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.4px', margin: 0 }}>Budgets</h1>
-      </motion.div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.4px', margin: 0 }}>Budgets</h1>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--neutral-500)', fontWeight: 500 }}>{getPeriodLabel(periodKey, customState)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCatSheet(true)}
+            style={{
+              border: '2px solid var(--primary-500)',
+              background: 'var(--primary-50)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-4)',
+              cursor: 'pointer',
+              color: 'var(--primary-500)',
+              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'transform var(--transition-base), box-shadow var(--transition-base)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+            aria-label="Choisir une catégorie"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
+            }}
+          >
+            {selectedCat === 'all'
+              ? <span style={{ fontSize: 44 }}>✨</span>
+              : <CategoryIcon categoryName={selectedCatInfo?.name} size={48} fallback="💰" />}
+          </button>
+        </div>
 
-      {/* ── Period selector ──────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08 }}
-        style={{ padding: '16px 20px 0' }}
-      >
-        <div style={{
-          display: 'flex', background: 'var(--neutral-100)',
-          borderRadius: 'var(--radius-full)', padding: 3, gap: 2,
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
           {PERIOD_TABS.map(({ key, label }) => {
-            const isActive = key === 'custom' ? periodKey === 'custom' : key === periodKey
+            const active = periodKey === key
             return (
               <button
                 key={key}
+                type="button"
                 onClick={() => handlePeriodTab(key)}
                 style={{
-                  flex: 1, padding: '8px 0', borderRadius: 'var(--radius-full)',
-                  border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  fontFamily: 'var(--font-sans)', transition: 'all 0.2s',
-                  background: isActive ? 'var(--primary-500)' : 'transparent',
-                  color:      isActive ? '#fff' : 'var(--neutral-400)',
-                  boxShadow:  isActive ? '0 2px 8px rgba(91,87,245,0.3)' : 'none',
+                  border: 'none',
+                  background: 'transparent',
+                  padding: '0 0 6px',
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? 'var(--primary-500)' : 'var(--neutral-500)',
+                  borderBottom: active ? '2px solid var(--primary-500)' : '2px solid transparent',
+                  cursor: 'pointer',
                 }}
               >
-                {key === 'custom' && periodKey === 'custom' ? '✦ ' : ''}{label}
+                {label}
               </button>
             )
           })}
+          <button
+            type="button"
+            onClick={() => setShowCustomSheet(true)}
+            style={{
+              marginLeft: 'auto',
+              border: 'none',
+              background: 'transparent',
+              padding: '0 0 6px',
+              fontSize: 13,
+              fontWeight: periodKey === 'custom' ? 700 : 600,
+              color: periodKey === 'custom' ? 'var(--primary-500)' : 'var(--neutral-500)',
+              borderBottom: periodKey === 'custom' ? '2px solid var(--primary-500)' : '2px solid transparent',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Personnalisée
+          </button>
         </div>
       </motion.div>
 
-      {/* ── Donut card ───────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
-        style={{
-          margin: '16px 20px 0',
-          background: 'var(--neutral-0)',
-          borderRadius: 'var(--radius-2xl)',
-          boxShadow: 'var(--shadow-card)',
-          padding: '22px 20px 18px',
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-        }}
-      >
-        {/* Ring + center text */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {/* Force animation restart on period/category change */}
-          <DonutRing key={`${periodKey}-${selectedCat}-${JSON.stringify(customState)}`} pct={pct} color={ringColor} size={210} />
-
-          {/* Center content */}
-          <div style={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none' }}>
-            {loadingPeriod ? (
-              <div style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--neutral-200)', borderTopColor: 'var(--primary-500)', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
-            ) : (
-              <>
-                <motion.p
-                  key={periodSpent}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3, duration: 0.35 }}
-                  style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'clamp(20px, 6vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.5px', lineHeight: 1 }}
-                >
-                  {formatCurrency(periodSpent)}
-                </motion.p>
-                <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--neutral-400)', lineHeight: 1.3 }}>
-                  Dépensé<br />
-                  {getPeriodLabel(periodKey, customState)}
-                </p>
-                <p style={{
-                  margin: '8px 0 0', fontSize: 16, fontWeight: 700,
-                  color: ringColor, fontFamily: 'var(--font-mono)',
-                }}>
-                  {pct.toFixed(0)}%
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: ringColor }} />
-            <span style={{ fontSize: 11, color: 'var(--neutral-500)' }}>Dépensé · {formatCurrency(periodSpent)}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--neutral-200)' }} />
-            <span style={{ fontSize: 11, color: 'var(--neutral-500)' }}>Budget · {formatCurrency(periodBudget)}</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Category picker button ──────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        style={{ margin: '10px 20px 0' }}
+        style={{
+          minHeight: '25dvh',
+          height: '25dvh',
+          maxHeight: 360,
+          display: 'grid',
+          gridTemplateColumns: selectedCat === 'all' ? 'minmax(0,1.1fr) minmax(0,0.9fr)' : 'minmax(0,1fr) minmax(0,1fr)',
+          gap: 'var(--space-6)',
+          alignItems: 'center',
+        }}
       >
-        <button
-          onClick={() => setShowCatSheet(true)}
+        <div style={{ position: 'relative', height: '100%', minHeight: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius="62%"
+                outerRadius="84%"
+                paddingAngle={2}
+                stroke="none"
+              >
+                {pieData.map((entry) => (
+                  <Cell key={entry.id} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 26, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1.1 }}>
+              {formatMoney(periodSpent)}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: chartRatioPct > 100 ? 'var(--color-error)' : chartRatioPct >= 80 ? 'var(--color-warning)' : 'var(--color-success)', lineHeight: 1 }}>
+              {`${chartRatioPct.toFixed(0)}%`}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--neutral-500)' }}>
+              {`${chartRatioPct.toFixed(0)}% budget`}
+            </p>
+          </div>
+        </div>
+
+        {selectedCat === 'all' ? (
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: '0 0 var(--space-2)', fontSize: 13, fontWeight: 700, color: 'var(--neutral-600)' }}>Top 5 catégories</p>
+            {topFiveCategories.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-400)' }}>Aucune dépense sur la période</p>
+            ) : (
+              topFiveCategories.map((row, idx) => (
+                <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.color }}>{idx + 1}</span>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-700)' }}>
+                    {row.name}
+                  </span>
+                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                    {formatMoney(row.value)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div style={{ height: '100%', minHeight: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 26, right: 8, left: 4, bottom: 2 }}>
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                <YAxis hide />
+                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={52}>
+                  <LabelList
+                    dataKey="evolutionPct"
+                    position="top"
+                    offset={14}
+                    content={(props: any) => {
+                      const { x, y, width, payload } = props
+                      const item = payload as MonthlyBucket | undefined
+                      if (!item || item.evolutionPct == null || x == null || y == null || width == null) return null
+                      const text = `${item.evolutionPct > 0 ? '+' : ''}${item.evolutionPct.toFixed(1)}%`
+                      return (
+                        <text
+                          x={Number(x) + Number(width) / 2}
+                          y={Number(y) - 8}
+                          textAnchor="middle"
+                          fill={item.evolutionPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'}
+                          fontSize={11}
+                          fontWeight={700}
+                        >
+                          {text}
+                        </text>
+                      )
+                    }}
+                  />
+                  {monthlyHistory.map((entry, i) => (
+                    <Cell key={`history-${i}`} fill={entry.amount > entry.budget ? 'var(--color-error)' : 'var(--primary-500)'} fillOpacity={i === monthlyHistory.length - 1 ? 1 : 0.42} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+              Évolutions 3 derniers mois
+            </p>
+          </div>
+        )}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+        style={{ display: 'grid', gap: 'var(--space-4)' }}
+      >
+        <div
           style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-card)', padding: '14px 18px',
-            border: selectedCat !== 'all' ? '1.5px solid var(--primary-300)' : '1.5px solid transparent',
-            cursor: 'pointer', transition: 'all 0.2s',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            gap: 'var(--space-4)',
+            background: 'var(--neutral-50)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-4)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Category icon */}
-            {selectedCat === 'all'
-              ? <span aria-hidden="true">✨</span>
-              : <CategoryIcon categoryName={selectedCatInfo?.name} size={20} fallback="💰" />}
-            <div style={{ textAlign: 'left' }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)' }}>
-                {selectedCat === 'all' ? 'Toutes les catégories' : selectedCatInfo?.name ?? 'Catégorie'}
-              </p>
-              <p style={{ margin: '1px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
-                {selectedCat === 'all' ? 'Afficher globalement' : 'Filtré par catégorie'}
-              </p>
-            </div>
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <KpiCard label="Budget" value={Math.floor(periodBudget)} format="currency" className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
           </div>
-          <ChevronDown size={18} color="var(--neutral-400)" />
-        </button>
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <KpiCard label="Dépensé" value={Math.floor(periodSpent)} format="currency" color="negative" className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
+          </div>
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <KpiCard
+              label="%"
+              value={chartRatioPct}
+              format="number"
+              deltaLabel={`${chartRatioPct > 0 ? '+' : ''}${chartRatioPct.toFixed(1)}%`}
+              color={chartRatioPct > 100 ? 'negative' : chartRatioPct >= 80 ? 'warning' : 'positive'}
+              className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]"
+            />
+          </div>
+          <div>
+            <KpiCard label="Restant" value={Math.floor(periodRemaining)} format="currency" color={periodRemaining >= 0 ? 'positive' : 'negative'} className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
+          </div>
+        </div>
       </motion.div>
 
-      {/* ── KPI Card ─────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}
-        style={{ margin: '10px 20px 0' }}
-      >
-        <KPICard
-          monthlyBudget={totalMonthlyBudget}
-          currentSpent={currentSpent}
-          recurringSpent={recurringSpent}
-          projectedEOM={projectedEOM}
-        />
-      </motion.div>
-
-      {/* ── Sous-catégories ───────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}
-        style={{ margin: '10px 20px 0' }}
+        style={{ margin: '0 calc(-1 * var(--space-6))' }}
       >
-        <SubCategoriesSection
-          rows={subCategoryRows}
-          onAnalyseClick={() => setShowAnalyseModal(true)}
-        />
-      </motion.div>
+        <div style={{ padding: '0 var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Sous-catégories
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowAnalyseModal(true)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              color: 'var(--primary-500)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Analyse
+          </button>
+        </div>
 
-      {/* ── Budget Analytics (mini panel) ───────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}
-        style={{ margin: '10px 20px 0' }}
-      >
-        <BudgetAnalyticsMiniPanel year={year} />
+        {selectedCat === 'all' ? (
+          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-12) var(--space-6)' }}>
+            Sélectionnez une catégorie pour voir ses sous-catégories
+          </div>
+        ) : subCategoryRows.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-12) var(--space-6)' }}>
+            Aucune sous-catégorie sur cette période
+          </div>
+        ) : (
+          [...subCategoryRows]
+            .sort((a, b) => b.currentMonthAmount - a.currentMonthAmount)
+            .map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => setSelectedSubCategory(row)}
+                style={{
+                  width: '100%',
+                  borderBottom: '1px solid var(--neutral-200)',
+                  background: 'transparent',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
+                  padding: 'var(--space-3) var(--space-6)',
+                  display: 'grid',
+                  gridTemplateColumns: '30px minmax(0,1fr) auto auto',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background-color var(--transition-fast)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CategoryIcon categoryName={row.name} size={18} fallback="💰" />
+                </span>
+                <span style={{ minWidth: 0, fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.name}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {formatMoney(row.currentMonthAmount)}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', color: row.trend === 'up' ? 'var(--color-error)' : row.trend === 'down' ? 'var(--color-success)' : 'var(--neutral-400)' }}>
+                  {row.trend === 'up' ? <ArrowUpRight size={16} /> : row.trend === 'down' ? <ArrowDownRight size={16} /> : <span style={{ fontSize: 12, fontWeight: 700 }}>—</span>}
+                </span>
+              </button>
+            ))
+        )}
       </motion.div>
 
       {/* ── Analyse Modal ────────────────────────────────────── */}
@@ -1332,6 +1450,13 @@ export function Budgets() {
           total: row.currentMonthAmount,
           topTx: null,
         }))}
+      />
+      <SubCategoryTransactionsModal
+        open={Boolean(selectedSubCategory)}
+        onClose={() => setSelectedSubCategory(null)}
+        title={subCategoryModalTitle}
+        transactions={subCategoryTransactions ?? []}
+        loading={loadingSubCategoryTransactions}
       />
 
       {/* ── Sheets ───────────────────────────────────────────── */}
