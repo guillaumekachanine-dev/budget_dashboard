@@ -163,69 +163,109 @@ export function Home() {
         </div>
       </motion.div>
 
-      {/* ── Solde Disponible ───────────────────────────────────── */}
-      <section style={{ padding: '16px 16px 0' }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Solde disponible
-        </p>
-        {loadingAccounts ? (
-          <div className="animate-pulse" style={{ marginTop: 10, height: 44, borderRadius: 12, background: 'var(--neutral-100)' }} />
-        ) : (
-          <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 40, fontWeight: 900, letterSpacing: '-0.03em', color: 'var(--neutral-900)', lineHeight: 1.05 }}>
-            {selectedAccount ? formatCurrency(selectedAccount.current_balance) : '—'}
-          </p>
-        )}
-      </section>
-
-      {/* ── KPI Grid ──────────────────────────────────────────── */}
+      {/* ── Budget Hero (design system) ───────────────────────── */}
       <section style={{ padding: '14px 16px 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
-              Reste utile
-            </p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
-              {formatCurrency(resteUtile)}
-            </p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-              Mois en cours
-            </p>
+        <div
+          style={{
+            position: 'relative',
+            borderRadius: 'var(--radius-2xl)',
+            background: 'var(--primary-500)',
+            padding: '16px 16px 14px',
+            overflow: 'hidden',
+            boxShadow: '0 10px 30px rgba(108,92,231,0.22)',
+          }}
+        >
+          {/* Decorative circles */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', right: -26, top: -34, width: 132, height: 132, borderRadius: 9999, background: 'rgba(255,255,255,0.06)' }} />
+            <div style={{ position: 'absolute', right: 34, bottom: -28, width: 96, height: 96, borderRadius: 9999, background: 'rgba(255,255,255,0.05)' }} />
           </div>
 
-          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
-              Budget / jour
-            </p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
-              {formatCurrency(budgetParJour)}
-            </p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-              {daysRemaining} jours restants
-            </p>
-          </div>
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.74)' }}>
+                  Solde compte courant
+                </p>
+                <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 34, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.05 }}>
+                  {loadingAccounts ? '—' : (selectedAccount ? formatCurrency(selectedAccount.current_balance) : '—')}
+                </p>
+                <p style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.62)' }}>
+                  {daysRemaining} jours restants dans le mois
+                </p>
+              </div>
 
-          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
-              Dépenses à venir
-            </p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
-              {plannedFuture > 0 ? formatCurrency(plannedFuture) : '—'}
-            </p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-              Planifiées ce mois
-            </p>
-          </div>
+              <button
+                type="button"
+                onClick={() => {}}
+                style={{
+                  borderRadius: 'var(--radius-pill)',
+                  border: '1.5px solid rgba(255,255,255,0.85)',
+                  background: 'transparent',
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  height: 34,
+                  flexShrink: 0,
+                }}
+              >
+                DÉTAILS
+              </button>
+            </div>
 
-          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
-              Prévision fin de mois
-            </p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
-              {formatCurrency(previsionFinDeMois)}
-            </p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-              Projection simple
-            </p>
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { label: 'Reste utile', value: resteUtile },
+                { label: 'Budget / jour', value: budgetParJour },
+                { label: 'Dépenses à venir', value: plannedFuture },
+                { label: 'Fin de mois', value: previsionFinDeMois },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  style={{
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 14,
+                    padding: '10px 10px',
+                    minHeight: 54,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.70)' }}>
+                    {label}
+                  </p>
+                  <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 800, color: '#fff' }}>
+                    {formatCurrency(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 12, height: 1, background: 'rgba(255,255,255,0.20)' }} />
+
+            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.86)' }}>
+                {formatCurrency(realToDate)} dépensés
+              </p>
+              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.68)' }}>
+                sur {formatCurrency(totalBudget)}
+              </p>
+            </div>
+            <div style={{ marginTop: 10, height: 3, borderRadius: 9999, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: totalBudget > 0 ? `${Math.min(100, Math.max(0, (realToDate / totalBudget) * 100))}%` : '0%',
+                  borderRadius: 9999,
+                  background: '#fff',
+                }}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -235,27 +275,27 @@ export function Home() {
         <div
           style={{
             borderRadius: 'var(--radius-2xl)',
-            background: 'linear-gradient(180deg, #F6EFE3 0%, #F2EADB 100%)',
-            border: '1px solid rgba(30,30,45,0.08)',
-            boxShadow: '0 10px 30px rgba(30,30,45,0.06)',
+            background: 'var(--neutral-0)',
+            border: '1px solid var(--neutral-100)',
+            boxShadow: 'var(--shadow-card)',
             padding: '14px 14px 12px',
             overflow: 'hidden',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(30,30,45,0.55)' }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
                 Trajectoire
               </p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+              <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>
                 Projection mensuelle des dépenses
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 900, color: deltaPct != null && deltaPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: deltaPct != null && deltaPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
                 {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
               </p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(30,30,45,0.55)', fontWeight: 600 }}>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
                 Écart projeté / réel
               </p>
             </div>
@@ -266,13 +306,13 @@ export function Home() {
               <AreaChart data={trajectoryData}>
                 <defs>
                   <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(108,92,231,0.30)" />
+                    <stop offset="0%" stopColor="rgba(108,92,231,0.18)" />
                     <stop offset="100%" stopColor="rgba(108,92,231,0.00)" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(30,30,45,0.08)" strokeDasharray="3 6" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'rgba(30,30,45,0.55)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'rgba(30,30,45,0.45)' }} axisLine={false} tickLine={false} width={38} />
+                <CartesianGrid stroke="#F0F0F5" strokeDasharray="3 6" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#C4C4CC' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#C4C4CC' }} axisLine={false} tickLine={false} width={38} />
                 <Tooltip
                   contentStyle={{
                     background: '#fff',
@@ -284,8 +324,8 @@ export function Home() {
                   formatter={(v: number) => formatCurrency(v)}
                   labelFormatter={(l) => `Jour ${l}`}
                 />
-                <Line type="monotone" dataKey="planned" stroke="rgba(90,73,42,0.55)" strokeWidth={2} dot={false} strokeDasharray="6 6" />
-                <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.6} fill="url(#actualFill)" dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="planned" stroke="#FF7675" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                <Area type="monotone" dataKey="actual" stroke="#6C5CE7" strokeWidth={2.4} fill="url(#actualFill)" dot={false} connectNulls={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
