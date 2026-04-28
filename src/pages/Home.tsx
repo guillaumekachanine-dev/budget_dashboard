@@ -11,6 +11,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
+import { Badge, Button, Card, KpiCard, Table } from '@/components'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { formatCurrency, formatCurrencyRounded, getCurrentPeriod, getDaysRemainingInMonth, getMonthLabel } from '@/lib/utils'
@@ -23,7 +24,6 @@ export function Home() {
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
-  // totalSpent exists in dataset but this page currently focuses on plan vs real trajectory.
 
   const now = new Date()
   const todayIso = now.toISOString().slice(0, 10)
@@ -54,7 +54,6 @@ export function Home() {
   }, [monthExpenseTxns, todayIso])
 
   const resteUtile = useMemo(() => {
-    // Approx: budget mensuel - réel à date - dépenses planifiées restantes.
     return Math.max(0, totalBudget - realToDate - plannedFuture)
   }, [plannedFuture, realToDate, totalBudget])
 
@@ -64,7 +63,6 @@ export function Home() {
   }, [daysRemaining, resteUtile])
 
   const previsionFinDeMois = useMemo(() => {
-    // Approx: réel à date + dépenses planifiées restantes + projection simple (si pas de planifiées).
     if (plannedFuture > 0) return realToDate + plannedFuture
     if (daysElapsed <= 0) return realToDate
     return (realToDate / daysElapsed) * daysInMonth
@@ -134,86 +132,119 @@ export function Home() {
     )
   }, [accounts])
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
+  const quickActions = useMemo(
+    () => [
+      { icon: Sparkles, label: 'NLP' },
+      { icon: Calendar, label: 'Plan' },
+      { icon: Target, label: 'Objectifs' },
+      { icon: ArrowUpRight, label: 'Export' },
+    ],
+    [],
+  )
 
-      {/* ── Top Row ────────────────────────────────────────────── */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ padding: '18px 16px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Bonjour · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
-            </p>
-          </div>
-          <button
+  const kpiItems = useMemo(
+    () => [
+      {
+        label: 'Reste utile',
+        value: resteUtile,
+        delta: deltaPct ?? 0,
+        deltaLabel: `${daysRemaining} j restants`,
+      },
+      {
+        label: 'Budget / jour',
+        value: budgetParJour,
+        delta: 0,
+        deltaLabel: 'Rythme actuel',
+      },
+      {
+        label: 'Dépenses à venir',
+        value: plannedFuture,
+        delta: plannedFuture > 0 ? 1 : 0,
+        deltaLabel: plannedFuture > 0 ? 'Planifiées' : 'Aucune',
+      },
+      {
+        label: 'Fin de mois',
+        value: previsionFinDeMois,
+        delta: deltaPct ?? 0,
+        deltaLabel: 'Projection',
+      },
+    ],
+    [budgetParJour, daysRemaining, deltaPct, plannedFuture, previsionFinDeMois, resteUtile],
+  )
+
+  const driftColumns = useMemo(
+    () => [
+      { key: 'name', label: 'Catégorie', align: 'left' as const },
+      { key: 'spent', label: 'Dépensé', align: 'right' as const },
+      { key: 'drift', label: 'Écart', align: 'right' as const },
+    ],
+    [],
+  )
+
+  const driftData = useMemo(
+    () =>
+      driftCategories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        spent: c.spent,
+        driftPct: c.driftPct,
+      })),
+    [driftCategories],
+  )
+
+  const deltaBadgeVariant =
+    deltaPct == null ? 'neutral' : deltaPct > 10 ? 'error' : deltaPct > 0 ? 'warning' : 'success'
+
+  return (
+    <div className="flex flex-col gap-0 pb-[calc(90px+env(safe-area-inset-bottom,0px))]">
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="px-4 pt-[18px]"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className="m-0 text-[13px] font-extrabold text-[var(--neutral-900)]">
+            Bonjour · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+          </p>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             aria-label="Paramètres"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--neutral-200)',
-              background: 'var(--neutral-0)',
-              boxShadow: 'var(--shadow-card)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'var(--neutral-700)',
-            }}
             onClick={() => {}}
+            className="h-10 w-10 rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-0)] px-0 text-[var(--neutral-700)] shadow-[var(--shadow-card)]"
           >
             <Settings size={18} />
-          </button>
+          </Button>
         </div>
       </motion.div>
 
-      {/* ── Budget Hero (design system) ───────────────────────── */}
-      <section style={{ padding: '14px 16px 0' }}>
-        <div
-          style={{
-            position: 'relative',
-            borderRadius: 'var(--radius-2xl)',
-            background: 'var(--primary-500)',
-            padding: '16px 16px 14px',
-            overflow: 'hidden',
-            boxShadow: '0 10px 30px rgba(108,92,231,0.22)',
-          }}
+      <section className="px-4 pt-[14px]">
+        <Card
+          variant="elevated"
+          padding="none"
+          className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-[var(--primary-500)] p-4 pb-[14px] shadow-[0_10px_30px_rgba(108,92,231,0.22)]"
         >
-          {/* Decorative circles */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-            <div style={{ position: 'absolute', right: -26, top: -34, width: 132, height: 132, borderRadius: 9999, background: 'rgba(255,255,255,0.06)' }} />
-            <div style={{ position: 'absolute', right: 34, bottom: -28, width: 96, height: 96, borderRadius: 9999, background: 'rgba(255,255,255,0.05)' }} />
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -right-[26px] -top-[34px] h-[132px] w-[132px] rounded-full bg-white/[0.06]" />
+            <div className="absolute -bottom-[28px] right-[34px] h-[96px] w-[96px] rounded-full bg-white/[0.05]" />
           </div>
 
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div className="relative z-[1]">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.74)' }}>
-                  Solde compte courant
+                <p className="m-0 text-[11px] font-bold uppercase tracking-[0.12em] text-white/75">Solde compte courant</p>
+                <p className="mt-[6px] m-0 leading-[1.05] text-[34px] font-extrabold tracking-[-0.02em] text-white [font-family:var(--font-mono)]">
+                  {loadingAccounts ? '—' : selectedAccount ? formatCurrencyRounded(selectedAccount.current_balance) : '—'}
                 </p>
-                <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 34, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.05 }}>
-                  {loadingAccounts ? '—' : (selectedAccount ? formatCurrencyRounded(selectedAccount.current_balance) : '—')}
-                </p>
-                <p style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.62)' }}>
-                  {daysRemaining} jours restants dans le mois
-                </p>
+                <p className="mt-[6px] m-0 text-[11px] font-semibold text-white/65">{daysRemaining} jours restants dans le mois</p>
               </div>
 
               <div
                 aria-label="Pourcentage dépensé vs prévision"
                 title="Dépenses réelles vs prévision (à date)"
-                style={{
-                  position: 'relative',
-                  width: 62,
-                  height: 62,
-                  borderRadius: 9999,
-                  background: '#fff',
-                  boxShadow: '0 10px 22px rgba(30,30,45,0.18)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  flexShrink: 0,
-                }}
+                className="relative grid h-[62px] w-[62px] shrink-0 place-items-center rounded-full bg-white shadow-[0_10px_22px_rgba(30,30,45,0.18)]"
               >
                 <svg width="56" height="56" viewBox="0 0 56 56" role="img" aria-hidden="true">
                   <defs>
@@ -235,94 +266,48 @@ export function Home() {
                     transform="rotate(-90 28 28)"
                   />
                 </svg>
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 2,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-900)' }}>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[2px]">
+                  <p className="m-0 text-[12px] font-extrabold text-[var(--neutral-900)] [font-family:var(--font-mono)]">
                     {spendVsForecastPct == null ? '—' : `${Math.round(spendVsForecastPct)}%`}
                   </p>
-                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)' }}>
-                    vs prév.
-                  </p>
+                  <p className="m-0 text-[9px] font-bold text-[var(--neutral-400)]">vs prév.</p>
                 </div>
               </div>
             </div>
 
-            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {[
-                { label: 'Reste utile', value: resteUtile },
-                { label: 'Budget / jour', value: budgetParJour },
-                { label: 'Dépenses à venir', value: plannedFuture },
-                { label: 'Fin de mois', value: previsionFinDeMois },
-              ].map(({ label, value }) => (
-                <div
-                  key={label}
-                  style={{
-                    background: 'rgba(255,255,255,0.12)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: 14,
-                    padding: '10px 10px',
-                    minHeight: 54,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.70)' }}>
-                    {label}
-                  </p>
-                  <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 800, color: '#fff' }}>
-                    {formatCurrency(value)}
-                  </p>
-                </div>
+            <div className="mt-[14px] grid grid-cols-2 gap-[10px]">
+              {kpiItems.map((item) => (
+                <KpiCard
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  delta={item.delta}
+                  deltaLabel={item.deltaLabel}
+                  format="currency"
+                  className="bg-white/95 p-[10px] shadow-none"
+                />
               ))}
             </div>
-
           </div>
-        </div>
+        </Card>
       </section>
 
-      {/* ── Trajectoire ───────────────────────────────────────── */}
-      <section style={{ padding: '14px 16px 0' }}>
-        <div
-          style={{
-            borderRadius: 'var(--radius-2xl)',
-            background: 'var(--neutral-0)',
-            border: '1px solid var(--neutral-100)',
-            boxShadow: 'var(--shadow-card)',
-            padding: '14px 14px 12px',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+      <section className="px-4 pt-[14px]">
+        <Card variant="default" padding="none" className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--neutral-100)] p-[14px] pb-3 shadow-[var(--shadow-card)]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
-                Trajectoire
-              </p>
-              <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>
-                Projection mensuelle des dépenses
-              </p>
+              <p className="m-0 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--neutral-400)]">Trajectoire</p>
+              <p className="mt-1 m-0 text-[14px] font-bold text-[var(--neutral-900)]">Projection mensuelle des dépenses</p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: deltaPct != null && deltaPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
+            <div className="text-right">
+              <Badge variant={deltaBadgeVariant}>
                 {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-                Écart projeté / réel
-              </p>
+              </Badge>
+              <p className="mt-[2px] m-0 text-[11px] font-semibold text-[var(--neutral-400)]">Écart projeté / réel</p>
             </div>
           </div>
 
-          <div style={{ marginTop: 10 }}>
+          <div className="mt-[10px]">
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={trajectoryData}>
                 <defs>
@@ -350,82 +335,56 @@ export function Home() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
       </section>
 
-      {/* ── Catégories en dérive ──────────────────────────────── */}
-      <section style={{ padding: '14px 16px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-            Catégories en dérive
-          </p>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-400)', fontWeight: 700 }}>
-            {getMonthLabel(year, month)}
-          </p>
+      <section className="px-4 pt-[14px]">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="m-0 text-[11px] font-black uppercase tracking-[0.08em] text-[var(--neutral-500)]">Catégories en dérive</p>
+          <Badge variant="neutral">{getMonthLabel(year, month)}</Badge>
         </div>
-        <div style={{ marginTop: 10, background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-100)', padding: '4px 14px' }}>
-          {loadingSummaries ? (
-            <div style={{ padding: '14px 0', color: 'var(--neutral-400)' }}>Chargement…</div>
-          ) : driftCategories.length === 0 ? (
-            <div style={{ padding: '14px 0', color: 'var(--neutral-400)' }}>Aucune donnée.</div>
-          ) : (
-            driftCategories.map((c, i) => (
-              <div
-                key={c.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto auto',
-                  gap: 10,
-                  alignItems: 'center',
-                  padding: '12px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--neutral-100)',
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-800)' }}>{c.name}</p>
-                <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-900)' }}>
-                  {formatCurrency(c.spent)}
-                </p>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 900, color: c.driftPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
-                  {c.driftPct > 0 ? '+' : ''}{c.driftPct.toFixed(0)}%
-                </p>
-              </div>
-            ))
-          )}
-        </div>
+
+        <Table
+          className="mt-[10px] rounded-[var(--radius-2xl)] border border-[var(--neutral-100)] shadow-[var(--shadow-card)]"
+          columns={driftColumns}
+          data={loadingSummaries ? [] : driftData}
+          density="compact"
+          striped
+          hoverable
+          emptyMessage={loadingSummaries ? 'Chargement…' : 'Aucune donnée.'}
+          renderCell={(value, key, row) => {
+            if (key === 'name') {
+              return <span className="text-[13px] font-extrabold text-[var(--neutral-800)]">{String(value)}</span>
+            }
+            if (key === 'spent') {
+              return <span className="text-[12px] font-extrabold text-[var(--neutral-900)] [font-family:var(--font-mono)]">{formatCurrency(Number(value ?? 0))}</span>
+            }
+            if (key === 'drift') {
+              const drift = Number(row.driftPct ?? 0)
+              const badgeVariant = drift > 12 ? 'error' : drift > 0 ? 'warning' : drift < -5 ? 'success' : 'neutral'
+              return <Badge variant={badgeVariant}>{`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}</Badge>
+            }
+            return value ?? '—'
+          }}
+        />
       </section>
 
-      {/* ── Actions rapides ───────────────────────────────────── */}
-      <section style={{ padding: '14px 16px 0' }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-          Actions rapides
-        </p>
-        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {[
-            { icon: Sparkles, label: 'NLP' },
-            { icon: Calendar, label: 'Plan' },
-            { icon: Target, label: 'Objectifs' },
-            { icon: ArrowUpRight, label: 'Export' },
-          ].map(({ icon: Icon, label }) => (
-            <button
+      <section className="px-4 pt-[14px]">
+        <p className="m-0 text-[11px] font-black uppercase tracking-[0.08em] text-[var(--neutral-500)]">Actions rapides</p>
+
+        <div className="mt-[10px] grid grid-cols-2 gap-[10px] sm:grid-cols-4">
+          {quickActions.map(({ icon: Icon, label }) => (
+            <Button
               key={label}
               type="button"
-              style={{
-                height: 58,
-                borderRadius: 'var(--radius-2xl)',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-200)',
-                boxShadow: 'var(--shadow-card)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
+              variant="ghost"
+              size="md"
+              leftIcon={<Icon size={16} />}
               onClick={() => {}}
-              aria-label={label}
-              title={label}
+              className="h-[58px] justify-center rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-[var(--neutral-0)] px-3 text-[var(--neutral-700)] shadow-[var(--shadow-card)]"
             >
-              <Icon size={18} color="var(--neutral-700)" />
-            </button>
+              {label}
+            </Button>
           ))}
         </div>
       </section>
