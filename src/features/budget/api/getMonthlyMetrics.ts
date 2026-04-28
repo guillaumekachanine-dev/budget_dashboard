@@ -1,4 +1,4 @@
-import { supabaseBudget } from '@/lib/supabaseBudget'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { AnalyticsMonthlyMetrics } from '@/lib/types'
 
 const MONTHLY_METRICS_COLUMNS = [
@@ -14,7 +14,7 @@ const MONTHLY_METRICS_COLUMNS = [
 ].join(', ')
 
 export async function getMonthlyMetrics(year?: number): Promise<AnalyticsMonthlyMetrics[]> {
-  let query = supabaseBudget
+  let query = budgetDb()
     .from('analytics_monthly_metrics')
     .select(MONTHLY_METRICS_COLUMNS)
     .order('month_start', { ascending: true })

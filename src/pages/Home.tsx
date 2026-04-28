@@ -1,363 +1,373 @@
-import { useRef, useState, useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Menu } from 'lucide-react'
+import { Settings, ArrowUpRight, Sparkles, Calendar, Target } from 'lucide-react'
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
-import { accountTypeLabel, getCurrentPeriod, getMonthLabel } from '@/lib/utils'
-import { HeroCard } from '@/components/ui/HeroCard'
-import { AccountSlideCard } from '@/components/ui/AccountSlideCard'
-import { CategoryIcon } from '@/components/ui/CategoryIcon'
-import type { SlideCardData } from '@/components/ui/AccountSlideCard'
+import { formatCurrency, getCurrentPeriod, getDaysRemainingInMonth, getMonthLabel } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
-
-const CAROUSEL_STEP = 188
-
-const ACCOUNT_GRADIENTS: Record<string, [string, string]> = {
-  checking: ['var(--primary-500)', 'var(--primary-700)'],
-  savings: ['var(--color-positive)', 'var(--cat-bills)'],
-  credit_card: ['var(--color-negative)', 'var(--cat-transport)'],
-  cash: ['var(--color-warning)', 'var(--cat-food)'],
-  other: ['var(--neutral-500)', 'var(--neutral-700)'],
-}
-
-function getAccountGradient(type: AccountWithBalance['account_type']): [string, string] {
-  return ACCOUNT_GRADIENTS[type] ?? ACCOUNT_GRADIENTS.other
-}
+import { useTransactions } from '@/hooks/useTransactions'
 
 export function Home() {
   const { year, month } = getCurrentPeriod()
   const { data: accounts, isLoading: loadingAccounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
-  const totalSpent  = summaries?.reduce((s, b) => s + b.spent_amount, 0) ?? 0
+  // totalSpent exists in dataset but this page currently focuses on plan vs real trajectory.
 
-  const carouselRef = useRef<HTMLDivElement>(null)
-  const [activeCardIndex, setActiveCardIndex] = useState(0)
-  const accountSlides = useMemo<SlideCardData[]>(() => {
-    const list = accounts ?? []
-    if (!list.length) return []
+  const now = new Date()
+  const todayIso = now.toISOString().slice(0, 10)
+  const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
+  const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const daysElapsed = now.getDate()
+  const daysRemaining = getDaysRemainingInMonth()
 
-    const positiveTotal = list.reduce((sum, account) => sum + Math.max(0, account.current_balance), 0)
-    const fallbackTotal = list.reduce((sum, account) => sum + Math.abs(account.current_balance), 0)
-    const referenceAmount = positiveTotal > 0 ? positiveTotal : fallbackTotal
+  const { data: monthExpenseTxns } = useTransactions({
+    startDate: monthStart,
+    endDate: monthEnd,
+    flowType: 'expense',
+  })
 
-    return list.map((account) => {
-      const weight = positiveTotal > 0
-        ? Math.max(0, account.current_balance)
-        : Math.abs(account.current_balance)
+  const realToDate = useMemo(() => {
+    const rows = monthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date <= todayIso)
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthExpenseTxns, todayIso])
 
+  const plannedFuture = useMemo(() => {
+    const rows = monthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.is_recurring && t.transaction_date > todayIso)
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthExpenseTxns, todayIso])
+
+  const resteUtile = useMemo(() => {
+    // Approx: budget mensuel - réel à date - dépenses planifiées restantes.
+    return Math.max(0, totalBudget - realToDate - plannedFuture)
+  }, [plannedFuture, realToDate, totalBudget])
+
+  const budgetParJour = useMemo(() => {
+    if (daysRemaining <= 0) return 0
+    return resteUtile / daysRemaining
+  }, [daysRemaining, resteUtile])
+
+  const previsionFinDeMois = useMemo(() => {
+    // Approx: réel à date + dépenses planifiées restantes + projection simple (si pas de planifiées).
+    if (plannedFuture > 0) return realToDate + plannedFuture
+    if (daysElapsed <= 0) return realToDate
+    return (realToDate / daysElapsed) * daysInMonth
+  }, [daysElapsed, daysInMonth, plannedFuture, realToDate])
+
+  const trajectoryData = useMemo(() => {
+    const txns = monthExpenseTxns ?? []
+    const daily = new Map<number, number>()
+    txns.forEach((t) => {
+      if (t.transaction_date < monthStart || t.transaction_date > monthEnd) return
+      const day = Number(t.transaction_date.slice(8, 10))
+      if (!Number.isFinite(day)) return
+      if (t.transaction_date > todayIso) return
+      daily.set(day, (daily.get(day) ?? 0) + Number(t.amount))
+    })
+
+    let cumul = 0
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1
+      cumul += daily.get(day) ?? 0
+      const planned = daysInMonth > 0 ? (totalBudget / daysInMonth) * day : 0
       return {
-        id: account.id,
-        title: account.name,
-        subtitle: accountTypeLabel(account.account_type),
-        amount: account.current_balance,
-        progress: referenceAmount > 0 ? (weight / referenceAmount) * 100 : 0,
-        referenceAmount,
-        gradient: getAccountGradient(account.account_type),
+        day,
+        planned,
+        actual: day <= daysElapsed ? cumul : null,
+        delta: day <= daysElapsed ? cumul - planned : null,
       }
     })
-  }, [accounts])
+  }, [daysElapsed, daysInMonth, monthEnd, monthExpenseTxns, monthStart, todayIso, totalBudget])
 
-  const preferredDefaultAccount = useMemo(() => {
+  const deltaPct = useMemo(() => {
+    const plannedToDate = daysElapsed > 0 ? (totalBudget / daysInMonth) * daysElapsed : 0
+    if (plannedToDate <= 0) return null
+    return ((realToDate - plannedToDate) / plannedToDate) * 100
+  }, [daysElapsed, daysInMonth, realToDate, totalBudget])
+
+  const driftCategories = useMemo(() => {
+    const rows = summaries ?? []
+    return [...rows]
+      .filter((r) => r.budget_amount > 0)
+      .map((r) => ({
+        id: r.category.id,
+        name: r.category.name,
+        spent: r.spent_amount,
+        driftPct: (r.spent_amount / r.budget_amount) * 100 - 100,
+      }))
+      .sort((a, b) => b.driftPct - a.driftPct)
+      .slice(0, 3)
+  }, [summaries])
+
+  const selectedAccount = useMemo<AccountWithBalance | null>(() => {
     if (!accounts?.length) return null
     return (
       accounts.find((a) => a.name === 'Compte courant principal') ??
       accounts.find((a) => a.account_type === 'checking' && a.name.toLowerCase().includes('principal')) ??
       accounts.find((a) => a.account_type === 'checking') ??
-      accounts[0]
+      accounts[0] ??
+      null
     )
   }, [accounts])
-
-  useEffect(() => {
-    if (!accounts?.length) {
-      setSelectedAccountId(null)
-      return
-    }
-    const selectedStillExists = selectedAccountId && accounts.some((a) => a.id === selectedAccountId)
-    if (selectedStillExists) return
-    setSelectedAccountId(preferredDefaultAccount?.id ?? accounts[0].id)
-  }, [accounts, preferredDefaultAccount, selectedAccountId])
-
-  const selectedAccount = useMemo(() => {
-    if (!accounts?.length) return null
-    return accounts.find((a) => a.id === selectedAccountId) ?? preferredDefaultAccount ?? accounts[0]
-  }, [accounts, preferredDefaultAccount, selectedAccountId])
-
-  const carouselCards = useMemo(
-    () => accountSlides.filter((card) => card.id !== selectedAccount?.id),
-    [accountSlides, selectedAccount?.id],
-  )
-
-  useEffect(() => {
-    setActiveCardIndex((prev) => {
-      const max = Math.max(0, carouselCards.length - 1)
-      return Math.min(prev, max)
-    })
-  }, [carouselCards.length])
-
-  const scrollCarousel = (dir: 'left' | 'right') => {
-    if (!carouselRef.current) return
-    carouselRef.current.scrollBy({ left: dir === 'right' ? CAROUSEL_STEP : -CAROUSEL_STEP, behavior: 'smooth' })
-  }
-
-  const handleCarouselScroll = () => {
-    if (!carouselRef.current) return
-    const index = Math.round(carouselRef.current.scrollLeft / CAROUSEL_STEP)
-    const clamped = Math.max(0, Math.min(index, carouselCards.length - 1))
-    setActiveCardIndex(clamped)
-  }
-
-  const handleSelectAccount = (accountId: string) => {
-    if (!carouselRef.current || accountId === selectedAccount?.id) return
-    setSelectedAccountId(accountId)
-    carouselRef.current.scrollTo({ left: 0, behavior: 'smooth' })
-    setActiveCardIndex(0)
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
 
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        style={{ padding: '18px 16px 0' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      {/* ── Top Row ────────────────────────────────────────────── */}
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ padding: '18px 16px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+              Bonjour
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
+              {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+            </p>
+          </div>
           <button
             type="button"
-            aria-label="Menu"
+            aria-label="Paramètres"
             style={{
-              width: 32,
-              height: 32,
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--neutral-900)',
+              width: 40,
+              height: 40,
+              borderRadius: 'var(--radius-full)',
+              border: '1px solid var(--neutral-200)',
+              background: 'var(--neutral-0)',
+              boxShadow: 'var(--shadow-card)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: 0,
+              cursor: 'pointer',
+              color: 'var(--neutral-700)',
             }}
+            onClick={() => {}}
           >
-            <Menu size={18} />
+            <Settings size={18} />
           </button>
-          <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--neutral-900)', margin: 0 }}>Home</h1>
-          <div style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: 'var(--primary-100)',
-            color: 'var(--primary-700)',
-            fontSize: 11,
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            GU
-          </div>
         </div>
-        <p style={{
-          textAlign: 'center',
-          fontSize: 10,
-          color: 'var(--neutral-400)',
-          marginBottom: 2,
-        }}>
-          {getMonthLabel(year, month)}
-        </p>
-        <p style={{
-          textAlign: 'center',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 38,
-          fontWeight: 700,
-          color: 'var(--neutral-900)',
-          margin: 0,
-          lineHeight: 1.1,
-        }}>
-          {selectedAccount ? `${Math.round(selectedAccount.current_balance)}€` : '—'}
-        </p>
       </motion.div>
 
-      {/* ── Mes comptes ────────────────────────────────────────── */}
-      <section style={{ marginTop: 18 }}>
-        {/* Section header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px', marginBottom: 10,
-        }}>
-          <h2 style={{
-            fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
-            textTransform: 'uppercase', letterSpacing: '1.5px', margin: 0,
-          }}>
-            Mes comptes
-          </h2>
-          {/* Scroll arrows — desktop/tablet hint */}
-          {carouselCards.length > 0 && (
-          <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                onClick={() => scrollCarousel('left')}
-                style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  background: 'var(--neutral-100)', border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: 'var(--neutral-500)',
-                }}
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button
-                onClick={() => scrollCarousel('right')}
-                style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  background: 'var(--neutral-100)', border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: 'var(--neutral-500)',
-                }}
-              >
-                <ChevronRight size={14} />
-              </button>
+      {/* ── Solde Disponible ───────────────────────────────────── */}
+      <section style={{ padding: '16px 16px 0' }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Solde disponible
+        </p>
+        {loadingAccounts ? (
+          <div className="animate-pulse" style={{ marginTop: 10, height: 44, borderRadius: 12, background: 'var(--neutral-100)' }} />
+        ) : (
+          <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 40, fontWeight: 900, letterSpacing: '-0.03em', color: 'var(--neutral-900)', lineHeight: 1.05 }}>
+            {selectedAccount ? formatCurrency(selectedAccount.current_balance) : '—'}
+          </p>
+        )}
+      </section>
+
+      {/* ── KPI Grid ──────────────────────────────────────────── */}
+      <section style={{ padding: '14px 16px 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
+              Reste utile
+            </p>
+            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
+              {formatCurrency(resteUtile)}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
+              Mois en cours
+            </p>
+          </div>
+
+          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
+              Budget / jour
+            </p>
+            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
+              {formatCurrency(budgetParJour)}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
+              {daysRemaining} jours restants
+            </p>
+          </div>
+
+          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
+              Dépenses à venir
+            </p>
+            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
+              {plannedFuture > 0 ? formatCurrency(plannedFuture) : '—'}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
+              Planifiées ce mois
+            </p>
+          </div>
+
+          <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-400)' }}>
+              Prévision fin de mois
+            </p>
+            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 900, color: 'var(--neutral-900)' }}>
+              {formatCurrency(previsionFinDeMois)}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
+              Projection simple
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Trajectoire ───────────────────────────────────────── */}
+      <section style={{ padding: '14px 16px 0' }}>
+        <div
+          style={{
+            borderRadius: 'var(--radius-2xl)',
+            background: 'linear-gradient(180deg, #F6EFE3 0%, #F2EADB 100%)',
+            border: '1px solid rgba(30,30,45,0.08)',
+            boxShadow: '0 10px 30px rgba(30,30,45,0.06)',
+            padding: '14px 14px 12px',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(30,30,45,0.55)' }}>
+                Trajectoire
+              </p>
+              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+                Projection mensuelle des dépenses
+              </p>
             </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 900, color: deltaPct != null && deltaPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
+                {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(30,30,45,0.55)', fontWeight: 600 }}>
+                Écart projeté / réel
+              </p>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={trajectoryData}>
+                <defs>
+                  <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(108,92,231,0.30)" />
+                    <stop offset="100%" stopColor="rgba(108,92,231,0.00)" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="rgba(30,30,45,0.08)" strokeDasharray="3 6" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'rgba(30,30,45,0.55)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'rgba(30,30,45,0.45)' }} axisLine={false} tickLine={false} width={38} />
+                <Tooltip
+                  contentStyle={{
+                    background: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    boxShadow: '0 10px 24px rgba(30,30,45,0.12)',
+                    fontSize: 12,
+                  }}
+                  formatter={(v: number) => formatCurrency(v)}
+                  labelFormatter={(l) => `Jour ${l}`}
+                />
+                <Line type="monotone" dataKey="planned" stroke="rgba(90,73,42,0.55)" strokeWidth={2} dot={false} strokeDasharray="6 6" />
+                <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.6} fill="url(#actualFill)" dot={false} connectNulls={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Catégories en dérive ──────────────────────────────── */}
+      <section style={{ padding: '14px 16px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
+            Catégories en dérive
+          </p>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-400)', fontWeight: 700 }}>
+            {getMonthLabel(year, month)}
+          </p>
+        </div>
+        <div style={{ marginTop: 10, background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-100)', padding: '4px 14px' }}>
+          {loadingSummaries ? (
+            <div style={{ padding: '14px 0', color: 'var(--neutral-400)' }}>Chargement…</div>
+          ) : driftCategories.length === 0 ? (
+            <div style={{ padding: '14px 0', color: 'var(--neutral-400)' }}>Aucune donnée.</div>
+          ) : (
+            driftCategories.map((c, i) => (
+              <div
+                key={c.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto auto',
+                  gap: 10,
+                  alignItems: 'center',
+                  padding: '12px 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--neutral-100)',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-800)' }}>{c.name}</p>
+                <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-900)' }}>
+                  {formatCurrency(c.spent)}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 900, color: c.driftPct > 0 ? 'var(--color-negative)' : 'var(--color-positive)' }}>
+                  {c.driftPct > 0 ? '+' : ''}{c.driftPct.toFixed(0)}%
+                </p>
+              </div>
+            ))
           )}
         </div>
-
-        {/* Carousel */}
-        {loadingAccounts ? (
-          <div style={{ display: 'flex', gap: 10, padding: '0 16px', overflowX: 'hidden' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse" style={{
-                width: 164, minWidth: 164, height: 122,
-                borderRadius: 'var(--radius-card)', background: 'var(--neutral-100)',
-                flexShrink: 0,
-              }} />
-            ))}
-          </div>
-        ) : carouselCards.length === 0 ? (
-          <div style={{
-            margin: '0 16px',
-            borderRadius: 'var(--radius-xl)',
-            border: '1px dashed var(--neutral-200)',
-            padding: '18px 14px',
-            textAlign: 'center',
-          }}>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>Aucun compte affichable.</p>
-          </div>
-        ) : (
-          <div
-            ref={carouselRef}
-            style={{
-              display: 'flex',
-              gap: 12,
-              overflowX: 'auto',
-              padding: '4px 16px 12px',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              WebkitOverflowScrolling: 'touch',
-              scrollSnapType: 'x mandatory',
-            }}
-            onScroll={handleCarouselScroll}
-            className="scrollbar-hide"
-          >
-            {carouselCards.map((card, i) => (
-              <div key={card.id} style={{ scrollSnapAlign: 'start' }}>
-                <AccountSlideCard
-                  card={card}
-                  index={i}
-                  onSelect={() => handleSelectAccount(card.id)}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Dots indicator */}
-        {carouselCards.length > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6 }}>
-            {carouselCards.map((card, i) => (
-              <div
-                key={card.id}
-                style={{
-                  width: i === activeCardIndex ? 16 : 5,
-                  height: 5,
-                  borderRadius: 9999,
-                  background: i === activeCardIndex ? 'var(--primary-500)' : 'var(--neutral-200)',
-                  transition: 'all 0.3s',
-                }}
-              />
-            ))}
-          </div>
-        )}
       </section>
 
-      {/* ── Budget héro ────────────────────────────────────────── */}
-      <section style={{ padding: '18px 16px 0' }}>
-        <h2 style={{
-          fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
-          textTransform: 'uppercase', letterSpacing: '1.5px',
-          margin: '0 0 12px',
-        }}>
-          {selectedAccount?.name ?? 'Compte sélectionné'}
-        </h2>
-
-        {loadingSummaries || !selectedAccount ? (
-          <div className="animate-pulse" style={{ height: 130, borderRadius: 24, background: 'var(--neutral-100)' }} />
-        ) : (
-          <HeroCard
-            account={selectedAccount}
-            totalSpent={totalSpent}
-            totalBudget={totalBudget}
-          />
-        )}
+      {/* ── Actions rapides ───────────────────────────────────── */}
+      <section style={{ padding: '14px 16px 0' }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
+          Actions rapides
+        </p>
+        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          {[
+            { icon: Sparkles, label: 'NLP' },
+            { icon: Calendar, label: 'Plan' },
+            { icon: Target, label: 'Objectifs' },
+            { icon: ArrowUpRight, label: 'Export' },
+          ].map(({ icon: Icon, label }) => (
+            <button
+              key={label}
+              type="button"
+              style={{
+                height: 58,
+                borderRadius: 'var(--radius-2xl)',
+                background: 'var(--neutral-0)',
+                border: '1px solid var(--neutral-200)',
+                boxShadow: 'var(--shadow-card)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+              onClick={() => {}}
+              aria-label={label}
+              title={label}
+            >
+              <Icon size={18} color="var(--neutral-700)" />
+            </button>
+          ))}
+        </div>
       </section>
-
-      {/* ── Top catégories (mini) ───────────────────────────────── */}
-      {!loadingSummaries && (summaries?.length ?? 0) > 0 && (
-        <section style={{ padding: '18px 16px 0' }}>
-          <h2 style={{
-            fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)',
-            textTransform: 'uppercase', letterSpacing: '1.5px',
-            margin: '0 0 12px',
-          }}>
-            Top dépenses ce mois
-          </h2>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }} className="scrollbar-hide">
-            {(summaries ?? []).slice(0, 5).map((s, i) => (
-              <motion.div
-                key={s.category.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.05 * i, duration: 0.3 }}
-                style={{
-                  background: '#fff',
-                  borderRadius: 'var(--radius-card)',
-                  boxShadow: 'var(--shadow-card)',
-                  padding: '12px 10px',
-                  minWidth: 96,
-                  flexShrink: 0,
-                  display: 'flex', flexDirection: 'column', gap: 6,
-                }}
-              >
-                <CategoryIcon categoryName={s.category.name} size={20} />
-                <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--neutral-600)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 88 }}>
-                  {s.category.name}
-                </p>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)', margin: 0 }}>
-                  {s.spent_amount.toFixed(0)}€
-                </p>
-                <div style={{ height: 3, background: 'var(--neutral-100)', borderRadius: 9999, overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 9999,
-                    background: 'var(--primary-400)',
-                    width: `${Math.min(s.percentage, 100)}%`,
-                  }} />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

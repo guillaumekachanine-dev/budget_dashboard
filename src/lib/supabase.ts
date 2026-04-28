@@ -19,6 +19,12 @@ export const supabase = createClient<Database, 'budget_dashboard'>(supabaseUrl, 
   },
 })
 
+declare global {
+  interface Window {
+    supabase?: typeof supabase
+  }
+}
+
 if (import.meta.env.DEV && typeof window !== 'undefined') {
-  ;(window as any).supabase = supabase
+  window.supabase = supabase
 }

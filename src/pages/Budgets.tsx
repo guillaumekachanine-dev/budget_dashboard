@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, X } from 'lucide-react'
 import {
@@ -964,9 +964,11 @@ export function Budgets() {
   const [showCustomSheet,  setShowCustomSheet]  = useState(false)
   const [showCatSheet,     setShowCatSheet]     = useState(false)
   const [showAnalyseModal, setShowAnalyseModal] = useState(false)
+  const debugRanRef = useRef(false)
 
   useEffect(() => {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && !debugRanRef.current) {
+      debugRanRef.current = true
       void debugBudgetSupabaseConnection(supabase)
     }
   }, [])

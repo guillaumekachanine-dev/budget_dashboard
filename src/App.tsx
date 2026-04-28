@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { Home } from '@/pages/Home'
-import { Activite } from '@/pages/Activite'
+import { Flux } from '@/pages/Flux'
 import { Budgets } from '@/pages/Budgets'
 import { Stats } from '@/pages/Stats'
 import { Login } from '@/pages/Login'
@@ -27,7 +27,8 @@ export default function App() {
     <div className="app-shell">
       <Routes>
         <Route path="/"         element={<Home />} />
-        <Route path="/activite" element={<Activite />} />
+        <Route path="/flux"     element={<Flux />} />
+        <Route path="/activite" element={<Navigate to="/flux" replace />} />
         <Route path="/budgets"  element={<Budgets />} />
         <Route path="/stats"    element={<Stats />} />
         {/* Redirections des anciens chemins */}

@@ -7,7 +7,7 @@ interface BottomNavProps {
 
 const LEFT_ITEMS = [
   { to: '/',         icon: Home,      label: 'Accueil'  },
-  { to: '/activite', icon: Activity,  label: 'Activité' },
+  { to: '/flux',     icon: Activity,  label: 'Flux' },
 ]
 const RIGHT_ITEMS = [
   { to: '/budgets',  icon: FolderOpen, label: 'Budgets' },

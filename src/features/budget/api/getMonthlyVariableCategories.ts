@@ -1,4 +1,4 @@
-import { supabaseBudget } from '@/lib/supabaseBudget'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { AnalyticsMonthlyCategoryMetrics } from '@/lib/types'
 
 const MONTHLY_VARIABLE_CATEGORIES_COLUMNS = [
@@ -14,7 +14,7 @@ const MONTHLY_VARIABLE_CATEGORIES_COLUMNS = [
 ].join(', ')
 
 export async function getMonthlyVariableCategories(year?: number): Promise<AnalyticsMonthlyCategoryMetrics[]> {
-  let query = supabaseBudget
+  let query = budgetDb()
     .from('analytics_monthly_category_metrics')
     .select(MONTHLY_VARIABLE_CATEGORIES_COLUMNS)
     .eq('flow_type', 'expense')

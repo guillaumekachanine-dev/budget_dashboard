@@ -5,6 +5,7 @@ import type { FlowType, Transaction } from '@/lib/types'
 interface TransactionFilters {
   accountId?: string
   categoryId?: string
+  categoryIds?: string[]
   flowType?: FlowType
   startDate?: string
   endDate?: string
@@ -13,14 +14,12 @@ interface TransactionFilters {
 }
 
 async function fetchTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
-  let query = supabase
-    .from('transactions')
-    .select('*, category:categories(*), account:accounts(*)')
-    .eq('is_hidden', false)
-    .order('transaction_date', { ascending: false })
+  const PAGE_SIZE = 1000
+  let query = supabase.from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
 
   if (filters.accountId) query = query.eq('account_id', filters.accountId)
-  if (filters.categoryId) query = query.eq('category_id', filters.categoryId)
+  if (filters.categoryIds && filters.categoryIds.length > 0) query = query.in('category_id', filters.categoryIds)
+  else if (filters.categoryId) query = query.eq('category_id', filters.categoryId)
   if (filters.flowType) query = query.eq('flow_type', filters.flowType)
   if (filters.startDate) query = query.gte('transaction_date', filters.startDate)
   if (filters.endDate) query = query.lte('transaction_date', filters.endDate)
@@ -31,9 +30,24 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
     query = query.gte('transaction_date', start).lte('transaction_date', end)
   }
 
-  const { data, error } = await query
-  if (error) throw error
-  return data as Transaction[]
+  const allRows: Transaction[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await query
+      .order('transaction_date', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) throw error
+
+    const page = (data ?? []) as Transaction[]
+    allRows.push(...page)
+
+    if (page.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return allRows
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {

@@ -29,11 +29,7 @@ export function BudgetBar({ summary, index }: BudgetBarProps) {
     >
       <div className="budget-item-top">
         <div className="budget-item-left">
-          <div
-            className="budget-item-icon"
-          >
-            <CategoryIcon categoryName={category.name} size={20} />
-          </div>
+          <CategoryIcon categoryName={category.name} size={32} />
           <div>
             <div className="budget-item-name">{category.name}</div>
             <div

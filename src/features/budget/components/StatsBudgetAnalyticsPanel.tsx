@@ -78,7 +78,7 @@ export function StatsBudgetAnalyticsPanel({ year }: StatsBudgetAnalyticsPanelPro
     refreshedAt,
     refreshAndReload,
     reloadOnly,
-  } = useBudgetAnalytics({ year, autoRefresh: false, autoLoad: true })
+  } = useBudgetAnalytics({ autoRefresh: false, autoLoad: true })
 
   const latest = useMemo(() => getLatestMonthMetrics(monthlyMetrics), [monthlyMetrics])
   const previous = useMemo(() => getPreviousMonthMetrics(monthlyMetrics), [monthlyMetrics])
@@ -89,15 +89,24 @@ export function StatsBudgetAnalyticsPanel({ year }: StatsBudgetAnalyticsPanelPro
   )
   const insights = useMemo(() => getBudgetInsights(variableCategorySummary), [variableCategorySummary])
 
+  const effectiveYear = useMemo(() => {
+    if (monthlyMetrics.length === 0) return year ?? null
+    const availableYears = [...new Set(monthlyMetrics.map((row) => row.period_year))].sort((a, b) => b - a)
+    if (year && availableYears.includes(year)) return year
+    return availableYears[0] ?? null
+  }, [monthlyMetrics, year])
+
   const chartData = useMemo(
-    () => monthlyMetrics.filter((row) => (year ? row.period_year === year : true)).map((row) => ({
-      label: `${String(row.period_month).padStart(2, '0')}/${String(row.period_year).slice(-2)}`,
-      income: Number(row.income_total),
-      fixed: Number(row.fixed_expense_total),
-      variable: Number(row.variable_expense_total),
-      savings: Number(row.savings_capacity_observed),
-    })),
-    [monthlyMetrics, year],
+    () => monthlyMetrics
+      .filter((row) => (effectiveYear ? row.period_year === effectiveYear : true))
+      .map((row) => ({
+        label: `${String(row.period_month).padStart(2, '0')}/${String(row.period_year).slice(-2)}`,
+        income: Number(row.income_total),
+        fixed: Number(row.fixed_expense_total),
+        variable: Number(row.variable_expense_total),
+        savings: Number(row.savings_capacity_observed),
+      })),
+    [monthlyMetrics, effectiveYear],
   )
 
   const latestLabel = latest ? `${String(latest.period_month).padStart(2, '0')}/${latest.period_year}` : '—'
@@ -197,7 +206,9 @@ export function StatsBudgetAnalyticsPanel({ year }: StatsBudgetAnalyticsPanelPro
         transition={{ delay: 0.08 }}
         style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 14px 12px' }}
       >
-        <h3 style={{ margin: 0, fontSize: 14, color: 'var(--neutral-700)' }}>Évolution mensuelle {year ?? ''}</h3>
+        <h3 style={{ margin: 0, fontSize: 14, color: 'var(--neutral-700)' }}>
+          Évolution mensuelle {effectiveYear ?? ''}
+        </h3>
         <p style={{ margin: '2px 0 10px', fontSize: 11, color: 'var(--neutral-400)' }}>
           Revenus, dépenses fixes, dépenses variables et capacité d’épargne.
         </p>

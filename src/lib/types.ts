@@ -75,6 +75,7 @@ export interface Transaction {
   transaction_date: string
   amount: number
   currency: string
+  personal_share_ratio?: number | null
   direction: Direction
   flow_type: FlowType
   budget_behavior: BudgetBehavior

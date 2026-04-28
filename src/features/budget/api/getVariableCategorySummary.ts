@@ -1,4 +1,4 @@
-import { supabaseBudget } from '@/lib/supabaseBudget'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { AnalyticsVariableCategorySummary } from '@/lib/types'
 
 const VARIABLE_CATEGORY_SUMMARY_COLUMNS = [
@@ -17,7 +17,7 @@ const VARIABLE_CATEGORY_SUMMARY_COLUMNS = [
 ].join(', ')
 
 export async function getVariableCategorySummary(): Promise<AnalyticsVariableCategorySummary[]> {
-  const { data, error } = await supabaseBudget
+  const { data, error } = await budgetDb()
     .from('analytics_variable_category_summary')
     .select(VARIABLE_CATEGORY_SUMMARY_COLUMNS)
     .order('total_amount', { ascending: false })

@@ -40,7 +40,7 @@ export function HeroCard({ account, totalSpent, totalBudget }: HeroCardProps) {
             Solde restant · {account.name}
           </div>
           <button
-            onClick={() => navigate('/activite')}
+            onClick={() => navigate('/flux')}
             style={{
               borderRadius: 'var(--radius-pill)',
               background: 'transparent',

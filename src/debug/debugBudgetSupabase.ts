@@ -1,4 +1,11 @@
-export async function debugBudgetSupabaseConnection(supabase: any) {
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types'
+
+type TxnUserIdRow = { user_id: string }
+
+export async function debugBudgetSupabaseConnection(
+  supabase: SupabaseClient<Database, 'budget_dashboard'>,
+) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
 
   console.log('[BUDGET DEBUG] sessionData:', sessionData)
@@ -30,7 +37,7 @@ export async function debugBudgetSupabaseConnection(supabase: any) {
   }
 
   if (authUserId && transactions?.length) {
-    const distinctUserIds = [...new Set(transactions.map((t: any) => t.user_id))]
+    const distinctUserIds = [...new Set((transactions as TxnUserIdRow[]).map((t) => t.user_id))]
     console.log('[BUDGET DEBUG] distinct transaction user_ids:', distinctUserIds)
     console.log('[BUDGET DEBUG] auth uid matches returned rows:', distinctUserIds.every((id) => id === authUserId))
   }
