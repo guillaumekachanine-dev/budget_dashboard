@@ -7,6 +7,15 @@ export function formatCurrency(amount: number, currency = 'EUR'): string {
   }).format(amount)
 }
 
+export function formatCurrencyRounded(amount: number, currency = 'EUR'): string {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 export function formatCompact(amount: number): string {
   if (Math.abs(amount) >= 1000) {
     return new Intl.NumberFormat('fr-FR', {

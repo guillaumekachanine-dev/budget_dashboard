@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
-import { formatCurrency, getCurrentPeriod, getDaysRemainingInMonth, getMonthLabel } from '@/lib/utils'
+import { formatCurrency, formatCurrencyRounded, getCurrentPeriod, getDaysRemainingInMonth, getMonthLabel } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 
@@ -193,7 +193,7 @@ export function Home() {
                   Solde compte courant
                 </p>
                 <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontSize: 34, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.05 }}>
-                  {loadingAccounts ? '—' : (selectedAccount ? formatCurrency(selectedAccount.current_balance) : '—')}
+                  {loadingAccounts ? '—' : (selectedAccount ? formatCurrencyRounded(selectedAccount.current_balance) : '—')}
                 </p>
                 <p style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.62)' }}>
                   {daysRemaining} jours restants dans le mois
