@@ -1,9 +1,18 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { X, ArrowUpRight, ArrowDownRight, Info, CheckCircle, AlertCircle } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Cell, LabelList, PieChart, Pie,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  LabelList,
+  PieChart,
+  Pie,
+  ReferenceLine,
 } from 'recharts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -13,42 +22,33 @@ import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
 import type { Category, Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
-import { KpiCard } from '@/components'
+import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type PeriodKey    = 'semaine' | 'mois' | 'trimestre' | 'annee' | 'custom'
-type CustomMode   = 'fixed' | 'rolling'
-
-interface CustomState {
-  mode:        CustomMode
-  startDate:   string
-  endDate:     string
-  rollingDays: number
-}
+type PeriodKey = 'mois' | 'annee'
+type SubCatTrend = 'up' | 'down' | 'equal'
 
 interface MonthlyBucket {
-  month:  string    // label court, ex : "Jan"
+  month: string
   amount: number
   budget: number
   evolutionPct: number | null
+  isCurrent: boolean
 }
 
 interface TopTransaction {
-  label:  string
+  label: string
   amount: number
-  date:   string
+  date: string
 }
 
 interface SubCatData {
-  id:    string
-  name:  string
+  id: string
+  name: string
   parentCategoryName?: string | null
-  icon:  string
+  icon: string
   total: number
   topTx: TopTransaction | null
 }
-
-type SubCatTrend = 'up' | 'down' | 'equal'
 
 interface SubCategoryTrendItem {
   id: string
@@ -67,7 +67,6 @@ interface PieDatum {
   color: string
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -87,86 +86,30 @@ function txLabel(tx: Transaction): string {
   return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
 }
 
-function getPeriodRange(key: PeriodKey, custom: CustomState): { startDate: string; endDate: string } {
+function getPeriodRange(key: PeriodKey): { startDate: string; endDate: string } {
   const now = new Date()
-  switch (key) {
-    case 'semaine': {
-      const dow = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - dow)
-      return { startDate: monday.toISOString().slice(0, 10), endDate: todayStr() }
-    }
-    case 'mois':
-      return {
-        startDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
-        endDate: todayStr(),
-      }
-    case 'trimestre': {
-      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
-      return {
-        startDate: new Date(now.getFullYear(), quarterStartMonth, 1).toISOString().slice(0, 10),
-        endDate: todayStr(),
-      }
-    }
-    case 'annee':
-      return { startDate: `${now.getFullYear()}-01-01`, endDate: todayStr() }
-    case 'custom':
-      if (custom.mode === 'fixed') {
-        return {
-          startDate: custom.startDate || todayStr(),
-          endDate:   custom.endDate   || todayStr(),
-        }
-      } else {
-        const start = new Date(now)
-        start.setDate(now.getDate() - custom.rollingDays + 1)
-        return { startDate: start.toISOString().slice(0, 10), endDate: todayStr() }
-      }
+  if (key === 'annee') {
+    return { startDate: `${now.getFullYear()}-01-01`, endDate: todayStr() }
+  }
+  return {
+    startDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
+    endDate: todayStr(),
   }
 }
 
-function getDaysBetween(start: string, end: string): number {
-  const a = new Date(start + 'T00:00:00')
-  const b = new Date(end   + 'T00:00:00')
-  return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1)
-}
-
-function scaleBudget(monthlyBudget: number, key: PeriodKey, custom: CustomState): number {
+function scaleBudget(monthlyBudget: number, key: PeriodKey): number {
   if (monthlyBudget === 0) return 0
+  if (key === 'annee') return monthlyBudget * 12
   const now = new Date()
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  if (key === 'annee') return monthlyBudget * 12
-  if (key === 'trimestre') return monthlyBudget * 3
-  const range = getPeriodRange(key, custom)
-  return (monthlyBudget / daysInMonth) * getDaysBetween(range.startDate, range.endDate)
+  const daysElapsed = now.getDate()
+  return (monthlyBudget / daysInMonth) * daysElapsed
 }
 
-function fmtDayShort(dateStr: string): string {
-  if (!dateStr) return '—'
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-}
-
-function getPeriodLabel(key: PeriodKey, custom: CustomState): string {
-  switch (key) {
-    case 'semaine': {
-      const r = getPeriodRange('semaine', custom)
-      return `Sem. du ${fmtDayShort(r.startDate)}`
-    }
-    case 'mois': {
-      const now = new Date()
-      return now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-    }
-    case 'trimestre': {
-      const now = new Date()
-      const quarter = Math.floor(now.getMonth() / 3) + 1
-      return `T${quarter} ${now.getFullYear()}`
-    }
-    case 'annee':
-      return `Année ${new Date().getFullYear()}`
-    case 'custom':
-      return custom.mode === 'fixed'
-        ? `${fmtDayShort(custom.startDate)} → ${fmtDayShort(custom.endDate)}`
-        : `Derniers ${custom.rollingDays}j`
-  }
+function getPeriodLabel(key: PeriodKey): string {
+  const now = new Date()
+  if (key === 'annee') return `Année ${now.getFullYear()}`
+  return now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 }
 
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -179,148 +122,21 @@ function accentFromLabel(label: string): string {
   return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
 }
 
-// ─── CustomPeriodSheet ────────────────────────────────────────────────────────
-const ROLLING_PRESETS = [7, 14, 30, 90]
-
-interface CustomPeriodSheetProps {
-  open:     boolean
-  value:    CustomState
-  onClose:  () => void
-  onApply:  (v: CustomState) => void
-}
-
-function CustomPeriodSheet({ open, value, onClose, onApply }: CustomPeriodSheetProps) {
-  const [draft, setDraft] = useState<CustomState>(value)
-
-  // Sync draft whenever the sheet opens
-  useEffect(() => {
-    if (open) setDraft(value)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '11px 14px', boxSizing: 'border-box',
-    borderRadius: 'var(--radius-md)',
-    border: '1.5px solid var(--neutral-200)',
-    fontSize: 14, color: 'var(--neutral-800)',
-    fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--neutral-0)',
-  }
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            key="cp-bd" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(13,13,31,0.48)', backdropFilter: 'blur(2px)' }}
-          />
-          <motion.div
-            key="cp-sh"
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 340 }}
-            style={{
-              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 101,
-              background: 'var(--neutral-0)', borderRadius: '24px 24px 0 0',
-              padding: '0 20px 44px', maxWidth: 512, margin: '0 auto',
-            }}
-          >
-            {/* Handle */}
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--neutral-200)', margin: '12px auto 20px' }} />
-
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--neutral-800)' }}>Période personnalisée</h3>
-              <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--neutral-100)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={15} color="var(--neutral-500)" />
-              </button>
-            </div>
-
-            {/* Mode toggle */}
-            <div style={{ display: 'flex', gap: 0, marginBottom: 24, background: 'var(--neutral-100)', borderRadius: 'var(--radius-full)', padding: 3 }}>
-              {(['fixed', 'rolling'] as const).map((m) => (
-                <button key={m} onClick={() => setDraft({ ...draft, mode: m })} style={{
-                  flex: 1, padding: '9px 0', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.2s', fontFamily: 'var(--font-sans)',
-                  background: draft.mode === m ? 'var(--primary-500)' : 'transparent',
-                  color:      draft.mode === m ? 'var(--neutral-0)' : 'var(--neutral-500)',
-                }}>
-                  {m === 'fixed' ? '📌 Période fixe' : '🔄 Glissante'}
-                </button>
-              ))}
-            </div>
-
-            {/* Mode content */}
-            <AnimatePresence mode="wait">
-              {draft.mode === 'fixed' ? (
-                <motion.div key="fixed" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
-                >
-                  {(['startDate', 'endDate'] as const).map((field, i) => (
-                    <div key={field}>
-                      <label style={{ display: 'block', marginBottom: 6, fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                        {i === 0 ? 'Du' : 'Au'}
-                      </label>
-                      <input type="date" value={draft[field]} style={inputStyle}
-                        onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
-                      />
-                    </div>
-                  ))}
-                </motion.div>
-              ) : (
-                <motion.div key="rolling" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 12 }}>
-                    Fenêtre glissante
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                    {ROLLING_PRESETS.map((d) => {
-                      const active = draft.rollingDays === d
-                      return (
-                        <button key={d} onClick={() => setDraft({ ...draft, rollingDays: d })} style={{
-                          padding: '13px 0', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                          fontSize: 14, fontWeight: 700, transition: 'all 0.15s',
-                          fontFamily: 'var(--font-mono)',
-                          background: active ? 'var(--primary-50)' : 'var(--neutral-100)',
-                          color:      active ? 'var(--primary-500)' : 'var(--neutral-500)',
-                          border:     `2px solid ${active ? 'var(--primary-400)' : 'transparent'}`,
-                        }}>
-                          {d}j
-                        </button>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <button onClick={() => { onApply(draft); onClose() }} style={{
-              marginTop: 28, width: '100%', padding: '14px', borderRadius: 'var(--radius-full)',
-              border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
-              fontFamily: 'var(--font-sans)', background: 'var(--primary-500)', color: 'var(--neutral-0)',
-              boxShadow: 'var(--shadow-md)',
-            }}>
-              Appliquer
-            </button>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
-}
-
-// ─── CategorySheet ────────────────────────────────────────────────────────────
 interface CatItem {
-  id: string; name: string; icon_name: string | null; color_token: string | null
+  id: string
+  name: string
+  icon_name: string | null
+  color_token: string | null
 }
 
 const ALL_ITEM: CatItem = { id: 'all', name: 'Toutes', icon_name: null, color_token: null }
 
 interface CategorySheetProps {
-  open:       boolean
+  open: boolean
   selectedId: string
   categories: Category[]
-  onClose:    () => void
-  onSelect:   (id: string) => void
+  onClose: () => void
+  onSelect: (id: string) => void
 }
 
 function CategorySheet({ open, selectedId, categories, onClose, onSelect }: CategorySheetProps) {
@@ -334,25 +150,35 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
       {open && (
         <>
           <motion.div
-            key="cat-bd" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            key="cat-bd"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={onClose}
             style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(13,13,31,0.52)', backdropFilter: 'blur(3px)' }}
           />
           <motion.div
             key="cat-sh"
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             style={{
-              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 101,
-              background: 'var(--neutral-50)', borderRadius: '28px 28px 0 0',
-              padding: '0 20px 52px', maxWidth: 512, margin: '0 auto',
-              maxHeight: '82dvh', overflowY: 'auto',
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 101,
+              background: 'var(--neutral-50)',
+              borderRadius: '28px 28px 0 0',
+              padding: '0 20px 52px',
+              maxWidth: 512,
+              margin: '0 auto',
+              maxHeight: '82dvh',
+              overflowY: 'auto',
             }}
           >
-            {/* Handle */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--neutral-300)', margin: '12px auto 0', flexShrink: 0 }} />
-
-            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0 22px', position: 'sticky', top: 0, background: 'var(--neutral-50)', zIndex: 1 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--neutral-800)' }}>Catégorie</h3>
@@ -362,32 +188,41 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
                 <X size={15} color="var(--neutral-500)" />
               </button>
             </div>
-
-            {/* Grid 4 per row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px 6px' }}>
               {items.map((cat) => {
                 const isSelected = cat.id === selectedId
-
                 return (
                   <motion.button
                     key={cat.id}
                     whileTap={{ scale: 0.88 }}
-                    onClick={() => { onSelect(cat.id); onClose() }}
+                    onClick={() => {
+                      onSelect(cat.id)
+                      onClose()
+                    }}
                     style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                      background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 8,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 2px',
                       WebkitTapHighlightColor: 'transparent',
                     }}
                   >
                     <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {cat.id === 'all'
-                        ? '✨'
-                        : <CategoryIcon categoryName={cat.name} size={30} fallback="💰" />}
+                      {cat.id === 'all' ? '✨' : <CategoryIcon categoryName={cat.name} size={30} fallback="💰" />}
                     </div>
                     <span style={{
-                      fontSize: 10, fontWeight: isSelected ? 700 : 500, textAlign: 'center',
-                      lineHeight: 1.25, maxWidth: 72,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontSize: 10,
+                      fontWeight: isSelected ? 700 : 500,
+                      textAlign: 'center',
+                      lineHeight: 1.25,
+                      maxWidth: 72,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                       color: isSelected ? 'var(--primary-500)' : 'var(--neutral-600)',
                       fontFamily: 'var(--font-sans)',
                     }}>
@@ -404,26 +239,20 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
   )
 }
 
-// ─── Analyse Modal ────────────────────────────────────────────────────────────
 interface AnalyseModalProps {
-  open:           boolean
-  onClose:        () => void
-  categoryName:   string
-  monthlyAvg:     number
+  open: boolean
+  onClose: () => void
+  categoryName: string
+  monthlyAvg: number
   monthlyBudgetToDate: number
   monthlyHistory: MonthlyBucket[]
-  subCategories:  SubCatData[]
+  subCategories: SubCatData[]
 }
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number }> }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{
-      background: 'var(--primary-600)',
-      borderRadius: 'var(--radius-md)',
-      padding: '5px 11px',
-      boxShadow: 'var(--shadow-md)',
-    }}>
+    <div style={{ background: 'var(--primary-600)', borderRadius: 'var(--radius-md)', padding: '5px 11px', boxShadow: 'var(--shadow-md)' }}>
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)' }}>
         {formatMoney(payload[0].value)}
       </span>
@@ -434,48 +263,33 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
 function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
   const isFirst = rank === 1
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '12px 0',
-      borderTop: rank > 1 ? '1px solid var(--neutral-100)' : 'none',
-    }}>
-      {/* Rank badge */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: rank > 1 ? '1px solid var(--neutral-100)' : 'none' }}>
       <div style={{
-        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        flexShrink: 0,
         background: isFirst ? 'var(--primary-500)' : 'var(--neutral-100)',
-        color:      isFirst ? 'var(--neutral-0)' : 'var(--neutral-400)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 10, fontWeight: 700,
+        color: isFirst ? 'var(--neutral-0)' : 'var(--neutral-400)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 10,
+        fontWeight: 700,
       }}>
         {rank}
       </div>
-
-      {/* Category icon */}
-      <div style={{
-        width: 38, height: 38,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        <CategoryIcon
-          categoryName={data.parentCategoryName || data.name}
-          size={20}
-          fallback={data.icon || '💰'}
-        />
+      <div style={{ width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <CategoryIcon categoryName={data.parentCategoryName || data.name} size={20} fallback={data.icon || '💰'} />
       </div>
-
-      {/* Name + top transaction */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-          {data.name}
-        </p>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)', lineHeight: 1.2 }}>{data.name}</p>
         {data.topTx && (
           <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             ↑ {data.topTx.label}
           </p>
         )}
       </div>
-
-      {/* Total + max amount */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--neutral-800)', lineHeight: 1.2 }}>
           {formatMoney(data.total)}
@@ -490,67 +304,60 @@ function SubCatRow({ rank, data }: { rank: number; data: SubCatData }) {
   )
 }
 
-function formatBarLabel(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return ''
-  return formatMoney(value)
-}
-
 function AnalyseModal({
-  open, onClose,
+  open,
+  onClose,
   categoryName,
-  monthlyAvg, monthlyBudgetToDate, monthlyHistory, subCategories,
+  monthlyAvg,
+  monthlyBudgetToDate,
+  monthlyHistory,
+  subCategories,
 }: AnalyseModalProps) {
   const todayLabel = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
   const hasComparableValues = monthlyAvg > 0 && monthlyBudgetToDate > 0
-  const avgGapPct = hasComparableValues
-    ? ((monthlyAvg - monthlyBudgetToDate) / monthlyBudgetToDate) * 100
-    : 0
+  const avgGapPct = hasComparableValues ? ((monthlyAvg - monthlyBudgetToDate) / monthlyBudgetToDate) * 100 : 0
   const avgGapColor = hasComparableValues
     ? (avgGapPct > 0 ? 'var(--color-negative)' : avgGapPct < 0 ? 'var(--color-positive)' : 'var(--neutral-800)')
     : 'var(--neutral-300)'
-  const hasHistoryData = monthlyHistory.some((m) => m.amount > 0)
 
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="am-bd"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
             onClick={onClose}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 200,
-              background: 'rgba(13,13,31,0.6)', backdropFilter: 'blur(3px)',
-            }}
+            style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(13,13,31,0.6)', backdropFilter: 'blur(3px)' }}
           />
 
-          {/* Panel */}
           <motion.div
             key="am-sh"
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
             style={{
-              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 201,
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 201,
               background: 'var(--neutral-50)',
               borderRadius: '28px 28px 0 0',
               height: '92dvh',
-              maxWidth: 512, margin: '0 auto',
-              display: 'flex', flexDirection: 'column',
+              maxWidth: 512,
+              margin: '0 auto',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
             }}
           >
-            {/* ── Sticky header ─────────────────────────────── */}
-            <div style={{
-              padding: '12px 20px 0',
-              flexShrink: 0,
-              borderBottom: '1px solid var(--neutral-100)',
-              background: 'var(--neutral-50)',
-            }}>
-              {/* Drag handle */}
+            <div style={{ padding: '12px 20px 0', flexShrink: 0, borderBottom: '1px solid var(--neutral-100)', background: 'var(--neutral-50)' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--neutral-200)', margin: '0 auto 16px' }} />
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <CategoryIcon categoryName={categoryName} size={22} fallback="✨" />
@@ -561,174 +368,63 @@ function AnalyseModal({
                 </div>
                 <button
                   onClick={onClose}
-                  style={{
-                    width: 34, height: 34, borderRadius: '50%',
-                    background: 'var(--neutral-100)', border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}
+                  style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--neutral-100)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                 >
                   <X size={16} color="var(--neutral-500)" />
                 </button>
               </div>
             </div>
 
-            {/* ── Scrollable body ───────────────────────────── */}
-            <div style={{
-              flex: 1, overflowY: 'auto',
-              padding: '20px 20px',
-              paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
-            }}>
-
-              {/* Top metrics */}
-              <div style={{
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-2xl)',
-                boxShadow: 'var(--shadow-card)',
-                padding: '14px 16px',
-                marginBottom: 14,
-                border: '1px solid var(--neutral-100)',
-              }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px', paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))' }}>
+              <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '14px 16px', marginBottom: 14, border: '1px solid var(--neutral-100)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <motion.p
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.16, duration: 0.35 }}
-                      style={{
-                        margin: 0,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 'clamp(28px, 8vw, 36px)',
-                        fontWeight: 700,
-                        color: 'var(--neutral-900)',
-                        letterSpacing: '-1px',
-                        lineHeight: 1,
-                      }}
-                    >
+                    <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16, duration: 0.35 }} style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'clamp(28px, 8vw, 36px)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-1px', lineHeight: 1 }}>
                       {monthlyAvg > 0 ? formatMoney(monthlyAvg) : '—'}
                     </motion.p>
-                    <p style={{
-                      margin: '4px 0 0',
-                      fontSize: 11,
-                      color: 'var(--neutral-400)',
-                      lineHeight: 1.35,
-                    }}>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', lineHeight: 1.35 }}>
                       montant moyen mensuel constaté
                     </p>
                   </div>
-
                   <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--neutral-100)', flexShrink: 0 }} />
-
                   <div style={{ minWidth: 112, textAlign: 'right' }}>
-                    <motion.p
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2, duration: 0.35 }}
-                      style={{
-                        margin: 0,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 'clamp(28px, 8vw, 36px)',
-                        fontWeight: 700,
-                        color: avgGapColor,
-                        letterSpacing: '-0.8px',
-                        lineHeight: 1,
-                      }}
-                    >
+                    <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.35 }} style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'clamp(28px, 8vw, 36px)', fontWeight: 700, color: avgGapColor, letterSpacing: '-0.8px', lineHeight: 1 }}>
                       {hasComparableValues ? `${avgGapPct > 0 ? '+' : ''}${avgGapPct.toFixed(0)}%` : '—'}
                     </motion.p>
-                    <p style={{
-                      margin: '4px 0 0',
-                      fontSize: 11,
-                      color: 'var(--neutral-400)',
-                      lineHeight: 1.35,
-                    }}>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--neutral-400)', lineHeight: 1.35 }}>
                       écart vs enveloppe allouée au {todayLabel}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* 3-month bar chart */}
-              <div style={{
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-2xl)',
-                boxShadow: 'var(--shadow-card)',
-                padding: '16px 14px 12px',
-                marginBottom: 14,
-              }}>
+              <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '16px 14px 12px', marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    Évolution 3 mois
-                  </p>
-                  <span style={{ fontSize: 11, color: 'var(--neutral-400)' }}>
-                    {hasHistoryData ? 'valeurs affichées' : 'en attente de données'}
-                  </span>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>Évolution 6 mois</p>
                 </div>
-
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={monthlyHistory} barGap={8} barCategoryGap="22%" margin={{ top: 28, right: 6, left: 6, bottom: 2 }}>
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false} tickLine={false}
-                      tick={{ fontSize: 12, fill: 'var(--neutral-400)', fontFamily: 'var(--font-sans)' }}
-                    />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-400)', fontFamily: 'var(--font-sans)' }} />
                     <YAxis hide />
                     <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(91,87,245,0.06)' }} />
                     <Bar dataKey="amount" radius={[9, 9, 0, 0]} maxBarSize={52}>
-                      <LabelList
-                        dataKey="amount"
-                        position="top"
-                        offset={8}
-                        formatter={(value: number) => formatBarLabel(value)}
-                        fill="var(--neutral-500)"
-                        fontFamily="var(--font-mono)"
-                        fontSize={11}
-                        fontWeight={700}
-                      />
+                      <LabelList dataKey="amount" position="top" offset={8} formatter={(value: number) => (Number.isFinite(value) && value > 0 ? formatMoney(value) : '')} fill="var(--neutral-500)" fontFamily="var(--font-mono)" fontSize={11} fontWeight={700} />
                       {monthlyHistory.map((entry, i) => (
-                        <Cell
-                          key={`cell-${i}`}
-                          fill={
-                            entry.budget > 0 && entry.amount > entry.budget
-                              ? 'var(--color-error)'
-                              : 'var(--primary-500)'
-                          }
-                          fillOpacity={i === monthlyHistory.length - 1 ? 1 : 0.38}
-                        />
+                        <Cell key={`cell-${i}`} fill={entry.budget > 0 && entry.amount > entry.budget ? 'var(--color-error)' : 'var(--primary-500)'} fillOpacity={i === monthlyHistory.length - 1 ? 1 : 0.38} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
-              {/* Sub-categories ranked list */}
-              <div style={{
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-2xl)',
-                boxShadow: 'var(--shadow-card)',
-                padding: '18px 16px',
-              }}>
-                <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  Sous-catégories
-                </p>
-                <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--neutral-400)' }}>
-                  Classées par montant total · toutes périodes
-                </p>
-
+              <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', padding: '18px 16px' }}>
+                <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '1px' }}>Sous-catégories</p>
+                <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--neutral-400)' }}>Classées par montant total</p>
                 {subCategories.length > 0 ? (
-                  subCategories.map((sc, i) => (
-                    <SubCatRow
-                      key={sc.id}
-                      rank={i + 1}
-                      data={{ ...sc, parentCategoryName: sc.parentCategoryName ?? categoryName }}
-                    />
-                  ))
+                  subCategories.map((sc, i) => <SubCatRow key={sc.id} rank={i + 1} data={{ ...sc, parentCategoryName: sc.parentCategoryName ?? categoryName }} />)
                 ) : (
                   <div style={{ padding: '28px 0', textAlign: 'center' }}>
-                    <p style={{ fontSize: 28, marginBottom: 8 }}>🏷️</p>
-                    <p style={{ fontSize: 13, color: 'var(--neutral-400)', margin: '0 0 4px' }}>Aucune sous-catégorie</p>
-                    <p style={{ fontSize: 11, color: 'var(--neutral-300)', fontStyle: 'italic', margin: 0 }}>
-                      Les données seront connectées prochainement
-                    </p>
+                    <p style={{ fontSize: 13, color: 'var(--neutral-400)', margin: 0 }}>Aucune sous-catégorie</p>
                   </div>
                 )}
               </div>
@@ -746,6 +442,7 @@ interface SubCategoryTransactionsModalProps {
   title: string
   transactions: Transaction[]
   loading: boolean
+  onSelectTransaction: (transaction: Transaction) => void
 }
 
 function SubCategoryTransactionsModal({
@@ -754,62 +451,26 @@ function SubCategoryTransactionsModal({
   title,
   transactions,
   loading,
+  onSelectTransaction,
 }: SubCategoryTransactionsModalProps) {
   return (
     <AnimatePresence>
       {open ? (
         <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
-          />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }} />
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-            style={{
-              position: 'fixed',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 221,
-              width: '100%',
-              maxWidth: 512,
-              margin: '0 auto',
-              background: 'var(--neutral-0)',
-              borderRadius: '24px 24px 0 0',
-              maxHeight: '82dvh',
-              overflow: 'hidden',
-              boxShadow: 'var(--shadow-lg)',
-            }}
+            style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 221, width: '100%', maxWidth: 512, margin: '0 auto', background: 'var(--neutral-0)', borderRadius: '24px 24px 0 0', maxHeight: '82dvh', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}
           >
             <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{title}</p>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  border: 'none',
-                  background: 'var(--neutral-100)',
-                  color: 'var(--neutral-600)',
-                  width: 32,
-                  height: 32,
-                  borderRadius: 'var(--radius-full)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-                aria-label="Fermer"
-              >
+              <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 32, height: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                 <X size={15} />
               </button>
             </div>
-
             <div style={{ maxHeight: 'calc(82dvh - 66px)', overflowY: 'auto' }}>
               {loading ? (
                 <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
@@ -817,27 +478,35 @@ function SubCategoryTransactionsModal({
                 <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
               ) : (
                 transactions.map((tx) => (
-                  <div
+                  <button
                     key={tx.id}
+                    type="button"
+                    onClick={() => onSelectTransaction(tx)}
                     style={{
+                      width: '100%',
+                      border: 'none',
                       borderBottom: '1px solid var(--neutral-200)',
                       padding: 'var(--space-3) var(--space-5)',
                       display: 'grid',
                       gridTemplateColumns: '52px minmax(0,1fr) auto',
                       alignItems: 'center',
                       gap: 'var(--space-3)',
+                      background: 'transparent',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent'
                     }}
                   >
-                    <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      {formatTxDateDayMonth(tx.transaction_date)}
-                    </span>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
-                      {txLabel(tx)}
-                    </span>
-                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                      {formatMoney(Number(tx.amount))}
-                    </span>
-                  </div>
+                    <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatTxDateDayMonth(tx.transaction_date)}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{txLabel(tx)}</span>
+                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoney(Number(tx.amount))}</span>
+                  </button>
                 ))
               )}
             </div>
@@ -848,32 +517,24 @@ function SubCategoryTransactionsModal({
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
-  { key: 'mois',      label: 'Mois' },
-  { key: 'trimestre', label: 'Trimestre' },
-  { key: 'annee',     label: 'Année' },
-]
-
-const DEFAULT_CUSTOM: CustomState = {
-  mode: 'rolling', startDate: '', endDate: '', rollingDays: 30,
-}
-
 export function Budgets() {
   const { year, month } = getCurrentPeriod()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
 
-  // ── UI state ──────────────────────────────────────────────
-  const [periodKey,        setPeriodKey]        = useState<PeriodKey>('mois')
-  const [customState,      setCustomState]      = useState<CustomState>(DEFAULT_CUSTOM)
-  const [selectedCat,      setSelectedCat]      = useState<string>('all')
-  const [showCustomSheet,  setShowCustomSheet]  = useState(false)
-  const [showCatSheet,     setShowCatSheet]     = useState(false)
+  const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
+  const [selectedCat, setSelectedCat] = useState<string>('all')
+  const [showCatSheet, setShowCatSheet] = useState(false)
   const [showAnalyseModal, setShowAnalyseModal] = useState(false)
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategoryTrendItem | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
+  const [subCategoryToReopen, setSubCategoryToReopen] = useState<SubCategoryTrendItem | null>(null)
+  const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false)
   const debugRanRef = useRef(false)
+  const donutTooltipRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -882,23 +543,13 @@ export function Budgets() {
     }
   }, [])
 
-  // ── Queries ───────────────────────────────────────────────
-  const { data: summaries }        = useBudgetSummaries(year, month)
-  const { data: categories = [] }  = useCategories('expense')
-  const rootExpenseCategories = useMemo(
-    () => categories.filter((c) => c.parent_id === null),
-    [categories],
-  )
-  const expenseSubCategories = useMemo(
-    () => categories.filter((c) => c.parent_id !== null),
-    [categories],
-  )
+  const { data: summaries } = useBudgetSummaries(year, month)
+  const { data: categories = [] } = useCategories('expense')
+  const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
+  const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
-  const range = useMemo(
-    () => getPeriodRange(periodKey, customState),
-    [periodKey, customState],
-  )
+  const range = useMemo(() => getPeriodRange(periodKey), [periodKey])
 
   const selectedCategoryIds = useMemo(() => {
     if (selectedCat === 'all') return undefined
@@ -909,35 +560,46 @@ export function Budgets() {
     return ids
   }, [expenseSubCategories, selectedCat])
 
-  // Transactions for the selected period and selected category scope
   const { data: periodTxns } = useTransactions({
-    ...range, flowType: 'expense', categoryIds: selectedCategoryIds,
+    ...range,
+    flowType: 'expense',
+    categoryIds: selectedCategoryIds,
   })
 
-  // Last 3 full months for the KPI average
   const threeMonthStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10)
-  const lastMonthEnd    = new Date(now.getFullYear(), now.getMonth(),    0).toISOString().slice(0, 10)
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
   const { data: threeMonthTxns } = useTransactions({
-    startDate: threeMonthStart, endDate: lastMonthEnd, flowType: 'expense', categoryIds: selectedCategoryIds,
+    startDate: threeMonthStart,
+    endDate: lastMonthEnd,
+    flowType: 'expense',
+    categoryIds: selectedCategoryIds,
   })
 
-  // Current month for KPI projection (may be same as periodTxns when key==='mois')
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const { data: currentMonthAllExpenseTxns } = useTransactions({
-    startDate: currentMonthStart, endDate: todayStr(), flowType: 'expense',
+    startDate: currentMonthStart,
+    endDate: todayStr(),
+    flowType: 'expense',
   })
   const threeMonthRollingStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10)
   const { data: rollingThreeMonthAllExpenseTxns } = useTransactions({
-    startDate: threeMonthRollingStart, endDate: todayStr(), flowType: 'expense',
+    startDate: threeMonthRollingStart,
+    endDate: todayStr(),
+    flowType: 'expense',
   })
-  const historyStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10)
+  const historyStart = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().slice(0, 10)
   const { data: historyTxns } = useTransactions({
-    startDate: historyStart, endDate: todayStr(), flowType: 'expense', categoryIds: selectedCategoryIds,
+    startDate: historyStart,
+    endDate: todayStr(),
+    flowType: 'expense',
+    categoryIds: selectedCategoryIds,
   })
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10)
   const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
   const { data: prevMonthAllExpenseTxns } = useTransactions({
-    startDate: prevMonthStart, endDate: prevMonthEnd, flowType: 'expense',
+    startDate: prevMonthStart,
+    endDate: prevMonthEnd,
+    flowType: 'expense',
   })
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
@@ -945,40 +607,25 @@ export function Budgets() {
     categoryIds: selectedSubCategory ? [selectedSubCategory.id] : ['__none__'],
   })
 
-  // ── Derived values ────────────────────────────────────────
   const totalMonthlyBudget = useMemo(() => {
     if (!summaries?.length) return 0
     if (selectedCat === 'all') return summaries.reduce((s, b) => s + b.budget_amount, 0)
     return summaries.find((s) => s.category.id === selectedCat)?.budget_amount ?? 0
   }, [summaries, selectedCat])
 
-  const periodBudget = useMemo(
-    () => scaleBudget(totalMonthlyBudget, periodKey, customState),
-    [totalMonthlyBudget, periodKey, customState],
-  )
+  const periodBudget = useMemo(() => scaleBudget(totalMonthlyBudget, periodKey), [totalMonthlyBudget, periodKey])
+  const periodSpent = useMemo(() => (periodTxns ?? []).reduce((s, t) => s + Number(t.amount), 0), [periodTxns])
 
-  const periodSpent = useMemo(
-    () => (periodTxns ?? []).reduce((s, t) => s + Number(t.amount), 0),
-    [periodTxns],
-  )
-
-  // 3-month average per month (last 3 full months)
   const threeMonthAvg = useMemo(() => {
     if (!threeMonthTxns?.length) return 0
     return threeMonthTxns.reduce((s, t) => s + Number(t.amount), 0) / 3
   }, [threeMonthTxns])
 
-  const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const daysElapsed  = now.getDate()
-  const budgetToDate = daysElapsed > 0
-    ? (totalMonthlyBudget / daysInMonth) * daysElapsed
-    : 0
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const daysElapsed = now.getDate()
+  const budgetToDate = daysElapsed > 0 ? (totalMonthlyBudget / daysInMonth) * daysElapsed : 0
 
-  // Selected category display info
-  const selectedCatInfo = useMemo(
-    () => categories.find((c) => c.id === selectedCat) ?? null,
-    [categories, selectedCat],
-  )
+  const selectedCatInfo = useMemo(() => categories.find((c) => c.id === selectedCat) ?? null, [categories, selectedCat])
 
   const subCategoryRows = useMemo<SubCategoryTrendItem[]>(() => {
     const visibleSubCategories = selectedCat === 'all'
@@ -1000,6 +647,7 @@ export function Budgets() {
       acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
       return acc
     }, new Map<string, number>())
+
     const previousMonthByCategory = (prevMonthAllExpenseTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
       acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
@@ -1010,7 +658,7 @@ export function Budgets() {
       .map((subCat) => {
         const currentMonthAmount = currentMonthByCategory.get(subCat.id) ?? 0
         const previousMonthAmount = previousMonthByCategory.get(subCat.id) ?? 0
-        const threeMonthAvg = (rollingThreeMonthsByCategory.get(subCat.id) ?? 0) / 3
+        const threeMonthAvgValue = (rollingThreeMonthsByCategory.get(subCat.id) ?? 0) / 3
 
         let trend: SubCatTrend = 'equal'
         if (currentMonthAmount > previousMonthAmount + 0.01) trend = 'up'
@@ -1022,7 +670,7 @@ export function Budgets() {
           parentCategoryName: subCat.parent_id ? categoryNameById.get(subCat.parent_id) ?? null : null,
           currentMonthAmount,
           previousMonthAmount,
-          threeMonthAvg,
+          threeMonthAvg: threeMonthAvgValue,
           trend,
         }
       })
@@ -1037,9 +685,8 @@ export function Budgets() {
     rollingThreeMonthAllExpenseTxns,
   ])
 
-  // Monthly history (last 3 months including current month)
   const monthlyHistory = useMemo<MonthlyBucket[]>(() => {
-    const base = [-2, -1, 0].map((offset) => {
+    const base = [-5, -4, -3, -2, -1, 0].map((offset) => {
       const d = new Date(nowYear, nowMonth + offset, 1)
       const m = d.getMonth()
       const y = d.getFullYear()
@@ -1048,8 +695,9 @@ export function Budgets() {
         if (txDate.getMonth() === m && txDate.getFullYear() === y) return sum + Number(t.amount)
         return sum
       }, 0)
-      return { month: MONTHS_FR_SHORT[m], amount, budget: totalMonthlyBudget }
+      return { month: MONTHS_FR_SHORT[m], amount, budget: totalMonthlyBudget, isCurrent: offset === 0 }
     })
+
     return base.map((row, idx) => {
       if (idx === 0) return { ...row, evolutionPct: null }
       const prev = base[idx - 1].amount
@@ -1090,18 +738,70 @@ export function Budgets() {
       .sort((a, b) => b.value - a.value)
   }, [categoryById, periodTxns, selectedCat])
 
-  const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
   const chartRatioPct = periodBudget > 0 ? (periodSpent / periodBudget) * 100 : 0
+  const monthlyVariableBudget = useMemo(
+    () => (summaries ?? []).reduce((sum, row) => sum + Number(row.budget_amount), 0),
+    [summaries],
+  )
+  const budgetSharePct = monthlyVariableBudget > 0 ? (totalMonthlyBudget / monthlyVariableBudget) * 100 : 0
+  const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
+  const pieTotal = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData])
 
-  // ── Handle period tab click ───────────────────────────────
   const handlePeriodTab = (key: PeriodKey) => {
     setPeriodKey(key)
   }
 
-  const periodRemaining = periodBudget - periodSpent
+  const monthModeLabel = getPeriodLabel('mois')
+  const yearModeLabel = getPeriodLabel('annee')
+  const categoryProgressPct = periodBudget > 0 ? Math.min(100, (periodSpent / periodBudget) * 100) : 0
+  const statusHealthy = periodSpent <= periodBudget
   const subCategoryModalTitle = selectedSubCategory
-    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey, customState)}`
+    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey)}`
     : ''
+
+  useEffect(() => {
+    if (!selectedDonutSlice) return
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (donutTooltipRef.current && !donutTooltipRef.current.contains(target)) {
+        setSelectedDonutSlice(null)
+      }
+    }
+    document.addEventListener('mousedown', onDocumentMouseDown)
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown)
+    }
+  }, [selectedDonutSlice])
+
+  useEffect(() => {
+    if (!pendingTransaction || selectedSubCategory) return
+    const timeoutId = window.setTimeout(() => {
+      setSelectedTransaction(pendingTransaction)
+      setPendingTransaction(null)
+    }, 280)
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [pendingTransaction, selectedSubCategory])
+
+  const handleSelectTransactionFromSubCategory = (transaction: Transaction) => {
+    if (selectedSubCategory) {
+      setSubCategoryToReopen(selectedSubCategory)
+      setSelectedSubCategory(null)
+    }
+    setPendingTransaction(transaction)
+  }
+
+  const handleCloseTransactionDetails = () => {
+    setSelectedTransaction(null)
+    if (subCategoryToReopen) {
+      const nextSubCategory = subCategoryToReopen
+      setSubCategoryToReopen(null)
+      window.setTimeout(() => {
+        setSelectedSubCategory(nextSubCategory)
+      }, 120)
+    }
+  }
 
   return (
     <div
@@ -1114,14 +814,72 @@ export function Budgets() {
       }}
     >
       <motion.div
-        initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
         style={{ display: 'grid', gap: 'var(--space-4)' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.4px', margin: 0 }}>Budgets</h1>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--neutral-500)', fontWeight: 500 }}>{getPeriodLabel(periodKey, customState)}</p>
+            <button
+              type="button"
+              onClick={() => setSelectedCat('all')}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                margin: 0,
+                fontSize: 26,
+                fontWeight: 700,
+                color: 'var(--neutral-900)',
+                letterSpacing: '-0.4px',
+                cursor: 'pointer',
+                lineHeight: 1.1,
+              }}
+            >
+              Budgets
+            </button>
+            <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => handlePeriodTab('mois')}
+                style={{
+                  border: 'none',
+                  background: periodKey === 'mois' ? 'var(--primary-50)' : 'transparent',
+                  color: periodKey === 'mois' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  borderRadius: 'var(--radius-pill)',
+                  padding: '2px 8px',
+                  minWidth: 84,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                {monthModeLabel}
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--neutral-400)', fontWeight: 700 }}>↔</span>
+              <button
+                type="button"
+                onClick={() => handlePeriodTab('annee')}
+                style={{
+                  border: 'none',
+                  background: periodKey === 'annee' ? 'var(--primary-50)' : 'transparent',
+                  color: periodKey === 'annee' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  borderRadius: 'var(--radius-pill)',
+                  padding: '2px 8px',
+                  minWidth: 84,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                {yearModeLabel}
+              </button>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={() => setShowCatSheet(true)}
@@ -1155,63 +913,89 @@ export function Budgets() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          {PERIOD_TABS.map(({ key, label }) => {
-            const active = periodKey === key
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handlePeriodTab(key)}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  padding: '0 0 6px',
-                  fontSize: 13,
-                  fontWeight: active ? 700 : 500,
-                  color: active ? 'var(--primary-500)' : 'var(--neutral-500)',
-                  borderBottom: active ? '2px solid var(--primary-500)' : '2px solid transparent',
-                  cursor: 'pointer',
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-          <button
-            type="button"
-            onClick={() => setShowCustomSheet(true)}
-            style={{
-              marginLeft: 'auto',
-              border: 'none',
-              background: 'transparent',
-              padding: '0 0 6px',
-              fontSize: 13,
-              fontWeight: periodKey === 'custom' ? 700 : 600,
-              color: periodKey === 'custom' ? 'var(--primary-500)' : 'var(--neutral-500)',
-              borderBottom: periodKey === 'custom' ? '2px solid var(--primary-500)' : '2px solid transparent',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Personnalisée
-          </button>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            gap: 'var(--space-4)',
+            background: 'var(--neutral-50)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-4)',
+          }}
+        >
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-500)' }}>Budget</p>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(periodBudget)}</p>
+          </div>
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-500)' }}>Dépensé</p>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>{formatMoney(periodSpent)}</p>
+          </div>
+          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-500)' }}>%</p>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-md)', fontWeight: 700, color: chartRatioPct > 100 ? 'var(--color-warning)' : 'var(--color-success)', fontFamily: 'var(--font-mono)' }}>{`${chartRatioPct.toFixed(0)}%`}</p>
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-500)' }}>Restant</p>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-md)', fontWeight: 700, color: periodBudget - periodSpent >= 0 ? 'var(--color-success)' : 'var(--color-warning)', fontFamily: 'var(--font-mono)' }}>{formatMoney(periodBudget - periodSpent)}</p>
+          </div>
         </div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
         style={{
-          minHeight: '25dvh',
-          height: '25dvh',
-          maxHeight: 360,
           display: 'grid',
-          gridTemplateColumns: selectedCat === 'all' ? 'minmax(0,1.1fr) minmax(0,0.9fr)' : 'minmax(0,1fr) minmax(0,1fr)',
-          gap: 'var(--space-6)',
-          alignItems: 'center',
+          gap: 'var(--space-2)',
         }}
       >
-        <div style={{ position: 'relative', height: '100%', minHeight: 220 }}>
+        {selectedCat === 'all' ? (
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+            Répartition par catégorie
+          </p>
+        ) : null}
+
+        <div
+          style={{
+            minHeight: '25dvh',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+            gap: 'var(--space-6)',
+            alignItems: 'start',
+          }}
+        >
+          <div style={{ position: 'relative', height: '100%', minHeight: 220 }}>
+          {selectedDonutSlice ? (
+            <div
+              ref={donutTooltipRef}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: '50%',
+                transform: 'translate(-50%, -110%)',
+                background: 'var(--neutral-0)',
+                border: '1px solid var(--neutral-200)',
+                boxShadow: 'var(--shadow-md)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-4)',
+                zIndex: 2,
+                minWidth: 180,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)' }}>{selectedDonutSlice.name}</p>
+                <button type="button" onClick={() => setSelectedDonutSlice(null)} style={{ border: 'none', background: 'transparent', color: 'var(--neutral-500)', cursor: 'pointer', padding: 0 }}>
+                  <X size={14} />
+                </button>
+              </div>
+              <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {formatMoney(selectedDonutSlice.value)}
+              </p>
+            </div>
+          ) : null}
+
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -1224,6 +1008,36 @@ export function Budgets() {
                 outerRadius="84%"
                 paddingAngle={2}
                 stroke="none"
+                onClick={(slice: any) => {
+                  const payload = slice?.payload ?? slice
+                  setSelectedDonutSlice({
+                    id: String(payload?.id ?? 'slice'),
+                    name: String(payload?.name ?? 'Catégorie'),
+                    value: Number(payload?.value ?? 0),
+                    color: String(payload?.color ?? 'var(--primary-500)'),
+                  })
+                }}
+                labelLine={false}
+                label={(props: any) => {
+                  const payload = props?.payload as PieDatum | undefined
+                  if (!payload || !selectedDonutSlice || payload.id !== selectedDonutSlice.id || pieTotal <= 0) return null
+                  const { x, y } = props
+                  if (typeof x !== 'number' || typeof y !== 'number') return null
+                  const pct = (payload.value / pieTotal) * 100
+                  return (
+                    <text
+                      x={x}
+                      y={y}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="var(--neutral-0)"
+                      fontSize={10}
+                      fontWeight={700}
+                    >
+                      {`${pct.toFixed(0)}%`}
+                    </text>
+                  )
+                }}
               >
                 {pieData.map((entry) => (
                   <Cell key={entry.id} fill={entry.color} />
@@ -1231,6 +1045,7 @@ export function Budgets() {
               </Pie>
             </PieChart>
           </ResponsiveContainer>
+
           <div
             style={{
               position: 'absolute',
@@ -1242,148 +1057,217 @@ export function Budgets() {
               pointerEvents: 'none',
             }}
           >
-            <p style={{ margin: 0, fontSize: 26, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1.1 }}>
+            <p style={{ margin: 0, fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1.1 }}>
               {formatMoney(periodSpent)}
             </p>
-            <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: chartRatioPct > 100 ? 'var(--color-error)' : chartRatioPct >= 80 ? 'var(--color-warning)' : 'var(--color-success)', lineHeight: 1 }}>
+            <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: chartRatioPct > 100 ? 'var(--color-warning)' : 'var(--color-success)', lineHeight: 1 }}>
               {`${chartRatioPct.toFixed(0)}%`}
             </p>
-            <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--neutral-500)' }}>
-              {`${chartRatioPct.toFixed(0)}% budget`}
-            </p>
           </div>
-        </div>
+          </div>
 
-        {selectedCat === 'all' ? (
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: '0 0 var(--space-2)', fontSize: 13, fontWeight: 700, color: 'var(--neutral-600)' }}>Top 5 catégories</p>
+          {selectedCat === 'all' ? (
+            <div style={{ display: 'grid', gap: '2px', alignContent: 'center', minHeight: 220 }}>
+              <p style={{ margin: '0 0 var(--space-1)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
+                Top 5 catégories
+              </p>
             {topFiveCategories.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-400)' }}>Aucune dépense sur la période</p>
-            ) : (
-              topFiveCategories.map((row, idx) => (
-                <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.color }}>{idx + 1}</span>
-                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-700)' }}>
-                    {row.name}
-                  </span>
-                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                    {formatMoney(row.value)}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div style={{ height: '100%', minHeight: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 26, right: 8, left: 4, bottom: 2 }}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis hide />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={52}>
-                  <LabelList
-                    dataKey="evolutionPct"
-                    position="top"
-                    offset={14}
-                    content={(props: any) => {
-                      const { x, y, width, payload } = props
-                      const item = payload as MonthlyBucket | undefined
-                      if (!item || item.evolutionPct == null || x == null || y == null || width == null) return null
-                      const text = `${item.evolutionPct > 0 ? '+' : ''}${item.evolutionPct.toFixed(1)}%`
-                      return (
-                        <text
-                          x={Number(x) + Number(width) / 2}
-                          y={Number(y) - 8}
-                          textAnchor="middle"
-                          fill={item.evolutionPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'}
-                          fontSize={11}
-                          fontWeight={700}
-                        >
-                          {text}
-                        </text>
-                      )
-                    }}
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-400)' }}>Aucune donnée</p>
+            ) : topFiveCategories.map((entry, index) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => {
+                  setSelectedCat(entry.id)
+                  setSelectedDonutSlice(null)
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: '4px 0',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'grid',
+                  gridTemplateColumns: '12px minmax(0,1fr) auto',
+                  alignItems: 'center',
+                  gap: '4px',
+                  textAlign: 'left',
+                  borderBottom: '1px solid var(--neutral-200)',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-500)' }}>{index + 1}</span>
+                <span style={{ minWidth: 0, fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {entry.name}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {formatMoney(entry.value)}
+                </span>
+              </button>
+            ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--space-3)', alignContent: 'center', minHeight: 220 }}>
+            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '44px minmax(0,1fr) auto auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{ width: 44, height: 44, position: 'relative' }}>
+                <svg width="44" height="44" viewBox="0 0 44 44" style={{ position: 'absolute', inset: 0 }}>
+                  <circle cx="22" cy="22" r="19" fill="none" stroke="var(--neutral-200)" strokeWidth="3" />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="19"
+                    fill="none"
+                    stroke="var(--primary-500)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(2 * Math.PI * 19 * categoryProgressPct) / 100} ${2 * Math.PI * 19}`}
+                    transform="rotate(-90 22 22)"
                   />
-                  {monthlyHistory.map((entry, i) => (
-                    <Cell key={`history-${i}`} fill={entry.amount > entry.budget ? 'var(--color-error)' : 'var(--primary-500)'} fillOpacity={i === monthlyHistory.length - 1 ? 1 : 0.42} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-              Évolutions 3 derniers mois
-            </p>
-          </div>
-        )}
-      </motion.div>
+                </svg>
+                <div style={{ position: 'absolute', inset: 7, borderRadius: 'var(--radius-full)', background: accentFromLabel(selectedCatInfo?.name ?? 'toutes'), display: 'grid', placeItems: 'center' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 'var(--radius-sm)', background: 'var(--neutral-0)' }} />
+                </div>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-800)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedCatInfo?.name ?? 'Catégorie'}
+              </p>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                {formatMoney(totalMonthlyBudget)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowBudgetInfo((v) => !v)}
+                onMouseEnter={() => setShowBudgetInfo(true)}
+                onMouseLeave={() => setShowBudgetInfo(false)}
+                style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', cursor: 'pointer', color: 'var(--neutral-600)' }}
+              >
+                <Info size={16} />
+              </button>
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
-        style={{ display: 'grid', gap: 'var(--space-4)' }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-            gap: 'var(--space-4)',
-            background: 'var(--neutral-50)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
-            <KpiCard label="Budget" value={Math.floor(periodBudget)} format="currency" className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
-          </div>
-          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
-            <KpiCard label="Dépensé" value={Math.floor(periodSpent)} format="currency" color="negative" className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
-          </div>
-          <div style={{ paddingRight: 'var(--space-4)', borderRight: '1px solid var(--neutral-200)' }}>
-            <KpiCard
-              label="%"
-              value={chartRatioPct}
-              format="number"
-              deltaLabel={`${chartRatioPct > 0 ? '+' : ''}${chartRatioPct.toFixed(1)}%`}
-              color={chartRatioPct > 100 ? 'negative' : chartRatioPct >= 80 ? 'warning' : 'positive'}
-              className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]"
-            />
-          </div>
-          <div>
-            <KpiCard label="Restant" value={Math.floor(periodRemaining)} format="currency" color={periodRemaining >= 0 ? 'positive' : 'negative'} className="rounded-none bg-transparent p-0 shadow-none [&>p:nth-of-type(2)]:text-[var(--font-size-md)]" />
-          </div>
+              {showBudgetInfo ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '100%',
+                    marginTop: 'var(--space-2)',
+                    zIndex: 2,
+                    background: 'var(--neutral-50)',
+                    border: '1px solid var(--neutral-200)',
+                    boxShadow: 'var(--shadow-sm)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-3)',
+                    minWidth: 280,
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)' }}>
+                    {`${formatMoney(totalMonthlyBudget)} (budget de la catégorie) sur ${formatMoney(monthlyVariableBudget)} (budget mensuel variable)`}
+                  </p>
+                  <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)' }}>
+                    {`${budgetSharePct.toFixed(0)}% du budget mensuel variable`}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-800)' }}>
+                {`Restant : ${formatMoney(periodBudget - periodSpent)}`}
+              </p>
+              <span style={{ display: 'inline-flex', color: statusHealthy ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                {statusHealthy ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              </span>
+            </div>
+            </div>
+          )}
         </div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.24 }}
+        style={{ display: 'grid', gap: 'var(--space-2)' }}
+      >
+        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+          Évolutions 6 derniers mois
+        </p>
+        <div style={{ height: 250 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 24, right: 30, left: 4, bottom: 2 }}>
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={64} />
+              <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+              <ReferenceLine
+                y={totalMonthlyBudget}
+                stroke="var(--color-warning)"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }}
+              />
+              <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                <LabelList
+                  dataKey="amount"
+                  position="top"
+                  offset={8}
+                  content={(props: any) => {
+                    const { x, y, width, payload } = props
+                    const item = payload as MonthlyBucket | undefined
+                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                    return (
+                      <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>
+                        {formatMoney(item.amount)}
+                      </text>
+                    )
+                  }}
+                />
+                <LabelList
+                  dataKey="evolutionPct"
+                  position="top"
+                  offset={20}
+                  content={(props: any) => {
+                    const { x, y, width, payload } = props
+                    const item = payload as MonthlyBucket | undefined
+                    if (!item || item.evolutionPct == null || x == null || y == null || width == null) return null
+                    const text = `${item.evolutionPct > 0 ? '+' : ''}${item.evolutionPct.toFixed(0)}%`
+                    return (
+                      <text x={Number(x) + Number(width) / 2} y={Number(y) - 20} textAnchor="middle" fill={item.evolutionPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'} fontSize={11} fontWeight={700}>
+                        {text}
+                      </text>
+                    )
+                  }}
+                />
+                {monthlyHistory.map((entry, i) => (
+                  <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} style={{ cursor: 'pointer' }} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.28 }}
         style={{ margin: '0 calc(-1 * var(--space-6))' }}
       >
         <div style={{ padding: '0 var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Sous-catégories
-          </p>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>Sous-catégories</p>
           <button
             type="button"
             onClick={() => setShowAnalyseModal(true)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              padding: 0,
-              color: 'var(--primary-500)',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
+            style={{ border: 'none', background: 'transparent', padding: 0, color: 'var(--primary-500)', fontSize: 'var(--font-size-sm)', fontWeight: 700, cursor: 'pointer' }}
           >
             Analyse
           </button>
         </div>
 
         {selectedCat === 'all' ? (
-          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-12) var(--space-6)' }}>
-            Sélectionnez une catégorie pour voir ses sous-catégories
+          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-8) var(--space-6)' }}>
+            Sélectionnez une catégorie pour ouvrir le détail des sous-catégories
           </div>
         ) : subCategoryRows.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-12) var(--space-6)' }}>
+          <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-8) var(--space-6)' }}>
             Aucune sous-catégorie sur cette période
           </div>
         ) : (
@@ -1434,7 +1318,6 @@ export function Budgets() {
         )}
       </motion.div>
 
-      {/* ── Analyse Modal ────────────────────────────────────── */}
       <AnalyseModal
         open={showAnalyseModal}
         onClose={() => setShowAnalyseModal(false)}
@@ -1451,21 +1334,26 @@ export function Budgets() {
           topTx: null,
         }))}
       />
+
       <SubCategoryTransactionsModal
         open={Boolean(selectedSubCategory)}
-        onClose={() => setSelectedSubCategory(null)}
+        onClose={() => {
+          setSelectedSubCategory(null)
+          setSubCategoryToReopen(null)
+          setPendingTransaction(null)
+        }}
         title={subCategoryModalTitle}
         transactions={subCategoryTransactions ?? []}
         loading={loadingSubCategoryTransactions}
+        onSelectTransaction={handleSelectTransactionFromSubCategory}
       />
 
-      {/* ── Sheets ───────────────────────────────────────────── */}
-      <CustomPeriodSheet
-        open={showCustomSheet}
-        value={customState}
-        onClose={() => setShowCustomSheet(false)}
-        onApply={(v) => { setCustomState(v); setPeriodKey('custom') }}
+      <TransactionDetailsModal
+        transaction={selectedTransaction}
+        categories={categories}
+        onClose={handleCloseTransactionDetails}
       />
+
       <CategorySheet
         open={showCatSheet}
         selectedId={selectedCat}
@@ -1474,7 +1362,6 @@ export function Budgets() {
         onSelect={setSelectedCat}
       />
 
-      {/* Spinner keyframe for loading state */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )

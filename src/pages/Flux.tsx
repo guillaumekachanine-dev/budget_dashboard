@@ -5,8 +5,9 @@ import { ChevronDown, SlidersHorizontal, ArrowLeft, Search } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrency } from '@/lib/utils'
-import { Badge, Button, Input } from '@/components'
+import { Button, Input } from '@/components'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import type { FlowType, Transaction } from '@/lib/types'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
@@ -122,28 +123,6 @@ function formatDateLabel(iso: string): string {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-function flowTypeLabel(flowType: string): string {
-  if (flowType === 'income') return 'Revenus'
-  if (flowType === 'expense') return 'Depenses'
-  if (flowType === 'transfer') return 'Transferts internes'
-  return flowType
-}
-
-function budgetBehaviorLabel(value: string): string {
-  if (value === 'fixed') return 'Fixe'
-  if (value === 'variable') return 'Variable'
-  if (value === 'excluded') return 'Exclu'
-  return value
-}
-
-function shareRatioLabel(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const pct = Math.round(Number(value) * 100)
-  if (pct === 100) return 'Personnel (100%)'
-  if (pct === 0) return 'Non imputable (0%)'
-  return `Personnel (${pct}%)`
-}
-
 function accentFromCategory(name: string): string {
   const key = name.trim().toLowerCase()
   let hash = 0
@@ -152,10 +131,10 @@ function accentFromCategory(name: string): string {
 }
 
 function resultNoun(flow: FlowFilter): string {
-  if (flow === 'expense') return 'depenses'
+  if (flow === 'expense') return 'dépenses'
   if (flow === 'income') return 'revenus'
   if (flow === 'transfer') return 'transferts internes'
-  return 'operations'
+  return 'opérations'
 }
 
 function Sheet({
@@ -391,12 +370,14 @@ export function Flux() {
     }
   }, [anySheetOpen])
 
-  const rangeLabel = useMemo(() => {
-    if (!range.startDate && !range.endDate) return 'Toutes periodes'
-    const start = range.startDate ? formatDateLabel(range.startDate) : 'Debut'
-    const end = range.endDate ? formatDateLabel(range.endDate) : formatDateLabel(todayIso())
-    return `${start} - ${end}`
-  }, [range.endDate, range.startDate])
+  const periodSummaryLabel = useMemo(() => {
+    const endIso = range.endDate ?? todayIso()
+    const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
+    const startIso = range.startDate ?? inferredStart
+    const start = formatDateLabel(startIso)
+    const end = formatDateLabel(endIso)
+    return `Du ${start} au ${end} - ${filtered.length} ${resultNoun(flow)}`
+  }, [filtered, flow, range.endDate, range.startDate])
 
   return (
     <div style={{ minHeight: '100dvh', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
@@ -407,6 +388,8 @@ export function Flux() {
           padding: 'var(--space-6)',
           display: 'grid',
           gap: 'var(--space-4)',
+          justifyItems: 'center',
+          textAlign: 'center',
         }}
       >
         <p style={{ margin: 0, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800, opacity: 0.8 }}>
@@ -415,9 +398,6 @@ export function Flux() {
         <p style={{ margin: 0, fontSize: 36, fontWeight: 900, lineHeight: 1.05, fontFamily: 'var(--font-mono)' }}>
           {filtered.length ? formatCurrency(totalAmount) : '—'}
         </p>
-        <div>
-          <Badge variant="neutral">{rangeLabel}</Badge>
-        </div>
       </section>
 
       <section style={{ padding: 'var(--space-6)', paddingBottom: 0, display: 'grid', gap: 'var(--space-4)' }}>
@@ -540,7 +520,7 @@ export function Flux() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                Resultats : {filtered.length} {resultNoun(flow)}
+                {periodSummaryLabel}
               </span>
             </div>
             <span
@@ -897,43 +877,7 @@ export function Flux() {
         </div>
       </Sheet>
 
-      <Sheet open={Boolean(detailsTxn)} title={detailsTxn ? displayTxnLabel(detailsTxn) : 'Details'} onClose={() => setDetailsTxn(null)}>
-        {detailsTxn ? (
-          <div style={{ display: 'grid', gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 30, fontWeight: 900, lineHeight: 1.1, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-              {formatCurrency(signedAmount(detailsTxn))}
-            </p>
-            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--neutral-500)' }}>{formatDateLabel(detailsTxn.transaction_date)}</p>
-
-            <div style={{ display: 'grid', gap: 8, borderTop: '1px solid var(--neutral-200)', paddingTop: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Type</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{flowTypeLabel(detailsTxn.flow_type)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Categorie</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{displayTxnCategoryName(detailsTxn)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Marchand</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{detailsTxn.merchant_name ?? '—'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Fixe / variable</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{budgetBehaviorLabel(detailsTxn.budget_behavior)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Compte</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{detailsTxn.account?.name ?? '—'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 600 }}>Imputabilite</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{shareRatioLabel(detailsTxn.personal_share_ratio ?? null)}</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </Sheet>
+      <TransactionDetailsModal transaction={detailsTxn} categories={flowCategories ?? []} onClose={() => setDetailsTxn(null)} />
     </div>
   )
 }
