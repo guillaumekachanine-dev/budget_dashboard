@@ -95,11 +95,19 @@ export function Home() {
     })
   }, [daysElapsed, daysInMonth, monthEnd, monthExpenseTxns, monthStart, todayIso, totalBudget])
 
+  const plannedToDate = useMemo(() => {
+    return daysElapsed > 0 ? (totalBudget / daysInMonth) * daysElapsed : 0
+  }, [daysElapsed, daysInMonth, totalBudget])
+
   const deltaPct = useMemo(() => {
-    const plannedToDate = daysElapsed > 0 ? (totalBudget / daysInMonth) * daysElapsed : 0
     if (plannedToDate <= 0) return null
     return ((realToDate - plannedToDate) / plannedToDate) * 100
-  }, [daysElapsed, daysInMonth, realToDate, totalBudget])
+  }, [plannedToDate, realToDate])
+
+  const spendVsForecastPct = useMemo(() => {
+    if (plannedToDate <= 0) return null
+    return Math.max(0, Math.min(100, (realToDate / plannedToDate) * 100))
+  }, [plannedToDate, realToDate])
 
   const driftCategories = useMemo(() => {
     const rows = summaries ?? []
@@ -134,10 +142,7 @@ export function Home() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Bonjour
-            </p>
-            <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600 }}>
-              {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+              Bonjour · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
             </p>
           </div>
           <button
@@ -195,25 +200,61 @@ export function Home() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {}}
+              <div
+                aria-label="Pourcentage dépensé vs prévision"
+                title="Dépenses réelles vs prévision (à date)"
                 style={{
-                  borderRadius: 'var(--radius-pill)',
-                  border: '1.5px solid rgba(255,255,255,0.85)',
-                  background: 'transparent',
-                  color: '#fff',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  padding: '6px 14px',
-                  cursor: 'pointer',
-                  height: 34,
+                  position: 'relative',
+                  width: 62,
+                  height: 62,
+                  borderRadius: 9999,
+                  background: '#fff',
+                  boxShadow: '0 10px 22px rgba(30,30,45,0.18)',
+                  display: 'grid',
+                  placeItems: 'center',
                   flexShrink: 0,
                 }}
               >
-                DÉTAILS
-              </button>
+                <svg width="56" height="56" viewBox="0 0 56 56" role="img" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="spendRing" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#55EFC4" />
+                      <stop offset="100%" stopColor="#74B9FF" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="#F0F0F5" strokeWidth="6" />
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r="22"
+                    fill="none"
+                    stroke="url(#spendRing)"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(2 * Math.PI * 22) * ((spendVsForecastPct ?? 0) / 100)} ${(2 * Math.PI * 22)}`}
+                    transform="rotate(-90 28 28)"
+                  />
+                </svg>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 2,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-900)' }}>
+                    {spendVsForecastPct == null ? '—' : `${Math.round(spendVsForecastPct)}%`}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)' }}>
+                    vs prév.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -246,26 +287,6 @@ export function Home() {
               ))}
             </div>
 
-            <div style={{ marginTop: 12, height: 1, background: 'rgba(255,255,255,0.20)' }} />
-
-            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.86)' }}>
-                {formatCurrency(realToDate)} dépensés
-              </p>
-              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.68)' }}>
-                sur {formatCurrency(totalBudget)}
-              </p>
-            </div>
-            <div style={{ marginTop: 10, height: 3, borderRadius: 9999, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: totalBudget > 0 ? `${Math.min(100, Math.max(0, (realToDate / totalBudget) * 100))}%` : '0%',
-                  borderRadius: 9999,
-                  background: '#fff',
-                }}
-              />
-            </div>
           </div>
         </div>
       </section>
