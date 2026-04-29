@@ -462,9 +462,6 @@ export function Budgets() {
 
   const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
   const pieTotal = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData])
-  const donutSpentPct = totalMonthlyBudget > 0 ? (currentMonthSpent / totalMonthlyBudget) * 100 : 0
-  const donutRemaining = totalMonthlyBudget - currentMonthSpent
-  const donutRemainingColor = donutRemaining >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const donutTopFiveCallouts = useMemo<DonutCallout[]>(() => {
     if (selectedCat !== 'all' || pieTotal <= 0 || donutAreaSize.width <= 0 || donutAreaSize.height <= 0) return []
 
@@ -633,17 +630,27 @@ export function Budgets() {
   const yearModeLabel = getPeriodLabel('annee')
   const subCategoryModalTitle = selectedSubCategory ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey)}` : ''
 
-  const slideCount = 4
-  const slideTitles = [
-    'Répartition par catégorie',
-    'Évolutions 6 derniers mois',
-    'Revenus / Dépenses / Épargne',
-    "Scénarios d'optimisation",
-  ] as const
+  const showExtendedSlides = selectedCat === 'all'
+  const slideCount = showExtendedSlides ? 4 : 2
+  const slideTitles = showExtendedSlides
+    ? ([
+        'Répartition par catégorie',
+        'Évolutions 6 derniers mois',
+        'Revenus / Dépenses / Épargne',
+        "Scénarios d'optimisation",
+      ] as const)
+    : ([
+        'Répartition par catégorie',
+        'Évolutions 6 derniers mois',
+      ] as const)
   const optimizationTableColumns = 'minmax(0,1.2fr) minmax(0,0.62fr) minmax(0,0.84fr) minmax(0,0.84fr)'
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
+
+  useEffect(() => {
+    setActiveSlide((current) => Math.min(current, slideCount - 1))
+  }, [slideCount])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStartXRef.current = event.clientX
@@ -758,13 +765,14 @@ export function Budgets() {
         title="Budgets"
         titleAriaLabel="Réinitialiser sur toutes catégories et période mois"
         onTitleClick={handleHeaderTitleReset}
+        rightLabel={selectedCat === 'all' ? 'toutes catégories' : (selectedCatInfo?.name ?? 'toutes catégories')}
         actionIcon={
           selectedCat === 'all'
             ? <Search size={24} />
             : <CategoryIcon categoryName={selectedCatInfo?.name} size={28} fallback="💰" />
         }
         actionAriaLabel="Choisir une catégorie"
-        onActionClick={() => setShowCatSheet(true)}
+        onActionClick={() => setShowCatSheet((current) => !current)}
       />
 
       <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
@@ -837,21 +845,12 @@ export function Budgets() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ position: 'absolute', top: '54%', left: '50%', transform: 'translate(-50%, -50%)', width: 160, height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly', textAlign: 'center' }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
-                      consommé
-                    </span>
-                    <span style={{ fontSize: 'clamp(16px, 5vw, 24px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
+                    <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
                       {formatMoney(currentMonthSpent)}
                     </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)', lineHeight: 1.1 }}>
-                      {`${Number.isFinite(donutSpentPct) ? donutSpentPct.toFixed(0) : '0'}%`}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: donutRemainingColor, lineHeight: 1.1 }}>
-                      restant
-                    </span>
-                    <span style={{ fontSize: 'clamp(16px, 5vw, 24px)', fontWeight: 700, color: donutRemainingColor, fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
-                      {formatMoney(donutRemaining)}
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
+                      dépensés
                     </span>
                   </div>
                 </div>
@@ -880,54 +879,58 @@ export function Budgets() {
               </div>
             </div>
 
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--space-4)' }}>
-                <div style={{ height: 210 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={incomeExpenseSavingsData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={2} onClick={(slice: unknown) => {
-                        const payload = extractPiePayload(slice)
-                        setActiveIncomeExpenseSlice(String(payload?.id ?? null))
-                      }}>
-                        {incomeExpenseSavingsData.map((entry) => {
-                          const active = activeIncomeExpenseSlice === entry.id
-                          return <Cell key={entry.id} fill={entry.color} fillOpacity={active || !activeIncomeExpenseSlice ? 1 : 0.68} style={active ? { filter: 'brightness(1.06)' } : undefined} />
-                        })}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+            {showExtendedSlides ? (
+              <>
+                <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--space-4)' }}>
+                    <div style={{ height: 210 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={incomeExpenseSavingsData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={2} onClick={(slice: unknown) => {
+                            const payload = extractPiePayload(slice)
+                            setActiveIncomeExpenseSlice(String(payload?.id ?? null))
+                          }}>
+                            {incomeExpenseSavingsData.map((entry) => {
+                              const active = activeIncomeExpenseSlice === entry.id
+                              return <Cell key={entry.id} fill={entry.color} fillOpacity={active || !activeIncomeExpenseSlice ? 1 : 0.68} style={active ? { filter: 'brightness(1.06)' } : undefined} />
+                            })}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                <div className="breakdown-kpi-grid" style={{ display: 'grid', gap: 'var(--space-4)', width: '100%', maxWidth: 430, margin: '0 auto', justifyItems: 'center' }}>
-                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Pression budgétaire</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${budgetPressurePct.toFixed(0)}%`}</span></div>
-                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité d'épargne</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: savingsCapacity >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsCapacity)}</span></div>
-                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne année en cours</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsYtd)}</span></div>
-                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne totale</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(totalSavings)}</span></div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-              <div style={{ width: '100%' }}>
-                <div style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: 'var(--space-2) 0' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Enveloppe</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>6 mois</span>
-                </div>
-
-                {optimizationScenarios.length === 0 ? (
-                  <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
-                ) : optimizationScenarios.map((scenario) => (
-                  <div key={scenario.id} style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
-                    <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.monthlyImpact)}`}</span>
-                    <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.sixMonthImpact)}`}</span>
+                    <div className="breakdown-kpi-grid" style={{ display: 'grid', gap: 'var(--space-4)', width: '100%', maxWidth: 430, margin: '0 auto', justifyItems: 'center' }}>
+                      <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Pression budgétaire</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${budgetPressurePct.toFixed(0)}%`}</span></div>
+                      <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité d'épargne</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: savingsCapacity >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsCapacity)}</span></div>
+                      <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne année en cours</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsYtd)}</span></div>
+                      <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne totale</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(totalSavings)}</span></div>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+
+                <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
+                  <div style={{ width: '100%' }}>
+                    <div style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: 'var(--space-2) 0' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Enveloppe</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>6 mois</span>
+                    </div>
+
+                    {optimizationScenarios.length === 0 ? (
+                      <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
+                    ) : optimizationScenarios.map((scenario) => (
+                      <div key={scenario.id} style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.monthlyImpact)}`}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.sixMonthImpact)}`}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -1061,28 +1064,31 @@ export function Budgets() {
               style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
             />
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner une catégorie"
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '-100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 30, stiffness: 330 }}
               style={{
                 position: 'fixed',
                 left: 0,
                 right: 0,
-                bottom: 0,
+                top: 0,
                 zIndex: 61,
                 width: '100%',
                 maxWidth: 420,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
-                borderRadius: '20px 20px 0 0',
-                padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
-                maxHeight: 'calc(100dvh - 12px)',
+                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                maxHeight: '78dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 12px', background: 'var(--neutral-200)' }} />
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-4)', background: 'var(--neutral-300)' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Categorie</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatSheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
@@ -1091,36 +1097,39 @@ export function Budgets() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCat('all')
-                      setShowCatSheet(false)
-                    }}
-                    style={{
-                      border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-0)',
-                      borderRadius: 'var(--radius-lg)',
-                      padding: '10px 8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                      <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                  </button>
-                  {rootExpenseCategories.map((cat) => (
+                <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
+                    {rootExpenseCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCat(cat.id)
+                          setShowCatSheet(false)
+                        }}
+                        style={{
+                          border: '1px solid var(--neutral-200)',
+                          background: 'var(--neutral-0)',
+                          borderRadius: 'var(--radius-lg)',
+                          padding: '10px 8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <button
-                      key={cat.id}
                       type="button"
                       onClick={() => {
-                        setSelectedCat(cat.id)
+                        setSelectedCat('all')
                         setShowCatSheet(false)
                       }}
                       style={{
@@ -1128,6 +1137,7 @@ export function Budgets() {
                         background: 'var(--neutral-0)',
                         borderRadius: 'var(--radius-lg)',
                         padding: '10px 8px',
+                        minWidth: 88,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
@@ -1135,10 +1145,12 @@ export function Budgets() {
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
+                        <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
-                  ))}
+                  </div>
                 </div>
               </div>
             </motion.div>

@@ -35,7 +35,7 @@ export function PageHeader({
         background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
         borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
         position: 'relative',
-        zIndex: 80,
+        zIndex: 120,
         isolation: 'isolate',
         overflow: 'visible',
         marginBottom: 'var(--space-8)',
@@ -127,7 +127,8 @@ export function PageHeader({
           left: '50%',
           bottom: 0,
           transform: 'translate(-50%, 50%)',
-          zIndex: 81,
+          zIndex: 121,
+          pointerEvents: 'auto',
         }}
       >
         <button
