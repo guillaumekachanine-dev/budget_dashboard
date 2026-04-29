@@ -6,6 +6,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrency } from '@/lib/utils'
 import { Button, Input } from '@/components'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import type { FlowType, Transaction } from '@/lib/types'
@@ -128,6 +129,22 @@ function accentFromCategory(name: string): string {
   let hash = 0
   for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
   return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
+}
+
+function formatMoneyInteger(amount: number): string {
+  if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(0)
+
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.floor(amount))
 }
 
 function resultNoun(flow: FlowFilter): string {
@@ -370,37 +387,68 @@ export function Flux() {
     }
   }, [anySheetOpen])
 
-  const periodSummaryLabel = useMemo(() => {
+  const periodDateLabel = useMemo(() => {
     const endIso = range.endDate ?? todayIso()
     const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
     const startIso = range.startDate ?? inferredStart
     const start = formatDateLabel(startIso)
     const end = formatDateLabel(endIso)
-    return `Du ${start} au ${end} - ${filtered.length} ${resultNoun(flow)}`
-  }, [filtered, flow, range.endDate, range.startDate])
+    return `Du ${start} au ${end}`
+  }, [filtered, range.endDate, range.startDate])
+
+  const periodSummaryLabel = useMemo(() => {
+    return `${periodDateLabel} - ${filtered.length} ${resultNoun(flow)}`
+  }, [filtered.length, flow, periodDateLabel])
 
   return (
-    <div style={{ minHeight: '100dvh', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
-      <section
-        style={{
-          background: 'var(--primary-500)',
-          color: '#fff',
-          padding: 'var(--space-6)',
-          display: 'grid',
-          gap: 'var(--space-4)',
-          justifyItems: 'center',
-          textAlign: 'center',
-        }}
-      >
-        <p style={{ margin: 0, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800, opacity: 0.8 }}>
-          Resume de la selection
-        </p>
-        <p style={{ margin: 0, fontSize: 36, fontWeight: 900, lineHeight: 1.05, fontFamily: 'var(--font-mono)' }}>
-          {filtered.length ? formatCurrency(totalAmount) : '—'}
-        </p>
-      </section>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
+      <PageHeader title="Flux" />
 
-      <section style={{ padding: 'var(--space-6)', paddingBottom: 0, display: 'grid', gap: 'var(--space-4)' }}>
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        style={{ padding: '0 var(--space-6)' }}
+      >
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
+          <p
+            style={{
+              margin: 0,
+              textAlign: 'center',
+              fontSize: 'var(--font-size-kpi)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              lineHeight: 'var(--line-height-tight)',
+              fontFamily: 'var(--font-mono)',
+              color: totalAmount > 0 ? 'var(--color-success)' : totalAmount < 0 ? 'var(--color-error)' : 'var(--viz-c)',
+            }}
+          >
+            {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
+          </p>
+
+          <div
+            style={{
+              background: 'var(--viz-c)',
+              color: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-5)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'grid',
+              justifyItems: 'center',
+              textAlign: 'center',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, opacity: 0.96 }}>
+              {periodDateLabel}
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, opacity: 0.92 }}>
+              {filtered.length} opérations
+            </p>
+          </div>
+        </div>
+      </motion.section>
+
+      <section style={{ padding: '0 var(--space-6)', display: 'grid', gap: 'var(--space-4)' }}>
         <Input
           type="search"
           placeholder="Recherche"
@@ -506,7 +554,7 @@ export function Flux() {
         </div>
       </section>
 
-      <section style={{ marginTop: 'var(--space-6)' }}>
+      <section>
         <div style={{ padding: '0 var(--space-6)' }}>
           <div
             style={{

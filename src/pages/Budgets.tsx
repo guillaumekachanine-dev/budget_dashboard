@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase'
 import type { Category, Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
+import { PageHeader } from '@/components/layout/PageHeader'
 
 type PeriodKey = 'mois' | 'annee'
 type SubCatTrend = 'up' | 'down' | 'equal'
@@ -802,29 +803,26 @@ export function Budgets() {
   const selectedSlicePct = selectedDonutSlice && pieTotal > 0 ? (selectedDonutSlice.value / pieTotal) * 100 : 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', padding: 'var(--space-6)', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ display: 'grid', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
-          <div>
-            <button type="button" onClick={() => setSelectedCat('all')} style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '-0.4px', cursor: 'pointer', lineHeight: 1.1 }}>
-              Budgets
-            </button>
-            <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <button type="button" onClick={() => setPeriodKey('mois')} style={{ border: 'none', background: periodKey === 'mois' ? 'var(--primary-50)' : 'transparent', color: periodKey === 'mois' ? 'var(--primary-600)' : 'var(--neutral-500)', fontSize: 12, fontWeight: 700, borderRadius: 'var(--radius-pill)', padding: '2px 8px', minWidth: 84, textAlign: 'center', cursor: 'pointer' }}>
-                {monthModeLabel}
-              </button>
-              <span style={{ fontSize: 12, color: 'var(--neutral-400)', fontWeight: 700 }}>↔</span>
-              <button type="button" onClick={() => setPeriodKey('annee')} style={{ border: 'none', background: periodKey === 'annee' ? 'var(--primary-50)' : 'transparent', color: periodKey === 'annee' ? 'var(--primary-600)' : 'var(--neutral-500)', fontSize: 12, fontWeight: 700, borderRadius: 'var(--radius-pill)', padding: '2px 8px', minWidth: 84, textAlign: 'center', cursor: 'pointer' }}>
-                {yearModeLabel}
-              </button>
-            </div>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
+      <PageHeader title="Budgets" />
 
-          <button type="button" onClick={() => setShowCatSheet(true)} style={{ border: '2px solid var(--primary-500)', background: 'var(--primary-50)', borderRadius: 'var(--radius-full)', width: 74, height: 74, padding: 0, cursor: 'pointer', color: 'var(--primary-500)', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform var(--transition-base), box-shadow var(--transition-base)', boxShadow: 'var(--shadow-sm)' }} aria-label="Choisir une catégorie">
-            {selectedCat === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={44} fallback="💰" /> : <CategoryIcon categoryName={selectedCatInfo?.name} size={44} fallback="💰" />}
+      <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
+          <button type="button" onClick={() => setShowCatSheet(true)} style={{ border: '2px solid var(--primary-500)', background: 'var(--primary-50)', borderRadius: 'var(--radius-full)', width: 102, height: 102, padding: 0, cursor: 'pointer', color: 'var(--primary-500)', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform var(--transition-base), box-shadow var(--transition-base)', boxShadow: 'var(--shadow-sm)' }} aria-label="Choisir une catégorie">
+            {selectedCat === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={62} fallback="💰" /> : <CategoryIcon categoryName={selectedCatInfo?.name} size={62} fallback="💰" />}
           </button>
+
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
+            <button type="button" onClick={() => setPeriodKey('mois')} style={{ border: '1px solid var(--neutral-200)', background: periodKey === 'mois' ? 'var(--primary-50)' : 'var(--neutral-0)', color: periodKey === 'mois' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
+              {monthModeLabel}
+            </button>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700 }}>-</span>
+            <button type="button" onClick={() => setPeriodKey('annee')} style={{ border: '1px solid var(--neutral-200)', background: periodKey === 'annee' ? 'var(--primary-50)' : 'var(--neutral-0)', color: periodKey === 'annee' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
+              {yearModeLabel}
+            </button>
+          </div>
         </div>
-      </motion.div>
+      </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
