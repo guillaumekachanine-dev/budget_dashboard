@@ -94,10 +94,10 @@ const navStyle: CSSProperties = {
 const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: 0,
+  top: 6,
   width: 56,
   height: 56,
-  transform: 'translate(-50%, -50%)',
+  transform: 'translate(-50%, -44%)',
   borderRadius: 'var(--radius-full)',
   border: 'none',
   background: 'var(--primary-500)',
@@ -135,7 +135,7 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         onMouseLeave={() => setFabHovered(false)}
         style={{
           ...fabBaseStyle,
-          transform: fabHovered ? 'translate(-50%, -50%) scale(1.05)' : 'translate(-50%, -50%) scale(1)',
+          transform: fabHovered ? 'translate(-50%, -44%) scale(1.05)' : 'translate(-50%, -44%) scale(1)',
         }}
       >
         <Plus size={26} strokeWidth={2.5} />

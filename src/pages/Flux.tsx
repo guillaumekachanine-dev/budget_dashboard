@@ -879,7 +879,13 @@ export function Flux() {
         </div>
       </Sheet>
 
-      <TransactionDetailsModal transaction={detailsTxn} categories={flowCategories ?? []} onClose={() => setDetailsTxn(null)} />
+      <TransactionDetailsModal
+        transaction={detailsTxn}
+        categories={flowCategories ?? []}
+        transactionList={filtered}
+        onNavigate={setDetailsTxn}
+        onClose={() => setDetailsTxn(null)}
+      />
     </div>
   )
 }

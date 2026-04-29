@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
-import { formatCurrencyRounded } from '@/lib/utils'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { formatCurrencyRounded, getCategoryColor } from '@/lib/utils'
 import type { Category, Transaction } from '@/lib/types'
-import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 interface TransactionDetailsModalProps {
   transaction: Transaction | null
   categories?: Category[]
+  transactionList?: Transaction[]
+  onNavigate?: (transaction: Transaction) => void
   onClose: () => void
 }
 
@@ -57,7 +58,13 @@ function formatMoneyInteger(amount: number): string {
   return formatCurrencyRounded(Math.floor(amount))
 }
 
-export function TransactionDetailsModal({ transaction, categories = [], onClose }: TransactionDetailsModalProps) {
+export function TransactionDetailsModal({
+  transaction,
+  categories = [],
+  transactionList = [],
+  onNavigate,
+  onClose,
+}: TransactionDetailsModalProps) {
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const modalRef = useRef<HTMLDivElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
@@ -108,19 +115,18 @@ export function TransactionDetailsModal({ transaction, categories = [], onClose 
 
     const categoryName = parentCategory ? parentCategory.name : ownCategory?.name ?? '—'
     const subCategoryName = parentCategory ? ownCategory?.name ?? '—' : '—'
-    const iconCategoryName = parentCategory?.name ?? ownCategory?.name ?? flowTypeLabel(transaction.flow_type)
+    const colorSourceCategory = parentCategory ?? ownCategory ?? null
+    const colorIndex = colorSourceCategory ? Math.max(categories.findIndex((c) => c.id === colorSourceCategory.id), 0) : 0
 
     return {
       amount: signedAmount(transaction),
       label: displayTxnLabel(transaction),
       flowTypeText: flowTypeLabel(transaction.flow_type),
+      dateText: formatLongDate(transaction.transaction_date),
       categoryName,
       subCategoryName,
-      iconCategoryName,
+      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex),
       rows: [
-        { key: 'Date', value: formatLongDate(transaction.transaction_date) },
-        { key: 'Marchand', value: transaction.merchant_name ?? '—' },
-        { key: 'Type', value: flowTypeLabel(transaction.flow_type) },
         { key: 'Catégorie', value: categoryName },
         { key: 'Sous-catégorie', value: subCategoryName },
         { key: 'Fixe/variable', value: budgetBehaviorLabel(transaction.budget_behavior) },
@@ -128,7 +134,20 @@ export function TransactionDetailsModal({ transaction, categories = [], onClose 
         { key: 'Imputabilité', value: shareRatioLabel(transaction.personal_share_ratio ?? null) },
       ],
     }
-  }, [categoryById, transaction])
+  }, [categories, categoryById, transaction])
+
+  const sequence = useMemo(() => transactionList, [transactionList])
+  const currentIndex = useMemo(() => {
+    if (!transaction || !sequence.length) return -1
+    return sequence.findIndex((item) => item.id === transaction.id)
+  }, [sequence, transaction])
+  const previousTxn = currentIndex > 0 ? sequence[currentIndex - 1] : null
+  const nextTxn = currentIndex >= 0 && currentIndex < sequence.length - 1 ? sequence[currentIndex + 1] : null
+
+  const handleNavigate = (target: Transaction | null) => {
+    if (!target || !onNavigate) return
+    onNavigate(target)
+  }
 
   return (
     <AnimatePresence>
@@ -182,19 +201,7 @@ export function TransactionDetailsModal({ transaction, categories = [], onClose 
                 overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <h2
-                  id="transaction-details-modal-title"
-                  style={{
-                    margin: 0,
-                    fontSize: 'var(--font-size-md)',
-                    fontWeight: 'var(--font-weight-bold)',
-                    color: 'var(--neutral-900)',
-                  }}
-                >
-                  Détail opération
-                </h2>
-
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <button
                   ref={closeRef}
                   type="button"
@@ -227,87 +234,164 @@ export function TransactionDetailsModal({ transaction, categories = [], onClose 
                 style={{
                   minHeight: 0,
                   overflowY: 'auto',
-                  display: 'grid',
-                  gridTemplateRows: 'minmax(0, 1fr) auto',
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: 'var(--space-5)',
                 }}
               >
                 <div
                   style={{
-                    display: 'grid',
-                    alignContent: 'center',
-                    justifyItems: 'center',
-                    textAlign: 'center',
-                    gap: 'var(--space-2)',
-                    minHeight: 220,
+                    position: 'relative',
+                    minHeight: 290,
+                    borderRadius: 'var(--radius-lg)',
+                    background: details.heroColor,
+                    overflow: 'hidden',
                   }}
                 >
-                  <CategoryIcon
-                    categoryName={details.iconCategoryName}
-                    size={96}
-                    fallback="●"
-                    style={{ borderRadius: 'var(--radius-full)', overflow: 'hidden' }}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '48px 1fr 48px',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: 'var(--space-4) var(--space-4) 0',
+                      position: 'relative',
+                      zIndex: 2,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Opération précédente"
+                      onClick={() => handleNavigate(previousTxn)}
+                      disabled={!previousTxn}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid rgba(255,255,255,0.32)',
+                        background: previousTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                        color: previousTxn ? 'var(--neutral-0)' : 'rgba(255,255,255,0.52)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: previousTxn ? 'pointer' : 'not-allowed',
+                        justifySelf: 'start',
+                      }}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+
+                    <h2
+                      id="transaction-details-modal-title"
+                      style={{
+                        margin: 0,
+                        textAlign: 'center',
+                        fontSize: 'var(--font-size-md)',
+                        fontWeight: 'var(--font-weight-bold)',
+                        color: 'var(--neutral-0)',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {details.dateText}
+                    </h2>
+
+                    <button
+                      type="button"
+                      aria-label="Opération suivante"
+                      onClick={() => handleNavigate(nextTxn)}
+                      disabled={!nextTxn}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid rgba(255,255,255,0.32)',
+                        background: nextTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                        color: nextTxn ? 'var(--neutral-0)' : 'rgba(255,255,255,0.52)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: nextTxn ? 'pointer' : 'not-allowed',
+                        justifySelf: 'end',
+                      }}
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      bottom: -220,
+                      width: '190%',
+                      height: 360,
+                      transform: 'translateX(-50%)',
+                      borderRadius: '50%',
+                      background: 'var(--neutral-50)',
+                    }}
                   />
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: 'var(--font-weight-semibold)',
-                      color: 'var(--neutral-500)',
-                    }}
-                  >
-                    {details.flowTypeText}
-                  </p>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 'var(--font-size-4xl)',
-                      fontWeight: 'var(--font-weight-extrabold)',
-                      lineHeight: 'var(--line-height-tight)',
-                      color: details.amount >= 0 ? 'var(--color-success)' : 'var(--color-error)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {formatMoneyInteger(details.amount)}
-                  </p>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 'var(--font-size-md)',
-                      fontWeight: 'var(--font-weight-medium)',
-                      lineHeight: 'var(--line-height-snug)',
-                      color: 'var(--neutral-700)',
-                      maxWidth: '100%',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {details.label}
-                  </p>
                 </div>
 
                 <div
                   style={{
-                    border: '1px solid var(--neutral-200)',
-                    borderRadius: 'var(--radius-lg)',
-                    background: 'var(--neutral-50)',
-                    overflow: 'hidden',
+                    marginTop: '-178px',
+                    position: 'relative',
+                    zIndex: 2,
+                    display: 'grid',
+                    gap: 'var(--space-4)',
+                    padding: '0 var(--space-2) var(--space-2)',
                   }}
                 >
+                  <div style={{ textAlign: 'center', display: 'grid', gap: 'var(--space-1)' }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 'var(--font-size-sm)',
+                        fontWeight: 800,
+                        color: '#fff',
+                      }}
+                    >
+                      {details.flowTypeText}
+                    </p>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 'var(--font-size-4xl)',
+                        fontWeight: 'var(--font-weight-extrabold)',
+                        lineHeight: 'var(--line-height-tight)',
+                        color: details.amount >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {formatMoneyInteger(details.amount)}
+                    </p>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 'var(--font-size-md)',
+                        fontWeight: 'var(--font-weight-medium)',
+                        lineHeight: 'var(--line-height-snug)',
+                        color: 'var(--neutral-700)',
+                        maxWidth: '100%',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {details.label}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   {details.rows.map((row, idx) => (
                     <div
-                      key={row.key}
+                      key={`${row.key}-${idx}`}
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: 'var(--space-3)',
-                        padding: 'var(--space-3) var(--space-4)',
-                        borderBottom: idx === details.rows.length - 1 ? 'none' : '1px solid var(--neutral-200)',
+                        gap: 'var(--space-4)',
                       }}
                     >
                       <span
@@ -336,6 +420,7 @@ export function TransactionDetailsModal({ transaction, categories = [], onClose 
                       </span>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             </div>

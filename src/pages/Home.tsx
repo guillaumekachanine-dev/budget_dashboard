@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Settings, ArrowUpRight, Sparkles, Calendar, Target } from 'lucide-react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -11,21 +10,36 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
-import { Badge, Button, Card, KpiCard } from '@/components'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import {
-  formatCurrency,
   getCurrentPeriod,
   getDaysRemainingInMonth,
   getMonthLabel,
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
+import geminiIcon from '@/assets/icons_app/gemini-svg.svg'
+
+function formatMoneyInteger(amount: number): string {
+  if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(0)
+
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.floor(amount))
+}
 
 export function Home() {
   const { year, month } = getCurrentPeriod()
-  const { data: accounts, isLoading: loadingAccounts } = useAccounts()
+  const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
@@ -107,11 +121,6 @@ export function Home() {
     return ((realToDate - plannedToDate) / plannedToDate) * 100
   }, [plannedToDate, realToDate])
 
-  const spendVsForecastPct = useMemo(() => {
-    if (plannedToDate <= 0) return null
-    return Math.max(0, Math.min(100, (realToDate / plannedToDate) * 100))
-  }, [plannedToDate, realToDate])
-
   const driftCategories = useMemo(() => {
     const rows = summaries ?? []
     return [...rows]
@@ -139,40 +148,12 @@ export function Home() {
 
   const heroMetrics = useMemo(
     () => [
-      {
-        key: 'reste',
-        label: 'Reste utile',
-        value: formatCurrency(resteUtile),
-        badgeText: deltaPct != null && deltaPct <= 0 ? 'Sous contrôle' : 'À surveiller',
-        badgeVariant: (deltaPct != null && deltaPct <= 0 ? 'success' : 'warning') as
-          | 'success'
-          | 'warning',
-      },
-      {
-        key: 'jour',
-        label: 'Budget / jour',
-        value: formatCurrency(budgetParJour),
-        badgeText: `${daysRemaining} jours`,
-        badgeVariant: 'neutral' as const,
-      },
-      {
-        key: 'avenir',
-        label: 'Dépenses à venir',
-        value: formatCurrency(plannedFuture),
-        badgeText: plannedFuture > 0 ? 'Planifiées' : 'Aucune',
-        badgeVariant: (plannedFuture > 0 ? 'warning' : 'success') as 'warning' | 'success',
-      },
-      {
-        key: 'fin',
-        label: 'Fin de mois',
-        value: formatCurrency(previsionFinDeMois),
-        badgeText: deltaPct != null && deltaPct > 0 ? 'Risque de dépassement' : 'Prévision stable',
-        badgeVariant: (deltaPct != null && deltaPct > 0 ? 'error' : 'success') as
-          | 'error'
-          | 'success',
-      },
+      { key: 'reste', label: 'Reste utile', value: formatMoneyInteger(resteUtile) },
+      { key: 'jour', label: 'Budget / jour', value: formatMoneyInteger(budgetParJour) },
+      { key: 'avenir', label: 'Dépenses à venir', value: formatMoneyInteger(plannedFuture) },
+      { key: 'fin', label: 'Fin de mois', value: formatMoneyInteger(previsionFinDeMois) },
     ],
-    [budgetParJour, daysRemaining, deltaPct, plannedFuture, previsionFinDeMois, resteUtile],
+    [budgetParJour, plannedFuture, previsionFinDeMois, resteUtile],
   )
 
   const driftRows = useMemo(
@@ -186,174 +167,327 @@ export function Home() {
     [driftCategories],
   )
 
-  const quickActions = useMemo(
-    () => [
-      { label: 'NLP', icon: Sparkles },
-      { label: 'Plan', icon: Calendar },
-      { label: 'Objectifs', icon: Target },
-      { label: 'Export', icon: ArrowUpRight },
-    ],
-    [],
-  )
-
-  const trajectoryDeltaVariant =
-    deltaPct == null ? 'neutral' : deltaPct <= 0 ? 'success' : deltaPct > 12 ? 'error' : 'warning'
+  const trajectoryDeltaColor =
+    deltaPct == null ? 'var(--neutral-500)' : deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
 
   return (
-    <div className="flex flex-col gap-[var(--space-4)] px-[var(--space-6)] pb-[calc(90px+env(safe-area-inset-bottom,0px))] pt-[var(--space-6)]">
-      <motion.div
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-8)',
+        paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
+      }}
+    >
+      <motion.header
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="flex items-center justify-between gap-3"
+        style={{
+          borderBottom: '1px solid var(--neutral-200)',
+          padding: 'var(--space-4) var(--space-6)',
+        }}
       >
-        <p className="m-0 text-[13px] font-extrabold text-[var(--neutral-900)]">
-          Bonjour · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Paramètres"
-          onClick={() => {}}
-          className="h-10 w-10 rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-0)] px-0 text-[var(--neutral-700)] shadow-[var(--shadow-sm)]"
-        >
-          <Settings size={18} />
-        </Button>
-      </motion.div>
-
-      <Card
-        variant="elevated"
-        padding="md"
-        className="bg-[var(--primary-500)] text-white"
-      >
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <KpiCard
-              label="Solde"
-              value={selectedAccount?.current_balance ?? 0}
-              format="currency"
-              subtitle={`${daysRemaining} jours restants dans le mois`}
-              className="flex-1 border border-white/15 bg-transparent p-0 shadow-none [&_p]:text-white [&_span]:text-white"
-            />
-            <Badge variant={trajectoryDeltaVariant}>
-              {spendVsForecastPct == null ? '—' : `${Math.round(spendVsForecastPct)}% vs prév.`}
-            </Badge>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-2xl)',
+                lineHeight: 'var(--line-height-tight)',
+                fontWeight: 'var(--font-weight-extrabold)',
+                color: 'var(--neutral-900)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Accueil
+            </h1>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--neutral-500)', textTransform: 'capitalize' }}>
+              {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {heroMetrics.map((metric) => (
-              <Card key={metric.key} variant="default" padding="sm" className="bg-white shadow-none">
-                <div className="flex flex-col gap-2">
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--neutral-400)]">
+          <button
+            type="button"
+            aria-label="Profil utilisateur"
+            onClick={() => {}}
+            style={{
+              border: '1px solid var(--neutral-200)',
+              background: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-full)',
+              width: 36,
+              height: 36,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--neutral-600)',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'transform var(--transition-fast), box-shadow var(--transition-fast)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
+            }}
+          >
+            <img
+              src={geminiIcon}
+              alt=""
+              aria-hidden="true"
+              style={{ width: 18, height: 18, borderRadius: 'var(--radius-full)' }}
+            />
+          </button>
+        </div>
+      </motion.header>
+
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.05 }}
+        style={{ padding: '0 var(--space-6)' }}
+      >
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-1)',
+              justifyItems: 'center',
+              textAlign: 'center',
+              marginBottom: 'var(--space-4)',
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
+                color: 'var(--primary-600)',
+              }}
+            >
+              Solde compte courant
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-kpi)',
+                fontWeight: 'var(--font-weight-extrabold)',
+                lineHeight: 'var(--line-height-tight)',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--primary-700)',
+              }}
+            >
+              {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+            </p>
+          </div>
+
+          <div
+            style={{
+              background: 'var(--primary-500)',
+              color: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-6)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'grid',
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+              {heroMetrics.map((metric) => (
+                <div
+                  key={metric.key}
+                  style={{
+                    background:
+                      metric.key === 'reste'
+                        ? 'color-mix(in oklab, var(--primary-500) 14%, var(--neutral-0) 86%)'
+                        : metric.key === 'jour'
+                          ? 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)'
+                          : metric.key === 'avenir'
+                            ? 'color-mix(in oklab, var(--primary-500) 18%, var(--neutral-0) 82%)'
+                            : 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-3)',
+                    border: '1px solid color-mix(in oklab, var(--primary-500) 28%, var(--neutral-0) 72%)',
+                    display: 'grid',
+                    gap: 'var(--space-1)',
+                    justifyItems: 'center',
+                    textAlign: 'center',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-xs)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      textTransform: 'uppercase',
+                      color: 'var(--neutral-600)',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
                     {metric.label}
                   </p>
-                  <p className="m-0 text-[16px] font-extrabold text-[var(--neutral-900)] [font-family:var(--font-mono)]">
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-md)',
+                      fontWeight: 'var(--font-weight-bold)',
+                      color: 'var(--neutral-900)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
                     {metric.value}
                   </p>
-                  <Badge variant={metric.badgeVariant}>{metric.badgeText}</Badge>
                 </div>
-              </Card>
-            ))}
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.12 }}
+        style={{ padding: '0 var(--space-6)' }}
+      >
+        <div
+          style={{
+            maxWidth: 600,
+            margin: '0 auto',
+            padding: 'var(--space-4) 0',
+            borderBottom: '1px solid var(--neutral-200)',
+            display: 'grid',
+            gap: 'var(--space-4)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.08em' }}>
+                Trajectoire
+              </p>
+              <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-900)' }}>
+                Prévisions VS Réel
+              </p>
+            </div>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
+              {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
+            </p>
           </div>
 
-          <p className="m-0 text-[11px] font-semibold text-white/80">
-            {loadingAccounts ? 'Chargement du solde…' : selectedAccount ? selectedAccount.name : 'Aucun compte sélectionné'}
-          </p>
-        </div>
-      </Card>
-
-      <Card variant="default" padding="md" className="overflow-hidden">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="m-0 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--neutral-400)]">Trajectoire</p>
-            <p className="mt-1 m-0 text-[14px] font-bold text-[var(--neutral-700)]">Projection mensuelle des dépenses</p>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trajectoryData}>
+                <defs>
+                  <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={54}
+                  tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--neutral-0)',
+                    border: '1px solid var(--neutral-200)',
+                    borderRadius: 12,
+                    boxShadow: 'var(--shadow-sm)',
+                    fontSize: 12,
+                  }}
+                  formatter={(value: number) => formatMoneyInteger(Number(value))}
+                  labelFormatter={(label) => `Jour ${label}`}
+                />
+                <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <Badge variant={trajectoryDeltaVariant}>
-            {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
-          </Badge>
         </div>
+      </motion.section>
 
-        <div className="mt-4 h-[220px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trajectoryData}>
-              <defs>
-                <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.24} />
-                  <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={38} />
-              <Tooltip
-                contentStyle={{
-                  background: '#fff',
-                  border: '1px solid var(--neutral-200)',
-                  borderRadius: 12,
-                  boxShadow: 'var(--shadow-sm)',
-                  fontSize: 12,
-                }}
-                formatter={(v: number) => formatCurrency(v)}
-                labelFormatter={(l) => `Jour ${l}`}
-              />
-              <Line type="monotone" dataKey="planned" stroke="var(--color-error)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-              <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.4} fill="url(#actualFill)" dot={false} connectNulls={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.18 }}
+        style={{ padding: '0 var(--space-6)' }}
+      >
+        <div
+          style={{
+            maxWidth: 600,
+            margin: '0 auto',
+            padding: 'var(--space-4) 0',
+            borderBottom: '1px solid var(--neutral-200)',
+            display: 'grid',
+            gap: 'var(--space-3)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.08em' }}>
+              Catégories en dérive
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+              {getMonthLabel(year, month)}
+            </p>
+          </div>
 
-      <Card variant="default" padding="md">
-        <div className="flex items-center justify-between gap-3">
-          <p className="m-0 text-[11px] font-black uppercase tracking-[0.08em] text-[var(--neutral-400)]">Catégories en dérive</p>
-          <Badge variant="warning">{getMonthLabel(year, month)}</Badge>
-        </div>
-
-        <div className="mt-4 -mx-[var(--space-5)]">
           {loadingSummaries ? (
-            <p className="m-0 px-[var(--space-5)] py-[var(--space-4)] text-[13px] font-medium text-[var(--neutral-500)]">Chargement…</p>
+            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)' }}>
+              Chargement…
+            </p>
           ) : driftRows.length === 0 ? (
-            <p className="m-0 px-[var(--space-5)] py-[var(--space-4)] text-[13px] font-medium text-[var(--neutral-500)]">Aucune donnée</p>
+            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)' }}>
+              Aucune donnée
+            </p>
           ) : (
-            driftRows.map((row) => {
-              const drift = Number(row.driftPct ?? 0)
-              const variant = drift > 12 ? 'error' : drift > 0 ? 'warning' : drift < -5 ? 'success' : 'neutral'
-              return (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-[var(--neutral-100)] px-[var(--space-5)] py-[10px]"
-                >
-                  <span className="min-w-0 truncate text-[13px] font-extrabold text-[var(--neutral-700)]">{row.name}</span>
-                  <span className="text-[13px] font-extrabold text-[var(--neutral-700)] [font-family:var(--font-mono)]">
-                    {formatCurrency(Number(row.spent ?? 0))}
-                  </span>
-                  <Badge variant={variant}>{`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}</Badge>
-                </div>
-              )
-            })
+            <div>
+              {driftRows.map((row) => {
+                const drift = Number(row.driftPct ?? 0)
+                const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                return (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0,1fr) auto auto',
+                      alignItems: 'center',
+                      gap: 'var(--space-3)',
+                      padding: 'var(--space-3) 0',
+                      borderBottom: '1px solid var(--neutral-100)',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.backgroundColor = 'transparent'
+                    }}
+                  >
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
+                      {row.name}
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      {formatMoneyInteger(Number(row.spent ?? 0))}
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
-      </Card>
-
-      <Card variant="default" padding="md">
-        <p className="m-0 text-[11px] font-black uppercase tracking-[0.08em] text-[var(--neutral-400)]">Actions rapides</p>
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          {quickActions.map(({ label, icon: Icon }) => (
-            <Button
-              key={label}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {}}
-              className="h-[58px] flex-col justify-center gap-1 px-1 text-[11px] font-semibold text-[var(--neutral-700)]"
-            >
-              <Icon size={14} />
-              {label}
-            </Button>
-          ))}
-        </div>
-      </Card>
+      </motion.section>
     </div>
   )
 }

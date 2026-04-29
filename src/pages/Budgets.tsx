@@ -338,7 +338,7 @@ export function Budgets() {
   const [subCategoryToReopen, setSubCategoryToReopen] = useState<SubCategoryTrendItem | null>(null)
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
-  const [breakdownMode, setBreakdownMode] = useState<'mois' | 'annee'>('mois')
+  const [breakdownMode] = useState<'mois' | 'annee'>('mois')
   const [activeIncomeExpenseSlice, setActiveIncomeExpenseSlice] = useState<string | null>(null)
   const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
@@ -384,17 +384,17 @@ export function Budgets() {
   }, [])
 
   const { data: summaries } = useBudgetSummaries(year, month)
-  const { data: categories = [] } = useCategories('expense')
+  const { data: categories = [], isFetched: categoriesFetched } = useCategories('expense')
   const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
   const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
   useEffect(() => {
-    if (selectedCat === 'all') return
+    if (selectedCat === 'all' || !categoriesFetched) return
     if (!categoryById.has(selectedCat)) {
       setSelectedCat('all')
     }
-  }, [selectedCat, categoryById])
+  }, [selectedCat, categoryById, categoriesFetched])
 
   const range = useMemo(() => getPeriodRange(periodKey), [periodKey])
 
@@ -820,8 +820,8 @@ export function Budgets() {
             </div>
           </div>
 
-          <button type="button" onClick={() => setShowCatSheet(true)} style={{ border: '2px solid var(--primary-500)', background: 'var(--primary-50)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', cursor: 'pointer', color: 'var(--primary-500)', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform var(--transition-base), box-shadow var(--transition-base)', boxShadow: 'var(--shadow-sm)' }} aria-label="Choisir une catégorie">
-            {selectedCat === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={48} fallback="💰" /> : <CategoryIcon categoryName={selectedCatInfo?.name} size={48} fallback="💰" />}
+          <button type="button" onClick={() => setShowCatSheet(true)} style={{ border: '2px solid var(--primary-500)', background: 'var(--primary-50)', borderRadius: 'var(--radius-full)', width: 74, height: 74, padding: 0, cursor: 'pointer', color: 'var(--primary-500)', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform var(--transition-base), box-shadow var(--transition-base)', boxShadow: 'var(--shadow-sm)' }} aria-label="Choisir une catégorie">
+            {selectedCat === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={44} fallback="💰" /> : <CategoryIcon categoryName={selectedCatInfo?.name} size={44} fallback="💰" />}
           </button>
         </div>
       </motion.div>
@@ -829,9 +829,9 @@ export function Budgets() {
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600 }}>Répartition par catégorie</p>
-              <div ref={donutAreaRef} style={{ position: 'relative', height: 360 }}>
+            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Répartition par catégorie</p>
+              <div ref={donutAreaRef} style={{ position: 'relative', height: 336 }}>
                 {selectedDonutSlice ? (
                   <div ref={donutTooltipRef} style={{ position: 'absolute', top: 'var(--space-2)', left: '50%', transform: 'translateX(-50%)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', boxShadow: 'var(--shadow-md)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', zIndex: 3, minWidth: 220, textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>{selectedDonutSlice.name}</p>
@@ -898,11 +898,11 @@ export function Budgets() {
               </div>
             </div>
 
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600 }}>Évolutions 6 derniers mois</p>
-              <div style={{ height: 360 }}>
+            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Évolutions 6 derniers mois</p>
+              <div style={{ height: 332 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 26, right: 30, left: 6, bottom: 4 }}>
+                  <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                     <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
                     <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
@@ -922,13 +922,7 @@ export function Budgets() {
             </div>
 
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600 }}>Revenus / Dépenses / Épargne</p>
-                <div style={{ display: 'inline-flex', background: 'var(--neutral-100)', borderRadius: 'var(--radius-pill)', padding: 2 }}>
-                  <button type="button" onClick={() => setBreakdownMode('mois')} style={{ border: 'none', background: breakdownMode === 'mois' ? 'var(--primary-500)' : 'transparent', color: breakdownMode === 'mois' ? 'var(--neutral-0)' : 'var(--neutral-600)', borderRadius: 'var(--radius-pill)', padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Mois</button>
-                  <button type="button" onClick={() => setBreakdownMode('annee')} style={{ border: 'none', background: breakdownMode === 'annee' ? 'var(--primary-500)' : 'transparent', color: breakdownMode === 'annee' ? 'var(--neutral-0)' : 'var(--neutral-600)', borderRadius: 'var(--radius-pill)', padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Année</button>
-                </div>
-              </div>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Revenus / Dépenses / Épargne</p>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--space-4)' }}>
                 <div style={{ height: 210 }}>
@@ -947,41 +941,35 @@ export function Budgets() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="breakdown-kpi-grid" style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Pression budgétaire</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${budgetPressurePct.toFixed(0)}%`}</span></div>
-                  <div style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité d'épargne</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: savingsCapacity >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsCapacity)}</span></div>
-                  <div style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne année en cours</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsYtd)}</span></div>
-                  <div style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne totale</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(totalSavings)}</span></div>
+                <div className="breakdown-kpi-grid" style={{ display: 'grid', gap: 'var(--space-4)', width: '100%', maxWidth: 430, margin: '0 auto', justifyItems: 'center' }}>
+                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Pression budgétaire</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${budgetPressurePct.toFixed(0)}%`}</span></div>
+                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité d'épargne</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: savingsCapacity >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsCapacity)}</span></div>
+                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne année en cours</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(savingsYtd)}</span></div>
+                  <div style={{ display: 'grid', gap: 2, textAlign: 'center' }}><span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne totale</span><span style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatMoney(totalSavings)}</span></div>
                 </div>
               </div>
-
-              <a href="/epargne" style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-button)', background: 'var(--primary-500)', color: 'var(--neutral-0)', fontSize: 13, fontWeight: 700, textDecoration: 'none', padding: '10px 14px' }}>Voir l'épargne</a>
             </div>
 
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600 }}>Scénarios d'optimisation</p>
-              <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: 560 }}>
-                  <div style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) 1fr 1fr 1fr auto', gap: 'var(--space-3)', padding: 'var(--space-3) 0' }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Scénario / Enveloppe</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Optimisation</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Impact fin mois</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Projection 6 mois</span>
-                    <span />
-                  </div>
-
-                  {optimizationScenarios.length === 0 ? (
-                    <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
-                  ) : optimizationScenarios.map((scenario) => (
-                    <div key={scenario.id} style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) 1fr 1fr 1fr auto', gap: 'var(--space-3)', padding: 'var(--space-3) 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
-                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{scenario.name}</span>
-                      <span style={{ fontSize: 13, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>{`${scenario.reduction}% réduction`}</span>
-                      <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${formatMoney(scenario.monthlyImpact)} dispo`}</span>
-                      <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{`${formatMoney(scenario.sixMonthImpact)} économisés`}</span>
-                      <button type="button" style={{ border: 'none', background: 'transparent', color: 'var(--primary-500)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Appliquer</button>
-                    </div>
-                  ))}
+            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Scénarios d'optimisation</p>
+              <div style={{ width: '100%' }}>
+                <div style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,0.75fr) minmax(0,0.95fr) minmax(0,0.95fr)', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Enveloppe</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>6 mois</span>
                 </div>
+
+                {optimizationScenarios.length === 0 ? (
+                  <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
+                ) : optimizationScenarios.map((scenario) => (
+                  <div key={scenario.id} style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,0.75fr) minmax(0,0.95fr) minmax(0,0.95fr)', gap: 'var(--space-2)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
+                    <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.monthlyImpact)}`}</span>
+                    <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.sixMonthImpact)}`}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -997,7 +985,7 @@ export function Budgets() {
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-6) var(--space-4) 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingBottom: 'var(--space-4)' }}>
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-            {selectedCat === 'all' ? '06 — Barres de progression' : 'Liste sous-catégories'}
+            {selectedCat === 'all' ? 'Consommé VS restant par catégorie' : 'Liste sous-catégories'}
           </p>
           <span style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
         </div>
@@ -1006,9 +994,9 @@ export function Budgets() {
           budgetProgressRows.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-8) 0' }}>Aucune catégorie à afficher</div>
           ) : (
-            <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
               {budgetProgressRows.map((row) => {
-                const isOverspent = row.remaining < 0
+                const remainingAmount = Math.max(0, row.remaining)
                 const rowTo = `/budgets?category=${row.id}`
                 return (
                   <Link
@@ -1020,45 +1008,26 @@ export function Budgets() {
                       display: 'grid',
                       gap: 'var(--space-1)',
                       cursor: 'pointer',
-                      transition: 'transform var(--transition-base)',
-                    }}
-                    onMouseEnter={(event) => {
-                      event.currentTarget.style.transform = 'scale(1.02)'
-                    }}
-                    onMouseLeave={(event) => {
-                      event.currentTarget.style.transform = 'scale(1)'
+                      borderBottom: '1px solid var(--neutral-200)',
+                      paddingBottom: 'var(--space-2)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                        <span style={{ width: row.isTopFive ? 10 : 8, height: row.isTopFive ? 10 : 8, borderRadius: 'var(--radius-full)', background: row.accent, flexShrink: 0 }} />
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: row.isTopFive ? 800 : 700, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {row.name}
-                        </p>
-                      </div>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--primary-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                        {formatMoney(row.budget)}
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {row.name}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--primary-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                        {formatMoney(row.spent)}
                       </p>
                     </div>
 
-                    <div style={{ width: '100%', height: 8, borderRadius: 'var(--radius-pill)', background: 'var(--neutral-200)', overflow: 'hidden' }}>
-                      <div style={{ width: `${row.progressPct}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: row.statusColor, transition: 'width var(--transition-base), background-color var(--transition-base)' }} />
+                    <div style={{ width: '100%', height: 7, borderRadius: 'var(--radius-pill)', background: 'var(--neutral-200)', overflow: 'hidden' }}>
+                      <div style={{ width: `${row.progressPct}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: row.accent, transition: 'width var(--transition-base), background-color var(--transition-base)' }} />
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)' }}>
-                        {`${formatMoney(row.spent)} dépensé`}
-                      </p>
-                      {isOverspent ? (
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 700 }}>
-                          {`Dépassement ${formatMoney(Math.abs(row.remaining))}`}
-                        </p>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)' }}>
-                          {`Restant ${formatMoney(row.remaining)}`}
-                        </p>
-                      )}
-                    </div>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                      {`Restant ${formatMoney(remainingAmount)}`}
+                    </p>
                   </Link>
                 )
               })}
@@ -1085,16 +1054,19 @@ export function Budgets() {
 
       <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
 
-      <TransactionDetailsModal transaction={selectedTransaction} categories={categories} onClose={handleCloseTransactionDetails} />
+      <TransactionDetailsModal
+        transaction={selectedTransaction}
+        categories={categories}
+        transactionList={subCategoryTransactions ?? []}
+        onNavigate={setSelectedTransaction}
+        onClose={handleCloseTransactionDetails}
+      />
 
       <CategorySheet open={showCatSheet} selectedId={selectedCat} categories={rootExpenseCategories} onClose={() => setShowCatSheet(false)} onSelect={setSelectedCat} />
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        .breakdown-kpi-grid { grid-template-columns: minmax(0,1fr); }
-        @media (min-width: 768px) {
-          .breakdown-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-        }
+        .breakdown-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
       `}</style>
     </div>
   )
