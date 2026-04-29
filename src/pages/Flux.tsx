@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, SlidersHorizontal, ArrowLeft, Search } from 'lucide-react'
+import { ChevronDown, ArrowLeft, Search, Settings2 } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrency } from '@/lib/utils'
@@ -14,6 +14,7 @@ import type { FlowType, Transaction } from '@/lib/types'
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 type PeriodMode = 'current' | 'rolling'
+type QuickParamPicker = 'type' | 'period' | 'fixed' | 'account' | null
 
 const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
   { value: 'all', label: 'Toutes' },
@@ -293,6 +294,8 @@ function Switch({ value, onChange }: { value: boolean; onChange: (next: boolean)
   )
 }
 
+type ParameterFocus = 'type' | 'period' | 'fixed' | 'account'
+
 export function Flux() {
   const [search, setSearch] = useState('')
   const [flow, setFlow] = useState<FlowFilter>('expense')
@@ -308,12 +311,23 @@ export function Flux() {
   const [selectedParentCategoryId, setSelectedParentCategoryId] = useState<string | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
 
-  const [excludeRecurring, setExcludeRecurring] = useState(false)
+  const [excludeRecurring] = useState(false)
   const [onlyFixed, setOnlyFixed] = useState(false)
   const [onlyJoint, setOnlyJoint] = useState(false)
   const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
 
-  const categoryFlowType = flow === 'income' ? 'income' : 'expense'
+  const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
+  const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
+  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
+  const [draftOnlyFixed, setDraftOnlyFixed] = useState(false)
+  const [draftOnlyJoint, setDraftOnlyJoint] = useState(false)
+  const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)
+  const [draftSelectedCategoryId, setDraftSelectedCategoryId] = useState<string | null>(null)
+  const [showTypeMenu, setShowTypeMenu] = useState(false)
+  const [showPeriodMiniModal, setShowPeriodMiniModal] = useState(false)
+  const [quickParamPicker, setQuickParamPicker] = useState<QuickParamPicker>(null)
+
+  const categoryFlowType = (showAdvancedSheet ? draftFlow : flow) === 'income' ? 'income' : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
@@ -357,23 +371,30 @@ export function Flux() {
   const typeLabel = FLOW_OPTIONS.find((o) => o.value === flow)?.label ?? 'Depenses'
   const periodLabel = PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? 'Mois'
 
-  const categoryLabel = useMemo(() => {
-    if (selectedCategoryId) return categoryById.get(selectedCategoryId)?.name ?? 'Categorie'
-    if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.name ?? 'Categorie'
-    return 'Toutes'
-  }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
-
   const selectedParent = selectedParentCategoryId ? parentById.get(selectedParentCategoryId) ?? null : null
   const selectedChildren = useMemo(
     () => (selectedParentCategoryId ? subCategories.filter((c) => c.parent_id === selectedParentCategoryId) : []),
     [selectedParentCategoryId, subCategories],
   )
 
+  const draftSelectedParent = draftSelectedParentCategoryId ? parentById.get(draftSelectedParentCategoryId) ?? null : null
+  const draftSelectedChildren = useMemo(
+    () => (draftSelectedParentCategoryId ? subCategories.filter((c) => c.parent_id === draftSelectedParentCategoryId) : []),
+    [draftSelectedParentCategoryId, subCategories],
+  )
+
   useEffect(() => {
     setSelectedParentCategoryId(null)
     setSelectedCategoryId(null)
     setCategoryStage('parents')
-  }, [categoryFlowType])
+  }, [flow])
+
+  useEffect(() => {
+    if (!showAdvancedSheet) return
+    setDraftSelectedParentCategoryId(null)
+    setDraftSelectedCategoryId(null)
+    setCategoryStage('parents')
+  }, [draftFlow, showAdvancedSheet])
 
   const anySheetOpen = showTypeSheet || showPeriodSheet || showCategorySheet || showAdvancedSheet
 
@@ -396,13 +417,81 @@ export function Flux() {
     return `Du ${start} au ${end}`
   }, [filtered, range.endDate, range.startDate])
 
-  const periodSummaryLabel = useMemo(() => {
-    return `${periodDateLabel} - ${filtered.length} ${resultNoun(flow)}`
-  }, [filtered.length, flow, periodDateLabel])
+  const operationsSummaryLabel = useMemo(() => `${filtered.length} ${resultNoun(flow)}`, [filtered.length, flow])
+  const cardTypeValue = useMemo(() => {
+    if (typeLabel.toLowerCase() === 'depenses') return 'Dépenses'
+    return typeLabel
+  }, [typeLabel])
+  const cardPeriodValue = useMemo(() => {
+    if (period === 'month') {
+      const nowDate = new Date()
+      const month = nowDate.toLocaleDateString('fr-FR', { month: 'long' })
+      const year = nowDate.getFullYear()
+      return `${month.slice(0, 1).toUpperCase() + month.slice(1)} ${year}`
+    }
+    if (period === 'day') return 'Jour'
+    if (period === 'week') return 'Semaine'
+    if (period === 'year') return 'Année'
+    return periodLabel
+  }, [period, periodLabel])
+  const cardBudgetValue = onlyFixed ? 'Budget fixe' : 'Budget variable'
+  const cardAccountValue = onlyJoint ? 'Compte joint' : 'Compte perso'
+
+  const draftTypeLabel = FLOW_OPTIONS.find((o) => o.value === draftFlow)?.label ?? 'Depenses'
+  const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
+  const categorySheetInParameters = showAdvancedSheet
+  const activeSelectedChildren = categorySheetInParameters ? draftSelectedChildren : selectedChildren
+  const activeSelectedParent = categorySheetInParameters ? draftSelectedParent : selectedParent
+  const draftCategoryLabel = useMemo(() => {
+    if (draftSelectedCategoryId) return categoryById.get(draftSelectedCategoryId)?.name ?? 'Categorie'
+    if (draftSelectedParentCategoryId) return parentById.get(draftSelectedParentCategoryId)?.name ?? 'Categorie'
+    return 'Toutes categories'
+  }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
+
+  const openParametersModal = (focus?: ParameterFocus) => {
+    setDraftFlow(flow)
+    setDraftPeriod(['day', 'week', 'month', 'year'].includes(period) ? period : 'month')
+    setDraftPeriodMode(periodMode)
+    setDraftOnlyFixed(onlyFixed)
+    setDraftOnlyJoint(onlyJoint)
+    setDraftSelectedParentCategoryId(selectedParentCategoryId)
+    setDraftSelectedCategoryId(selectedCategoryId)
+    setShowTypeMenu(focus === 'type')
+    setShowPeriodMiniModal(focus === 'period')
+    setShowAdvancedSheet(true)
+  }
+
+  const closeQuickPicker = () => {
+    setQuickParamPicker(null)
+  }
+
+  const applyParameters = () => {
+    setFlow(draftFlow)
+    setPeriod(draftPeriod)
+    setPeriodMode(draftPeriodMode)
+    setOnlyFixed(draftOnlyFixed)
+    setOnlyJoint(draftOnlyJoint)
+    setSelectedParentCategoryId(draftSelectedParentCategoryId)
+    setSelectedCategoryId(draftSelectedCategoryId)
+    setShowTypeMenu(false)
+    setShowPeriodMiniModal(false)
+    setShowAdvancedSheet(false)
+  }
+
+  const closeParametersModal = () => {
+    setShowTypeMenu(false)
+    setShowPeriodMiniModal(false)
+    setShowAdvancedSheet(false)
+  }
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
-      <PageHeader title="Flux" />
+      <PageHeader
+        title="Flux"
+        actionIcon={<Settings2 size={24} />}
+        actionAriaLabel="Ouvrir les paramètres de recherche"
+        onActionClick={() => openParametersModal()}
+      />
 
       <motion.section
         initial={{ opacity: 0, y: 8 }}
@@ -441,9 +530,84 @@ export function Flux() {
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, opacity: 0.96 }}>
               {periodDateLabel}
             </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, opacity: 0.92 }}>
-              {filtered.length} opérations
-            </p>
+
+            <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+              <button
+                type="button"
+                onClick={() => setQuickParamPicker('type')}
+                style={{
+                  border: '1px solid color-mix(in oklab, var(--neutral-0) 32%, var(--viz-c) 68%)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'color-mix(in oklab, var(--neutral-0) 14%, var(--viz-c) 86%)',
+                  color: 'var(--neutral-0)',
+                  padding: 'var(--space-2)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  minHeight: 58,
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, textAlign: 'center' }}>{cardTypeValue}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickParamPicker('period')}
+                style={{
+                  border: '1px solid color-mix(in oklab, var(--neutral-0) 32%, var(--viz-c) 68%)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'color-mix(in oklab, var(--neutral-0) 14%, var(--viz-c) 86%)',
+                  color: 'var(--neutral-0)',
+                  padding: 'var(--space-2)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  minHeight: 58,
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, textAlign: 'center' }}>{cardPeriodValue}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickParamPicker('fixed')}
+                style={{
+                  border: '1px solid color-mix(in oklab, var(--neutral-0) 32%, var(--viz-c) 68%)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'color-mix(in oklab, var(--neutral-0) 14%, var(--viz-c) 86%)',
+                  color: 'var(--neutral-0)',
+                  padding: 'var(--space-2)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  minHeight: 58,
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, textAlign: 'center' }}>{cardBudgetValue}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickParamPicker('account')}
+                style={{
+                  border: '1px solid color-mix(in oklab, var(--neutral-0) 32%, var(--viz-c) 68%)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'color-mix(in oklab, var(--neutral-0) 14%, var(--viz-c) 86%)',
+                  color: 'var(--neutral-0)',
+                  padding: 'var(--space-2)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  minHeight: 58,
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, textAlign: 'center' }}>{cardAccountValue}</span>
+              </button>
+            </div>
           </div>
         </div>
       </motion.section>
@@ -457,101 +621,6 @@ export function Flux() {
           leftIcon={<Search size={14} />}
           size="md"
         />
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 44px',
-            gap: 'var(--space-2)',
-            alignItems: 'center',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setShowTypeSheet(true)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: 2,
-              minWidth: 0,
-              padding: '2px 0',
-              color: 'var(--neutral-700)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{typeLabel}</span>
-            <ChevronDown size={14} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPeriodSheet(true)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: 2,
-              minWidth: 0,
-              padding: '2px 0',
-              color: 'var(--neutral-700)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{periodLabel}</span>
-            <ChevronDown size={14} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCategorySheet(true)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: 2,
-              minWidth: 0,
-              padding: '2px 0',
-              color: 'var(--neutral-700)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{categoryLabel}</span>
-            <ChevronDown size={14} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowAdvancedSheet(true)}
-            aria-label="Filtres avances"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 'var(--touch-target-min)',
-              minHeight: 'var(--touch-target-min)',
-              justifySelf: 'end',
-              cursor: 'pointer',
-              color: 'var(--neutral-700)',
-            }}
-          >
-            <SlidersHorizontal size={16} />
-          </button>
-        </div>
       </section>
 
       <section>
@@ -568,7 +637,7 @@ export function Flux() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {periodSummaryLabel}
+                {operationsSummaryLabel}
               </span>
             </div>
             <span
@@ -676,6 +745,208 @@ export function Flux() {
         )}
       </section>
 
+      <AnimatePresence>
+        {quickParamPicker ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeQuickPicker}
+              style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(13,13,31,0.4)' }}
+            />
+            <motion.div
+              initial={{ y: 18, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 18, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-4)',
+                right: 'var(--space-4)',
+                bottom: 'calc(var(--nav-height) + var(--safe-bottom-offset) + var(--space-3))',
+                zIndex: 86,
+                maxWidth: 430,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--neutral-200)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: 'var(--space-4)',
+                display: 'grid',
+                gap: 'var(--space-3)',
+              }}
+            >
+              {quickParamPicker === 'type' ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Type</p>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {FLOW_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setFlow(opt.value)
+                          closeQuickPicker()
+                        }}
+                        style={{
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-md)',
+                          background: flow === opt.value ? 'var(--primary-50)' : 'var(--neutral-0)',
+                          color: flow === opt.value ? 'var(--primary-700)' : 'var(--neutral-700)',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              {quickParamPicker === 'period' ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Période</p>
+                    <SegmentedToggle
+                      left="Fixe"
+                      right="Glissant"
+                      value={periodMode === 'current' ? 'left' : 'right'}
+                      onChange={(next) => setPeriodMode(next === 'left' ? 'current' : 'rolling')}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8 }}>
+                    {[
+                      { value: 'day', label: 'Jour' },
+                      { value: 'week', label: 'Semaine' },
+                      { value: 'month', label: 'Mois' },
+                      { value: 'year', label: 'Année' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setPeriod(option.value as PeriodFilter)
+                          closeQuickPicker()
+                        }}
+                        style={{
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-md)',
+                          background: period === option.value ? 'var(--primary-50)' : 'var(--neutral-0)',
+                          color: period === option.value ? 'var(--primary-700)' : 'var(--neutral-700)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: '10px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              {quickParamPicker === 'fixed' ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Fixe / Variable</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlyFixed(false)
+                        closeQuickPicker()
+                      }}
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: !onlyFixed ? 'var(--primary-50)' : 'var(--neutral-0)',
+                        color: !onlyFixed ? 'var(--primary-700)' : 'var(--neutral-700)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Variable
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlyFixed(true)
+                        closeQuickPicker()
+                      }}
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: onlyFixed ? 'var(--primary-50)' : 'var(--neutral-0)',
+                        color: onlyFixed ? 'var(--primary-700)' : 'var(--neutral-700)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Fixe
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
+              {quickParamPicker === 'account' ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Compte</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlyJoint(false)
+                        closeQuickPicker()
+                      }}
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: !onlyJoint ? 'var(--primary-50)' : 'var(--neutral-0)',
+                        color: !onlyJoint ? 'var(--primary-700)' : 'var(--neutral-700)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Perso
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlyJoint(true)
+                        closeQuickPicker()
+                      }}
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: onlyJoint ? 'var(--primary-50)' : 'var(--neutral-0)',
+                        color: onlyJoint ? 'var(--primary-700)' : 'var(--neutral-700)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Joint
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+
       <Sheet open={showTypeSheet} title="Type" onClose={() => setShowTypeSheet(false)}>
         <div style={{ display: 'grid', gap: 8 }}>
           {FLOW_OPTIONS.map((opt) => (
@@ -754,7 +1025,7 @@ export function Flux() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowCategorySheet(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+              style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(13,13,31,0.45)' }}
             />
             <motion.div
               initial={{ y: '100%' }}
@@ -766,7 +1037,7 @@ export function Flux() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                zIndex: 61,
+                zIndex: 121,
                 width: '100%',
                 maxWidth: 420,
                 margin: '0 auto',
@@ -788,7 +1059,8 @@ export function Flux() {
                       size="sm"
                       onClick={() => {
                         setCategoryStage('parents')
-                        setSelectedCategoryId(null)
+                        if (categorySheetInParameters) setDraftSelectedCategoryId(null)
+                        else setSelectedCategoryId(null)
                       }}
                       className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0"
                     >
@@ -808,8 +1080,13 @@ export function Flux() {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedParentCategoryId(null)
-                        setSelectedCategoryId(null)
+                        if (categorySheetInParameters) {
+                          setDraftSelectedParentCategoryId(null)
+                          setDraftSelectedCategoryId(null)
+                        } else {
+                          setSelectedParentCategoryId(null)
+                          setSelectedCategoryId(null)
+                        }
                         setShowCategorySheet(false)
                       }}
                       style={{
@@ -834,8 +1111,13 @@ export function Flux() {
                         key={cat.id}
                         type="button"
                         onClick={() => {
-                          setSelectedParentCategoryId(cat.id)
-                          setSelectedCategoryId(null)
+                          if (categorySheetInParameters) {
+                            setDraftSelectedParentCategoryId(cat.id)
+                            setDraftSelectedCategoryId(null)
+                          } else {
+                            setSelectedParentCategoryId(cat.id)
+                            setSelectedCategoryId(null)
+                          }
                           setCategoryStage('children')
                         }}
                         style={{
@@ -860,7 +1142,8 @@ export function Flux() {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedCategoryId(null)
+                        if (categorySheetInParameters) setDraftSelectedCategoryId(null)
+                        else setSelectedCategoryId(null)
                         setShowCategorySheet(false)
                       }}
                       style={{
@@ -878,12 +1161,13 @@ export function Flux() {
                       <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>↺</div>
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
-                    {selectedChildren.map((sub) => (
+                    {activeSelectedChildren.map((sub) => (
                       <button
                         key={sub.id}
                         type="button"
                         onClick={() => {
-                          setSelectedCategoryId(sub.id)
+                          if (categorySheetInParameters) setDraftSelectedCategoryId(sub.id)
+                          else setSelectedCategoryId(sub.id)
                           setShowCategorySheet(false)
                         }}
                         style={{
@@ -898,7 +1182,7 @@ export function Flux() {
                           cursor: 'pointer',
                         }}
                       >
-                        <CategoryIcon categoryName={selectedParent?.name ?? sub.name} size={30} fallback={null} />
+                        <CategoryIcon categoryName={activeSelectedParent?.name ?? sub.name} size={30} fallback={null} />
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub.name}</span>
                       </button>
                     ))}
@@ -910,22 +1194,286 @@ export function Flux() {
         ) : null}
       </AnimatePresence>
 
-      <Sheet open={showAdvancedSheet} title="Filtres avances" onClose={() => setShowAdvancedSheet(false)}>
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-700)' }}>Recurrence</span>
-            <Switch value={excludeRecurring} onChange={setExcludeRecurring} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-700)' }}>Fixe / variable</span>
-            <Switch value={onlyFixed} onChange={setOnlyFixed} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-700)' }}>Compte principal / joint</span>
-            <Switch value={onlyJoint} onChange={setOnlyJoint} />
-          </div>
-        </div>
-      </Sheet>
+      <AnimatePresence>
+        {showAdvancedSheet ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeParametersModal}
+              style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.52)' }}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+              style={{
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 81,
+                width: '100%',
+                maxWidth: 430,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '24px 24px 0 0',
+                padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
+                minHeight: '52dvh',
+                maxHeight: '58dvh',
+                boxShadow: 'var(--shadow-lg)',
+                overflow: 'hidden',
+                display: 'grid',
+                gridTemplateRows: 'auto 1fr auto',
+                gap: 'var(--space-4)',
+              }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 2px', background: 'var(--neutral-200)' }} />
+
+              <div style={{ overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-4)' }}>
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCategorySheet(true)}
+                    aria-label="Choisir une catégorie"
+                    style={{
+                      width: 92,
+                      height: 92,
+                      borderRadius: 'var(--radius-full)',
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-50)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {draftCategoryLabel === 'Toutes categories'
+                      ? <CategoryIcon categoryName="Toutes catégories" size={50} fallback="💰" />
+                      : <CategoryIcon categoryName={draftCategoryLabel} size={50} fallback="💰" />}
+                  </button>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    {draftCategoryLabel}
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                  <div style={{ position: 'relative', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Type</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPeriodMiniModal(false)
+                        setShowTypeMenu((current) => !current)
+                      }}
+                      style={{
+                        marginTop: 'var(--space-2)',
+                        width: '100%',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--neutral-0)',
+                        color: 'var(--neutral-800)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>{draftTypeLabel}</span>
+                      <ChevronDown size={14} />
+                    </button>
+                    <AnimatePresence>
+                      {showTypeMenu ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 4 }}
+                          style={{
+                            position: 'absolute',
+                            top: 'calc(100% - 4px)',
+                            left: 0,
+                            right: 0,
+                            zIndex: 2,
+                            border: '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-md)',
+                            background: 'var(--neutral-0)',
+                            boxShadow: 'var(--shadow-md)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {FLOW_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setDraftFlow(opt.value)
+                                setShowTypeMenu(false)
+                              }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                background: draftFlow === opt.value ? 'var(--primary-50)' : 'var(--neutral-0)',
+                                color: draftFlow === opt.value ? 'var(--primary-700)' : 'var(--neutral-700)',
+                                fontSize: 13,
+                                fontWeight: 700,
+                                textAlign: 'left',
+                                padding: '10px 12px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Période</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTypeMenu(false)
+                        setShowPeriodMiniModal(true)
+                      }}
+                      style={{
+                        marginTop: 'var(--space-2)',
+                        width: '100%',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--neutral-0)',
+                        color: 'var(--neutral-800)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>{draftPeriodLabel}</span>
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
+                    <div style={{ marginTop: 'var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)' }}>{draftOnlyFixed ? 'Fixe' : 'Variable'}</span>
+                      <Switch value={draftOnlyFixed} onChange={setDraftOnlyFixed} />
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
+                    <div style={{ marginTop: 'var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)' }}>{draftOnlyJoint ? 'Joint' : 'Perso'}</span>
+                      <Switch value={draftOnlyJoint} onChange={setDraftOnlyJoint} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={applyParameters}
+                  style={{
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--primary-500)',
+                    color: 'var(--neutral-0)',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    padding: '10px 18px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Appliquer
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showPeriodMiniModal ? (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setShowPeriodMiniModal(false)}
+                      style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'rgba(13,13,31,0.24)' }}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      style={{
+                        position: 'absolute',
+                        left: 'var(--space-4)',
+                        right: 'var(--space-4)',
+                        top: '40%',
+                        zIndex: 4,
+                        borderRadius: 'var(--radius-xl)',
+                        border: '1px solid var(--neutral-200)',
+                        background: 'var(--neutral-0)',
+                        boxShadow: 'var(--shadow-lg)',
+                        padding: 'var(--space-4)',
+                        display: 'grid',
+                        gap: 'var(--space-3)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <SegmentedToggle
+                          left="Fixe"
+                          right="Glissant"
+                          value={draftPeriodMode === 'current' ? 'left' : 'right'}
+                          onChange={(next) => setDraftPeriodMode(next === 'left' ? 'current' : 'rolling')}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                        {[
+                          { value: 'day', label: 'Jour' },
+                          { value: 'week', label: 'Semaine' },
+                          { value: 'month', label: 'Mois' },
+                          { value: 'year', label: 'Année' },
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setDraftPeriod(option.value as PeriodFilter)
+                              setShowPeriodMiniModal(false)
+                            }}
+                            style={{
+                              border: '1px solid var(--neutral-200)',
+                              borderRadius: 'var(--radius-md)',
+                              background: draftPeriod === option.value ? 'var(--primary-50)' : 'var(--neutral-0)',
+                              color: draftPeriod === option.value ? 'var(--primary-700)' : 'var(--neutral-700)',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              padding: '9px 6px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
 
       <TransactionDetailsModal
         transaction={detailsTxn}

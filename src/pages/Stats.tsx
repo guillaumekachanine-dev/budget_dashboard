@@ -31,7 +31,7 @@ export function Stats() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
-      <PageHeader />
+      <PageHeader title="Stats" actionDisabled />
 
       <HeroSection
         bgColor="var(--color-success)"

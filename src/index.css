@@ -138,6 +138,8 @@
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     min-height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -151,10 +153,14 @@
     line-height: 1.5;
     margin: 0;
     min-height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   #root {
     min-height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -271,6 +277,7 @@
     margin: 0 auto;
     background: var(--neutral-50);
     padding-top: var(--safe-top-offset);
+    overflow-x: clip;
   }
 
   .pb-nav {
@@ -289,6 +296,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

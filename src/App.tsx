@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
@@ -22,6 +22,11 @@ function RouteFallback() {
 export default function App() {
   const { user, loading } = useAuth()
   const [modalOpen, setModalOpen] = useState(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [location.pathname, location.search])
 
   useEffect(() => {
     if (!user) return

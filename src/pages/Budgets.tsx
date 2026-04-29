@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Search, ChevronDown } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -22,10 +22,11 @@ import { getCurrentPeriod, formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
 import { readOfflineValue, writeOfflineValue } from '@/lib/offlineStorage'
-import type { Category, Transaction } from '@/lib/types'
+import type { Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Button } from '@/components'
 
 type PeriodKey = 'mois' | 'annee'
 type SubCatTrend = 'up' | 'down' | 'equal'
@@ -145,123 +146,6 @@ function accentFromLabel(label: string): string {
   let hash = 0
   for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
   return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
-}
-
-interface CatItem {
-  id: string
-  name: string
-  icon_name: string | null
-  color_token: string | null
-}
-
-const ALL_ITEM: CatItem = { id: 'all', name: 'Toutes', icon_name: null, color_token: null }
-
-interface CategorySheetProps {
-  open: boolean
-  selectedId: string
-  categories: Category[]
-  onClose: () => void
-  onSelect: (id: string) => void
-}
-
-function CategorySheet({ open, selectedId, categories, onClose, onSelect }: CategorySheetProps) {
-  const items: CatItem[] = useMemo(
-    () => [ALL_ITEM, ...categories.map((c) => ({ id: c.id, name: c.name, icon_name: c.icon_name, color_token: c.color_token }))],
-    [categories],
-  )
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            key="cat-bd"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(13,13,31,0.52)', backdropFilter: 'blur(3px)' }}
-          />
-          <motion.div
-            key="cat-sh"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            style={{
-              position: 'fixed',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 101,
-              background: 'var(--neutral-50)',
-              borderRadius: '28px 28px 0 0',
-              padding: '0 20px 52px',
-              maxWidth: 512,
-              margin: '0 auto',
-              maxHeight: '82dvh',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--neutral-300)', margin: '12px auto 0', flexShrink: 0 }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0 22px', position: 'sticky', top: 0, background: 'var(--neutral-50)', zIndex: 1 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--neutral-800)' }}>Catégorie</h3>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--neutral-400)' }}>Sélectionne une catégorie à analyser</p>
-              </div>
-              <button type="button" aria-label="Fermer" onClick={onClose} style={{ minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: '50%', background: 'var(--neutral-100)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <X size={15} color="var(--neutral-500)" />
-              </button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px 6px' }}>
-              {items.map((cat) => {
-                const isSelected = cat.id === selectedId
-                return (
-                  <motion.button
-                    key={cat.id}
-                    whileTap={{ scale: 0.88 }}
-                    onClick={() => {
-                      onSelect(cat.id)
-                      onClose()
-                    }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 8,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '4px 2px',
-                      WebkitTapHighlightColor: 'transparent',
-                    }}
-                  >
-                    <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {cat.id === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={34} fallback="💰" /> : <CategoryIcon categoryName={cat.name} size={30} fallback="💰" />}
-                    </div>
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: isSelected ? 700 : 500,
-                      textAlign: 'center',
-                      lineHeight: 1.25,
-                      maxWidth: 72,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: isSelected ? 'var(--primary-500)' : 'var(--neutral-600)',
-                      fontFamily: 'var(--font-sans)',
-                    }}>
-                      {cat.name}
-                    </span>
-                  </motion.button>
-                )
-              })}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
 }
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number }> }) {
@@ -408,6 +292,12 @@ export function Budgets() {
     else nextParams.set('category', nextCategoryId)
     setSearchParams(nextParams, { replace: true })
   }, [searchParams, setSearchParams])
+
+  const handleHeaderTitleReset = useCallback(() => {
+    setSelectedCat('all')
+    setPeriodKey('mois')
+    setShowCatSheet(false)
+  }, [setSelectedCat])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -744,6 +634,13 @@ export function Budgets() {
   const subCategoryModalTitle = selectedSubCategory ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey)}` : ''
 
   const slideCount = 4
+  const slideTitles = [
+    'Répartition par catégorie',
+    'Évolutions 6 derniers mois',
+    'Revenus / Dépenses / Épargne',
+    "Scénarios d'optimisation",
+  ] as const
+  const optimizationTableColumns = 'minmax(0,1.2fr) minmax(0,0.62fr) minmax(0,0.84fr) minmax(0,0.84fr)'
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
@@ -857,14 +754,21 @@ export function Budgets() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
-      <PageHeader title="Budgets" />
+      <PageHeader
+        title="Budgets"
+        titleAriaLabel="Réinitialiser sur toutes catégories et période mois"
+        onTitleClick={handleHeaderTitleReset}
+        actionIcon={
+          selectedCat === 'all'
+            ? <Search size={24} />
+            : <CategoryIcon categoryName={selectedCatInfo?.name} size={28} fallback="💰" />
+        }
+        actionAriaLabel="Choisir une catégorie"
+        onActionClick={() => setShowCatSheet(true)}
+      />
 
       <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
-          <button type="button" onClick={() => setShowCatSheet(true)} style={{ border: '2px solid var(--primary-500)', background: 'var(--primary-50)', borderRadius: 'var(--radius-full)', width: 102, height: 102, padding: 0, cursor: 'pointer', color: 'var(--primary-500)', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform var(--transition-base), box-shadow var(--transition-base)', boxShadow: 'var(--shadow-sm)' }} aria-label="Choisir une catégorie">
-            {selectedCat === 'all' ? <CategoryIcon categoryName="Toutes catégories" size={62} fallback="💰" /> : <CategoryIcon categoryName={selectedCatInfo?.name} size={62} fallback="💰" />}
-          </button>
-
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
             <button type="button" onClick={() => setPeriodKey('mois')} style={{ border: '1px solid var(--neutral-200)', background: periodKey === 'mois' ? 'var(--primary-50)' : 'var(--neutral-0)', color: periodKey === 'mois' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
               {monthModeLabel}
@@ -877,11 +781,10 @@ export function Budgets() {
         </div>
       </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Répartition par catégorie</p>
               <div ref={donutAreaRef} style={{ position: 'relative', height: 336 }}>
                 {selectedDonutSlice ? (
                   <div ref={donutTooltipRef} style={{ position: 'absolute', top: 'var(--space-2)', left: '50%', transform: 'translateX(-50%)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', boxShadow: 'var(--shadow-md)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', zIndex: 3, minWidth: 220, textAlign: 'center' }}>
@@ -956,7 +859,6 @@ export function Budgets() {
             </div>
 
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Évolutions 6 derniers mois</p>
               <div style={{ height: 332 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
@@ -979,8 +881,6 @@ export function Budgets() {
             </div>
 
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Revenus / Dépenses / Épargne</p>
-
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--space-4)' }}>
                 <div style={{ height: 210 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1008,9 +908,8 @@ export function Budgets() {
             </div>
 
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>Scénarios d'optimisation</p>
               <div style={{ width: '100%' }}>
-                <div style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,0.75fr) minmax(0,0.95fr) minmax(0,0.95fr)', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
+                <div style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: 'var(--space-2) 0' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Enveloppe</span>
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
@@ -1020,7 +919,7 @@ export function Budgets() {
                 {optimizationScenarios.length === 0 ? (
                   <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
                 ) : optimizationScenarios.map((scenario) => (
-                  <div key={scenario.id} style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,0.75fr) minmax(0,0.95fr) minmax(0,0.95fr)', gap: 'var(--space-2)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+                  <div key={scenario.id} style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
                     <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
                     <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
                     <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.monthlyImpact)}`}</span>
@@ -1031,6 +930,10 @@ export function Budgets() {
             </div>
           </div>
         </div>
+
+        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
+          {slideTitles[activeSlide]}
+        </p>
 
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
           {Array.from({ length: slideCount }).map((_, idx) => (
@@ -1067,7 +970,7 @@ export function Budgets() {
         </div>
       </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-6) var(--space-4) 0' }}>
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingBottom: 'var(--space-4)' }}>
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
             {selectedCat === 'all' ? 'Consommé VS restant par catégorie' : 'Liste sous-catégories'}
@@ -1147,7 +1050,101 @@ export function Budgets() {
         onClose={handleCloseTransactionDetails}
       />
 
-      <CategorySheet open={showCatSheet} selectedId={selectedCat} categories={rootExpenseCategories} onClose={() => setShowCatSheet(false)} onSelect={setSelectedCat} />
+      <AnimatePresence>
+        {showCatSheet ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCatSheet(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              style={{
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 61,
+                width: '100%',
+                maxWidth: 420,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '20px 20px 0 0',
+                padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
+                maxHeight: 'calc(100dvh - 12px)',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 12px', background: 'var(--neutral-200)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Categorie</p>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatSheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
+                  <ChevronDown size={16} />
+                </Button>
+              </div>
+
+              <div style={{ overflowY: 'auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCat('all')
+                      setShowCatSheet(false)
+                    }}
+                    style={{
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '10px 8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
+                      <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
+                  </button>
+                  {rootExpenseCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCat(cat.id)
+                        setShowCatSheet(false)
+                      }}
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        background: 'var(--neutral-0)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '10px 8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

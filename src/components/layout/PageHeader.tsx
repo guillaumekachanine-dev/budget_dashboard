@@ -1,81 +1,156 @@
-import { Settings } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 type PageHeaderProps = {
-  onSettingsClick?: () => void
-  title?: string
+  title: string
+  titleAriaLabel?: string
+  onTitleClick?: () => void
+  centerLabel?: string
+  rightLabel?: string
+  actionIcon?: ReactNode
+  actionAriaLabel?: string
+  onActionClick?: () => void
+  actionDisabled?: boolean
 }
 
-export function PageHeader({ onSettingsClick, title }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  titleAriaLabel,
+  onTitleClick,
+  centerLabel,
+  rightLabel,
+  actionIcon,
+  actionAriaLabel = 'Action',
+  onActionClick,
+  actionDisabled = false,
+}: PageHeaderProps) {
+  const triggerAction = () => {
+    if (actionDisabled || !onActionClick) return
+    onActionClick()
+  }
+
   return (
     <header
       style={{
-        borderBottom: '1px solid var(--neutral-200)',
-        padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--neutral-0)',
+        padding: 'var(--space-3) var(--space-6) var(--space-5)',
+        background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+        borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
+        position: 'relative',
+        zIndex: 80,
+        isolation: 'isolate',
+        overflow: 'visible',
+        marginBottom: 'var(--space-8)',
       }}
     >
       <div
         style={{
           maxWidth: 600,
           margin: '0 auto',
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-3)',
-          minHeight: 32,
+          justifyContent: 'flex-start',
+          minHeight: 'calc(var(--space-6) + var(--space-1))',
         }}
       >
-        {title ? (
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-2xl)',
-              lineHeight: 'var(--line-height-tight)',
-              fontWeight: 'var(--font-weight-extrabold)',
-              color: 'var(--neutral-900)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {title}
-          </h1>
-        ) : (
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 'var(--font-size-2xl)',
+            lineHeight: 'var(--line-height-tight)',
+            fontWeight: 'var(--font-weight-extrabold)',
+            color: 'var(--neutral-0)',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {onTitleClick ? (
+            <button
+              type="button"
+              aria-label={titleAriaLabel ?? title}
+              onClick={onTitleClick}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'inherit',
+                font: 'inherit',
+                letterSpacing: 'inherit',
+                padding: 0,
+                margin: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {title}
+            </button>
+          ) : (
+            title
+          )}
+        </h1>
+
+        {centerLabel ? (
           <p
             style={{
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
               margin: 0,
-              fontSize: 'var(--font-size-sm)',
+              fontSize: 'var(--font-size-base)',
               fontWeight: 'var(--font-weight-semibold)',
-              color: 'var(--neutral-600)',
+              color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
               textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
             }}
           >
-            Bonjour · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+            {centerLabel}
           </p>
-        )}
+        ) : null}
 
+        {rightLabel ? (
+          <p
+            style={{
+              position: 'absolute',
+              right: 0,
+              margin: 0,
+              fontSize: 'var(--font-size-base)',
+              fontWeight: 'var(--font-weight-semibold)',
+              color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
+              textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {rightLabel}
+          </p>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          bottom: 0,
+          transform: 'translate(-50%, 50%)',
+          zIndex: 81,
+        }}
+      >
         <button
           type="button"
-          aria-label="Paramètres"
-          onClick={onSettingsClick}
+          aria-label={actionAriaLabel}
+          onClick={triggerAction}
+          disabled={actionDisabled}
           style={{
-            border: 'none',
-            background: 'transparent',
-            minWidth: 'var(--touch-target-min)',
-            minHeight: 'var(--touch-target-min)',
+            width: 'var(--space-16)',
+            height: 'var(--space-16)',
+            borderRadius: 'var(--radius-full)',
+            border: '2px solid color-mix(in oklab, var(--neutral-0) 58%, var(--primary-200) 42%)',
+            background: 'var(--neutral-200)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--neutral-600)',
-            cursor: 'pointer',
-            transition: 'color var(--transition-fast)',
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.color = 'var(--primary-500)'
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.color = 'var(--neutral-600)'
+            color: 'var(--primary-600)',
+            boxShadow: 'var(--shadow-fab)',
+            cursor: actionDisabled ? 'default' : 'pointer',
+            transition: 'transform var(--transition-base), box-shadow var(--transition-base)',
           }}
         >
-          <Settings size={20} />
+          {actionIcon ?? null}
         </button>
       </div>
     </header>

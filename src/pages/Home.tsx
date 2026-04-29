@@ -1,5 +1,7 @@
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { List, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -19,7 +21,12 @@ import {
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
-import geminiIcon from '@/assets/icons_app/gemini-svg.svg'
+import { PageHeader } from '@/components/layout/PageHeader'
+import comptePrincipalIcon from '@/assets/bank_account_icons/Compte_principal_banque_populaire.png'
+import compteJointIcon from '@/assets/bank_account_icons/banque_postale_compte_joint.png'
+import peaIcon from '@/assets/bank_account_icons/Boursorama_PEA .png'
+import percolIcon from '@/assets/bank_account_icons/Amundi_Epargne.png'
+import cryptoIcon from '@/assets/bank_account_icons/bitcoin.png'
 
 function formatMoneyInteger(amount: number): string {
   if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
@@ -35,6 +42,37 @@ function formatMoneyInteger(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.floor(amount))
+}
+
+type HomeAccountPreset = {
+  id: string
+  label: string
+  iconSrc: string
+  keywords: string[]
+  missing?: boolean
+}
+
+type HomeAccountEntry = {
+  preset: HomeAccountPreset
+  account: AccountWithBalance | null
+}
+
+const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
+  { id: 'compte_principal', label: 'Compte principal', iconSrc: comptePrincipalIcon, keywords: ['compte principal', 'courant principal', 'principal'] },
+  { id: 'compte_joint', label: 'Compte joint', iconSrc: compteJointIcon, keywords: ['compte joint', 'joint'] },
+  { id: 'livret_a', label: 'Livret A', iconSrc: comptePrincipalIcon, keywords: ['livret a'] },
+  { id: 'ldds', label: 'LDDS', iconSrc: comptePrincipalIcon, keywords: ['ldds'] },
+  { id: 'per', label: 'PER', iconSrc: comptePrincipalIcon, keywords: ['per'] },
+  { id: 'pea', label: 'PEA', iconSrc: peaIcon, keywords: ['pea'] },
+  { id: 'epargne_percol', label: 'Epargne PERCOL', iconSrc: percolIcon, keywords: ['percol', 'amundi'] },
+  { id: 'compte_crypto', label: 'Compte crypto', iconSrc: cryptoIcon, keywords: ['crypto', 'bitcoin'], missing: true },
+]
+
+function normalizeLabel(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
 }
 
 export function Home() {
@@ -135,16 +173,58 @@ export function Home() {
       .slice(0, 6)
   }, [summaries])
 
-  const selectedAccount = useMemo<AccountWithBalance | null>(() => {
-    if (!accounts?.length) return null
-    return (
-      accounts.find((a) => a.name === 'Compte courant principal') ??
-      accounts.find((a) => a.account_type === 'checking' && a.name.toLowerCase().includes('principal')) ??
-      accounts.find((a) => a.account_type === 'checking') ??
-      accounts[0] ??
-      null
-    )
+  const accountEntries = useMemo<HomeAccountEntry[]>(() => {
+    const source = accounts ?? []
+    return HOME_ACCOUNT_PRESETS.map((preset) => {
+      const matched = source.find((account) => {
+        const haystack = `${account.name} ${account.institution_name ?? ''}`
+        const normalized = normalizeLabel(haystack)
+        return preset.keywords.some((keyword) => normalized.includes(normalizeLabel(keyword)))
+      })
+      return { preset, account: matched ?? null }
+    })
   }, [accounts])
+
+  const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(null)
+  const [showAccountsModal, setShowAccountsModal] = useState(false)
+
+  useEffect(() => {
+    if (!accountEntries.length) {
+      setSelectedAccountPresetId(null)
+      return
+    }
+    setSelectedAccountPresetId((current) => {
+      if (current && accountEntries.some((entry) => entry.preset.id === current)) return current
+      return accountEntries[0].preset.id
+    })
+  }, [accountEntries])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (!showAccountsModal) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [showAccountsModal])
+
+  const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
+    if (!accountEntries.length) return null
+    if (!selectedAccountPresetId) return accountEntries[0]
+    return accountEntries.find((entry) => entry.preset.id === selectedAccountPresetId) ?? accountEntries[0]
+  }, [accountEntries, selectedAccountPresetId])
+
+  const selectedAccount = selectedAccountEntry?.account ?? null
+
+  const handleOpenAccountsModal = useCallback(() => {
+    setShowAccountsModal(true)
+  }, [])
+
+  const handleSelectAccountPreset = useCallback((presetId: string) => {
+    setSelectedAccountPresetId(presetId)
+    setShowAccountsModal(false)
+  }, [])
 
   const heroMetrics = useMemo(
     () => [
@@ -179,70 +259,13 @@ export function Home() {
         paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))',
       }}
     >
-      <motion.header
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        style={{
-          borderBottom: '1px solid var(--neutral-200)',
-          padding: 'var(--space-4) var(--space-6)',
-        }}
-      >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 'var(--font-size-2xl)',
-                lineHeight: 'var(--line-height-tight)',
-                fontWeight: 'var(--font-weight-extrabold)',
-                color: 'var(--neutral-900)',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              Accueil
-            </h1>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--neutral-500)', textTransform: 'capitalize' }}>
-              {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Profil utilisateur"
-            onClick={() => {}}
-            style={{
-              border: '1px solid var(--neutral-200)',
-              background: 'var(--neutral-0)',
-              borderRadius: 'var(--radius-full)',
-              minWidth: 'var(--touch-target-min)',
-              minHeight: 'var(--touch-target-min)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--neutral-600)',
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-sm)',
-              transition: 'transform var(--transition-fast), box-shadow var(--transition-fast)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
-            }}
-          >
-            <img
-              src={geminiIcon}
-              alt=""
-              aria-hidden="true"
-              style={{ width: 18, height: 18, borderRadius: 'var(--radius-full)' }}
-            />
-          </button>
-        </div>
-      </motion.header>
+      <PageHeader
+        title="Accueil"
+        rightLabel={new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })}
+        actionIcon={<List size={24} />}
+        actionAriaLabel="Changer de compte"
+        onActionClick={handleOpenAccountsModal}
+      />
 
       <motion.section
         initial={{ opacity: 0, y: 10 }}
@@ -257,21 +280,9 @@ export function Home() {
               gap: 'var(--space-1)',
               justifyItems: 'center',
               textAlign: 'center',
-              marginBottom: 'var(--space-4)',
+              marginBottom: 'var(--space-2)',
             }}
           >
-            <p
-              style={{
-                margin: 0,
-                fontSize: 'var(--font-size-xs)',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-                color: 'var(--primary-600)',
-              }}
-            >
-              Solde compte courant
-            </p>
             <p
               style={{
                 margin: 0,
@@ -488,6 +499,107 @@ export function Home() {
           )}
         </div>
       </motion.section>
+
+      {typeof document !== 'undefined'
+        ? createPortal(
+          <AnimatePresence>
+            {showAccountsModal ? (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(13,13,31,0.52)', backdropFilter: 'blur(2px)' }}
+                />
+                <motion.div
+                  initial={{ y: '-100%', opacity: 0 }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '-100%', opacity: 0 }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+                  style={{
+                    position: 'fixed',
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    zIndex: 501,
+                    width: '100%',
+                    maxWidth: 430,
+                    margin: '0 auto',
+                    background: 'var(--neutral-0)',
+                    borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                    padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                    boxShadow: 'var(--shadow-lg)',
+                    maxHeight: '78dvh',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-4)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                      Sélectionner un compte
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Fermer"
+                      onClick={() => setShowAccountsModal(false)}
+                      style={{
+                        border: 'none',
+                        background: 'var(--neutral-100)',
+                        color: 'var(--neutral-600)',
+                        minWidth: 'var(--touch-target-min)',
+                        minHeight: 'var(--touch-target-min)',
+                        borderRadius: 'var(--radius-full)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-5) var(--space-2)' }}>
+                    {accountEntries.map((entry) => {
+                      const isActive = entry.preset.id === selectedAccountEntry?.preset.id
+                      return (
+                        <button
+                          key={entry.preset.id}
+                          type="button"
+                          onClick={() => handleSelectAccountPreset(entry.preset.id)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            cursor: 'pointer',
+                            display: 'grid',
+                            justifyItems: 'center',
+                            gap: 'var(--space-2)',
+                          }}
+                        >
+                          <img
+                            src={entry.preset.iconSrc}
+                            alt={entry.preset.label}
+                            width={56}
+                            height={56}
+                            style={{ width: 56, height: 56, objectFit: 'contain' }}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <span style={{ fontSize: 10, lineHeight: 1.3, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
+                            {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              </>
+            ) : null}
+          </AnimatePresence>,
+          document.body,
+        )
+        : null}
     </div>
   )
 }
