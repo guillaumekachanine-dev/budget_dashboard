@@ -94,9 +94,9 @@ const rootStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   zIndex: 50,
-  maxWidth: 600,
+  maxWidth: 430,
   margin: '0 auto',
-  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+  paddingBottom: 'var(--safe-bottom-offset)',
 }
 
 const navStyle: CSSProperties = {

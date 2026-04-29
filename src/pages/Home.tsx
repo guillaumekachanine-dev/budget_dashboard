@@ -176,7 +176,7 @@ export function Home() {
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-8)',
-        paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))',
       }}
     >
       <motion.header

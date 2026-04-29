@@ -192,7 +192,7 @@ function Sheet({
               margin: '0 auto',
               background: 'var(--neutral-0)',
               borderRadius: '20px 20px 0 0',
-              padding: '12px var(--space-6) calc(var(--space-6) + env(safe-area-inset-bottom, 0px))',
+              padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
               maxHeight: 'calc(100dvh - 12px)',
               boxShadow: 'var(--shadow-lg)',
               overflow: 'hidden',
@@ -401,7 +401,7 @@ export function Flux() {
   }, [filtered.length, flow, periodDateLabel])
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader title="Flux" />
 
       <motion.section
@@ -772,7 +772,7 @@ export function Flux() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '20px 20px 0 0',
-                padding: '12px var(--space-6) calc(var(--space-6) + env(safe-area-inset-bottom, 0px))',
+                padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
                 maxHeight: 'calc(100dvh - 12px)',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',

@@ -5,6 +5,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App'
 
+if (typeof window !== 'undefined') {
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+
+  document.documentElement.dataset.standalone = isStandalone ? 'true' : 'false'
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

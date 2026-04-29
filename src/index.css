@@ -125,6 +125,8 @@
   --touch-gap-min: 8px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top-offset: 0px;
+  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
   --nav-height: 90px;
 }
 
@@ -135,6 +137,7 @@
     overscroll-behavior: none;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
+    min-height: 100%;
   }
 
   body {
@@ -146,6 +149,12 @@
     -moz-osx-font-smoothing: grayscale;
     font-size: 16px;
     line-height: 1.5;
+    margin: 0;
+    min-height: 100%;
+  }
+
+  #root {
+    min-height: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -255,15 +264,17 @@
   }
 
   .app-shell {
+    min-height: 100svh;
     min-height: 100dvh;
     width: 100%;
-    max-width: 600px;
+    max-width: 430px;
     margin: 0 auto;
     background: var(--neutral-50);
+    padding-top: var(--safe-top-offset);
   }
 
   .pb-nav {
-    padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
+    padding-bottom: calc(var(--nav-height) + var(--safe-bottom-offset));
   }
 
   .tap-target {
@@ -297,6 +308,18 @@
       transform: translateY(0);
     }
   }
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  :root {
+    --safe-top-offset: max(var(--safe-top), 6px);
+    --safe-bottom-offset: max(var(--safe-bottom), 12px);
+  }
+}
+
+html[data-standalone='true'] {
+  --safe-top-offset: max(var(--safe-top), 6px);
+  --safe-bottom-offset: max(var(--safe-bottom), 12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
