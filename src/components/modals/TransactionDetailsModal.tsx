@@ -208,8 +208,8 @@ export function TransactionDetailsModal({
                   aria-label="Fermer"
                   onClick={onClose}
                   style={{
-                    width: 36,
-                    height: 36,
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
                     borderRadius: 'var(--radius-full)',
                     border: '1px solid var(--neutral-200)',
                     background: 'var(--neutral-0)',
@@ -265,8 +265,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(previousTxn)}
                       disabled={!previousTxn}
                       style={{
-                        width: 40,
-                        height: 40,
+                        minWidth: 'var(--touch-target-min)',
+                        minHeight: 'var(--touch-target-min)',
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: previousTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
@@ -300,8 +300,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(nextTxn)}
                       disabled={!nextTxn}
                       style={{
-                        width: 40,
-                        height: 40,
+                        minWidth: 'var(--touch-target-min)',
+                        minHeight: 'var(--touch-target-min)',
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: nextTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',

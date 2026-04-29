@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -21,6 +21,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { getCurrentPeriod, formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
+import { readOfflineValue, writeOfflineValue } from '@/lib/offlineStorage'
 import type { Category, Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
@@ -68,6 +69,31 @@ interface DonutCallout {
   textAnchor: 'start' | 'end'
 }
 
+type PieInteractionPayload = Partial<PieDatum> & { payload?: Partial<PieDatum> }
+
+interface PieLabelProps {
+  payload?: PieDatum
+  cx?: number
+  cy?: number
+  midAngle?: number
+  innerRadius?: number
+  outerRadius?: number
+}
+
+interface LabelListContentProps {
+  x?: number
+  y?: number
+  width?: number
+  payload?: MonthlyBucket
+}
+
+interface BudgetsUiPrefs {
+  periodKey: PeriodKey
+  activeSlide: number
+}
+
+const BUDGETS_UI_PREFS_KEY = 'budget-dashboard:budgets-ui-prefs'
+
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -85,6 +111,13 @@ function formatTxDateDayMonth(dateStr: string): string {
 
 function txLabel(tx: Transaction): string {
   return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
+}
+
+function extractPiePayload(slice: unknown): Partial<PieDatum> | null {
+  if (!slice || typeof slice !== 'object') return null
+  const source = slice as PieInteractionPayload
+  if (source.payload && typeof source.payload === 'object') return source.payload
+  return source
 }
 
 function getPeriodRange(key: PeriodKey): { startDate: string; endDate: string } {
@@ -176,7 +209,7 @@ function CategorySheet({ open, selectedId, categories, onClose, onSelect }: Cate
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--neutral-800)' }}>Catégorie</h3>
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--neutral-400)' }}>Sélectionne une catégorie à analyser</p>
               </div>
-              <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--neutral-100)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <button type="button" aria-label="Fermer" onClick={onClose} style={{ minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: '50%', background: 'var(--neutral-100)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <X size={15} color="var(--neutral-500)" />
               </button>
             </div>
@@ -273,7 +306,7 @@ function SubCategoryTransactionsModal({
           >
             <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{title}</p>
-              <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 32, height: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+              <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                 <X size={15} />
               </button>
             </div>
@@ -349,12 +382,32 @@ export function Budgets() {
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
 
-  const setSelectedCat = (nextCategoryId: string) => {
+  useEffect(() => {
+    let mounted = true
+    void readOfflineValue<BudgetsUiPrefs>(BUDGETS_UI_PREFS_KEY).then((prefs) => {
+      if (!mounted || !prefs) return
+      if (prefs.periodKey === 'mois' || prefs.periodKey === 'annee') {
+        setPeriodKey(prefs.periodKey)
+      }
+      if (Number.isInteger(prefs.activeSlide) && prefs.activeSlide >= 0 && prefs.activeSlide < 4) {
+        setActiveSlide(prefs.activeSlide)
+      }
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    void writeOfflineValue<BudgetsUiPrefs>(BUDGETS_UI_PREFS_KEY, { periodKey, activeSlide })
+  }, [periodKey, activeSlide])
+
+  const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
     if (nextCategoryId === 'all') nextParams.delete('category')
     else nextParams.set('category', nextCategoryId)
     setSearchParams(nextParams, { replace: true })
-  }
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -395,7 +448,7 @@ export function Budgets() {
     if (!categoryById.has(selectedCat)) {
       setSelectedCat('all')
     }
-  }, [selectedCat, categoryById, categoriesFetched])
+  }, [selectedCat, categoryById, categoriesFetched, setSelectedCat])
 
   const range = useMemo(() => getPeriodRange(periodKey), [periodKey])
 
@@ -695,13 +748,13 @@ export function Budgets() {
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
 
-  const handlePointerDown = (event: any) => {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStartXRef.current = event.clientX
     dragDeltaXRef.current = 0
     setIsDragging(true)
   }
 
-  const handlePointerMove = (event: any) => {
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragStartXRef.current == null) return
     dragDeltaXRef.current = event.clientX - dragStartXRef.current
   }
@@ -850,14 +903,20 @@ export function Budgets() {
                 ) : null}
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="54%" innerRadius={86} outerRadius={136} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: any) => {
-                      const payload = slice?.payload ?? slice
-                      setSelectedDonutSlice({ id: String(payload?.id ?? 'slice'), name: String(payload?.name ?? 'Catégorie'), value: Number(payload?.value ?? 0), color: String(payload?.color ?? 'var(--primary-500)') })
-                    }} labelLine={false} label={(props: any) => {
+                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="54%" innerRadius={86} outerRadius={136} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: unknown) => {
+                      const payload = extractPiePayload(slice)
+                      setSelectedDonutSlice({
+                        id: String(payload?.id ?? 'slice'),
+                        name: String(payload?.name ?? 'Catégorie'),
+                        value: Number(payload?.value ?? 0),
+                        color: String(payload?.color ?? 'var(--primary-500)'),
+                      })
+                    }} labelLine={false} label={(props: unknown) => {
                       if (selectedCat !== 'all') return null
-                      const payload = props?.payload as PieDatum | undefined
+                      const labelProps = (props ?? {}) as PieLabelProps
+                      const payload = labelProps.payload
                       if (!payload || pieTotal <= 0) return null
-                      const { cx, cy, midAngle, innerRadius, outerRadius } = props
+                      const { cx, cy, midAngle, innerRadius, outerRadius } = labelProps
                       if (typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof innerRadius !== 'number' || typeof outerRadius !== 'number') return null
                       const pct = (payload.value / pieTotal) * 100
                       if (pct < 8) return null
@@ -906,9 +965,9 @@ export function Budgets() {
                     <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                     <ReferenceLine y={totalMonthlyBudget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                     <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                      <LabelList dataKey="amount" position="top" offset={8} content={(props: any) => {
-                        const { x, y, width, payload } = props
-                        const item = payload as MonthlyBucket | undefined
+                      <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                        const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                        const item = payload
                         if (!item || item.isCurrent || x == null || y == null || width == null) return null
                         return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
                       }} />
@@ -926,8 +985,8 @@ export function Budgets() {
                 <div style={{ height: 210 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={incomeExpenseSavingsData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={2} onClick={(slice: any) => {
-                        const payload = slice?.payload ?? slice
+                      <Pie data={incomeExpenseSavingsData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={2} onClick={(slice: unknown) => {
+                        const payload = extractPiePayload(slice)
                         setActiveIncomeExpenseSlice(String(payload?.id ?? null))
                       }}>
                         {incomeExpenseSavingsData.map((entry) => {
@@ -975,7 +1034,35 @@ export function Budgets() {
 
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
           {Array.from({ length: slideCount }).map((_, idx) => (
-            <button key={idx} type="button" onClick={() => goToSlide(idx)} aria-label={`Aller au graphique ${idx + 1}`} style={{ width: idx === activeSlide ? 14 : 8, height: idx === activeSlide ? 14 : 8, borderRadius: 'var(--radius-full)', border: 'none', padding: 0, background: idx === activeSlide ? 'var(--primary-500)' : 'var(--neutral-300)', cursor: 'pointer', transition: 'all var(--transition-base)' }} />
+            <button
+              key={idx}
+              type="button"
+              onClick={() => goToSlide(idx)}
+              aria-label={`Aller au graphique ${idx + 1}`}
+              style={{
+                minWidth: 'var(--touch-target-min)',
+                minHeight: 'var(--touch-target-min)',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                padding: 0,
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all var(--transition-base)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: idx === activeSlide ? 14 : 8,
+                  height: idx === activeSlide ? 14 : 8,
+                  borderRadius: 'var(--radius-full)',
+                  background: idx === activeSlide ? 'var(--primary-500)' : 'var(--neutral-300)',
+                }}
+              />
+            </button>
           ))}
         </div>
       </motion.section>

@@ -7,16 +7,7 @@ export async function debugBudgetSupabaseConnection(
   supabase: SupabaseClient<Database, 'budget_dashboard'>,
 ) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-
-  console.log('[BUDGET DEBUG] sessionData:', sessionData)
-  console.log('[BUDGET DEBUG] sessionError:', sessionError)
-
   const { data: userData, error: userError } = await supabase.auth.getUser()
-
-  console.log('[BUDGET DEBUG] auth user:', userData?.user)
-  console.log('[BUDGET DEBUG] auth user id:', userData?.user?.id)
-  console.log('[BUDGET DEBUG] auth user email:', userData?.user?.email)
-  console.log('[BUDGET DEBUG] auth error:', userError)
 
   const { data: transactions, error: transactionsError, status, statusText } = await supabase
     .schema('budget_dashboard')
@@ -25,25 +16,19 @@ export async function debugBudgetSupabaseConnection(
     .order('transaction_date', { ascending: false })
     .limit(10)
 
-  console.log('[BUDGET DEBUG] transactions:', transactions)
-  console.log('[BUDGET DEBUG] transactions count:', transactions?.length)
-  console.log('[BUDGET DEBUG] transactions error:', transactionsError)
-  console.log('[BUDGET DEBUG] transactions status:', status, statusText)
-
   const authUserId = userData?.user?.id
+  const warnings: string[] = []
+  if (!authUserId) warnings.push('No authenticated user. RLS policies using auth.uid() = user_id will return zero rows.')
 
-  if (!authUserId) {
-    console.warn('[BUDGET DEBUG] No authenticated user. RLS policies using auth.uid() = user_id will return zero rows.')
-  }
-
+  let distinctUserIds: string[] = []
+  let authUidMatchesReturnedRows = false
   if (authUserId && transactions?.length) {
-    const distinctUserIds = [...new Set((transactions as TxnUserIdRow[]).map((t) => t.user_id))]
-    console.log('[BUDGET DEBUG] distinct transaction user_ids:', distinctUserIds)
-    console.log('[BUDGET DEBUG] auth uid matches returned rows:', distinctUserIds.every((id) => id === authUserId))
+    distinctUserIds = [...new Set((transactions as TxnUserIdRow[]).map((t) => t.user_id))]
+    authUidMatchesReturnedRows = distinctUserIds.every((id) => id === authUserId)
   }
 
   if (authUserId && transactions && transactions.length === 0) {
-    console.warn('[BUDGET DEBUG] Auth user exists but no transactions returned. Likely causes: user_id mismatch in database, RLS policy issue, or no rows for this user.')
+    warnings.push('Auth user exists but no transactions returned. Likely causes: user_id mismatch in database, RLS policy issue, or no rows for this user.')
   }
 
   const referenceTables = [
@@ -55,16 +40,40 @@ export async function debugBudgetSupabaseConnection(
     'recurring_obligations',
   ]
 
+  const tableChecks: Array<{
+    table: string
+    status: number
+    statusText: string
+    rowCount: number | undefined
+    error: string | null
+  }> = []
   for (const table of referenceTables) {
     const { data, error, status: tableStatus, statusText: tableStatusText } = await supabase
       .schema('budget_dashboard')
       .from(table)
       .select('id, user_id')
       .limit(5)
+    tableChecks.push({
+      table,
+      status: tableStatus,
+      statusText: tableStatusText,
+      rowCount: data?.length,
+      error: error?.message ?? null,
+    })
+  }
 
-    console.log(`[BUDGET DEBUG] ${table} data:`, data)
-    console.log(`[BUDGET DEBUG] ${table} count:`, data?.length)
-    console.log(`[BUDGET DEBUG] ${table} error:`, error)
-    console.log(`[BUDGET DEBUG] ${table} status:`, tableStatus, tableStatusText)
+  return {
+    sessionError: sessionError?.message ?? null,
+    authUserId: authUserId ?? null,
+    authError: userError?.message ?? null,
+    transactionStatus: { status, statusText },
+    transactionError: transactionsError?.message ?? null,
+    transactionCount: transactions?.length ?? 0,
+    distinctUserIds,
+    authUidMatchesReturnedRows,
+    tableChecks,
+    warnings,
+    sessionPresent: Boolean(sessionData?.session),
+    userEmail: userData?.user?.email ?? null,
   }
 }

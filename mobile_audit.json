@@ -1,0 +1,14 @@
+{
+  "project_type": "React Web",
+  "metrics": {
+    "structure": 100,
+    "performance": 100,
+    "testing": 100,
+    "accessibility": 100,
+    "navigation": 100,
+    "backend": 100
+  },
+  "issues": [],
+  "recommendations": [],
+  "score": 100
+}

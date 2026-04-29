@@ -201,7 +201,7 @@ function Sheet({
             <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 12px', background: 'var(--neutral-200)' }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>{title}</p>
-              <Button type="button" variant="ghost" size="sm" onClick={onClose} className="h-[34px] w-[34px] rounded-full bg-[var(--neutral-100)] px-0">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
                 <ChevronDown size={16} />
               </Button>
             </div>
@@ -461,7 +461,7 @@ export function Flux() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 34px',
+            gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 44px',
             gap: 'var(--space-2)',
             alignItems: 'center',
           }}
@@ -542,8 +542,8 @@ export function Flux() {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 34,
-              height: 28,
+              minWidth: 'var(--touch-target-min)',
+              minHeight: 'var(--touch-target-min)',
               justifySelf: 'end',
               cursor: 'pointer',
               color: 'var(--neutral-700)',
@@ -790,14 +790,14 @@ export function Flux() {
                         setCategoryStage('parents')
                         setSelectedCategoryId(null)
                       }}
-                      className="h-[34px] w-[34px] rounded-full bg-[var(--neutral-100)] px-0"
+                      className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0"
                     >
                       <ArrowLeft size={16} />
                     </Button>
                   ) : null}
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Categorie</p>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategorySheet(false)} className="h-[34px] w-[34px] rounded-full bg-[var(--neutral-100)] px-0">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategorySheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
                   <ChevronDown size={16} />
                 </Button>
               </div>

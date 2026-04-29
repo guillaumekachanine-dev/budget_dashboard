@@ -388,7 +388,7 @@ function PickerModal({
               type="button"
               aria-label="Fermer"
               onClick={onClose}
-              className="absolute right-[var(--space-5)] top-[var(--space-5)] inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border-none bg-[var(--neutral-100)] text-[var(--neutral-600)]"
+              className="absolute right-[var(--space-5)] top-[var(--space-5)] inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-none bg-[var(--neutral-100)] text-[var(--neutral-600)]"
               style={{ transition: 'opacity var(--transition-fast)' }}
             >
               <X size={20} />
@@ -894,6 +894,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-modal-title"
+            data-testid="add-transaction-modal"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -915,7 +916,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   type="button"
                   aria-label="Fermer"
                   onClick={closeAll}
-                  className="absolute right-[var(--space-3)] top-[var(--space-3)] z-[3] inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border-none bg-[rgba(255,255,255,0.16)] text-[var(--neutral-0)]"
+                  className="absolute right-[var(--space-3)] top-[var(--space-3)] z-[3] inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-none bg-[rgba(255,255,255,0.16)] text-[var(--neutral-0)]"
                   style={{ transition: 'opacity var(--transition-fast)' }}
                   onMouseEnter={(event) => {
                     event.currentTarget.style.opacity = '0.8'
@@ -938,7 +939,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     type="button"
                     onClick={openDatePicker}
                     aria-label="Modifier la date"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
                     style={{ transition: 'opacity var(--transition-fast), transform var(--transition-fast)' }}
                     onMouseEnter={(event) => {
                       event.currentTarget.style.opacity = '0.85'

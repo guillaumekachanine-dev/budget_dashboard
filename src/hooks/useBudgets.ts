@@ -28,34 +28,42 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
 
   const start = period.starts_on
   const end = period.ends_on
+  const budgetRows = (budgets as Budget[]).filter((budget) => budget.category && budget.category_id)
+  const categoryIds = budgetRows.map((budget) => budget.category_id!).filter((id): id is string => Boolean(id))
 
-  const summaries = await Promise.all(
-    (budgets as Budget[]).map(async (budget) => {
-      if (!budget.category) return null
+  const spentByCategory = new Map<string, number>()
 
-      const { data: txns, error: tErr } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('category_id', budget.category_id!)
-        .eq('flow_type', 'expense')
-        .gte('transaction_date', start)
-        .lte('transaction_date', end)
+  if (categoryIds.length > 0) {
+    const { data: txns, error: txErr } = await supabase
+      .from('transactions')
+      .select('category_id, amount')
+      .eq('flow_type', 'expense')
+      .in('category_id', categoryIds)
+      .gte('transaction_date', start)
+      .lte('transaction_date', end)
 
-      if (tErr) throw tErr
+    if (txErr) throw txErr
 
-      const spent = (txns ?? []).reduce((sum, t) => sum + Number(t.amount), 0)
-      const budgetAmount = Number(budget.amount)
-      const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0
+    for (const txn of txns ?? []) {
+      if (!txn.category_id) continue
+      const prev = spentByCategory.get(txn.category_id) ?? 0
+      spentByCategory.set(txn.category_id, prev + Number(txn.amount))
+    }
+  }
 
-      return {
-        category: budget.category!,
-        budget_amount: budgetAmount,
-        spent_amount: spent,
-        remaining: budgetAmount - spent,
-        percentage,
-      } satisfies CategoryBudgetSummary
-    })
-  )
+  const summaries = budgetRows.map((budget) => {
+    const spent = spentByCategory.get(budget.category_id!) ?? 0
+    const budgetAmount = Number(budget.amount)
+    const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0
+
+    return {
+      category: budget.category!,
+      budget_amount: budgetAmount,
+      spent_amount: spent,
+      remaining: budgetAmount - spent,
+      percentage,
+    } satisfies CategoryBudgetSummary
+  })
 
   return summaries.filter((s): s is CategoryBudgetSummary => s !== null)
     .sort((a, b) => b.percentage - a.percentage)

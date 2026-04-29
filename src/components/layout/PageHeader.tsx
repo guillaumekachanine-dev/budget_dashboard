@@ -59,8 +59,8 @@ export function PageHeader({ onSettingsClick, title }: PageHeaderProps) {
           style={{
             border: 'none',
             background: 'transparent',
-            width: 32,
-            height: 32,
+            minWidth: 'var(--touch-target-min)',
+            minHeight: 'var(--touch-target-min)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
