@@ -216,6 +216,115 @@ function resolveObligationDueDateForMonth(
   return null
 }
 
+function DriftCategoryTransactionsModal({
+  open,
+  onClose,
+  categoryId,
+  categoryName,
+  categoryTransactions,
+  loading,
+}: {
+  open: boolean
+  onClose: () => void
+  categoryId: string | null
+  categoryName: string | null
+  categoryTransactions: Array<{ id: string; transaction_date: string; merchant_name: string | null; normalized_label: string | null; raw_label: string | null; amount: number }> | null
+  loading: boolean
+}) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 221,
+              display: 'grid',
+              placeItems: 'center',
+              padding: 'var(--space-4)',
+              pointerEvents: 'none',
+            }}
+          >
+            <motion.div
+              initial={{ y: 24, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 24, opacity: 0, scale: 0.98 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              style={{
+                width: 'min(560px, 100%)',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-2xl)',
+                maxHeight: 'min(82dvh, calc(100dvh - var(--space-8)))',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-lg)',
+                pointerEvents: 'auto',
+              }}
+            >
+              <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{categoryName}</p>
+                <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+                  <X size={15} />
+                </button>
+              </div>
+              <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
+                {loading ? (
+                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
+                ) : (categoryTransactions?.length ?? 0) === 0 ? (
+                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
+                ) : (
+                  categoryTransactions?.map((tx) => {
+                    const d = new Date(`${tx.transaction_date}T00:00:00`)
+                    const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+                    const label = (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
+                    return (
+                      <button
+                        key={tx.id}
+                        type="button"
+                        style={{
+                          width: '100%',
+                          border: 'none',
+                          borderBottom: '1px solid var(--neutral-200)',
+                          padding: 'var(--space-3) var(--space-5)',
+                          display: 'grid',
+                          gridTemplateColumns: '52px minmax(0,1fr) auto',
+                          alignItems: 'center',
+                          gap: 'var(--space-3)',
+                          background: 'transparent',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          transition: 'background-color var(--transition-fast)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
+                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoneyInteger(Number(tx.amount))}</span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 export function Home() {
   const { year, month } = getCurrentPeriod()
   const { data: accounts } = useAccounts()
@@ -466,6 +575,8 @@ export function Home() {
 
   const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(null)
   const [showAccountsModal, setShowAccountsModal] = useState(false)
+  const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
+  const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -479,9 +590,9 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showAccountsModal) return
+    if (!showAccountsModal && !showDriftCategoryModal) return
     return lockDocumentScroll()
-  }, [showAccountsModal])
+  }, [showAccountsModal, showDriftCategoryModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -577,10 +688,10 @@ export function Home() {
 
   const mainCheckingHeroMetrics = useMemo(
     () => [
-      { key: 'variable-budget', label: 'Budget variable (mois)', value: formatMoneyInteger(variableBudgetMonthly) },
+      { key: 'variable-budget', label: 'Budget variable', value: formatMoneyInteger(variableBudgetMonthly) },
       { key: 'variable-spent', label: 'Variable consommé', value: formatMoneyInteger(variableSpentToDate) },
-      { key: 'reste-utile-main', label: 'Reste utile', value: formatMoneyInteger(mainAccountResteUtile) },
-      { key: 'daily-available', label: 'Disponible / jour', value: formatMoneyInteger(mainAccountDailyAvailable) },
+      { key: 'reste-utile-main', label: 'Reste utile', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
+      { key: 'daily-available', label: 'Disponible / jour', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
     ],
     [mainAccountDailyAvailable, mainAccountResteUtile, variableBudgetMonthly, variableSpentToDate],
   )
@@ -754,6 +865,17 @@ export function Home() {
     [driftCategories],
   )
 
+  const selectedDriftCategoryName = useMemo(() => {
+    if (!selectedDriftCategoryId) return null
+    return driftRows.find((r) => r.id === selectedDriftCategoryId)?.name ?? null
+  }, [selectedDriftCategoryId, driftRows])
+
+  const selectedDriftCategoryTransactions = useMemo(() => {
+    if (!selectedDriftCategoryId) return null
+    const rows = monthExpenseTxns ?? []
+    return rows.filter((t) => t.category_id === selectedDriftCategoryId)
+  }, [selectedDriftCategoryId, monthExpenseTxns])
+
   const trajectoryDeltaColor =
     deltaPct == null ? 'var(--neutral-500)' : deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
@@ -865,7 +987,7 @@ export function Home() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 'var(--font-size-xs)',
+                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
                       fontWeight: 'var(--font-weight-semibold)',
                       textTransform: 'uppercase',
                       color: 'var(--neutral-700)',
@@ -880,7 +1002,7 @@ export function Home() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 'var(--font-size-md)',
+                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
                       fontWeight: 'var(--font-weight-bold)',
                       color: 'var(--neutral-900)',
                       fontFamily: 'var(--font-mono)',
@@ -921,7 +1043,7 @@ export function Home() {
                   homeInsightsSlide === 0
                     ? 'Trajectoire · Consommé VS réel'
                     : homeInsightsSlide === 1
-                      ? 'Vision globale · Consommé par bloc'
+                      ? 'Consommé par bloc'
                       : `Catégories en dérive · ${getMonthLabel(year, month)}`
                 )
                 : isPEA
@@ -934,20 +1056,60 @@ export function Home() {
                         ? 'Évolution des intérêts · Courbe sur 10 ans'
                         : 'Trajectoire · Prévisions VS Réel'}
             </p>
-            {isMainCheckingAccount ? (
-              homeInsightsSlide === 1 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              {isMainCheckingAccount && homeInsightsSlide === 1 ? (
+                <div style={{ display: 'inline-flex', padding: 2, borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', border: '1px solid var(--neutral-200)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setHomeVisionMode('to_date')}
+                    aria-pressed={homeVisionMode === 'to_date'}
+                    style={{
+                      border: 'none',
+                      borderRadius: 'var(--radius-full)',
+                      background: homeVisionMode === 'to_date' ? 'var(--neutral-0)' : 'transparent',
+                      color: homeVisionMode === 'to_date' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                      fontSize: 10,
+                      fontWeight: 'var(--font-weight-semibold)',
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    À date
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHomeVisionMode('end_of_month')}
+                    aria-pressed={homeVisionMode === 'end_of_month'}
+                    style={{
+                      border: 'none',
+                      borderRadius: 'var(--radius-full)',
+                      background: homeVisionMode === 'end_of_month' ? 'var(--neutral-0)' : 'transparent',
+                      color: homeVisionMode === 'end_of_month' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                      fontSize: 10,
+                      fontWeight: 'var(--font-weight-semibold)',
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    Fin de mois
+                  </button>
+                </div>
+              ) : null}
+              {isMainCheckingAccount && homeInsightsSlide === 1 ? (
                 <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-semibold)', whiteSpace: 'nowrap' }}>
-                  {`${homeVisionTodayLabel} · ${daysRemaining} j restants`}
+                  {`${daysRemaining} j restants`}
                 </p>
-              ) : null
-            ) : isSavingsBooklet || isPER || isPEA ? null : (
-              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
-                {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
-              </p>
-            )}
+              ) : !isMainCheckingAccount ? null : isSavingsBooklet || isPER || isPEA ? null : (
+                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
+                  {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div style={{ height: 270 }}>
+          <div style={{ height: 420 }}>
             {isMainCheckingAccount ? (
               <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
                 <div
@@ -1002,101 +1164,59 @@ export function Home() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-3)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                       <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                        <div style={{ display: 'inline-flex', padding: 2, borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', border: '1px solid var(--neutral-200)', width: 'fit-content' }}>
-                          <button
-                            type="button"
-                            onClick={() => setHomeVisionMode('to_date')}
-                            aria-pressed={homeVisionMode === 'to_date'}
-                            style={{
-                              border: 'none',
-                              borderRadius: 'var(--radius-full)',
-                              background: homeVisionMode === 'to_date' ? 'var(--neutral-0)' : 'transparent',
-                              color: homeVisionMode === 'to_date' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                              fontSize: 11,
-                              fontWeight: 'var(--font-weight-semibold)',
-                              padding: '4px 10px',
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-sans)',
-                            }}
-                          >
-                            À date
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setHomeVisionMode('end_of_month')}
-                            aria-pressed={homeVisionMode === 'end_of_month'}
-                            style={{
-                              border: 'none',
-                              borderRadius: 'var(--radius-full)',
-                              background: homeVisionMode === 'end_of_month' ? 'var(--neutral-0)' : 'transparent',
-                              color: homeVisionMode === 'end_of_month' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                              fontSize: 11,
-                              fontWeight: 'var(--font-weight-semibold)',
-                              padding: '4px 10px',
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-sans)',
-                            }}
-                          >
-                            Fin de mois
-                          </button>
-                        </div>
-
-                        <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-                          {homeVisionRows.map((row) => {
-                            const progressWidth = `${Math.max(0, Math.min(100, row.consumedRatio)).toFixed(1)}%`
-                            return (
-                              <div
-                                key={row.id}
-                                style={{
-                                  display: 'grid',
-                                  gap: 'var(--space-1)',
-                                  paddingBottom: 'var(--space-2)',
-                                  borderBottom: '1px solid var(--neutral-150)',
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-2)' }}>
-                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-800)' }}>
-                                    {row.label}
-                                  </span>
-                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                                    {formatMoneyInteger(row.budgetAmount)}
-                                  </span>
-                                </div>
-
+                        {homeVisionRows.map((row) => {
+                          const progressWidth = `${Math.max(0, Math.min(100, row.consumedRatio)).toFixed(1)}%`
+                          return (
+                            <div
+                              key={row.id}
+                              style={{
+                                display: 'grid',
+                                gap: 'var(--space-1)',
+                                paddingBottom: 'var(--space-2)',
+                                borderBottom: '1px solid var(--neutral-100)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-1)', minHeight: 20, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 11, fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-800)', minWidth: 0 }}>
+                                  {row.label}
+                                </span>
                                 {homeVisionMode === 'end_of_month' ? (
-                                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                                    {`+${row.plannedOperationsCount} opérations planifiées : ${formatMoneyInteger(row.plannedOperationsAmount)}`}
-                                  </p>
+                                  <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {row.plannedOperationsCount} opération{row.plannedOperationsCount > 1 ? 's' : ''} planifiée{row.plannedOperationsCount > 1 ? 's' : ''}{row.plannedOperationsCount > 0 ? ` : ${formatMoneyInteger(row.plannedOperationsAmount)}` : ''}
+                                  </span>
                                 ) : null}
-
-                                <div style={{ height: 'var(--space-2)', borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                                  <div
-                                    style={{
-                                      width: progressWidth,
-                                      height: '100%',
-                                      background: row.color,
-                                      borderRadius: 'var(--radius-full)',
-                                      transition: 'width var(--transition-base)',
-                                    }}
-                                  />
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-2)' }}>
-                                  <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                                    {homeVisionMode === 'to_date'
-                                      ? `${formatMoneyInteger(row.spentToDate)} consommés`
-                                      : `${formatMoneyInteger(row.consumedAmount)} prévus`}
-                                  </span>
-                                  <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-semibold)' }}>
-                                    {`${row.consumedRatio.toFixed(0)}%`}
-                                  </span>
-                                </div>
+                                <span style={{ fontSize: 11, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', marginLeft: 'auto', flexShrink: 0 }}>
+                                  {formatMoneyInteger(row.budgetAmount)}
+                                </span>
                               </div>
-                            )
-                          })}
-                        </div>
+
+                              <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                                <div
+                                  style={{
+                                    width: progressWidth,
+                                    height: '100%',
+                                    background: row.color,
+                                    borderRadius: 'var(--radius-full)',
+                                    transition: 'width var(--transition-base)',
+                                  }}
+                                />
+                              </div>
+
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                                <span>
+                                  {homeVisionMode === 'to_date'
+                                    ? `${formatMoneyInteger(row.spentToDate)}`
+                                    : `${formatMoneyInteger(row.consumedAmount)}`}
+                                </span>
+                                <span style={{ color: 'var(--neutral-700)', fontWeight: 'var(--font-weight-semibold)' }}>
+                                  {`${row.consumedRatio.toFixed(0)}%`}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                     <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
@@ -1114,29 +1234,48 @@ export function Home() {
                             const drift = Number(row.driftPct ?? 0)
                             const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
                             return (
-                              <div
+                              <button
                                 key={row.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDriftCategoryId(row.id)
+                                  setShowDriftCategoryModal(true)
+                                }}
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: 'minmax(0,1fr) auto auto',
+                                  gridTemplateColumns: '1fr auto',
                                   alignItems: 'center',
                                   gap: 'var(--space-2)',
-                                  minHeight: 30,
-                                  padding: '2px 0',
+                                  minHeight: 40,
+                                  padding: '8px 0',
                                   borderBottom: '1px solid var(--neutral-100)',
-                                  lineHeight: 1.15,
+                                  lineHeight: 1.4,
+                                  width: '100%',
+                                  border: 'none',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  transition: 'background-color var(--transition-fast)',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent'
                                 }}
                               >
-                                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
-                                  {row.name}
-                                </span>
+                                <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center', minWidth: 0 }}>
+                                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
+                                    {row.name}
+                                  </span>
+                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                  </span>
+                                </div>
                                 <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                                   {formatMoneyInteger(Number(row.spent ?? 0))}
                                 </span>
-                                <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                                  {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                                </span>
-                              </div>
+                              </button>
                             )
                           })}
                         </div>
@@ -1400,6 +1539,18 @@ export function Home() {
           </>
         ) : null}
       </AnimatePresence>
+
+      <DriftCategoryTransactionsModal
+        open={showDriftCategoryModal}
+        onClose={() => {
+          setShowDriftCategoryModal(false)
+          setSelectedDriftCategoryId(null)
+        }}
+        categoryId={selectedDriftCategoryId}
+        categoryName={selectedDriftCategoryName}
+        categoryTransactions={selectedDriftCategoryTransactions}
+        loading={loadingSummaries}
+      />
     </div>
   )
 }
