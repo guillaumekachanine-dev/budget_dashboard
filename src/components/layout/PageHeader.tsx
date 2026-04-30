@@ -33,14 +33,14 @@ export function PageHeader({
   return (
     <header
       style={{
-        padding: 'var(--space-3) var(--space-6) var(--space-5)',
+        padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--page-gutter) var(--space-4)',
         background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
         borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
         position: 'relative',
         zIndex: 120,
         isolation: 'isolate',
         overflow: 'visible',
-        marginBottom: 'var(--space-8)',
+        marginBottom: 'var(--space-6)',
       }}
     >
       <div

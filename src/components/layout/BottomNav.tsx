@@ -94,23 +94,27 @@ const rootStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   zIndex: 50,
-  maxWidth: 430,
+  maxWidth: 'var(--page-max-width)',
   margin: '0 auto',
-  paddingBottom: 'var(--safe-bottom-offset)',
 }
 
 const navStyle: CSSProperties = {
   position: 'relative',
-  height: 72,
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
-  alignItems: 'center',
-  justifyItems: 'center',
+  minHeight: 'calc(var(--nav-base-height) + var(--safe-bottom-offset))',
+  paddingBottom: 'var(--safe-bottom-offset)',
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
   borderTop: 'none',
   borderTopLeftRadius: 'var(--radius-md)',
   borderTopRightRadius: 'var(--radius-md)',
   boxShadow: 'var(--shadow-lg)',
+}
+
+const navRowStyle: CSSProperties = {
+  height: 'var(--nav-base-height)',
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
+  alignItems: 'center',
+  justifyItems: 'center',
 }
 
 const fabBaseStyle: CSSProperties = {
@@ -139,15 +143,17 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
   return (
     <div style={rootStyle}>
       <nav style={navStyle} aria-label="Navigation principale">
-        {LEFT_ITEMS.map(({ to, icon, label }, i) => (
-          <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
-        ))}
+        <div style={navRowStyle}>
+          {LEFT_ITEMS.map(({ to, icon, label }, i) => (
+            <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
+          ))}
 
-        <div aria-hidden="true" />
+          <div aria-hidden="true" />
 
-        {RIGHT_ITEMS.map(({ to, icon, label }) => (
-          <NavItem key={to} to={to} icon={icon} label={label} />
-        ))}
+          {RIGHT_ITEMS.map(({ to, icon, label }) => (
+            <NavItem key={to} to={to} icon={icon} label={label} />
+          ))}
+        </div>
       </nav>
 
       <button

@@ -123,11 +123,16 @@
   /* MOBILE INTERACTION */
   --touch-target-min: 44px;
   --touch-gap-min: 8px;
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top-offset: 0px;
+  --safe-top-offset: env(safe-area-inset-top, 0px);
   --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
-  --nav-height: 90px;
+  --nav-height: 86px;
+  --nav-base-height: 72px;
+  --page-gutter: clamp(16px, 4.5vw, 24px);
+  --page-max-width: 430px;
 }
 
 /* ─── BASE STYLES ─────────────────────────────────────────────────── */
@@ -138,6 +143,7 @@
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     min-height: 100%;
+    height: 100%;
     width: 100%;
     overflow-x: hidden;
   }
@@ -152,13 +158,16 @@
     font-size: 16px;
     line-height: 1.5;
     margin: 0;
-    min-height: 100%;
+    min-height: 100svh;
+    min-height: 100dvh;
+    height: 100%;
     width: 100%;
     overflow-x: hidden;
   }
 
   #root {
     min-height: 100%;
+    height: 100%;
     width: 100%;
     overflow-x: hidden;
   }
@@ -272,11 +281,12 @@
   .app-shell {
     min-height: 100svh;
     min-height: 100dvh;
+    height: 100%;
     width: 100%;
-    max-width: 430px;
+    max-width: var(--page-max-width);
     margin: 0 auto;
     background: var(--neutral-50);
-    padding-top: var(--safe-top-offset);
+    padding-top: 0;
     overflow-x: clip;
   }
 
@@ -325,16 +335,18 @@
   }
 }
 
-@media (display-mode: standalone), (display-mode: fullscreen) {
+@media (max-width: 430px) {
   :root {
-    --safe-top-offset: max(var(--safe-top), 6px);
-    --safe-bottom-offset: max(var(--safe-bottom), 12px);
+    --space-6: 20px;
+    --space-8: 28px;
+    --space-16: 60px;
+    --nav-height: 84px;
   }
 }
 
 html[data-standalone='true'] {
-  --safe-top-offset: max(var(--safe-top), 6px);
-  --safe-bottom-offset: max(var(--safe-bottom), 12px);
+  --safe-top-offset: env(safe-area-inset-top, 0px);
+  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-reduced-motion: reduce) {
