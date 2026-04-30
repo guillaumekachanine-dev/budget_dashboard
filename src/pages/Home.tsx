@@ -219,14 +219,12 @@ function resolveObligationDueDateForMonth(
 function DriftCategoryTransactionsModal({
   open,
   onClose,
-  categoryId,
   categoryName,
   categoryTransactions,
   loading,
 }: {
   open: boolean
   onClose: () => void
-  categoryId: string | null
   categoryName: string | null
   categoryTransactions: Array<{ id: string; transaction_date: string; merchant_name: string | null; normalized_label: string | null; raw_label: string | null; amount: number }> | null
   loading: boolean
@@ -636,10 +634,6 @@ export function Home() {
     if (daysRemaining <= 0) return mainAccountResteUtile
     return mainAccountResteUtile / daysRemaining
   }, [daysRemaining, mainAccountResteUtile])
-
-  const homeVisionTodayLabel = useMemo(() => (
-    new Date(`${todayIso}T00:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-  ), [todayIso])
 
   const homeVisionRows = useMemo<HomeVisionBlockRow[]>(() => (
     HOME_VISION_BLOCKS.map((block) => {
@@ -1546,7 +1540,6 @@ export function Home() {
           setShowDriftCategoryModal(false)
           setSelectedDriftCategoryId(null)
         }}
-        categoryId={selectedDriftCategoryId}
         categoryName={selectedDriftCategoryName}
         categoryTransactions={selectedDriftCategoryTransactions}
         loading={loadingSummaries}
