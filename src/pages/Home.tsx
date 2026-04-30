@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -23,6 +24,9 @@ import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
+import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
+import { budgetDb } from '@/lib/supabaseBudget'
+import type { BudgetLineWithCategory } from '@/features/budget/types'
 import comptePrincipalIcon from '@/assets/bank_account_icons/Compte_principal_banque_populaire.png'
 import compteJointIcon from '@/assets/bank_account_icons/banque_postale_compte_joint.png'
 import peaIcon from '@/assets/bank_account_icons/Boursorama_PEA .png'
@@ -121,6 +125,97 @@ const PROJECTION_SAVINGS_RATE = 0.015
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 const MONTHS_2026_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
+type HomeVisionMode = 'to_date' | 'end_of_month'
+type HomeBudgetBlockId = 'fixe' | 'variable_essentiel' | 'discretionnaire' | 'epargne' | 'cagnotte'
+
+interface RecurringObligationRow {
+  id: string
+  category_id: string | null
+  amount: number
+  due_day: number
+  recurrence_frequency: 'monthly' | 'quarterly' | 'yearly'
+  starts_on: string | null
+  ends_on: string | null
+}
+
+interface HomeVisionBlockConfig {
+  id: HomeBudgetBlockId
+  label: string
+  color: string
+}
+
+interface HomeVisionBlockRow extends HomeVisionBlockConfig {
+  budgetAmount: number
+  spentToDate: number
+  plannedOperationsCount: number
+  plannedOperationsAmount: number
+  consumedAmount: number
+  consumedRatio: number
+}
+
+const HOME_VISION_BLOCKS: HomeVisionBlockConfig[] = [
+  { id: 'fixe', label: 'Fixe', color: 'var(--primary-500)' },
+  { id: 'variable_essentiel', label: 'Variable essentiel', color: 'var(--color-success)' },
+  { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
+  { id: 'epargne', label: 'Épargne', color: 'var(--color-warning)' },
+  { id: 'cagnotte', label: 'Cagnotte', color: 'var(--viz-e)' },
+]
+
+function normalizeBudgetBucket(value: string | null | undefined): string {
+  if (!value) return ''
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+}
+
+function mapBudgetBucketToHomeBlock(bucket: string | null | undefined): HomeBudgetBlockId | null {
+  const normalized = normalizeBudgetBucket(bucket)
+  if (normalized === 'socle_fixe') return 'fixe'
+  if (normalized === 'variable_essentielle') return 'variable_essentiel'
+  if (normalized === 'discretionnaire') return 'discretionnaire'
+  if (normalized === 'provision') return 'epargne'
+  if (normalized === 'cagnotte_projet') return 'cagnotte'
+  return null
+}
+
+function resolveObligationDueDateForMonth(
+  obligation: RecurringObligationRow,
+  year: number,
+  month: number,
+): string | null {
+  const monthDays = new Date(year, month, 0).getDate()
+  const dueDay = Math.max(1, Math.min(monthDays, Number(obligation.due_day ?? 1)))
+  const dueDate = new Date(year, month - 1, dueDay)
+  const dueIso = dueDate.toISOString().slice(0, 10)
+
+  if (obligation.starts_on && dueIso < obligation.starts_on) return null
+  if (obligation.ends_on && dueIso > obligation.ends_on) return null
+
+  if (obligation.recurrence_frequency === 'monthly') return dueIso
+
+  if (!obligation.starts_on) return null
+
+  const startDate = new Date(`${obligation.starts_on}T00:00:00`)
+  if (Number.isNaN(startDate.getTime())) return null
+
+  const startMonth = startDate.getMonth() + 1
+  const monthsDiff = (year - startDate.getFullYear()) * 12 + (month - startMonth)
+  if (monthsDiff < 0) return null
+
+  if (obligation.recurrence_frequency === 'quarterly') {
+    return monthsDiff % 3 === 0 ? dueIso : null
+  }
+
+  if (obligation.recurrence_frequency === 'yearly') {
+    return month === startMonth && monthsDiff % 12 === 0 ? dueIso : null
+  }
+
+  return null
+}
+
 export function Home() {
   const { year, month } = getCurrentPeriod()
   const { data: accounts } = useAccounts()
@@ -141,6 +236,42 @@ export function Home() {
     endDate: monthEnd,
     flowType: 'expense',
   })
+  const { data: monthSavingsTxns } = useTransactions({
+    startDate: monthStart,
+    endDate: monthEnd,
+    flowType: 'savings',
+  })
+  const { data: homeBudgetLines } = useQuery<{
+    categoryLines: BudgetLineWithCategory[]
+    globalVariableAmount: number
+  } | null>({
+    queryKey: ['home', 'budget-lines', year, month],
+    queryFn: async () => {
+      try {
+        const budgetLines = await getBudgetLinesForPeriod({ year, month })
+        return {
+          categoryLines: budgetLines.categoryLines,
+          globalVariableAmount: Number(budgetLines.globalVariableLine?.amount ?? 0),
+        }
+      } catch {
+        return null
+      }
+    },
+    staleTime: 60_000,
+  })
+  const { data: recurringObligations } = useQuery<RecurringObligationRow[]>({
+    queryKey: ['home', 'recurring-obligations'],
+    queryFn: async () => {
+      const { data, error } = await budgetDb()
+        .from('recurring_obligations')
+        .select('id, category_id, amount, due_day, recurrence_frequency, starts_on, ends_on')
+        .eq('is_active', true)
+
+      if (error) throw error
+      return (data ?? []) as RecurringObligationRow[]
+    },
+    staleTime: 60_000,
+  })
 
   const realToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
@@ -155,6 +286,104 @@ export function Home() {
       .filter((t) => t.is_recurring && t.transaction_date > todayIso)
       .reduce((sum, t) => sum + Number(t.amount), 0)
   }, [monthExpenseTxns, todayIso])
+
+  const fallbackVariableBudget = useMemo(() => {
+    const rows = summaries ?? []
+    return rows
+      .filter((row) => row.category.budget_behavior === 'variable')
+      .reduce((sum, row) => sum + Number(row.budget_amount), 0)
+  }, [summaries])
+
+  const variableBudgetMonthly = useMemo(() => {
+    if (typeof homeBudgetLines?.globalVariableAmount === 'number' && Number.isFinite(homeBudgetLines.globalVariableAmount)) {
+      return homeBudgetLines.globalVariableAmount
+    }
+    return fallbackVariableBudget
+  }, [fallbackVariableBudget, homeBudgetLines?.globalVariableAmount])
+
+  const variableSpentToDate = useMemo(() => {
+    const rows = monthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'variable')
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthExpenseTxns, todayIso])
+
+  const fixedChargesToDate = useMemo(() => {
+    const rows = monthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'fixed')
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthExpenseTxns, todayIso])
+
+  const savingsContributionsToDate = useMemo(() => {
+    const rows = monthSavingsTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date <= todayIso)
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthSavingsTxns, todayIso])
+
+  const certainUpcomingExpenses = useMemo(() => {
+    const rows = monthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date > todayIso && (t.is_recurring || t.budget_behavior === 'fixed'))
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [monthExpenseTxns, todayIso])
+
+  const budgetBlockByCategoryId = useMemo(() => {
+    const map = new Map<string, HomeBudgetBlockId>()
+    const rows = homeBudgetLines?.categoryLines ?? []
+    for (const line of rows) {
+      if (!line.category_id) continue
+      const blockId = mapBudgetBucketToHomeBlock(line.budget_bucket)
+      if (!blockId) continue
+      map.set(line.category_id, blockId)
+    }
+    return map
+  }, [homeBudgetLines?.categoryLines])
+
+  const blockBudgetById = useMemo(() => {
+    const byBlock = new Map<HomeBudgetBlockId, number>()
+    const rows = homeBudgetLines?.categoryLines ?? []
+    for (const line of rows) {
+      const blockId = mapBudgetBucketToHomeBlock(line.budget_bucket)
+      if (!blockId) continue
+      byBlock.set(blockId, (byBlock.get(blockId) ?? 0) + Number(line.amount))
+    }
+    return byBlock
+  }, [homeBudgetLines?.categoryLines])
+
+  const spentToDateByBlock = useMemo(() => {
+    const byBlock = new Map<HomeBudgetBlockId, number>()
+    const rows = monthExpenseTxns ?? []
+    for (const txn of rows) {
+      if (txn.transaction_date > todayIso) continue
+      const mappedCategoryBlock = txn.category_id ? budgetBlockByCategoryId.get(txn.category_id) ?? null : null
+      const fallbackBlock = txn.budget_behavior === 'fixed' ? 'fixe' : txn.budget_behavior === 'variable' ? 'variable_essentiel' : null
+      const blockId = mappedCategoryBlock ?? fallbackBlock
+      if (!blockId) continue
+      byBlock.set(blockId, (byBlock.get(blockId) ?? 0) + Number(txn.amount))
+    }
+    return byBlock
+  }, [budgetBlockByCategoryId, monthExpenseTxns, todayIso])
+
+  const plannedObligationsByBlock = useMemo(() => {
+    const byBlock = new Map<HomeBudgetBlockId, { count: number; amount: number }>()
+    const rows = recurringObligations ?? []
+
+    for (const obligation of rows) {
+      const dueIso = resolveObligationDueDateForMonth(obligation, year, month)
+      if (!dueIso || dueIso <= todayIso) continue
+      if (!obligation.category_id) continue
+      const blockId = budgetBlockByCategoryId.get(obligation.category_id)
+      if (!blockId) continue
+      const previous = byBlock.get(blockId) ?? { count: 0, amount: 0 }
+      previous.count += 1
+      previous.amount += Number(obligation.amount ?? 0)
+      byBlock.set(blockId, previous)
+    }
+
+    return byBlock
+  }, [budgetBlockByCategoryId, month, recurringObligations, todayIso, year])
 
   const resteUtile = useMemo(() => {
     return Math.max(0, totalBudget - realToDate - plannedFuture)
@@ -275,7 +504,53 @@ export function Home() {
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1>(0)
+  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1 | 2>(0)
+  const [homeVisionMode, setHomeVisionMode] = useState<HomeVisionMode>('to_date')
+
+  const mainAccountResteUtile = useMemo(() => (
+    selectedBalance
+    - fixedChargesToDate
+    - variableSpentToDate
+    - savingsContributionsToDate
+    - certainUpcomingExpenses
+  ), [
+    certainUpcomingExpenses,
+    fixedChargesToDate,
+    savingsContributionsToDate,
+    selectedBalance,
+    variableSpentToDate,
+  ])
+
+  const mainAccountDailyAvailable = useMemo(() => {
+    if (daysRemaining <= 0) return mainAccountResteUtile
+    return mainAccountResteUtile / daysRemaining
+  }, [daysRemaining, mainAccountResteUtile])
+
+  const homeVisionTodayLabel = useMemo(() => (
+    new Date(`${todayIso}T00:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  ), [todayIso])
+
+  const homeVisionRows = useMemo<HomeVisionBlockRow[]>(() => (
+    HOME_VISION_BLOCKS.map((block) => {
+      const budgetAmount = blockBudgetById.get(block.id) ?? 0
+      const spentToDate = spentToDateByBlock.get(block.id) ?? 0
+      const planned = plannedObligationsByBlock.get(block.id) ?? { count: 0, amount: 0 }
+      const consumedAmount = homeVisionMode === 'end_of_month'
+        ? spentToDate + planned.amount
+        : spentToDate
+      const consumedRatio = budgetAmount > 0 ? (consumedAmount / budgetAmount) * 100 : 0
+
+      return {
+        ...block,
+        budgetAmount,
+        spentToDate,
+        plannedOperationsCount: planned.count,
+        plannedOperationsAmount: planned.amount,
+        consumedAmount,
+        consumedRatio,
+      }
+    })
+  ), [blockBudgetById, homeVisionMode, plannedObligationsByBlock, spentToDateByBlock])
 
   const handleOpenAccountsModal = useCallback(() => {
     setShowAccountsModal((current) => !current)
@@ -287,16 +562,7 @@ export function Home() {
   }, [])
 
   useEffect(() => {
-    if (!isMainCheckingAccount) {
-      setHomeInsightsSlide(0)
-      return
-    }
-
-    const intervalId = window.setInterval(() => {
-      setHomeInsightsSlide((current) => (current === 0 ? 1 : 0))
-    }, 4200)
-
-    return () => window.clearInterval(intervalId)
+    if (!isMainCheckingAccount) setHomeInsightsSlide(0)
   }, [isMainCheckingAccount])
 
   const heroMetrics = useMemo(
@@ -307,6 +573,16 @@ export function Home() {
       { key: 'fin', label: 'Fin de mois', value: formatMoneyInteger(previsionFinDeMois) },
     ],
     [budgetParJour, plannedFuture, previsionFinDeMois, resteUtile],
+  )
+
+  const mainCheckingHeroMetrics = useMemo(
+    () => [
+      { key: 'variable-budget', label: 'Budget variable (mois)', value: formatMoneyInteger(variableBudgetMonthly) },
+      { key: 'variable-spent', label: 'Variable consommé', value: formatMoneyInteger(variableSpentToDate) },
+      { key: 'reste-utile-main', label: 'Reste utile', value: formatMoneyInteger(mainAccountResteUtile) },
+      { key: 'daily-available', label: 'Disponible / jour', value: formatMoneyInteger(mainAccountDailyAvailable) },
+    ],
+    [mainAccountDailyAvailable, mainAccountResteUtile, variableBudgetMonthly, variableSpentToDate],
   )
 
   const savingsBookletCeiling = useMemo(() => {
@@ -403,6 +679,8 @@ export function Home() {
             { key: 'pea-liquidite', label: 'Liquidité', value: 'Sous conditions' },
             { key: 'pea-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
           ]
+    : isMainCheckingAccount
+      ? mainCheckingHeroMetrics
     : isSavingsBooklet
       ? savingsHeroMetrics
       : heroMetrics
@@ -637,49 +915,46 @@ export function Home() {
           style={{
             maxWidth: 600,
             margin: '0 auto',
-            padding: 'var(--space-4) 0',
+            padding: 'var(--space-2) 0',
             borderBottom: '1px solid var(--neutral-200)',
             display: 'grid',
-            gap: 'var(--space-4)',
+            gap: 'var(--space-2)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.08em' }}>
-                {isMainCheckingAccount
-                  ? (homeInsightsSlide === 0 ? 'Trajectoire' : 'Catégories en dérive')
-                  : isPEA
-                    ? "Évolution de l'indice ETF"
-                    : isPER
-                      ? 'Évolution du solde'
-                      : isProjectionSavingsAccount
-                        ? 'Évolution des fonds'
-                        : isSavingsBooklet
-                          ? 'Évolution des intérêts'
-                          : 'Trajectoire'}
-              </p>
-              <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-900)' }}>
-                {isMainCheckingAccount
-                  ? (homeInsightsSlide === 0 ? 'Prévisions VS Réel' : `${getMonthLabel(year, month)} · Mois en cours`)
-                  : isPEA
-                    ? '1 an · à faire plus tard'
-                    : isPER
-                      ? 'Simulation 2026 · +1000€ en juin, octobre et décembre'
-                      : isProjectionSavingsAccount
-                        ? 'Projection sur 10 ans à 1,5%'
-                        : isSavingsBooklet
-                          ? 'Courbe sur 10 ans'
-                          : 'Prévisions VS Réel'}
-              </p>
-            </div>
-            {isSavingsBooklet || isPER || isPEA || isMainCheckingAccount ? null : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em' }}>
+              {isMainCheckingAccount
+                ? (
+                  homeInsightsSlide === 0
+                    ? 'Trajectoire · Consommé VS réel'
+                    : homeInsightsSlide === 1
+                      ? 'Vision globale · Consommé par bloc'
+                      : `Catégories en dérive · ${getMonthLabel(year, month)}`
+                )
+                : isPEA
+                  ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
+                  : isPER
+                    ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
+                    : isProjectionSavingsAccount
+                      ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
+                      : isSavingsBooklet
+                        ? 'Évolution des intérêts · Courbe sur 10 ans'
+                        : 'Trajectoire · Prévisions VS Réel'}
+            </p>
+            {isMainCheckingAccount ? (
+              homeInsightsSlide === 1 ? (
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-semibold)', whiteSpace: 'nowrap' }}>
+                  {`${homeVisionTodayLabel} · ${daysRemaining} j restants`}
+                </p>
+              ) : null
+            ) : isSavingsBooklet || isPER || isPEA ? null : (
               <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
                 {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
               </p>
             )}
           </div>
 
-          <div style={{ height: 220 }}>
+          <div style={{ height: 270 }}>
             {isMainCheckingAccount ? (
               <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
                 <div
@@ -694,13 +969,13 @@ export function Home() {
                   <div
                     style={{
                       display: 'flex',
-                      width: '200%',
+                      width: '300%',
                       height: '100%',
-                      transform: `translateX(-${homeInsightsSlide * 50}%)`,
+                      transform: `translateX(-${homeInsightsSlide * (100 / 3)}%)`,
                       transition: 'transform 420ms ease',
                     }}
                   >
-                    <div style={{ flex: '0 0 50%', minWidth: 0, padding: 'var(--space-2)' }}>
+                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)' }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={trajectoryData}>
                           <defs>
@@ -734,7 +1009,104 @@ export function Home() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <div style={{ flex: '0 0 50%', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-3)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                      <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                        <div style={{ display: 'inline-flex', padding: 2, borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', border: '1px solid var(--neutral-200)', width: 'fit-content' }}>
+                          <button
+                            type="button"
+                            onClick={() => setHomeVisionMode('to_date')}
+                            aria-pressed={homeVisionMode === 'to_date'}
+                            style={{
+                              border: 'none',
+                              borderRadius: 'var(--radius-full)',
+                              background: homeVisionMode === 'to_date' ? 'var(--neutral-0)' : 'transparent',
+                              color: homeVisionMode === 'to_date' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                              fontSize: 11,
+                              fontWeight: 'var(--font-weight-semibold)',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-sans)',
+                            }}
+                          >
+                            À date
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setHomeVisionMode('end_of_month')}
+                            aria-pressed={homeVisionMode === 'end_of_month'}
+                            style={{
+                              border: 'none',
+                              borderRadius: 'var(--radius-full)',
+                              background: homeVisionMode === 'end_of_month' ? 'var(--neutral-0)' : 'transparent',
+                              color: homeVisionMode === 'end_of_month' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                              fontSize: 11,
+                              fontWeight: 'var(--font-weight-semibold)',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-sans)',
+                            }}
+                          >
+                            Fin de mois
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                          {homeVisionRows.map((row) => {
+                            const progressWidth = `${Math.max(0, Math.min(100, row.consumedRatio)).toFixed(1)}%`
+                            return (
+                              <div
+                                key={row.id}
+                                style={{
+                                  display: 'grid',
+                                  gap: 'var(--space-1)',
+                                  paddingBottom: 'var(--space-2)',
+                                  borderBottom: '1px solid var(--neutral-150)',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-2)' }}>
+                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-800)' }}>
+                                    {row.label}
+                                  </span>
+                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                                    {formatMoneyInteger(row.budgetAmount)}
+                                  </span>
+                                </div>
+
+                                {homeVisionMode === 'end_of_month' ? (
+                                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                                    {`+${row.plannedOperationsCount} opérations planifiées : ${formatMoneyInteger(row.plannedOperationsAmount)}`}
+                                  </p>
+                                ) : null}
+
+                                <div style={{ height: 'var(--space-2)', borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                                  <div
+                                    style={{
+                                      width: progressWidth,
+                                      height: '100%',
+                                      background: row.color,
+                                      borderRadius: 'var(--radius-full)',
+                                      transition: 'width var(--transition-base)',
+                                    }}
+                                  />
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-2)' }}>
+                                  <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                                    {homeVisionMode === 'to_date'
+                                      ? `${formatMoneyInteger(row.spentToDate)} consommés`
+                                      : `${formatMoneyInteger(row.consumedAmount)} prévus`}
+                                  </span>
+                                  <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-semibold)' }}>
+                                    {`${row.consumedRatio.toFixed(0)}%`}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
                       {loadingSummaries ? (
                         <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
                           Chargement…
@@ -780,12 +1152,12 @@ export function Home() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  {[0, 1].map((idx) => (
+                  {[0, 1, 2].map((idx) => (
                     <button
                       key={idx}
                       type="button"
-                      aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
-                      onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
+                      aria-label={idx === 0 ? 'Afficher la trajectoire' : idx === 1 ? 'Afficher la vision globale' : 'Afficher les catégories en dérive'}
+                      onClick={() => setHomeInsightsSlide(idx as 0 | 1 | 2)}
                       style={{
                         width: 8,
                         height: 8,
@@ -934,82 +1306,6 @@ export function Home() {
           </div>
         </div>
       </motion.section>
-
-      {!isSavingsBooklet && !isMainCheckingAccount ? (
-        <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.18 }}
-        style={{ padding: '0 var(--space-6)' }}
-      >
-        <div
-          style={{
-            maxWidth: 600,
-            margin: '0 auto',
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--neutral-200)',
-            display: 'grid',
-            gap: 'var(--space-3)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.08em' }}>
-              Catégories en dérive
-            </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-              {getMonthLabel(year, month)}
-            </p>
-          </div>
-
-          {loadingSummaries ? (
-            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)' }}>
-              Chargement…
-            </p>
-          ) : driftRows.length === 0 ? (
-            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)' }}>
-              Aucune donnée
-            </p>
-          ) : (
-            <div>
-              {driftRows.map((row) => {
-                const drift = Number(row.driftPct ?? 0)
-                const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                return (
-                  <div
-                    key={row.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(0,1fr) auto auto',
-                      alignItems: 'center',
-                      gap: 'var(--space-3)',
-                      padding: 'var(--space-3) 0',
-                      borderBottom: '1px solid var(--neutral-100)',
-                      transition: 'background-color var(--transition-fast)',
-                    }}
-                    onMouseEnter={(event) => {
-                      event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                    }}
-                    onMouseLeave={(event) => {
-                      event.currentTarget.style.backgroundColor = 'transparent'
-                    }}
-                  >
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
-                      {row.name}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                      {formatMoneyInteger(Number(row.spent ?? 0))}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                      {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </motion.section>
-      ) : null}
 
       <AnimatePresence>
         {showAccountsModal ? (

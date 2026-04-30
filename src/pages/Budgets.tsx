@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, ChevronDown } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { X, Search, ChevronDown, ArrowLeft } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -141,6 +141,10 @@ function formatMoney(amount: number): string {
   return formatCurrencyRounded(Math.floor(amount))
 }
 
+function formatPercentSigned(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+}
+
 function formatTxDateDayMonth(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '--/--'
@@ -217,13 +221,41 @@ function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockI
   return null
 }
 
-function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number }> }) {
+function formatBudgetBucketLabel(bucket: string | null | undefined): string {
+  if (!bucket) return 'Non classé'
+  if (bucket === 'socle_fixe') return 'Fixe'
+  if (bucket === 'variable_essentielle') return 'Variable essentielle'
+  if (bucket === 'discretionnaire') return 'Discrétionnaire'
+  if (bucket === 'cagnotte_projet') return 'Cagnotte projet'
+  if (bucket === 'provision') return 'Épargne'
+  if (bucket === 'hors_pilotage') return 'Hors pilotage'
+  return bucket
+}
+
+function toleranceByBucket(bucket: string | null | undefined): string {
+  if (bucket === 'socle_fixe') return '±3%'
+  if (bucket === 'variable_essentielle') return '±8%'
+  if (bucket === 'discretionnaire') return '±12%'
+  if (bucket === 'provision') return '±6%'
+  if (bucket === 'cagnotte_projet') return '±0%'
+  return '±10%'
+}
+
+function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
   if (!active || !payload?.length) return null
+  const amount = Number(payload[0]?.value ?? 0)
+  const budget = Number(payload[0]?.payload?.budget ?? 0)
+  const gapPct = budget > 0 ? ((amount - budget) / budget) * 100 : null
   return (
-    <div style={{ background: 'var(--primary-600)', borderRadius: 'var(--radius-md)', padding: '5px 11px', boxShadow: 'var(--shadow-md)' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)' }}>
-        {formatMoney(payload[0].value)}
+    <div style={{ background: 'var(--primary-600)', borderRadius: 'var(--radius-md)', padding: '6px 11px', boxShadow: 'var(--shadow-md)', display: 'grid', gap: 2 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', textAlign: 'center' }}>
+        {formatMoney(amount)}
       </span>
+      {gapPct != null ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: gapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', textAlign: 'center' }}>
+          {formatPercentSigned(gapPct)}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -249,13 +281,38 @@ function SubCategoryTransactionsModal({
     <AnimatePresence>
       {open ? (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }} />
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 221,
+              display: 'grid',
+              placeItems: 'center',
+              padding: 'var(--space-4)',
+              pointerEvents: 'none',
+            }}
+          >
+          <motion.div
+            initial={{ y: 24, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 24, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-            style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 221, width: '100%', maxWidth: 512, margin: '0 auto', background: 'var(--neutral-0)', borderRadius: '24px 24px 0 0', maxHeight: '82dvh', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}
+            style={{
+              width: 'min(560px, 100%)',
+              background: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-2xl)',
+              maxHeight: 'min(82dvh, calc(100dvh - var(--space-8)))',
+              overflow: 'hidden',
+              boxShadow: 'var(--shadow-lg)',
+              pointerEvents: 'auto',
+            }}
           >
             <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{title}</p>
@@ -263,7 +320,7 @@ function SubCategoryTransactionsModal({
                 <X size={15} />
               </button>
             </div>
-            <div style={{ maxHeight: 'calc(82dvh - 66px)', overflowY: 'auto' }}>
+            <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
               {loading ? (
                 <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
               ) : transactions.length === 0 ? (
@@ -303,6 +360,7 @@ function SubCategoryTransactionsModal({
               )}
             </div>
           </motion.div>
+          </div>
         </>
       ) : null}
     </AnimatePresence>
@@ -314,6 +372,7 @@ export function Budgets() {
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
@@ -324,6 +383,7 @@ export function Budgets() {
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategoryTrendItem | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [subCategoryTransactionSequence, setSubCategoryTransactionSequence] = useState<Transaction[]>([])
   const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
   const [subCategoryToReopen, setSubCategoryToReopen] = useState<SubCategoryTrendItem | null>(null)
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
@@ -489,6 +549,40 @@ export function Budgets() {
   }, [periodTxns])
 
   const selectedCatInfo = useMemo(() => categories.find((c) => c.id === selectedCat) ?? null, [categories, selectedCat])
+  const categoryBudgetLines = useMemo(() => {
+    if (selectedCat === 'all') return []
+    return configuredBudgetCategoryLines.filter((line) => (
+      line.category_id === selectedCat
+      || line.parent_category_id === selectedCat
+    ))
+  }, [configuredBudgetCategoryLines, selectedCat])
+  const dominantCategoryBudgetLine = useMemo(() => {
+    if (!categoryBudgetLines.length) return null
+    return [...categoryBudgetLines].sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))[0]
+  }, [categoryBudgetLines])
+  const categoryMonthlyBudget = useMemo(() => {
+    if (selectedCat === 'all') return totalMonthlyBudget
+    if (!categoryBudgetLines.length) return 0
+    return categoryBudgetLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0)
+  }, [categoryBudgetLines, selectedCat, totalMonthlyBudget])
+  const categoryRanking = useMemo(() => {
+    if (selectedCat === 'all') return null
+    const rootBudgets = new Map<string, number>()
+    for (const summary of summaries ?? []) {
+      const rootId = summary.category.parent_id ?? summary.category.id
+      rootBudgets.set(rootId, (rootBudgets.get(rootId) ?? 0) + Number(summary.budget_amount ?? 0))
+    }
+    const selectedRootId = selectedCatInfo ? (selectedCatInfo.parent_id ?? selectedCatInfo.id) : selectedCat
+    const ranked = [...rootBudgets.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id)
+    const idx = ranked.findIndex((id) => id === selectedRootId)
+    if (idx < 0) return null
+    return { index: idx + 1, total: ranked.length }
+  }, [selectedCat, selectedCatInfo, summaries])
+  const categoryMethodLabel = useMemo(() => {
+    const method = dominantCategoryBudgetLine?.budget_method
+    if (!method) return 'Calcul auto'
+    return method.replace(/_/g, ' ')
+  }, [dominantCategoryBudgetLine?.budget_method])
   const budgetByCategoryId = useMemo(
     () =>
       (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
@@ -594,7 +688,6 @@ export function Budgets() {
   const pieData = dataDisplayMode === 'budget' ? budgetPieData : realPieData
 
   const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
-  const topFiveRealCategories = useMemo(() => realPieData.slice(0, 5), [realPieData])
   const pieTotal = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData])
   const donutTopFiveCallouts = useMemo<DonutCallout[]>(() => {
     if (selectedCat !== 'all' || pieTotal <= 0 || donutAreaSize.width <= 0 || donutAreaSize.height <= 0) return []
@@ -685,14 +778,14 @@ export function Budgets() {
           parentCategoryName: row.parentCategoryName,
           actualAmount,
           budgetAmount,
-          displayAmount: dataDisplayMode === 'budget' ? budgetAmount : actualAmount,
+          displayAmount: actualAmount,
         } satisfies CategoryBarRow
       })
       .filter((row) => row.actualAmount > 0 || row.budgetAmount > 0)
       .sort((a, b) => b.displayAmount - a.displayAmount)
 
     return rows
-  }, [selectedCat, listSubCategoryRows, budgetByCategoryId, dataDisplayMode])
+  }, [selectedCat, listSubCategoryRows, budgetByCategoryId])
   const subCategoryRowById = useMemo(
     () => new Map(listSubCategoryRows.map((row) => [row.id, row])),
     [listSubCategoryRows],
@@ -937,20 +1030,19 @@ export function Budgets() {
   }, [showHeaderPeriodMenu])
 
   const showExtendedSlides = selectedCat === 'all'
-  const slideCount = showExtendedSlides ? 4 : 2
+  const isCategoryMode = selectedCat !== 'all'
+  const slideCount = showExtendedSlides ? 3 : 2
   const slideTitles = showExtendedSlides
     ? ([
         'Répartition par catégorie',
         'Répartition par bloc',
         'Évolutions 6 derniers mois',
-        "Scénarios d'optimisation",
       ] as const)
     : ([
         'Répartition par sous-catégorie',
         'Évolutions 6 derniers mois',
       ] as const)
-  const showRealBudgetToggle = showExtendedSlides ? activeSlide < 2 : activeSlide === 0
-  const optimizationTableColumns = 'minmax(0,1.2fr) minmax(0,0.62fr) minmax(0,0.84fr) minmax(0,0.84fr)'
+  const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
@@ -980,22 +1072,6 @@ export function Budgets() {
     if (delta < 0) goNextSlide()
     else goPrevSlide()
   }
-
-  const optimizationScenarios = useMemo(() => {
-    const candidates = topFiveRealCategories.slice(0, 5)
-    const reductionPercents = [5, 8, 10, 12, 15]
-    return candidates.map((entry, idx) => {
-      const reduction = reductionPercents[idx] ?? 10
-      const monthlyImpact = (entry.value * reduction) / 100
-      return {
-        id: entry.id,
-        name: entry.name,
-        reduction,
-        monthlyImpact,
-        sixMonthImpact: monthlyImpact * 6,
-      }
-    })
-  }, [topFiveRealCategories])
 
   useEffect(() => {
     if (!selectedDonutSlice) return
@@ -1033,6 +1109,7 @@ export function Budgets() {
   }, [pendingTransaction, selectedSubCategory])
 
   const handleSelectTransactionFromSubCategory = (transaction: Transaction) => {
+    setSubCategoryTransactionSequence(subCategoryTransactions ?? [])
     if (selectedSubCategory) {
       setSubCategoryToReopen(selectedSubCategory)
       setSelectedSubCategory(null)
@@ -1041,6 +1118,13 @@ export function Budgets() {
   }
 
   const handleCloseTransactionDetails = () => {
+    setSelectedTransaction(null)
+    setSubCategoryToReopen(null)
+    setSubCategoryTransactionSequence([])
+    setPendingTransaction(null)
+  }
+
+  const handleBackToSubCategoryList = () => {
     setSelectedTransaction(null)
     if (subCategoryToReopen) {
       const nextSubCategory = subCategoryToReopen
@@ -1068,9 +1152,32 @@ export function Budgets() {
     const total = rows.reduce((sum, row) => sum + ((row.amount - row.budget) / row.budget) * 100, 0)
     return total / rows.length
   }, [monthlyHistory])
+  const selectedPeriodGapPct = useMemo(() => {
+    if (totalMonthlyBudget <= 0) return null
+    return ((selectedPeriodSpent - totalMonthlyBudget) / totalMonthlyBudget) * 100
+  }, [selectedPeriodSpent, totalMonthlyBudget])
+  const historyBudgetTarget = Math.max(0, Number(totalMonthlyBudget))
+  const historyYAxisTicks = useMemo(() => {
+    const maxHistory = monthlyHistory.reduce((max, row) => Math.max(max, Number(row.amount ?? 0)), 0)
+    const maxValue = Math.max(maxHistory, historyBudgetTarget)
+    if (maxValue <= 0) return [0]
+
+    const step = Math.max(100, Math.ceil((maxValue / 4) / 100) * 100)
+    const top = Math.ceil(maxValue / step) * step
+    const ticks: number[] = []
+
+    for (let value = 0; value <= top; value += step) ticks.push(value)
+
+    if (!ticks.some((value) => Math.abs(value - historyBudgetTarget) < step * 0.04)) {
+      ticks.push(historyBudgetTarget)
+      ticks.sort((a, b) => a - b)
+    }
+
+    return ticks
+  }, [historyBudgetTarget, monthlyHistory])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isCategoryMode ? 'var(--space-4)' : 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
         title="Budgets"
         titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
@@ -1187,9 +1294,36 @@ export function Budgets() {
         )}
       />
 
+      {isCategoryMode ? (
+        <motion.section initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} style={{ padding: '0 var(--space-6)', marginTop: 'calc(var(--space-2) * -1)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Retour"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--neutral-700)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-1)',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: 'var(--font-size-sm)',
+                fontWeight: 700,
+              }}
+            >
+              <ArrowLeft size={16} />
+              Retour
+            </button>
+          </div>
+        </motion.section>
+      ) : null}
+
       {showRealBudgetToggle ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
               <button type="button" onClick={() => setDataDisplayMode('reel')} style={{ border: '1px solid var(--neutral-200)', background: dataDisplayMode === 'reel' ? 'var(--primary-50)' : 'var(--neutral-0)', color: dataDisplayMode === 'reel' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
                 Réel
@@ -1198,6 +1332,54 @@ export function Budgets() {
               <button type="button" onClick={() => setDataDisplayMode('budget')} style={{ border: '1px solid var(--neutral-200)', background: dataDisplayMode === 'budget' ? 'var(--primary-50)' : 'var(--neutral-0)', color: dataDisplayMode === 'budget' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
                 Budget
               </button>
+            </div>
+            {showExtendedSlides ? (
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: selectedPeriodGapPct == null ? 'var(--neutral-500)' : selectedPeriodGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
+                {selectedPeriodGapPct == null ? '—' : formatPercentSigned(selectedPeriodGapPct)}
+              </p>
+            ) : null}
+          </div>
+        </motion.section>
+      ) : null}
+
+      {isCategoryMode ? (
+        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {`catégorie : ${selectedCatInfo?.name ?? '—'}`}
+              </p>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                {categoryRanking ? `Rang ${categoryRanking.index}/${categoryRanking.total}` : 'Rang —'}
+              </p>
+            </div>
+            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', background: 'var(--neutral-0)', padding: 'var(--space-2) var(--space-3)', display: 'grid', gap: 'var(--space-1)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-1) var(--space-2)' }}>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Bloc</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                    {formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)}
+                  </p>
+                </div>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget mensuel</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
+                    {formatMoney(categoryMonthlyBudget)}
+                  </p>
+                </div>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Méthode</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                    {categoryMethodLabel}
+                  </p>
+                </div>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Tolérance</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
+                    {toleranceByBucket(dominantCategoryBudgetLine?.budget_bucket)}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </motion.section>
@@ -1276,7 +1458,7 @@ export function Budgets() {
                     border: '1px solid var(--neutral-200)',
                     borderRadius: 'var(--radius-xl)',
                     background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
-                    padding: 'var(--space-4)',
+                    padding: 'var(--space-3)',
                     display: 'grid',
                     alignContent: 'start',
                     gap: 'var(--space-2)',
@@ -1300,23 +1482,23 @@ export function Budgets() {
                           style={{
                             border: 'none',
                             background: 'transparent',
-                            padding: '4px 2px',
+                            padding: '3px 2px',
                             cursor: 'pointer',
                             display: 'grid',
-                            gridTemplateColumns: 'minmax(0,130px) minmax(0,1fr)',
+                            gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
                             alignItems: 'center',
-                            gap: 'var(--space-3)',
+                            gap: 'var(--space-2)',
                             textAlign: 'left',
                           }}
                         >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                            <span style={{ width: 12, height: 12, borderRadius: 'var(--radius-sm)', background: accent, flexShrink: 0 }} />
-                            <span style={{ minWidth: 0, fontSize: 13, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-sm)', background: accent, flexShrink: 0 }} />
+                            <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {row.name}
                             </span>
                           </span>
-                          <span style={{ display: 'grid', gap: 4 }}>
-                            <span style={{ width: '100%', height: 14, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                          <span style={{ display: 'grid', gap: 2 }}>
+                            <span style={{ width: '100%', height: 11, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
                               <span
                                 style={{
                                   width: `${row.displayAmount <= 0 ? 0 : Math.max(6, Math.min(barWidth, 100))}%`,
@@ -1327,7 +1509,7 @@ export function Budgets() {
                                 }}
                               />
                             </span>
-                            <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                            <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
                               {formatMoney(row.displayAmount)}
                             </span>
                           </span>
@@ -1458,51 +1640,67 @@ export function Budgets() {
             )}
 
             {showExtendedSlides ? (
-              <>
-                <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-                  <div style={{ height: 332 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
-                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
-                        <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                        <ReferenceLine y={totalMonthlyBudget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
-                        <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                          <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                            const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                            const item = payload
-                            if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                            return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
-                          }} />
-                          {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ height: 332 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={({ x, y, payload }: { x?: number; y?: number; payload?: { value?: number } }) => {
+                          const value = Number(payload?.value ?? 0)
+                          const isBudgetTick = Math.abs(value - historyBudgetTarget) < 0.5
+                          return (
+                            <text
+                              x={x ?? 0}
+                              y={y ?? 0}
+                              dy={3}
+                              textAnchor="end"
+                              fontSize={11}
+                              fill={isBudgetTick ? 'var(--color-error)' : 'var(--neutral-500)'}
+                              fontWeight={isBudgetTick ? 700 : 500}
+                            >
+                              {formatMoney(value)}
+                            </text>
+                          )
+                        }}
+                        ticks={historyYAxisTicks}
+                        width={68}
+                      />
+                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                      <ReferenceLine y={historyBudgetTarget} stroke="var(--color-error)" strokeWidth={2} strokeDasharray="4 4" />
+                      <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                        <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                          const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                          const item = payload
+                          if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                        }} />
+                        {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)', padding: '0 var(--space-2)', justifyItems: 'center', textAlign: 'center' }}>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Montant moyen
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                      {formatMoney(sixMonthAverageAmount)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Écart moyen
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
+                      {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
+                    </span>
                   </div>
                 </div>
-
-                <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-                  <div style={{ width: '100%' }}>
-                    <div style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: 'var(--space-2) 0' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Enveloppe</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>6 mois</span>
-                    </div>
-
-                    {optimizationScenarios.length === 0 ? (
-                      <div style={{ padding: 'var(--space-6) 0', color: 'var(--neutral-400)', fontSize: 13 }}>Aucune donnée disponible</div>
-                    ) : optimizationScenarios.map((scenario) => (
-                      <div key={scenario.id} style={{ width: '96%', margin: '0 auto', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: '10px 0', alignItems: 'center', transition: 'background-color var(--transition-fast)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
-                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.monthlyImpact)}`}</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatMoney(scenario.sixMonthImpact)}`}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
+              </div>
             ) : null}
           </div>
         </div>
@@ -1771,13 +1969,14 @@ export function Budgets() {
         ) : null}
       </AnimatePresence>
 
-      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
+      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null); setSubCategoryTransactionSequence([]) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
 
       <TransactionDetailsModal
         transaction={selectedTransaction}
         categories={categories}
-        transactionList={subCategoryTransactions ?? []}
+        transactionList={subCategoryTransactionSequence}
         onNavigate={setSelectedTransaction}
+        onBack={handleBackToSubCategoryList}
         onClose={handleCloseTransactionDetails}
       />
 

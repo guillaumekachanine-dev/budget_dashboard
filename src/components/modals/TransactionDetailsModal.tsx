@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react'
 import { formatCurrencyRounded, getCategoryColor } from '@/lib/utils'
 import type { Category, Transaction } from '@/lib/types'
 
@@ -9,6 +9,7 @@ interface TransactionDetailsModalProps {
   categories?: Category[]
   transactionList?: Transaction[]
   onNavigate?: (transaction: Transaction) => void
+  onBack?: () => void
   onClose: () => void
 }
 
@@ -63,6 +64,7 @@ export function TransactionDetailsModal({
   categories = [],
   transactionList = [],
   onNavigate,
+  onBack,
   onClose,
 }: TransactionDetailsModalProps) {
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -201,7 +203,37 @@ export function TransactionDetailsModal({
                 overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                {onBack ? (
+                  <button
+                    type="button"
+                    aria-label="Retour à la liste des opérations"
+                    onClick={onBack}
+                    style={{
+                      minWidth: 'var(--touch-target-min)',
+                      minHeight: 'var(--touch-target-min)',
+                      borderRadius: 'var(--radius-full)',
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--neutral-600)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--neutral-100)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'var(--neutral-0)'
+                    }}
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                ) : (
+                  <span aria-hidden="true" style={{ width: 'var(--touch-target-min)', height: 'var(--touch-target-min)' }} />
+                )}
                 <button
                   ref={closeRef}
                   type="button"
