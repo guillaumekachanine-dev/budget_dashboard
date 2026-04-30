@@ -64,6 +64,27 @@ export interface Budget {
   period?: BudgetPeriod
 }
 
+export interface BudgetRecommendation {
+  id: string
+  user_id: string
+  category_id: string | null
+  source_month_start: string | null
+  source_period_year: number | null
+  source_period_month: number | null
+  source_amount_total: number | null
+  source_months_count: number | null
+  recommendation_status: string | null
+  decision_status: string | null
+  applied_period_id: string | null
+  budget_bucket: string | null
+  budget_method: string | null
+  final_budget_monthly_eur: number | null
+  manual_budget_monthly_eur: number | null
+  recommendation_comment: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Transaction {
   id: string
   user_id: string
@@ -195,6 +216,7 @@ export type Database = {
       categories: TableDef<Category, Omit<Category, 'id' | 'created_at' | 'updated_at'>, Partial<Category>>
       budget_periods: TableDef<BudgetPeriod, Omit<BudgetPeriod, 'id' | 'created_at' | 'updated_at'>, Partial<BudgetPeriod>>
       budgets: TableDef<Budget, Omit<Budget, 'id' | 'created_at' | 'updated_at'>, Partial<Budget>>
+      budget_recommendations: TableDef<BudgetRecommendation, Omit<BudgetRecommendation, 'id' | 'created_at' | 'updated_at'>, Partial<BudgetRecommendation>>
       transactions: TableDef<Transaction, Omit<Transaction, 'id' | 'created_at' | 'updated_at'>, Partial<Transaction>>
       income_sources: TableDef<IncomeSource, Omit<IncomeSource, 'id' | 'created_at' | 'updated_at'>, Partial<IncomeSource>>
       recurring_obligations: TableDef<RecurringObligation, Omit<RecurringObligation, 'id' | 'created_at' | 'updated_at'>, Partial<RecurringObligation>>

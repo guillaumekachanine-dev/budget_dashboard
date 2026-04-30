@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import type { FlowType, Transaction } from '@/lib/types'
+import { lockDocumentScroll } from '@/lib/scrollLock'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
@@ -643,13 +644,8 @@ export function Flux() {
   const anySheetOpen = showTypeSheet || showPeriodSheet || showCategorySheet || showHeaderCategorySheet || showAdvancedSheet
 
   useEffect(() => {
-    if (typeof document === 'undefined') return
     if (!anySheetOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
+    return lockDocumentScroll()
   }, [anySheetOpen])
 
   useEffect(() => {

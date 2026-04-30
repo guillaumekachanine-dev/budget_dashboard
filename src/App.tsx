@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
+import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
 
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
@@ -25,8 +26,13 @@ export default function App() {
   const location = useLocation()
 
   useEffect(() => {
+    forceUnlockDocumentScroll()
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search])
+
+  useEffect(() => {
+    forceUnlockDocumentScroll()
+  }, [])
 
   useEffect(() => {
     if (!user) return

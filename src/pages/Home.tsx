@@ -22,6 +22,7 @@ import {
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { lockDocumentScroll } from '@/lib/scrollLock'
 import comptePrincipalIcon from '@/assets/bank_account_icons/Compte_principal_banque_populaire.png'
 import compteJointIcon from '@/assets/bank_account_icons/banque_postale_compte_joint.png'
 import peaIcon from '@/assets/bank_account_icons/Boursorama_PEA .png'
@@ -227,13 +228,8 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (typeof document === 'undefined') return
     if (!showAccountsModal) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
+    return lockDocumentScroll()
   }, [showAccountsModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {

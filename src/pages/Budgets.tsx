@@ -27,6 +27,12 @@ import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components'
+import { useBudgetPeriod } from '@/features/budget/hooks/useBudgetPeriod'
+import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCards'
+import { BudgetParentGroups } from '@/features/budget/components/BudgetParentGroups'
+import { BudgetVsActualSection } from '@/features/budget/components/BudgetVsActualSection'
+import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
+import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
 
 type PeriodKey = 'mois' | 'annee'
 type SubCatTrend = 'up' | 'down' | 'equal'
@@ -258,6 +264,19 @@ export function Budgets() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [breakdownMode] = useState<'mois' | 'annee'>('mois')
   const [activeIncomeExpenseSlice, setActiveIncomeExpenseSlice] = useState<string | null>(null)
+  const {
+    selectedPeriod: configuredBudgetPeriod,
+    availablePeriods: configuredBudgetPeriods,
+    loading: configuredBudgetLoading,
+    error: configuredBudgetError,
+    summary: configuredBudgetSummary,
+    categoryLines: configuredBudgetCategoryLines,
+    parentGroups: configuredBudgetParentGroups,
+    actuals: configuredBudgetActuals,
+    hasActuals: configuredBudgetHasActuals,
+    setSelectedPeriod: setConfiguredBudgetPeriod,
+    reload: reloadConfiguredBudget,
+  } = useBudgetPeriod()
   const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const donutAreaRef = useRef<HTMLDivElement | null>(null)
@@ -629,6 +648,18 @@ export function Budgets() {
   const monthModeLabel = getPeriodLabel('mois')
   const yearModeLabel = getPeriodLabel('annee')
   const subCategoryModalTitle = selectedSubCategory ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey)}` : ''
+  const configuredPeriodLabel = configuredBudgetPeriod
+    ? formatPeriodLabel(
+      configuredBudgetPeriod.period_year,
+      configuredBudgetPeriod.period_month,
+      configuredBudgetPeriod.label,
+    )
+    : 'Aucune période'
+
+  const handleConfiguredPeriodChange = useCallback((nextPeriodId: string) => {
+    const period = configuredBudgetPeriods.find((row) => row.id === nextPeriodId) ?? null
+    setConfiguredBudgetPeriod(period)
+  }, [configuredBudgetPeriods, setConfiguredBudgetPeriod])
 
   const showExtendedSlides = selectedCat === 'all'
   const slideCount = showExtendedSlides ? 4 : 2
@@ -653,6 +684,7 @@ export function Budgets() {
   }, [slideCount])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse') return
     dragStartXRef.current = event.clientX
     dragDeltaXRef.current = 0
     setIsDragging(true)
@@ -790,7 +822,7 @@ export function Budgets() {
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
+        <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
               <div ref={donutAreaRef} style={{ position: 'relative', height: 336 }}>
@@ -1042,6 +1074,87 @@ export function Budgets() {
           )
         )}
       </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0', display: 'grid', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingBottom: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
+            Pilotage budget configuré
+          </p>
+          <span style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+        </div>
+
+        <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Période budgétaire
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+              {configuredPeriodLabel}
+            </p>
+          </div>
+
+          {configuredBudgetPeriods.length > 1 ? (
+            <label style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              <span style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Changer de période
+              </span>
+              <select
+                value={configuredBudgetPeriod?.id ?? ''}
+                onChange={(event) => handleConfiguredPeriodChange(event.target.value)}
+                disabled={configuredBudgetLoading}
+                style={{
+                  width: '100%',
+                  minHeight: 'var(--touch-target-min)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--neutral-200)',
+                  background: 'var(--neutral-0)',
+                  color: 'var(--neutral-900)',
+                  padding: '0 var(--space-4)',
+                  fontSize: 'var(--font-size-base)',
+                  fontWeight: 700,
+                }}
+              >
+                {configuredBudgetPeriods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {formatPeriodLabel(period.period_year, period.period_month, period.label)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {configuredBudgetError ? (
+            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 600 }}>
+                {configuredBudgetError}
+              </p>
+              <div>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void reloadConfiguredBudget()}>
+                  Réessayer
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </motion.section>
+
+      {configuredBudgetPeriod ? (
+        <>
+          <BudgetSummaryCards summary={configuredBudgetSummary} />
+          <BudgetParentGroups groups={configuredBudgetParentGroups} />
+          <BudgetVsActualSection
+            summary={configuredBudgetSummary}
+            categoryLines={configuredBudgetCategoryLines}
+            actuals={configuredBudgetActuals}
+            hasActuals={configuredBudgetHasActuals}
+          />
+          <BudgetCategoryList
+            lines={configuredBudgetCategoryLines}
+            actualCategoryMetrics={configuredBudgetActuals?.categoryActuals ?? []}
+            hasActuals={configuredBudgetHasActuals}
+          />
+        </>
+      ) : null}
 
       <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
 
