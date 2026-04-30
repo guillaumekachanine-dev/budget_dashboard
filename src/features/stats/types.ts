@@ -7,16 +7,68 @@ export type StatsBudgetBucketKey =
   | 'discretionnaire'
   | 'cagnotte_projet'
 
-export interface StatsSelectedPeriod {
-  id: string | null
-  periodYear: number | null
+export type StatsSelectedPeriod =
+  | {
+      mode: 'month'
+      periodYear: number
+      periodMonth: number
+      label: string
+      id?: string | null
+    }
+  | {
+      mode: 'year'
+      periodYear: number
+      label: string
+    }
+
+export interface StatsPeriodOption {
+  key: string
+  mode: 'month' | 'year'
+  periodYear: number
   periodMonth: number | null
-  label: string | null
+  label: string
+}
+
+export interface StatsMonthlyReference {
+  periodYear: number
+  periodMonth: number
+  label: string
+  id: string | null
+  budgetSummary: {
+    totalExpenseBudget: number
+    globalVariableBudget: number
+    socleFixeBudget: number
+    variableEssentielleBudget: number
+    provisionBudget: number
+    discretionnaireBudget: number
+    cagnotteProjetBudget: number
+  }
+  budgetBucketVsActual: Array<{
+    budgetBucket: string
+    targetBudgetBucketEur: number
+    actualBudgetBucketEur: number
+    deltaBudgetBucketEur: number
+    consumptionRatio: number | null
+  }>
+  savingsSummary: {
+    totalSavingsBudget: number
+    totalSavingsActual: number
+    deltaSavings: number
+  }
+  savingsLines: Array<{
+    categoryName: string
+    targetSavingsAmountEur: number
+    actualSavingsAmountEur: number
+    deltaSavingsAmountEur: number
+  }>
+  totalMonthlyNeed: number
 }
 
 export interface StatsReferenceSnapshot {
   loadedAt: string
   selectedPeriod: StatsSelectedPeriod
+  availablePeriodOptions: StatsPeriodOption[]
+  monthlyReferences: StatsMonthlyReference[]
   budgetSummary: {
     totalExpenseBudget: number
     globalVariableBudget: number

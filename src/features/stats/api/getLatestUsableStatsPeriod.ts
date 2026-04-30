@@ -59,3 +59,26 @@ export async function hasUsableStatsPeriod(periodYear: number, periodMonth: numb
 
   return (data ?? []).length > 0
 }
+
+export async function getUsableStatsPeriodsByYear(periodYear: number): Promise<UsableStatsPeriod[]> {
+  const { data, error } = await budgetDb()
+    .from('budget_bucket_totals_by_period')
+    .select('period_year, period_month')
+    .eq('period_year', periodYear)
+    .order('period_month', { ascending: false })
+
+  if (error) {
+    throw new Error(`getUsableStatsPeriodsByYear failed: ${error.message}`)
+  }
+
+  const uniqueMonths = [...new Set(((data ?? []) as BudgetBucketPeriodRow[]).map((row) => Number(row.period_month)))]
+
+  const periods = uniqueMonths.map((month): UsableStatsPeriod => ({
+    id: null,
+    period_year: periodYear,
+    period_month: month,
+    label: null,
+  }))
+
+  return periods.sort((a, b) => b.period_month - a.period_month)
+}

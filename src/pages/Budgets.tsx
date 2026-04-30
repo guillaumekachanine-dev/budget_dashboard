@@ -26,6 +26,7 @@ import type { Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
 import { useBudgetPeriod } from '@/features/budget/hooks/useBudgetPeriod'
 import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCards'
@@ -405,7 +406,6 @@ export function Budgets() {
   const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const donutAreaRef = useRef<HTMLDivElement | null>(null)
-  const periodMenuRef = useRef<HTMLDivElement | null>(null)
   const [donutAreaSize, setDonutAreaSize] = useState({ width: 0, height: 0 })
   const dragStartXRef = useRef<number | null>(null)
   const dragDeltaXRef = useRef(0)
@@ -999,38 +999,37 @@ export function Budgets() {
     if (matched) setConfiguredBudgetPeriod(matched)
   }, [configuredBudgetPeriods, nowYear, setConfiguredBudgetPeriod])
 
-  const handleSelectHeaderMonth = useCallback((monthNumber: number) => {
-    setPeriodKey('mois')
-    setSelectedPeriodMonth(monthNumber)
-    setShowHeaderPeriodMenu(false)
-    syncConfiguredPeriodForMonth(monthNumber)
-  }, [syncConfiguredPeriodForMonth])
+  const headerPeriodOptions = useMemo(() => {
+    const monthOptions = elapsedMonths.map((monthNumber) => ({
+      key: `month-${monthNumber}`,
+      label: formatPeriodLabel(nowYear, monthNumber),
+      active: periodKey === 'mois' && selectedPeriodMonth === monthNumber,
+      onSelect: () => {
+        setPeriodKey('mois')
+        setSelectedPeriodMonth(monthNumber)
+        syncConfiguredPeriodForMonth(monthNumber)
+      },
+    }))
 
-  const handleSelectHeaderYear = useCallback(() => {
-    setPeriodKey('annee')
-    setShowHeaderPeriodMenu(false)
-    const fallbackMonth = Math.max(1, Math.min(nowMonth + 1, selectedPeriodMonth))
-    syncConfiguredPeriodForMonth(fallbackMonth)
-  }, [nowMonth, selectedPeriodMonth, syncConfiguredPeriodForMonth])
+    const yearOption = {
+      key: `year-${nowYear}`,
+      label: `année ${nowYear}`,
+      active: periodKey === 'annee',
+      showDividerBefore: true,
+      onSelect: () => {
+        setPeriodKey('annee')
+        const fallbackMonth = Math.max(1, Math.min(nowMonth + 1, selectedPeriodMonth))
+        syncConfiguredPeriodForMonth(fallbackMonth)
+      },
+    }
+
+    return [...monthOptions, yearOption]
+  }, [elapsedMonths, nowMonth, nowYear, periodKey, selectedPeriodMonth, syncConfiguredPeriodForMonth])
 
   useEffect(() => {
     if (!configuredBudgetPeriods.length) return
     syncConfiguredPeriodForMonth(nowMonth + 1)
   }, [configuredBudgetPeriods.length, nowMonth, syncConfiguredPeriodForMonth])
-
-  useEffect(() => {
-    if (!showHeaderPeriodMenu) return
-    const onDocumentMouseDown = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (periodMenuRef.current && !periodMenuRef.current.contains(target)) {
-        setShowHeaderPeriodMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', onDocumentMouseDown)
-    return () => {
-      document.removeEventListener('mousedown', onDocumentMouseDown)
-    }
-  }, [showHeaderPeriodMenu])
 
   const showExtendedSlides = selectedCat === 'all'
   const isCategoryMode = selectedCat !== 'all'
@@ -1196,104 +1195,15 @@ export function Budgets() {
           setShowCatSheet((current) => !current)
         }}
         rightSlot={(
-          <div ref={periodMenuRef} style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => {
-                setShowCatSheet(false)
-                setShowHeaderPeriodMenu((current) => !current)
-              }}
-              aria-label="Choisir une période"
-              aria-haspopup="menu"
-              aria-expanded={showHeaderPeriodMenu}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
-                fontSize: 'var(--font-size-base)',
-                fontWeight: 'var(--font-weight-semibold)',
-                padding: 0,
-                margin: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span>{headerPeriodLabel}</span>
-              <ChevronDown
-                size={14}
-                style={{
-                  transform: showHeaderPeriodMenu ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform var(--transition-fast)',
-                }}
-              />
-            </button>
-
-            {showHeaderPeriodMenu ? (
-              <div
-                role="menu"
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 'calc(100% + var(--space-3))',
-                  minWidth: 196,
-                  background: 'var(--neutral-0)',
-                  border: '1px solid var(--neutral-200)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-card)',
-                  padding: 'var(--space-2)',
-                  display: 'grid',
-                  gap: 2,
-                  zIndex: 130,
-                }}
-              >
-                {elapsedMonths.map((monthNumber) => {
-                  const optionLabel = formatPeriodLabel(nowYear, monthNumber)
-                  const active = periodKey === 'mois' && selectedPeriodMonth === monthNumber
-                  return (
-                    <button
-                      key={`month-${monthNumber}`}
-                      type="button"
-                      onClick={() => handleSelectHeaderMonth(monthNumber)}
-                      style={{
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        background: active ? 'var(--primary-50)' : 'transparent',
-                        color: active ? 'var(--primary-700)' : 'var(--neutral-800)',
-                        fontSize: 'var(--font-size-sm)',
-                        fontWeight: active ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
-                        textAlign: 'left',
-                        padding: 'var(--space-2) var(--space-3)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {optionLabel}
-                    </button>
-                  )
-                })}
-                <div style={{ height: 1, background: 'var(--neutral-200)', margin: 'var(--space-1) 0' }} />
-                <button
-                  type="button"
-                  onClick={handleSelectHeaderYear}
-                  style={{
-                    border: 'none',
-                    borderRadius: 'var(--radius-sm)',
-                    background: periodKey === 'annee' ? 'var(--primary-50)' : 'transparent',
-                    color: periodKey === 'annee' ? 'var(--primary-700)' : 'var(--neutral-800)',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: periodKey === 'annee' ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
-                    textAlign: 'left',
-                    padding: 'var(--space-2) var(--space-3)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {`année ${nowYear}`}
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <HeaderPeriodMenu
+            buttonLabel={headerPeriodLabel}
+            buttonAriaLabel="Choisir une période"
+            menuAriaLabel="Choisir une période Budgets"
+            open={showHeaderPeriodMenu}
+            onOpenChange={setShowHeaderPeriodMenu}
+            onBeforeToggle={() => setShowCatSheet(false)}
+            options={headerPeriodOptions}
+          />
         )}
       />
 
