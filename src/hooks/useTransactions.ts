@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { FlowType, Transaction } from '@/lib/types'
 
 interface TransactionFilters {
-  accountId?: string
+  accountId?: string | null
   categoryId?: string
   categoryIds?: string[]
   flowType?: FlowType
@@ -11,9 +11,30 @@ interface TransactionFilters {
   endDate?: string
   year?: number
   month?: number
+  debugSource?: string
+}
+
+interface UseTransactionsOptions {
+  enabled?: boolean
+}
+
+function isValidUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 async function fetchTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
+  if (filters.accountId === null) {
+    return []
+  }
+
+  if (typeof filters.accountId === 'string' && !isValidUuid(filters.accountId)) {
+    return []
+  }
+
+  if (filters.categoryIds?.some((id) => !isValidUuid(id))) {
+    return []
+  }
+
   const PAGE_SIZE = 1000
   let query = supabase.from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
 
@@ -50,11 +71,13 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
   return allRows
 }
 
-export function useTransactions(filters: TransactionFilters = {}) {
+export function useTransactions(filters: TransactionFilters = {}, options: UseTransactionsOptions = {}) {
+  const { enabled = true } = options
   return useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => fetchTransactions(filters),
     staleTime: 30_000,
+    enabled,
   })
 }
 

@@ -148,7 +148,10 @@ export function Stats() {
 
               <StatsBudgetBucketsCard budgetSummary={snapshot.budgetSummary} />
 
-              <StatsBudgetVsActualCard rows={snapshot.budgetBucketVsActual} />
+              <StatsBudgetVsActualCard
+                budgetSummary={snapshot.budgetSummary}
+                rows={snapshot.budgetBucketVsActual}
+              />
 
               <StatsSavingsCard
                 savingsSummary={snapshot.savingsSummary}

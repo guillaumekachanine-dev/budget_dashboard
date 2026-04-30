@@ -84,40 +84,26 @@ function getBudgetBucketLabel(key: StatsBudgetBucketKey): string {
   return BUDGET_BUCKET_CONFIG.find((item) => item.key === key)?.label ?? key
 }
 
-function getBucketByKey(
-  rows: BudgetBucketTotalSourceRow[],
-  key: StatsBudgetBucketKey,
-): number {
-  const matchingRow = rows.find((row) => {
-    const bucketRaw = readString(row, ['budget_bucket', 'bucket', 'bucket_name', 'budget_bucket_name'])
-    return normalizeBudgetBucket(bucketRaw) === key
-  })
-
-  if (!matchingRow) return 0
-
-  return asNumber(
-    readNumber(matchingRow, [
-      'target_budget_bucket_eur',
-      'target_amount_eur',
-      'budget_bucket_total_eur',
-      'budget_amount_eur',
-      'amount_total',
-      'total_amount',
-      'amount',
-    ]),
-  )
-}
-
 export function buildBudgetSummary(
   budgetBucketTotals: BudgetBucketTotalSourceRow[],
   totalExpenseBudget: number,
   globalVariableBudget: number,
 ): StatsReferenceSnapshot['budgetSummary'] {
-  const socleFixeBudget = getBucketByKey(budgetBucketTotals, 'socle_fixe')
-  const variableEssentielleBudget = getBucketByKey(budgetBucketTotals, 'variable_essentielle')
-  const provisionBudget = getBucketByKey(budgetBucketTotals, 'provision')
-  const discretionnaireBudget = getBucketByKey(budgetBucketTotals, 'discretionnaire')
-  const cagnotteProjetBudget = getBucketByKey(budgetBucketTotals, 'cagnotte_projet')
+  const byBucket = new Map<StatsBudgetBucketKey, number>()
+
+  for (const row of budgetBucketTotals) {
+    const bucketRaw = typeof row.budget_bucket === 'string' ? row.budget_bucket : null
+    const bucket = normalizeBudgetBucket(bucketRaw)
+    if (!bucket) continue
+    const amount = asNumber((row as Record<string, unknown>).total_budget_bucket_eur)
+    byBucket.set(bucket, amount)
+  }
+
+  const socleFixeBudget = byBucket.get('socle_fixe') ?? 0
+  const variableEssentielleBudget = byBucket.get('variable_essentielle') ?? 0
+  const provisionBudget = byBucket.get('provision') ?? 0
+  const discretionnaireBudget = byBucket.get('discretionnaire') ?? 0
+  const cagnotteProjetBudget = byBucket.get('cagnotte_projet') ?? 0
 
   const derivedExpenseTotal =
     socleFixeBudget + variableEssentielleBudget + provisionBudget + discretionnaireBudget + cagnotteProjetBudget

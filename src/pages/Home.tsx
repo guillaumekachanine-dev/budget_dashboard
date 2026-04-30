@@ -600,7 +600,8 @@ export function Home() {
 
   const selectedAccount = selectedAccountEntry?.account ?? null
   const { data: selectedAccountTxns } = useTransactions({
-    accountId: selectedAccount?.id ?? '__none__',
+    accountId: selectedAccount?.id ?? null,
+    debugSource: 'Home:selectedAccountTxns',
   })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
   const isLivretA = selectedPresetId === 'livret_a'

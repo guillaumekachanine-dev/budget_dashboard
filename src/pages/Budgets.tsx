@@ -533,7 +533,10 @@ export function Budgets() {
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
     flowType: 'expense',
-    categoryIds: selectedSubCategory ? [selectedSubCategory.id] : ['__none__'],
+    categoryIds: selectedSubCategory ? [selectedSubCategory.id] : undefined,
+    debugSource: 'Budgets:subCategoryTransactions',
+  }, {
+    enabled: Boolean(selectedSubCategory),
   })
 
   const totalMonthlyBudget = useMemo(() => {
