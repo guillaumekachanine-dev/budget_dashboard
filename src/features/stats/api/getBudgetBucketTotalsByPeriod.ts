@@ -7,7 +7,7 @@ export async function getBudgetBucketTotalsByPeriod(
 ): Promise<BudgetBucketTotalSourceRow[]> {
   const { data, error } = await budgetDb()
     .from('budget_bucket_totals_by_period')
-    .select('*')
+    .select('budget_bucket, total_budget_bucket_eur, period_year, period_month')
     .eq('period_year', periodYear)
     .eq('period_month', periodMonth)
 
