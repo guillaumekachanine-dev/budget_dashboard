@@ -541,7 +541,7 @@ export function Flux() {
   const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('expense')
   const [period, setPeriod] = useState<PeriodFilter>('month')
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('current')
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('rolling')
 
   const [showTypeSheet, setShowTypeSheet] = useState(false)
   const [showPeriodSheet, setShowPeriodSheet] = useState(false)
@@ -560,7 +560,7 @@ export function Flux() {
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
-  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
+  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('rolling')
   const [draftOnlyFixed, setDraftOnlyFixed] = useState(false)
   const [draftOnlyJoint, setDraftOnlyJoint] = useState(false)
   const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)

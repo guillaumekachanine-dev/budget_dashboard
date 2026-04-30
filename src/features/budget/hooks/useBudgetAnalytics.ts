@@ -60,6 +60,8 @@ export function useBudgetAnalytics(options: UseBudgetAnalyticsOptions = {}): Use
   const runIdRef = useRef(0)
 
   useEffect(() => {
+    mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }

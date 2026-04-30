@@ -226,6 +226,15 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      get_budget_page_payload: {
+        Args: {
+          p_user_id: string
+          p_period_year: number
+          p_period_month: number
+          p_months_back?: number
+        }
+        Returns: Record<string, unknown>
+      }
       refresh_budget_analytics: {
         Args: { p_user_id: string }
         Returns: null

@@ -88,3 +88,81 @@ export interface BudgetVsActualRow {
   varianceAmount: number
   consumptionRatio: number
 }
+
+export interface BudgetPageSelectedPeriod {
+  period_year: number
+  period_month: number
+  label: string
+}
+
+export interface BudgetPageSummary {
+  actual_total_to_date: number
+  budget_total_reference: number
+  variance_amount: number
+  variance_pct: number | null
+  avg_actual_last_6m: number
+  avg_budget_last_6m: number
+  avg_variance_pct_last_6m: number | null
+}
+
+export interface BudgetPageBucketRow {
+  budget_bucket: string
+  actual_amount: number
+  budget_amount: number
+  variance_amount: number
+  variance_pct: number | null
+  share_actual_pct: number | null
+  share_budget_pct: number | null
+  avg_actual_last_6m: number
+  avg_budget_last_6m: number
+  avg_variance_pct_last_6m: number | null
+}
+
+export interface BudgetPageParentCategoryRow {
+  parent_category_id: string
+  parent_category_name: string
+  actual_amount: number
+  budget_amount: number
+  variance_amount: number
+  variance_pct: number | null
+  share_actual_pct: number | null
+  share_budget_pct: number | null
+  avg_actual_last_6m: number
+  avg_budget_last_6m: number
+  avg_variance_pct_last_6m: number | null
+}
+
+export interface BudgetPageCategoryRow {
+  category_id: string
+  category_name: string
+  parent_category_id: string | null
+  parent_category_name: string | null
+  budget_bucket: string
+  actual_amount: number
+  budget_amount: number
+  variance_amount: number
+  variance_pct: number | null
+  share_actual_pct: number | null
+  share_budget_pct: number | null
+  avg_actual_last_6m: number
+  avg_budget_last_6m: number
+  avg_variance_pct_last_6m: number | null
+}
+
+export interface BudgetPageHistoryRow {
+  period_year: number
+  period_month: number
+  actual_total: number
+  budget_total: number
+  variance_amount: number
+  variance_pct: number | null
+}
+
+export interface BudgetPagePayload {
+  selected_period: BudgetPageSelectedPeriod
+  summary: BudgetPageSummary
+  by_bucket: BudgetPageBucketRow[]
+  by_parent_category: BudgetPageParentCategoryRow[]
+  by_category: BudgetPageCategoryRow[]
+  history_last_6m: BudgetPageHistoryRow[]
+}

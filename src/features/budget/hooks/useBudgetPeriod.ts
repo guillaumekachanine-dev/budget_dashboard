@@ -68,6 +68,8 @@ export function useBudgetPeriod(): UseBudgetPeriodResult {
   const [selectedPeriod, setSelectedPeriodState] = useState<BudgetPeriodOption | null>(null)
 
   useEffect(() => {
+    mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }

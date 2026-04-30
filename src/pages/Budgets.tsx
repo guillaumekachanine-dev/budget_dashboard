@@ -15,19 +15,20 @@ import {
   Pie,
   ReferenceLine,
 } from 'recharts'
-import { useBudgetSummaries } from '@/hooks/useBudgets'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { getCurrentPeriod, formatCurrencyRounded } from '@/lib/utils'
+import { formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
 import type { Transaction } from '@/lib/types'
+import type { BudgetLineWithCategory, BudgetPeriodOption } from '@/features/budget/types'
+import { getBudgetPeriods } from '@/features/budget/api/getBudgetPeriods'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
-import { useBudgetPeriod } from '@/features/budget/hooks/useBudgetPeriod'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCards'
 import { BudgetParentGroups } from '@/features/budget/components/BudgetParentGroups'
 import { BudgetVsActualSection } from '@/features/budget/components/BudgetVsActualSection'
@@ -195,8 +196,9 @@ const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> 
   { id: 'cagnotte', label: 'Cagnotte', color: 'var(--viz-e)' },
 ]
 
-function accentFromLabel(label: string): string {
-  const key = label.trim().toLowerCase()
+function accentFromLabel(label: string | null | undefined): string {
+  const safeLabel = typeof label === 'string' && label.trim().length > 0 ? label : 'categorie'
+  const key = safeLabel.trim().toLowerCase()
   let hash = 0
   for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
   return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
@@ -359,7 +361,6 @@ function SubCategoryTransactionsModal({
 }
 
 export function Budgets() {
-  const { year, month } = getCurrentPeriod()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
@@ -367,7 +368,9 @@ export function Budgets() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
+  const [selectedPeriodYear, setSelectedPeriodYear] = useState(nowYear)
   const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(nowMonth + 1)
+  const [availableBudgetPeriods, setAvailableBudgetPeriods] = useState<BudgetPeriodOption[]>([])
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
   const searchParamsKey = searchParams.toString()
@@ -382,18 +385,31 @@ export function Budgets() {
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const {
-    selectedPeriod: configuredBudgetPeriod,
-    availablePeriods: configuredBudgetPeriods,
+    data: budgetPayload,
     loading: configuredBudgetLoading,
     error: configuredBudgetError,
-    summary: configuredBudgetSummary,
-    categoryLines: configuredBudgetCategoryLines,
-    parentGroups: configuredBudgetParentGroups,
-    actuals: configuredBudgetActuals,
-    hasActuals: configuredBudgetHasActuals,
-    setSelectedPeriod: setConfiguredBudgetPeriod,
     reload: reloadConfiguredBudget,
-  } = useBudgetPeriod()
+  } = useBudgetPagePayload({
+    periodYear: selectedPeriodYear,
+    periodMonth: selectedPeriodMonth,
+    monthsBack: 6,
+  })
+  const payloadByBucket = useMemo(
+    () => (Array.isArray(budgetPayload?.by_bucket) ? budgetPayload.by_bucket : []),
+    [budgetPayload],
+  )
+  const payloadByParentCategory = useMemo(
+    () => (Array.isArray(budgetPayload?.by_parent_category) ? budgetPayload.by_parent_category : []),
+    [budgetPayload],
+  )
+  const payloadByCategory = useMemo(
+    () => (Array.isArray(budgetPayload?.by_category) ? budgetPayload.by_category : []),
+    [budgetPayload],
+  )
+  const payloadHistory = useMemo(
+    () => (Array.isArray(budgetPayload?.history_last_6m) ? budgetPayload.history_last_6m : []),
+    [budgetPayload],
+  )
   const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const donutAreaRef = useRef<HTMLDivElement | null>(null)
@@ -415,6 +431,7 @@ export function Budgets() {
     hasAppliedDefaultParamsRef.current = true
 
     setPeriodKey('mois')
+    setSelectedPeriodYear(nowYear)
     setSelectedPeriodMonth(nowMonth + 1)
     setDataDisplayMode('reel')
     setActiveSlide(0)
@@ -424,15 +441,48 @@ export function Budgets() {
       nextParams.delete('category')
       setSearchParams(nextParams, { replace: true })
     }
-  }, [nowMonth, searchParamsKey, setSearchParams])
+  }, [nowMonth, nowYear, searchParamsKey, setSearchParams])
+
+  useEffect(() => {
+    let active = true
+
+    const loadBudgetPeriods = async () => {
+      try {
+        const periods = await getBudgetPeriods()
+        if (!active) return
+
+        setAvailableBudgetPeriods(periods)
+        if (!periods.length) return
+
+        const hasCurrentSelection = periods.some(
+          (period) => period.period_year === nowYear && period.period_month === nowMonth + 1,
+        )
+
+        if (!hasCurrentSelection) {
+          setSelectedPeriodYear(periods[0].period_year)
+          setSelectedPeriodMonth(periods[0].period_month)
+        }
+      } catch {
+        if (!active) return
+        setAvailableBudgetPeriods([])
+      }
+    }
+
+    void loadBudgetPeriods()
+
+    return () => {
+      active = false
+    }
+  }, [nowMonth, nowYear])
 
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
     setPeriodKey('mois')
+    setSelectedPeriodYear(nowYear)
     setSelectedPeriodMonth(nowMonth + 1)
     setShowHeaderPeriodMenu(false)
     setShowCatSheet(false)
-  }, [nowMonth, setSelectedCat])
+  }, [nowMonth, nowYear, setSelectedCat])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -462,7 +512,106 @@ export function Budgets() {
     return () => resizeObserver.disconnect()
   }, [])
 
-  const { data: summaries } = useBudgetSummaries(year, month)
+  const configuredBudgetPeriod = useMemo(() => {
+    if (!budgetPayload) return null
+
+    const selectedPeriod = budgetPayload.selected_period
+    return {
+      id: '',
+      period_year: Number(selectedPeriod?.period_year ?? selectedPeriodYear),
+      period_month: Number(selectedPeriod?.period_month ?? selectedPeriodMonth),
+      label: selectedPeriod?.label ?? formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth),
+      starts_on: '',
+      ends_on: '',
+    }
+  }, [budgetPayload, selectedPeriodMonth, selectedPeriodYear])
+
+  const configuredBudgetCategoryLines = useMemo<BudgetLineWithCategory[]>(() => {
+    if (!budgetPayload) return []
+    const periodYear = Number(budgetPayload.selected_period?.period_year ?? selectedPeriodYear)
+    const periodMonth = Number(budgetPayload.selected_period?.period_month ?? selectedPeriodMonth)
+
+    return payloadByCategory.map((row) => ({
+      id: `${row.category_id}:${periodYear}-${periodMonth}`,
+      period_id: '',
+      category_id: row.category_id,
+      budget_kind: 'category' as const,
+      amount: Number(row.budget_amount ?? 0),
+      currency: 'EUR',
+      notes: null,
+      category_name: row.category_name,
+      parent_category_id: row.parent_category_id,
+      parent_category_name: row.parent_category_name,
+      budget_bucket: row.budget_bucket,
+      budget_method: null,
+      decision_status: null,
+      final_budget_monthly_eur: null,
+      manual_budget_monthly_eur: null,
+      recommendation_comment: null,
+    }))
+  }, [payloadByCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
+
+  const configuredBudgetSummary = useMemo(() => {
+    const byBucket = new Map(payloadByBucket.map((row) => [row.budget_bucket, Number(row.budget_amount ?? 0)]))
+    const totalBudgetMonthly = Number(budgetPayload?.summary.budget_total_reference ?? 0)
+
+    return {
+      totalBudgetMonthly,
+      globalVariableBudget: 0,
+      socleFixeBudget: byBucket.get('socle_fixe') ?? 0,
+      variableEssentielleBudget: byBucket.get('variable_essentielle') ?? 0,
+      provisionBudget: byBucket.get('provision') ?? 0,
+      discretionnaireBudget: byBucket.get('discretionnaire') ?? 0,
+      cagnotteProjetBudget: byBucket.get('cagnotte_projet') ?? 0,
+      horsPilotageBudget: byBucket.get('hors_pilotage') ?? 0,
+    }
+  }, [budgetPayload, payloadByBucket])
+
+  const configuredBudgetParentGroups = useMemo(() => {
+    if (!budgetPayload) return []
+    return payloadByParentCategory.map((parentRow) => ({
+      parentCategoryId: parentRow.parent_category_id,
+      parentCategoryName: parentRow.parent_category_name,
+      totalAmount: Number(parentRow.budget_amount ?? 0),
+      lines: configuredBudgetCategoryLines.filter((line) => (
+        (line.parent_category_id ?? line.category_id) === parentRow.parent_category_id
+      )),
+    }))
+  }, [payloadByParentCategory, configuredBudgetCategoryLines])
+
+  const configuredBudgetActuals = useMemo(() => {
+    if (!budgetPayload) return null
+    return {
+      monthlyMetrics: null,
+      categoryActuals: payloadByCategory.map((row) => ({
+        category_id: row.category_id,
+        category_name: row.category_name,
+        parent_category_id: row.parent_category_id,
+        parent_category_name: row.parent_category_name,
+        amount_total: Number(row.actual_amount ?? 0),
+      })),
+      totalActualExpense: Number(budgetPayload.summary.actual_total_to_date ?? 0),
+    }
+  }, [budgetPayload, payloadByCategory])
+
+  const configuredBudgetHasActuals = useMemo(() => {
+    if (!configuredBudgetActuals) return false
+    if (configuredBudgetActuals.totalActualExpense > 0) return true
+    return configuredBudgetActuals.categoryActuals.some((row) => Number(row.amount_total ?? 0) > 0)
+  }, [configuredBudgetActuals])
+
+  const summaries = useMemo(() => {
+    if (!budgetPayload) return []
+    return payloadByCategory.map((row) => ({
+      category: {
+        id: row.category_id,
+        parent_id: row.parent_category_id,
+        name: row.category_name,
+      },
+      budget_amount: Number(row.budget_amount ?? 0),
+    }))
+  }, [budgetPayload, payloadByCategory])
+
   const { data: categories = [], isFetched: categoriesFetched } = useCategories('expense')
   const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
   const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
@@ -475,7 +624,10 @@ export function Budgets() {
     }
   }, [selectedCat, categoryById, categoriesFetched, setSelectedCat])
 
-  const range = useMemo(() => getPeriodRange(periodKey, nowYear, selectedPeriodMonth), [periodKey, nowYear, selectedPeriodMonth])
+  const range = useMemo(
+    () => getPeriodRange(periodKey, selectedPeriodYear, selectedPeriodMonth),
+    [periodKey, selectedPeriodYear, selectedPeriodMonth],
+  )
 
   const selectedCategoryIds = useMemo(() => {
     if (selectedCat === 'all') return undefined
@@ -499,14 +651,6 @@ export function Budgets() {
     flowType: 'expense',
   })
 
-  const historyStart = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().slice(0, 10)
-  const { data: historyTxns } = useTransactions({
-    startDate: historyStart,
-    endDate: todayStr(),
-    flowType: 'expense',
-    categoryIds: selectedCategoryIds,
-  })
-
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
     flowType: 'expense',
@@ -523,10 +667,14 @@ export function Budgets() {
   }, [summaries, selectedCat])
 
   const selectedPeriodSpent = useMemo(() => {
+    if (selectedCat === 'all') {
+      return Number(budgetPayload?.summary.actual_total_to_date ?? 0)
+    }
+
     const txs = periodTxns ?? []
     if (!txs.length) return 0
     return txs.reduce((sum, tx) => sum + Number(tx.amount), 0)
-  }, [periodTxns])
+  }, [budgetPayload, periodTxns, selectedCat])
 
   const selectedCatInfo = useMemo(() => categories.find((c) => c.id === selectedCat) ?? null, [categories, selectedCat])
   const categoryBudgetLines = useMemo(() => {
@@ -573,16 +721,18 @@ export function Budgets() {
   )
 
   const monthlyHistory = useMemo<MonthlyBucket[]>(() => {
-    const base = [-5, -4, -3, -2, -1, 0].map((offset) => {
-      const d = new Date(nowYear, nowMonth + offset, 1)
-      const m = d.getMonth()
-      const y = d.getFullYear()
-      const amount = (historyTxns ?? []).reduce((sum, t) => {
-        const txDate = new Date(t.transaction_date)
-        if (txDate.getMonth() === m && txDate.getFullYear() === y) return sum + Number(t.amount)
-        return sum
-      }, 0)
-      return { month: MONTHS_FR_SHORT[m], amount, budget: totalMonthlyBudget, isCurrent: offset === 0 }
+    const base = payloadHistory.map((row) => {
+      const monthIndex = Math.max(0, Math.min(11, Number(row.period_month) - 1))
+      const amount = Number(row.actual_total ?? 0)
+      const budget = Number(row.budget_total ?? 0)
+      const isCurrent = Number(row.period_year) === selectedPeriodYear && Number(row.period_month) === selectedPeriodMonth
+
+      return {
+        month: MONTHS_FR_SHORT[monthIndex],
+        amount,
+        budget,
+        isCurrent,
+      }
     })
 
     return base.map((row, idx) => {
@@ -591,80 +741,61 @@ export function Budgets() {
       if (prev <= 0) return { ...row, evolutionPct: null }
       return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
     })
-  }, [historyTxns, totalMonthlyBudget, nowMonth, nowYear])
+  }, [payloadHistory, selectedPeriodYear, selectedPeriodMonth])
 
   const realPieData = useMemo<PieDatum[]>(() => {
-    const txs = periodTxns ?? []
-    const amounts = new Map<string, number>()
-
-    txs.forEach((tx) => {
-      const categoryId = tx.category_id
-      if (!categoryId) return
-      const category = categoryById.get(categoryId)
-      if (!category) return
-
-      if (selectedCat === 'all') {
-        const rootId = category.parent_id ?? category.id
-        amounts.set(rootId, (amounts.get(rootId) ?? 0) + Number(tx.amount))
-        return
-      }
-
-      if (category.parent_id === selectedCat || category.id === selectedCat) {
-        amounts.set(category.id, (amounts.get(category.id) ?? 0) + Number(tx.amount))
-      }
-    })
-
-    return Array.from(amounts.entries())
-      .map(([id, value]) => ({
-        id,
-        name: categoryById.get(id)?.name ?? 'Catégorie',
-        value,
-        color: accentFromLabel(categoryById.get(id)?.name ?? id),
-      }))
-      .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value)
-  }, [categoryById, periodTxns, selectedCat])
-  const budgetPieData = useMemo<PieDatum[]>(() => {
-    const budgetByCategory = (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
-      acc.set(summary.category.id, (acc.get(summary.category.id) ?? 0) + Number(summary.budget_amount))
-      return acc
-    }, new Map<string, number>())
+    if (!budgetPayload) return []
 
     if (selectedCat === 'all') {
-      const budgetByRoot = (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
-        const rootId = summary.category.parent_id ?? summary.category.id
-        acc.set(rootId, (acc.get(rootId) ?? 0) + Number(summary.budget_amount))
-        return acc
-      }, new Map<string, number>())
-
-      return rootExpenseCategories
-        .map((rootCategory) => ({
-          id: rootCategory.id,
-          name: rootCategory.name,
-          value: budgetByRoot.get(rootCategory.id) ?? 0,
-          color: accentFromLabel(rootCategory.name),
+      return payloadByParentCategory
+        .map((row) => ({
+          id: row.parent_category_id,
+          name: row.parent_category_name,
+          value: Number(row.actual_amount ?? 0),
+          color: accentFromLabel(row.parent_category_name),
         }))
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
     }
 
-    const selectedCategory = categoryById.get(selectedCat)
-    if (!selectedCategory) return []
-
-    const entries = selectedCategory.parent_id
-      ? [selectedCategory]
-      : expenseSubCategories.filter((subCategory) => subCategory.parent_id === selectedCat)
-
-    return entries
-      .map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        value: budgetByCategory.get(entry.id) ?? 0,
-        color: accentFromLabel(entry.name),
+    return payloadByCategory
+      .filter((row) => row.parent_category_id === selectedCat || row.category_id === selectedCat)
+      .map((row) => ({
+        id: row.category_id,
+        name: row.category_name,
+        value: Number(row.actual_amount ?? 0),
+        color: accentFromLabel(row.category_name),
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
-  }, [summaries, selectedCat, rootExpenseCategories, categoryById, expenseSubCategories])
+  }, [payloadByCategory, payloadByParentCategory, selectedCat])
+
+  const budgetPieData = useMemo<PieDatum[]>(() => {
+    if (!budgetPayload) return []
+
+    if (selectedCat === 'all') {
+      return payloadByParentCategory
+        .map((row) => ({
+          id: row.parent_category_id,
+          name: row.parent_category_name,
+          value: Number(row.budget_amount ?? 0),
+          color: accentFromLabel(row.parent_category_name),
+        }))
+        .filter((row) => row.value > 0)
+        .sort((a, b) => b.value - a.value)
+    }
+
+    return payloadByCategory
+      .filter((row) => row.parent_category_id === selectedCat || row.category_id === selectedCat)
+      .map((row) => ({
+        id: row.category_id,
+        name: row.category_name,
+        value: Number(row.budget_amount ?? 0),
+        color: accentFromLabel(row.category_name),
+      }))
+      .filter((row) => row.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [payloadByCategory, payloadByParentCategory, selectedCat])
   const pieData = dataDisplayMode === 'budget' ? budgetPieData : realPieData
 
   const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
@@ -880,13 +1011,35 @@ export function Budgets() {
       })
     })
 
+    if (selectedCat === 'all' && budgetPayload) {
+      for (const bucketRow of payloadByBucket) {
+        const blockId = mapBudgetBucketToBlock(bucketRow.budget_bucket)
+        if (!blockId) continue
+
+        const target = initial.get(blockId)
+        if (!target) continue
+
+        target.budgetAmount += Number(bucketRow.budget_amount ?? 0)
+        target.actualAmount += Number(bucketRow.actual_amount ?? 0)
+        target.lines = payloadByCategory
+          .filter((row) => row.budget_bucket === bucketRow.budget_bucket)
+          .map((row) => ({
+            id: row.category_id,
+            categoryName: row.category_name,
+            parentCategoryName: row.parent_category_name,
+            budgetAmount: Number(row.budget_amount ?? 0),
+            actualAmount: Number(row.actual_amount ?? 0),
+          }))
+      }
+    }
+
     const isVisibleLine = (categoryId: string | null, parentCategoryId: string | null): boolean => {
       if (selectedCat === 'all') return true
       if (!categoryId) return false
       return categoryId === selectedCat || parentCategoryId === selectedCat
     }
 
-    for (const line of configuredBudgetCategoryLines) {
+    for (const line of selectedCat === 'all' ? [] : configuredBudgetCategoryLines) {
       if (!isVisibleLine(line.category_id, line.parent_category_id)) continue
       const blockId = mapBudgetBucketToBlock(line.budget_bucket)
       if (!blockId) continue
@@ -918,7 +1071,7 @@ export function Budgets() {
         }),
       }))
       .filter((row) => row.budgetAmount > 0 || row.actualAmount > 0)
-  }, [configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
+  }, [budgetPayload, payloadByBucket, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
 
   const blockPieData = useMemo<PieDatum[]>(
     () =>
@@ -942,7 +1095,7 @@ export function Budgets() {
   )
 
   const subCategoryModalTitle = selectedSubCategory
-    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey, nowYear, selectedPeriodMonth)}`
+    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey, selectedPeriodYear, selectedPeriodMonth)}`
     : ''
   const configuredPeriodLabel = configuredBudgetPeriod
     ? formatPeriodLabel(
@@ -952,61 +1105,34 @@ export function Budgets() {
     )
     : 'Aucune période'
   const headerPeriodLabel = periodKey === 'annee'
-    ? `Année ${nowYear}`
-    : formatPeriodLabel(nowYear, selectedPeriodMonth)
-  const elapsedMonths = useMemo(
-    () => Array.from({ length: nowMonth + 1 }, (_, index) => nowMonth + 1 - index),
-    [nowMonth],
-  )
-
-  const handleConfiguredPeriodChange = useCallback((nextPeriodId: string) => {
-    const period = configuredBudgetPeriods.find((row) => row.id === nextPeriodId) ?? null
-    setConfiguredBudgetPeriod(period)
-    if (!period) return
-    if (period.period_year !== nowYear) return
-    if (period.period_month < 1 || period.period_month > nowMonth + 1) return
-    setPeriodKey('mois')
-    setSelectedPeriodMonth(period.period_month)
-  }, [configuredBudgetPeriods, nowYear, nowMonth, setConfiguredBudgetPeriod])
-
-  const syncConfiguredPeriodForMonth = useCallback((nextMonth: number) => {
-    const matched = configuredBudgetPeriods.find(
-      (period) => period.period_year === nowYear && period.period_month === nextMonth,
-    ) ?? null
-    if (matched) setConfiguredBudgetPeriod(matched)
-  }, [configuredBudgetPeriods, nowYear, setConfiguredBudgetPeriod])
-
+    ? `Année ${selectedPeriodYear}`
+    : formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth)
   const headerPeriodOptions = useMemo(() => {
-    const monthOptions = elapsedMonths.map((monthNumber) => ({
-      key: `month-${monthNumber}`,
-      label: formatPeriodLabel(nowYear, monthNumber),
-      active: periodKey === 'mois' && selectedPeriodMonth === monthNumber,
+    const monthOptions = availableBudgetPeriods.map((period) => ({
+      key: `period-${period.period_year}-${period.period_month}`,
+      label: formatPeriodLabel(period.period_year, period.period_month, period.label),
+      active: periodKey === 'mois'
+        && selectedPeriodYear === period.period_year
+        && selectedPeriodMonth === period.period_month,
       onSelect: () => {
         setPeriodKey('mois')
-        setSelectedPeriodMonth(monthNumber)
-        syncConfiguredPeriodForMonth(monthNumber)
+        setSelectedPeriodYear(period.period_year)
+        setSelectedPeriodMonth(period.period_month)
       },
     }))
 
     const yearOption = {
-      key: `year-${nowYear}`,
-      label: `année ${nowYear}`,
+      key: `year-${selectedPeriodYear}`,
+      label: `année ${selectedPeriodYear}`,
       active: periodKey === 'annee',
       showDividerBefore: true,
       onSelect: () => {
         setPeriodKey('annee')
-        const fallbackMonth = Math.max(1, Math.min(nowMonth + 1, selectedPeriodMonth))
-        syncConfiguredPeriodForMonth(fallbackMonth)
       },
     }
 
     return [...monthOptions, yearOption]
-  }, [elapsedMonths, nowMonth, nowYear, periodKey, selectedPeriodMonth, syncConfiguredPeriodForMonth])
-
-  useEffect(() => {
-    if (!configuredBudgetPeriods.length) return
-    syncConfiguredPeriodForMonth(nowMonth + 1)
-  }, [configuredBudgetPeriods.length, nowMonth, syncConfiguredPeriodForMonth])
+  }, [availableBudgetPeriods, periodKey, selectedPeriodMonth, selectedPeriodYear])
 
   const showExtendedSlides = selectedCat === 'all'
   const isCategoryMode = selectedCat !== 'all'
@@ -1068,7 +1194,7 @@ export function Budgets() {
 
   useEffect(() => {
     setSelectedDonutSlice(null)
-  }, [dataDisplayMode, periodKey, selectedPeriodMonth, selectedCat])
+  }, [dataDisplayMode, periodKey, selectedPeriodYear, selectedPeriodMonth, selectedCat])
 
   useEffect(() => {
     if (!selectedBlockId) return
@@ -1712,34 +1838,10 @@ export function Budgets() {
             </p>
           </div>
 
-          {configuredBudgetPeriods.length > 1 ? (
-            <label style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              <span style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Changer de période
-              </span>
-              <select
-                value={configuredBudgetPeriod?.id ?? ''}
-                onChange={(event) => handleConfiguredPeriodChange(event.target.value)}
-                disabled={configuredBudgetLoading}
-                style={{
-                  width: '100%',
-                  minHeight: 'var(--touch-target-min)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--neutral-200)',
-                  background: 'var(--neutral-0)',
-                  color: 'var(--neutral-900)',
-                  padding: '0 var(--space-4)',
-                  fontSize: 'var(--font-size-base)',
-                  fontWeight: 700,
-                }}
-              >
-                {configuredBudgetPeriods.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {formatPeriodLabel(period.period_year, period.period_month, period.label)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {configuredBudgetLoading ? (
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+              Chargement du payload Budgets…
+            </p>
           ) : null}
 
           {configuredBudgetError ? (
