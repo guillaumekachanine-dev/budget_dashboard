@@ -41,10 +41,11 @@ function normalizePeriodRows(rows: BudgetBucketPeriodRow[]): Array<{ period_year
   })
 }
 
-export async function getUsableStatsMonthlyPeriods(year = STATS_REFERENCE_YEAR): Promise<UsableStatsPeriod[]> {
+export async function getUsableStatsMonthlyPeriods(userId: string, year = STATS_REFERENCE_YEAR): Promise<UsableStatsPeriod[]> {
   const { data, error } = await budgetDb()
     .from('budget_bucket_totals_by_period')
     .select('period_year, period_month')
+    .eq('user_id', userId)
     .eq('period_year', year)
     .order('period_year', { ascending: false })
     .order('period_month', { ascending: false })
@@ -52,6 +53,8 @@ export async function getUsableStatsMonthlyPeriods(year = STATS_REFERENCE_YEAR):
   if (error) {
     throw new Error(`getUsableStatsMonthlyPeriods failed: ${error.message}`)
   }
+
+  console.info('[stats periods][temporary] getUsableStatsMonthlyPeriods raw data=', data ?? [])
 
   const normalized = normalizePeriodRows((data ?? []) as BudgetBucketPeriodRow[])
   const periods = await Promise.all(normalized.map(async (period) => {
@@ -67,15 +70,16 @@ export async function getUsableStatsMonthlyPeriods(year = STATS_REFERENCE_YEAR):
   return periods.sort((a, b) => b.period_month - a.period_month)
 }
 
-export async function getLatestUsableStatsPeriod(): Promise<UsableStatsPeriod | null> {
-  const periods = await getUsableStatsMonthlyPeriods()
+export async function getLatestUsableStatsPeriod(userId: string): Promise<UsableStatsPeriod | null> {
+  const periods = await getUsableStatsMonthlyPeriods(userId)
   return periods[0] ?? null
 }
 
-export async function hasUsableStatsPeriod(periodYear: number, periodMonth: number): Promise<boolean> {
+export async function hasUsableStatsPeriod(userId: string, periodYear: number, periodMonth: number): Promise<boolean> {
   const { data, error } = await budgetDb()
     .from('budget_bucket_totals_by_period')
     .select('period_year, period_month')
+    .eq('user_id', userId)
     .eq('period_year', periodYear)
     .eq('period_month', periodMonth)
     .limit(1)
