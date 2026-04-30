@@ -59,6 +59,8 @@ type HomeAccountEntry = {
   account: AccountWithBalance | null
 }
 
+type AccountVisualGroup = 'checking' | 'savings' | 'invest'
+
 const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
   { id: 'compte_principal', label: 'Compte principal', iconSrc: comptePrincipalIcon, keywords: ['compte principal', 'courant principal', 'principal'] },
   { id: 'compte_joint', label: 'Compte joint', iconSrc: compteJointIcon, keywords: ['compte joint', 'joint'], iconScale: 1.22 },
@@ -89,6 +91,18 @@ const SAVINGS_BOOKLET_CEILINGS: Record<(typeof SAVINGS_BOOKLET_IDS)[number], num
   ldds: 12_000,
 }
 
+const CHECKING_ACCOUNT_IDS = new Set(['compte_principal', 'compte_joint'])
+const SAVINGS_ACCOUNT_IDS = new Set(['livret_a', 'ldds', 'per', 'epargne_percol'])
+const INVEST_ACCOUNT_IDS = new Set(['pea', 'compte_crypto'])
+
+function resolveAccountVisualGroup(presetId: string | null | undefined): AccountVisualGroup {
+  if (!presetId) return 'checking'
+  if (SAVINGS_ACCOUNT_IDS.has(presetId)) return 'savings'
+  if (INVEST_ACCOUNT_IDS.has(presetId)) return 'invest'
+  if (CHECKING_ACCOUNT_IDS.has(presetId)) return 'checking'
+  return 'checking'
+}
+
 const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
   2017: 0.0075,
   2018: 0.0075,
@@ -102,6 +116,10 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
   2026: 0.015,
   2027: 0.015,
 }
+
+const PROJECTION_SAVINGS_RATE = 0.015
+const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
+const MONTHS_2026_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 export function Home() {
   const { year, month } = getCurrentPeriod()
@@ -204,6 +222,10 @@ export function Home() {
   const accountEntries = useMemo<HomeAccountEntry[]>(() => {
     const source = accounts ?? []
     return HOME_ACCOUNT_PRESETS.map((preset) => {
+      if (preset.id === 'per') {
+        const perAccount = source.find((account) => account.id === PER_ACCOUNT_ID)
+        if (perAccount) return { preset, account: perAccount }
+      }
       const matched = source.find((account) => {
         const haystack = `${account.name} ${account.institution_name ?? ''}`
         const normalized = normalizeLabel(haystack)
@@ -242,10 +264,18 @@ export function Home() {
   const { data: selectedAccountTxns } = useTransactions({
     accountId: selectedAccount?.id ?? '__none__',
   })
+  const selectedPresetId = selectedAccountEntry?.preset.id ?? null
+  const isLivretA = selectedPresetId === 'livret_a'
+  const isLDDS = selectedPresetId === 'ldds'
+  const isPER = selectedPresetId === 'per'
+  const isPEA = selectedPresetId === 'pea'
+  const isMainCheckingAccount = selectedPresetId === 'compte_principal'
+  const isProjectionSavingsAccount = isLivretA || isLDDS
   const isSavingsBooklet =
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
+  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1>(0)
 
   const handleOpenAccountsModal = useCallback(() => {
     setShowAccountsModal((current) => !current)
@@ -255,6 +285,19 @@ export function Home() {
     setSelectedAccountPresetId(presetId)
     setShowAccountsModal(false)
   }, [])
+
+  useEffect(() => {
+    if (!isMainCheckingAccount) {
+      setHomeInsightsSlide(0)
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setHomeInsightsSlide((current) => (current === 0 ? 1 : 0))
+    }, 4200)
+
+    return () => window.clearInterval(intervalId)
+  }, [isMainCheckingAccount])
 
   const heroMetrics = useMemo(
     () => [
@@ -331,6 +374,39 @@ export function Home() {
     [latestSavingsDepositLabel, projectedInterest2027, savingsInterestYtd2026, savingsStatusLabel],
   )
 
+  const projectionSavingsHeroMetrics = useMemo(() => {
+    if (!isProjectionSavingsAccount) return []
+    const interests2025 = isLivretA ? '522€' : '57€'
+    const accountKey = isLivretA ? 'livret-a' : 'ldds'
+
+    return [
+      { key: `statut-${accountKey}`, label: 'Statut', value: 'Plafond atteint' },
+      { key: `liquidite-${accountKey}`, label: 'Liquidité', value: 'Disponible' },
+      { key: `taux-${accountKey}`, label: "Taux d’intérêt", value: '1,5%' },
+      { key: `interets-2025-${accountKey}`, label: 'Intérêts 2025', value: interests2025 },
+    ]
+  }, [isLivretA, isProjectionSavingsAccount])
+
+  const displayedHeroMetrics = isProjectionSavingsAccount
+    ? projectionSavingsHeroMetrics
+    : isPER
+      ? [
+          { key: 'per-versement', label: 'Dernier versement', value: 'Décembre 2025' },
+          { key: 'per-liquidite', label: 'Liquidité', value: 'Sous conditions' },
+          { key: 'per-plus-value-2025', label: 'Plus-value 2025', value: '+265€' },
+          { key: 'per-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
+        ]
+      : isPEA
+        ? [
+            { key: 'pea-indice', label: 'Evolution indice', value: '+8,7%' },
+            { key: 'pea-plus-value', label: 'Plus-value', value: '1305€' },
+            { key: 'pea-liquidite', label: 'Liquidité', value: 'Sous conditions' },
+            { key: 'pea-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
+          ]
+    : isSavingsBooklet
+      ? savingsHeroMetrics
+      : heroMetrics
+
   const savingsInterestCurveData = useMemo(() => {
     if (!isSavingsBooklet) return []
     const currentYear = now.getFullYear()
@@ -354,6 +430,41 @@ export function Home() {
     })
   }, [isSavingsBooklet, now, selectedAccount?.opening_balance, selectedBalance])
 
+  const projectionSavingsData = useMemo(() => {
+    if (!isProjectionSavingsAccount) return []
+
+    const currentYear = new Date().getFullYear()
+    let projectedAmount = Math.max(0, selectedBalance)
+
+    return Array.from({ length: 10 }, (_, index) => {
+      const yearValue = currentYear + index + 1
+      projectedAmount = projectedAmount * (1 + PROJECTION_SAVINGS_RATE)
+      return {
+        year: String(yearValue),
+        projectedFunds: projectedAmount,
+      }
+    })
+  }, [isProjectionSavingsAccount, selectedBalance])
+
+  const perProjection2026Data = useMemo(() => {
+    if (!isPER) return []
+
+    let modeledBalance = Math.max(0, Number(selectedAccount?.opening_balance ?? (selectedBalance - 3000)))
+    const contributionByMonth = new Set([6, 10, 12])
+
+    return MONTHS_2026_LABELS.map((label, index) => {
+      const monthNumber = index + 1
+      if (contributionByMonth.has(monthNumber)) {
+        modeledBalance += 1000
+      }
+
+      return {
+        month: label,
+        balance: modeledBalance,
+      }
+    })
+  }, [isPER, selectedAccount?.opening_balance, selectedBalance])
+
   const driftRows = useMemo(
     () =>
       driftCategories.map((c) => ({
@@ -367,6 +478,17 @@ export function Home() {
 
   const trajectoryDeltaColor =
     deltaPct == null ? 'var(--neutral-500)' : deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
+  const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
+  const heroPrimaryColor = accountVisualGroup === 'savings'
+    ? 'var(--color-success)'
+    : accountVisualGroup === 'invest'
+      ? 'var(--color-warning)'
+      : 'var(--primary-500)'
+  const heroAmountColor = accountVisualGroup === 'savings'
+    ? 'color-mix(in oklab, var(--color-success) 58%, var(--neutral-900) 42%)'
+    : accountVisualGroup === 'invest'
+      ? 'color-mix(in oklab, var(--color-warning) 56%, var(--neutral-900) 44%)'
+      : 'var(--primary-700)'
 
   return (
     <div
@@ -425,7 +547,7 @@ export function Home() {
                 fontWeight: 'var(--font-weight-extrabold)',
                 lineHeight: 'var(--line-height-tight)',
                 fontFamily: 'var(--font-mono)',
-                color: 'var(--primary-700)',
+                color: heroAmountColor,
               }}
             >
               {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
@@ -439,7 +561,7 @@ export function Home() {
 
           <div
             style={{
-              background: 'var(--primary-500)',
+              background: heroPrimaryColor,
               color: 'var(--neutral-0)',
               borderRadius: 'var(--radius-lg)',
               padding: 'var(--space-6)',
@@ -448,21 +570,21 @@ export function Home() {
             }}
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-              {(isSavingsBooklet ? savingsHeroMetrics : heroMetrics).map((metric) => (
+              {displayedHeroMetrics.map((metric) => (
                 <div
                   key={metric.key}
                   style={{
                     background:
                       metric.key === 'reste'
-                        ? 'color-mix(in oklab, var(--primary-500) 14%, var(--neutral-0) 86%)'
+                        ? `color-mix(in oklab, ${heroPrimaryColor} 14%, var(--neutral-0) 86%)`
                         : metric.key === 'jour'
-                          ? 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)'
+                          ? `color-mix(in oklab, ${heroPrimaryColor} 10%, var(--neutral-0) 90%)`
                           : metric.key === 'avenir'
-                            ? 'color-mix(in oklab, var(--primary-500) 18%, var(--neutral-0) 82%)'
-                            : 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)',
+                            ? `color-mix(in oklab, ${heroPrimaryColor} 18%, var(--neutral-0) 82%)`
+                            : `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
                     borderRadius: 'var(--radius-md)',
                     padding: 'var(--space-3)',
-                    border: '1px solid color-mix(in oklab, var(--primary-500) 28%, var(--neutral-0) 72%)',
+                    border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
                     display: 'grid',
                     gap: 'var(--space-1)',
                     justifyItems: 'center',
@@ -472,11 +594,14 @@ export function Home() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 'var(--font-size-xs)',
+                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 'var(--font-size-xs)',
                       fontWeight: 'var(--font-weight-semibold)',
                       textTransform: 'uppercase',
                       color: 'var(--neutral-600)',
                       letterSpacing: '0.06em',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     }}
                   >
                     {metric.label}
@@ -484,10 +609,13 @@ export function Home() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 'var(--font-size-md)',
+                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 'var(--font-size-md)',
                       fontWeight: 'var(--font-weight-bold)',
                       color: 'var(--neutral-900)',
                       fontFamily: 'var(--font-mono)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     }}
                   >
                     {metric.value}
@@ -518,13 +646,33 @@ export function Home() {
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
             <div>
               <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.08em' }}>
-                {isSavingsBooklet ? 'Évolution des intérêts' : 'Trajectoire'}
+                {isMainCheckingAccount
+                  ? (homeInsightsSlide === 0 ? 'Trajectoire' : 'Catégories en dérive')
+                  : isPEA
+                    ? "Évolution de l'indice ETF"
+                    : isPER
+                      ? 'Évolution du solde'
+                      : isProjectionSavingsAccount
+                        ? 'Évolution des fonds'
+                        : isSavingsBooklet
+                          ? 'Évolution des intérêts'
+                          : 'Trajectoire'}
               </p>
               <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-900)' }}>
-                {isSavingsBooklet ? 'Courbe sur 10 ans' : 'Prévisions VS Réel'}
+                {isMainCheckingAccount
+                  ? (homeInsightsSlide === 0 ? 'Prévisions VS Réel' : `${getMonthLabel(year, month)} · Mois en cours`)
+                  : isPEA
+                    ? '1 an · à faire plus tard'
+                    : isPER
+                      ? 'Simulation 2026 · +1000€ en juin, octobre et décembre'
+                      : isProjectionSavingsAccount
+                        ? 'Projection sur 10 ans à 1,5%'
+                        : isSavingsBooklet
+                          ? 'Courbe sur 10 ans'
+                          : 'Prévisions VS Réel'}
               </p>
             </div>
-            {isSavingsBooklet ? null : (
+            {isSavingsBooklet || isPER || isPEA || isMainCheckingAccount ? null : (
               <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
                 {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
               </p>
@@ -532,7 +680,197 @@ export function Home() {
           </div>
 
           <div style={{ height: 220 }}>
-            {isSavingsBooklet ? (
+            {isMainCheckingAccount ? (
+              <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
+                <div
+                  style={{
+                    minHeight: 0,
+                    overflow: 'hidden',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      width: '200%',
+                      height: '100%',
+                      transform: `translateX(-${homeInsightsSlide * 50}%)`,
+                      transition: 'transform 420ms ease',
+                    }}
+                  >
+                    <div style={{ flex: '0 0 50%', minWidth: 0, padding: 'var(--space-2)' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trajectoryData}>
+                          <defs>
+                            <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
+                              <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                          <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                            axisLine={false}
+                            tickLine={false}
+                            width={54}
+                            tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: 'var(--neutral-0)',
+                              border: '1px solid var(--neutral-200)',
+                              borderRadius: 12,
+                              boxShadow: 'var(--shadow-sm)',
+                              fontSize: 12,
+                            }}
+                            formatter={(value: number) => formatMoneyInteger(Number(value))}
+                            labelFormatter={(label) => `Jour ${label}`}
+                          />
+                          <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                          <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ flex: '0 0 50%', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                      {loadingSummaries ? (
+                        <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
+                          Chargement…
+                        </p>
+                      ) : driftRows.length === 0 ? (
+                        <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
+                          Aucune donnée
+                        </p>
+                      ) : (
+                        <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                          {driftRows.map((row) => {
+                            const drift = Number(row.driftPct ?? 0)
+                            const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                            return (
+                              <div
+                                key={row.id}
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'minmax(0,1fr) auto auto',
+                                  alignItems: 'center',
+                                  gap: 'var(--space-2)',
+                                  minHeight: 30,
+                                  padding: '2px 0',
+                                  borderBottom: '1px solid var(--neutral-100)',
+                                  lineHeight: 1.15,
+                                }}
+                              >
+                                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
+                                  {row.name}
+                                </span>
+                                <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                  {formatMoneyInteger(Number(row.spent ?? 0))}
+                                </span>
+                                <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                  {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  {[0, 1].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
+                      onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 'var(--radius-full)',
+                        border: 'none',
+                        padding: 0,
+                        background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
+                        cursor: 'pointer',
+                        transition: 'background-color var(--transition-fast)',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : isPEA ? (
+              <div
+                style={{
+                  height: '100%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px dashed var(--neutral-300)',
+                  background: 'color-mix(in oklab, var(--color-warning) 8%, var(--neutral-0) 92%)',
+                  color: 'var(--neutral-700)',
+                  textAlign: 'center',
+                  padding: 'var(--space-5)',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
+                  Évolution de l’indice ETF sur 1 an: à faire plus tard
+                </p>
+              </div>
+            ) : isPER ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={perProjection2026Data}>
+                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={54}
+                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--neutral-0)',
+                      border: '1px solid var(--neutral-200)',
+                      borderRadius: 12,
+                      boxShadow: 'var(--shadow-sm)',
+                      fontSize: 12,
+                    }}
+                    formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Solde modélisé']}
+                    labelFormatter={(label) => `2026 · ${label}`}
+                  />
+                  <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : isProjectionSavingsAccount ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={projectionSavingsData}>
+                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                  <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={54}
+                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--neutral-0)',
+                      border: '1px solid var(--neutral-200)',
+                      borderRadius: 12,
+                      boxShadow: 'var(--shadow-sm)',
+                      fontSize: 12,
+                    }}
+                    formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Fonds projetés']}
+                    labelFormatter={(label) => `Année ${label}`}
+                  />
+                  <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : isSavingsBooklet ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={savingsInterestCurveData}>
                   <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
@@ -597,7 +935,7 @@ export function Home() {
         </div>
       </motion.section>
 
-      {!isSavingsBooklet ? (
+      {!isSavingsBooklet && !isMainCheckingAccount ? (
         <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

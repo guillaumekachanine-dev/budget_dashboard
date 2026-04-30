@@ -6,6 +6,7 @@ type PageHeaderProps = {
   onTitleClick?: () => void
   centerLabel?: string
   rightLabel?: string
+  rightSlot?: ReactNode
   actionIcon?: ReactNode
   actionAriaLabel?: string
   onActionClick?: () => void
@@ -18,6 +19,7 @@ export function PageHeader({
   onTitleClick,
   centerLabel,
   rightLabel,
+  rightSlot,
   actionIcon,
   actionAriaLabel = 'Action',
   onActionClick,
@@ -103,7 +105,16 @@ export function PageHeader({
           </p>
         ) : null}
 
-        {rightLabel ? (
+        {rightSlot ? (
+          <div
+            style={{
+              position: 'absolute',
+              right: 0,
+            }}
+          >
+            {rightSlot}
+          </div>
+        ) : rightLabel ? (
           <p
             style={{
               position: 'absolute',
