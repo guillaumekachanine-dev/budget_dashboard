@@ -51,7 +51,7 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
               padding: '8px 10px',
               borderRadius: 'var(--radius-full)',
               background: isActive
-                ? 'color-mix(in srgb, var(--neutral-0) 22%, transparent)'
+                ? 'color-mix(in oklab, var(--neutral-0) 22%, transparent)'
                 : 'transparent',
               opacity: isActive ? 1 : 0.62,
               transition: 'all var(--transition-base)',
@@ -125,10 +125,10 @@ const fabBaseStyle: CSSProperties = {
   height: 56,
   transform: 'translate(-50%, -44%)',
   borderRadius: 'var(--radius-full)',
-  border: '1.5px solid color-mix(in srgb, var(--primary-500) 44%, var(--neutral-0))',
+  border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
   background: 'var(--neutral-0)',
   color: 'var(--primary-600)',
-  boxShadow: '0 0 0 3px color-mix(in srgb, var(--primary-300) 55%, transparent), var(--shadow-fab)',
+  boxShadow: '0 0 0 3px color-mix(in oklab, var(--primary-300) 55%, transparent), var(--shadow-fab)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

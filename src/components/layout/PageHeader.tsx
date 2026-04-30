@@ -148,8 +148,8 @@ export function PageHeader({
           onClick={triggerAction}
           disabled={actionDisabled}
           style={{
-            width: 'var(--space-16)',
-            height: 'var(--space-16)',
+            width: 'var(--space-12)',
+            height: 'var(--space-12)',
             borderRadius: 'var(--radius-full)',
             border: '2px solid color-mix(in oklab, var(--neutral-0) 58%, var(--primary-200) 42%)',
             background: 'var(--neutral-200)',

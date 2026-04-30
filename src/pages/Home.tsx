@@ -852,14 +852,7 @@ export function Home() {
                 <div
                   key={metric.key}
                   style={{
-                    background:
-                      metric.key === 'reste'
-                        ? `color-mix(in oklab, ${heroPrimaryColor} 14%, var(--neutral-0) 86%)`
-                        : metric.key === 'jour'
-                          ? `color-mix(in oklab, ${heroPrimaryColor} 10%, var(--neutral-0) 90%)`
-                          : metric.key === 'avenir'
-                            ? `color-mix(in oklab, ${heroPrimaryColor} 18%, var(--neutral-0) 82%)`
-                            : `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
+                    background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
                     borderRadius: 'var(--radius-md)',
                     padding: 'var(--space-3)',
                     border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
@@ -875,7 +868,7 @@ export function Home() {
                       fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 'var(--font-size-xs)',
                       fontWeight: 'var(--font-weight-semibold)',
                       textTransform: 'uppercase',
-                      color: 'var(--neutral-600)',
+                      color: 'var(--neutral-700)',
                       letterSpacing: '0.06em',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -1159,14 +1152,14 @@ export function Home() {
                       aria-label={idx === 0 ? 'Afficher la trajectoire' : idx === 1 ? 'Afficher la vision globale' : 'Afficher les catégories en dérive'}
                       onClick={() => setHomeInsightsSlide(idx as 0 | 1 | 2)}
                       style={{
-                        width: 8,
+                        width: homeInsightsSlide === idx ? 18 : 8,
                         height: 8,
                         borderRadius: 'var(--radius-full)',
                         border: 'none',
                         padding: 0,
                         background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
                         cursor: 'pointer',
-                        transition: 'background-color var(--transition-fast)',
+                        transition: 'width var(--transition-base), background-color var(--transition-fast)',
                       }}
                     />
                   ))}

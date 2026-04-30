@@ -23,19 +23,19 @@
   --color-negative: #FC5A5A;
   --color-info:     #5B57F5;
 
-  /* NEUTRALS (grayscale) */
+  /* NEUTRALS (grayscale) — source de vérité : tailwind.config.js */
   --neutral-0:   #FFFFFF;
-  --neutral-50:  #F9FAFB;
-  --neutral-100: #F3F4F6;
-  --neutral-150: #EEF0F5;
-  --neutral-200: #E8EAF0;
-  --neutral-300: #D1D5DB;
-  --neutral-400: #9CA3AF;
-  --neutral-500: #6B7280;
-  --neutral-600: #4B5563;
-  --neutral-700: #374151;
-  --neutral-800: #1F2937;
-  --neutral-900: #111827;
+  --neutral-50:  #F8F8FC;
+  --neutral-100: #F0F0F5;
+  --neutral-150: #EDEDF2;
+  --neutral-200: #EBEBF0;
+  --neutral-300: #C4C4CC;
+  --neutral-400: #9898A6;
+  --neutral-500: #777788;
+  --neutral-600: #5E5E6F;
+  --neutral-700: #3C3C4D;
+  --neutral-800: #2B2B3B;
+  --neutral-900: #1E1E2D;
 
   /* DATA VIZ PALETTE (5 colors for categories) */
   --viz-a: #4CC9F0;  /* Cyan / Category A */
@@ -44,20 +44,20 @@
   --viz-d: #8BC34A;  /* Lime / Category D */
   --viz-e: #B0BEC5;  /* Grey / Category E */
 
-  /* CATEGORY COLORS (fallback if needed) */
-  --cat-transport:   #4CC9F0;
-  --cat-food:        #40E0D0;
-  --cat-sport:       #FF9F43;
-  --cat-education:   #8BC34A;
-  --cat-entertain:   #B0BEC5;
-  --cat-household:   #4361EE;
-  --cat-bills:       #4CAF50;
-  --cat-subscript:   #FF9F43;
+  /* CATEGORY COLORS — source de vérité : tailwind.config.js cat.* */
+  --cat-transport:   #FF6B6B;
+  --cat-food:        #FFB347;
+  --cat-sport:       #4ECDC4;
+  --cat-education:   #A29BFE;
+  --cat-entertain:   #FD79A8;
+  --cat-household:   #6C5CE7;
+  --cat-bills:       #00B894;
+  --cat-subscript:   #E17055;
 
-  /* TYPOGRAPHY */
-  --font-display: 'Plus Jakarta Sans', 'Poppins', sans-serif;
-  --font-sans:    'DM Sans', 'Poppins', sans-serif;
-  --font-mono:    'Fira Code', 'Poppins', monospace;
+  /* TYPOGRAPHY — DM Sans (UI) + DM Mono (chiffres) */
+  --font-display: 'DM Sans', sans-serif;
+  --font-sans:    'DM Sans', sans-serif;
+  --font-mono:    'DM Mono', monospace;
 
   --font-size-xs:    11px;
   --font-size-sm:    12px;
@@ -93,27 +93,27 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* BORDER RADIUS */
-  --radius-xs:   4px;
-  --radius-sm:   6px;
-  --radius-md:   10px;
-  --radius-lg:   16px;
-  --radius-xl:   20px;
-  --radius-2xl:  28px;
-  --radius-pill: 9999px;
-  --radius-card: 16px;
-  --radius-input: 10px;
+  /* BORDER RADIUS — aligné sur tailwind.config.js + CLAUDE.md */
+  --radius-xs:     4px;
+  --radius-sm:     8px;
+  --radius-md:     12px;
+  --radius-lg:     16px;
+  --radius-xl:     20px;
+  --radius-2xl:    24px;
+  --radius-pill:   9999px;
+  --radius-card:   16px;
+  --radius-input:  12px;
   --radius-button: 12px;
-  --radius-full: 9999px;
+  --radius-full:   9999px;
 
-  /* SHADOWS (elevation system) */
-  --shadow-xs:   0 1px 3px rgba(67, 97, 238, 0.06);
-  --shadow-sm:   0 2px 8px rgba(67, 97, 238, 0.08);
-  --shadow-md:   0 4px 16px rgba(67, 97, 238, 0.10);
-  --shadow-lg:   0 8px 32px rgba(67, 97, 238, 0.14);
-  --shadow-xl:   0 16px 48px rgba(67, 97, 238, 0.18);
-  --shadow-card: 0 2px 8px rgba(67, 97, 238, 0.08);
-  --shadow-fab:  0 8px 24px rgba(67, 97, 238, 0.20);
+  /* SHADOWS (elevation system) — navy tint pour xs/sm/md/card, brand pour lg/xl/fab */
+  --shadow-xs:   0 1px 3px rgba(28, 28, 58, 0.06);
+  --shadow-sm:   0 2px 8px rgba(28, 28, 58, 0.07);
+  --shadow-md:   0 4px 16px rgba(28, 28, 58, 0.10);
+  --shadow-lg:   0 8px 24px rgba(91, 87, 245, 0.20);
+  --shadow-xl:   0 16px 48px rgba(91, 87, 245, 0.18);
+  --shadow-card: 0 2px 12px rgba(28, 28, 58, 0.07);
+  --shadow-fab:  0 8px 24px rgba(91, 87, 245, 0.20);
 
   /* TRANSITIONS */
   --transition-fast:  150ms ease-out;
@@ -266,14 +266,14 @@
   .budget-bar {
     position: relative;
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
+    height: 8px;
+    border-radius: 4px;
     background: var(--neutral-200);
     overflow: hidden;
   }
   .budget-bar-fill {
     height: 100%;
-    border-radius: 3px;
+    border-radius: 4px;
     background: var(--primary-500);
     transition: width var(--transition-base);
   }
