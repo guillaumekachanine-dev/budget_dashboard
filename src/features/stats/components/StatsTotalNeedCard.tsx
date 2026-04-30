@@ -1,23 +1,19 @@
 import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
 
 type StatsTotalNeedCardProps = {
-  mode: 'month' | 'year'
-  periodYear: number
   totalExpenseBudget: number
   totalSavingsBudget: number
   totalMonthlyNeed: number
 }
 
 export function StatsTotalNeedCard({
-  mode,
-  periodYear,
   totalExpenseBudget,
   totalSavingsBudget,
   totalMonthlyNeed,
 }: StatsTotalNeedCardProps) {
-  const needLabel = mode === 'year' ? `Besoin cumulé ${periodYear}` : 'Besoin mensuel total'
-  const expenseLabel = mode === 'year' ? 'Budget dépenses cumulé' : 'Budget dépenses'
-  const savingsLabel = mode === 'year' ? 'Épargne cible cumulée' : 'Épargne cible'
+  const needLabel = 'Besoin mensuel total'
+  const expenseLabel = 'Budget dépenses'
+  const savingsLabel = 'Épargne cible'
 
   return (
     <section style={{ padding: '0 var(--space-6)' }}>

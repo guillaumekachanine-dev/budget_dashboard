@@ -2,8 +2,8 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import { getBudgetPeriodByYearMonth } from '@/features/stats/api/getBudgetPeriodByYearMonth'
 
 interface BudgetBucketPeriodRow {
-  period_year: number
-  period_month: number
+  period_year?: number | string | null
+  period_month?: number | string | null
 }
 
 export interface UsableStatsPeriod {
@@ -13,36 +13,63 @@ export interface UsableStatsPeriod {
   label: string | null
 }
 
-export async function getLatestUsableStatsPeriod(): Promise<UsableStatsPeriod | null> {
+const STATS_REFERENCE_YEAR = 2026
+
+function asFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizePeriodRows(rows: BudgetBucketPeriodRow[]): Array<{ period_year: number; period_month: number }> {
+  const unique = new Map<string, { period_year: number; period_month: number }>()
+
+  for (const row of rows) {
+    const periodYear = asFiniteNumber(row.period_year)
+    const periodMonth = asFiniteNumber(row.period_month)
+    if (!periodYear || !periodMonth) continue
+    if (periodMonth < 1 || periodMonth > 12) continue
+
+    const key = `${periodYear}-${periodMonth}`
+    if (!unique.has(key)) {
+      unique.set(key, { period_year: periodYear, period_month: periodMonth })
+    }
+  }
+
+  return [...unique.values()].sort((a, b) => {
+    if (a.period_year !== b.period_year) return b.period_year - a.period_year
+    return b.period_month - a.period_month
+  })
+}
+
+export async function getUsableStatsMonthlyPeriods(year = STATS_REFERENCE_YEAR): Promise<UsableStatsPeriod[]> {
   const { data, error } = await budgetDb()
     .from('budget_bucket_totals_by_period')
     .select('period_year, period_month')
+    .eq('period_year', year)
     .order('period_year', { ascending: false })
     .order('period_month', { ascending: false })
-    .limit(1)
 
   if (error) {
-    throw new Error(`getLatestUsableStatsPeriod failed: ${error.message}`)
+    throw new Error(`getUsableStatsMonthlyPeriods failed: ${error.message}`)
   }
 
-  const latestBucketPeriod = ((data ?? [])[0] ?? null) as BudgetBucketPeriodRow | null
-  if (!latestBucketPeriod) return null
+  const normalized = normalizePeriodRows((data ?? []) as BudgetBucketPeriodRow[])
+  const periods = await Promise.all(normalized.map(async (period) => {
+    const resolvedPeriod = await getBudgetPeriodByYearMonth(period.period_year, period.period_month)
+    return {
+      id: resolvedPeriod?.id ?? null,
+      period_year: period.period_year,
+      period_month: period.period_month,
+      label: resolvedPeriod?.label ?? null,
+    } satisfies UsableStatsPeriod
+  }))
 
-  const periodFromBudgetPeriods = await getBudgetPeriodByYearMonth(
-    Number(latestBucketPeriod.period_year),
-    Number(latestBucketPeriod.period_month),
-  )
+  return periods.sort((a, b) => b.period_month - a.period_month)
+}
 
-  if (periodFromBudgetPeriods) {
-    return periodFromBudgetPeriods
-  }
-
-  return {
-    id: null,
-    period_year: Number(latestBucketPeriod.period_year),
-    period_month: Number(latestBucketPeriod.period_month),
-    label: null,
-  }
+export async function getLatestUsableStatsPeriod(): Promise<UsableStatsPeriod | null> {
+  const periods = await getUsableStatsMonthlyPeriods()
+  return periods[0] ?? null
 }
 
 export async function hasUsableStatsPeriod(periodYear: number, periodMonth: number): Promise<boolean> {
@@ -58,27 +85,4 @@ export async function hasUsableStatsPeriod(periodYear: number, periodMonth: numb
   }
 
   return (data ?? []).length > 0
-}
-
-export async function getUsableStatsPeriodsByYear(periodYear: number): Promise<UsableStatsPeriod[]> {
-  const { data, error } = await budgetDb()
-    .from('budget_bucket_totals_by_period')
-    .select('period_year, period_month')
-    .eq('period_year', periodYear)
-    .order('period_month', { ascending: false })
-
-  if (error) {
-    throw new Error(`getUsableStatsPeriodsByYear failed: ${error.message}`)
-  }
-
-  const uniqueMonths = [...new Set(((data ?? []) as BudgetBucketPeriodRow[]).map((row) => Number(row.period_month)))]
-
-  const periods = uniqueMonths.map((month): UsableStatsPeriod => ({
-    id: null,
-    period_year: periodYear,
-    period_month: month,
-    label: null,
-  }))
-
-  return periods.sort((a, b) => b.period_month - a.period_month)
 }

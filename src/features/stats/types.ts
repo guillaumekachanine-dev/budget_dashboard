@@ -7,25 +7,18 @@ export type StatsBudgetBucketKey =
   | 'discretionnaire'
   | 'cagnotte_projet'
 
-export type StatsSelectedPeriod =
-  | {
-      mode: 'month'
-      periodYear: number
-      periodMonth: number
-      label: string
-      id?: string | null
-    }
-  | {
-      mode: 'year'
-      periodYear: number
-      label: string
-    }
+export type StatsSelectedPeriod = {
+  id: string | null
+  period_year: number
+  period_month: number
+  label: string | null
+}
 
 export interface StatsPeriodOption {
   key: string
-  mode: 'month' | 'year'
-  periodYear: number
-  periodMonth: number | null
+  id: string | null
+  period_year: number
+  period_month: number
   label: string
 }
 
