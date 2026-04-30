@@ -282,6 +282,50 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
   const { force = false } = options
   const task = (async () => {
     const resolvedUserId = await resolveCurrentUserId(options.userId)
+    console.info('[stats hydrate][temporary] resolvedUserId=', resolvedUserId)
+
+    if (!resolvedUserId) {
+      setState({
+        loading: false,
+        error: null,
+        isHydrated: Boolean(state.snapshot),
+        userId: null,
+      })
+
+      if (state.snapshot) {
+        return state.snapshot
+      }
+
+      return {
+        loadedAt: new Date().toISOString(),
+        selectedPeriod: {
+          id: null,
+          period_year: STATS_REFERENCE_YEAR,
+          period_month: new Date().getMonth() + 1,
+          label: null,
+        },
+        availablePeriodOptions: [],
+        monthlyReferences: [],
+        budgetSummary: {
+          totalExpenseBudget: 0,
+          globalVariableBudget: 0,
+          socleFixeBudget: 0,
+          variableEssentielleBudget: 0,
+          provisionBudget: 0,
+          discretionnaireBudget: 0,
+          cagnotteProjetBudget: 0,
+        },
+        budgetBucketVsActual: [],
+        savingsSummary: {
+          totalSavingsBudget: 0,
+          totalSavingsActual: 0,
+          deltaSavings: 0,
+        },
+        savingsLines: [],
+        totalMonthlyNeed: 0,
+        monthlyEvolution2026: [],
+      }
+    }
 
     if (state.userId && resolvedUserId && state.userId !== resolvedUserId) {
       setState({
@@ -303,16 +347,21 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
 
       if (checkedCandidate) {
         const isExpectedYear = checkedCandidate.period_year === STATS_REFERENCE_YEAR
-        const exists = await hasUsableStatsPeriod(checkedCandidate.period_year, checkedCandidate.period_month)
+        const exists = await hasUsableStatsPeriod(
+          resolvedUserId,
+          checkedCandidate.period_year,
+          checkedCandidate.period_month,
+        )
         if (!isExpectedYear || !exists) {
           checkedCandidate = null
         }
       }
 
-      const usablePeriods = await getUsableStatsMonthlyPeriods(STATS_REFERENCE_YEAR)
+      const usablePeriods = await getUsableStatsMonthlyPeriods(resolvedUserId, STATS_REFERENCE_YEAR)
+      console.info('[stats hydrate][temporary] getUsableStatsMonthlyPeriods result=', usablePeriods)
 
       if (usablePeriods.length === 0) {
-        const latestPeriod = await getLatestUsableStatsPeriod()
+        const latestPeriod = await getLatestUsableStatsPeriod(resolvedUserId)
         const selectedPeriod: StatsSelectedPeriod = latestPeriod
           ? {
               id: latestPeriod.id,
@@ -372,6 +421,8 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
       })
 
       const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
+      console.info('[stats hydrate][temporary] selectedPeriod final=', selectedPeriod)
+      console.info('[stats hydrate][temporary] monthlyReferences.length=', monthlyReferences.length)
       const monthlyEvolution2026 = await getMonthlyEvolution2026()
       const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
@@ -387,6 +438,7 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
         totalMonthlyNeed: displayData.totalMonthlyNeed,
         monthlyEvolution2026: buildMonthlyEvolution2026(monthlyEvolution2026),
       }
+      console.info('[stats hydrate][temporary] snapshot final=', snapshot)
 
       setState({
         snapshot,
