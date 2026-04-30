@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Home, FolderOpen, BarChart2, Activity, Plus } from 'lucide-react'
+import { prefetchRoute, type RoutePath } from '@/lib/routePrefetch'
 
 interface BottomNavProps {
   onAddClick: () => void
@@ -24,10 +25,19 @@ type NavItemProps = {
 }
 
 function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
+  const warmup = () => prefetchRoute(to as RoutePath)
+
   return (
-    <NavLink to={to} end={end} style={{ textDecoration: 'none' }}>
+    <NavLink
+      to={to}
+      end={end}
+      style={{ textDecoration: 'none' }}
+      onMouseEnter={warmup}
+      onFocus={warmup}
+      onTouchStart={warmup}
+    >
       {({ isActive }) => {
-        const iconColor = isActive ? 'var(--primary-500)' : 'var(--neutral-600)'
+        const iconColor = 'var(--neutral-0)'
 
         return (
           <div
@@ -40,17 +50,27 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
               minWidth: 64,
               padding: '8px 10px',
               borderRadius: 'var(--radius-full)',
-              background: isActive ? 'var(--primary-50)' : 'transparent',
+              background: isActive
+                ? 'color-mix(in oklab, var(--neutral-0) 22%, transparent)'
+                : 'transparent',
+              opacity: isActive ? 1 : 0.62,
               transition: 'all var(--transition-base)',
             }}
-          >
-            <span style={{ display: 'inline-flex', color: iconColor }}>
-              <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
+            >
+            <span
+              style={{
+                display: 'inline-flex',
+                color: iconColor,
+                transform: isActive ? 'scale(1.06)' : 'scale(1)',
+                transition: 'transform var(--transition-fast)',
+              }}
+            >
+              <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.45 : 1.8} />
             </span>
             <span
               style={{
                 fontSize: 10,
-                fontWeight: 700,
+                fontWeight: isActive ? 800 : 700,
                 lineHeight: 1,
                 color: iconColor,
                 maxWidth: 58,
@@ -74,21 +94,27 @@ const rootStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   zIndex: 50,
-  maxWidth: 390,
+  maxWidth: 'var(--page-max-width)',
   margin: '0 auto',
-  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
 }
 
 const navStyle: CSSProperties = {
   position: 'relative',
-  height: 72,
+  minHeight: 'calc(var(--nav-base-height) + var(--safe-bottom-offset))',
+  paddingBottom: 'var(--safe-bottom-offset)',
+  background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+  borderTop: 'none',
+  borderTopLeftRadius: 'var(--radius-md)',
+  borderTopRightRadius: 'var(--radius-md)',
+  boxShadow: 'var(--shadow-lg)',
+}
+
+const navRowStyle: CSSProperties = {
+  height: 'var(--nav-base-height)',
   display: 'grid',
   gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
   alignItems: 'center',
   justifyItems: 'center',
-  background: 'var(--neutral-0)',
-  borderTop: '1px solid var(--neutral-200)',
-  boxShadow: 'var(--shadow-lg)',
 }
 
 const fabBaseStyle: CSSProperties = {
@@ -99,10 +125,10 @@ const fabBaseStyle: CSSProperties = {
   height: 56,
   transform: 'translate(-50%, -44%)',
   borderRadius: 'var(--radius-full)',
-  border: 'none',
-  background: 'var(--primary-500)',
-  color: '#fff',
-  boxShadow: 'var(--shadow-fab)',
+  border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
+  background: 'var(--neutral-0)',
+  color: 'var(--primary-600)',
+  boxShadow: '0 0 0 3px color-mix(in oklab, var(--primary-300) 55%, transparent), var(--shadow-fab)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -117,15 +143,17 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
   return (
     <div style={rootStyle}>
       <nav style={navStyle} aria-label="Navigation principale">
-        {LEFT_ITEMS.map(({ to, icon, label }, i) => (
-          <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
-        ))}
+        <div style={navRowStyle}>
+          {LEFT_ITEMS.map(({ to, icon, label }, i) => (
+            <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
+          ))}
 
-        <div aria-hidden="true" />
+          <div aria-hidden="true" />
 
-        {RIGHT_ITEMS.map(({ to, icon, label }) => (
-          <NavItem key={to} to={to} icon={icon} label={label} />
-        ))}
+          {RIGHT_ITEMS.map(({ to, icon, label }) => (
+            <NavItem key={to} to={to} icon={icon} label={label} />
+          ))}
+        </div>
       </nav>
 
       <button

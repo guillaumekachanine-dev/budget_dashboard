@@ -1,6 +1,14 @@
 import { memo, useMemo, type CSSProperties, type ReactNode } from 'react'
 
 type ColumnAlign = 'left' | 'center' | 'right'
+type RowData = Record<string, unknown>
+
+function toCellNode(value: unknown): ReactNode {
+  if (value == null) return '—'
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (value instanceof Date) return value.toLocaleDateString('fr-FR')
+  return String(value)
+}
 
 export interface TableColumn {
   key: string
@@ -11,14 +19,14 @@ export interface TableColumn {
 
 export interface TableProps {
   columns: TableColumn[]
-  data: Array<Record<string, any>>
-  onRowClick?: (row: Record<string, any>) => void
+  data: RowData[]
+  onRowClick?: (row: RowData) => void
   density?: 'compact' | 'normal' | 'spacious'
   striped?: boolean
   hoverable?: boolean
   className?: string
   emptyMessage?: string
-  renderCell?: (value: any, key: string, row: Record<string, any>) => ReactNode
+  renderCell?: (value: unknown, key: string, row: RowData) => ReactNode
 }
 
 const densityStyles: Record<TableProps['density'] extends infer D ? Exclude<D, undefined> : never, { padding: string }> = {
@@ -107,7 +115,11 @@ function TableBase({
             </tr>
           ) : (
             processedData.map((row, rowIndex) => {
-              const rowKey = row.id ?? row.key ?? `${rowIndex}`
+              const rawRowKey = row.id ?? row.key
+              const rowKey =
+                typeof rawRowKey === 'string' || typeof rawRowKey === 'number'
+                  ? rawRowKey
+                  : `row-${rowIndex}`
               const stripedBackground = striped
                 ? rowIndex % 2 === 0
                   ? 'var(--neutral-0)'
@@ -145,7 +157,7 @@ function TableBase({
                           width: column.width,
                         }}
                       >
-                        {renderCell ? renderCell(value, column.key, row) : value ?? '—'}
+                        {renderCell ? renderCell(value, column.key, row) : toCellNode(value)}
                       </td>
                     )
                   })}

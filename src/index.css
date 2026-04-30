@@ -5,37 +5,37 @@
 /* ─── FINDASH DESIGN SYSTEM TOKENS ────── */
 :root {
   /* PRIMARY BRAND */
-  --primary-50:  #EEF2FF;
-  --primary-100: #E0ECFF;
-  --primary-200: #BFD9FF;
-  --primary-300: #9DC5FF;
-  --primary-400: #7BA8FF;
-  --primary-500: #4361EE;
-  --primary-600: #3B52D9;
-  --primary-700: #2D47C9;
-  --primary-800: #1F3BA8;
+  --primary-50:  #F1EFFF;
+  --primary-100: #E6E2FF;
+  --primary-200: #D1CBFF;
+  --primary-300: #B5ACFF;
+  --primary-400: #8A7CFF;
+  --primary-500: #5B57F5;
+  --primary-600: #4E4AE0;
+  --primary-700: #4440C9;
+  --primary-800: #3835A8;
 
   /* SEMANTIC STATUS */
-  --color-success:  #4CAF50;
-  --color-positive: #4CAF50;
-  --color-warning:  #FF9F43;
-  --color-error:    #E74C3C;
-  --color-negative: #E74C3C;
-  --color-info:     #4361EE;
+  --color-success:  #2ED47A;
+  --color-positive: #2ED47A;
+  --color-warning:  #FFAB2E;
+  --color-error:    #FC5A5A;
+  --color-negative: #FC5A5A;
+  --color-info:     #5B57F5;
 
-  /* NEUTRALS (grayscale) */
+  /* NEUTRALS (grayscale) — source de vérité : tailwind.config.js */
   --neutral-0:   #FFFFFF;
-  --neutral-50:  #F9FAFB;
-  --neutral-100: #F3F4F6;
-  --neutral-150: #EEF0F5;
-  --neutral-200: #E8EAF0;
-  --neutral-300: #D1D5DB;
-  --neutral-400: #9CA3AF;
-  --neutral-500: #6B7280;
-  --neutral-600: #4B5563;
-  --neutral-700: #374151;
-  --neutral-800: #1F2937;
-  --neutral-900: #111827;
+  --neutral-50:  #F8F8FC;
+  --neutral-100: #F0F0F5;
+  --neutral-150: #EDEDF2;
+  --neutral-200: #EBEBF0;
+  --neutral-300: #C4C4CC;
+  --neutral-400: #9898A6;
+  --neutral-500: #777788;
+  --neutral-600: #5E5E6F;
+  --neutral-700: #3C3C4D;
+  --neutral-800: #2B2B3B;
+  --neutral-900: #1E1E2D;
 
   /* DATA VIZ PALETTE (5 colors for categories) */
   --viz-a: #4CC9F0;  /* Cyan / Category A */
@@ -44,20 +44,20 @@
   --viz-d: #8BC34A;  /* Lime / Category D */
   --viz-e: #B0BEC5;  /* Grey / Category E */
 
-  /* CATEGORY COLORS (fallback if needed) */
-  --cat-transport:   #4CC9F0;
-  --cat-food:        #40E0D0;
-  --cat-sport:       #FF9F43;
-  --cat-education:   #8BC34A;
-  --cat-entertain:   #B0BEC5;
-  --cat-household:   #4361EE;
-  --cat-bills:       #4CAF50;
-  --cat-subscript:   #FF9F43;
+  /* CATEGORY COLORS — source de vérité : tailwind.config.js cat.* */
+  --cat-transport:   #FF6B6B;
+  --cat-food:        #FFB347;
+  --cat-sport:       #4ECDC4;
+  --cat-education:   #A29BFE;
+  --cat-entertain:   #FD79A8;
+  --cat-household:   #6C5CE7;
+  --cat-bills:       #00B894;
+  --cat-subscript:   #E17055;
 
-  /* TYPOGRAPHY */
-  --font-display: 'Plus Jakarta Sans', 'Poppins', sans-serif;
-  --font-sans:    'DM Sans', 'Poppins', sans-serif;
-  --font-mono:    'Fira Code', 'Poppins', monospace;
+  /* TYPOGRAPHY — DM Sans (UI) + DM Mono (chiffres) */
+  --font-display: 'DM Sans', sans-serif;
+  --font-sans:    'DM Sans', sans-serif;
+  --font-mono:    'DM Mono', monospace;
 
   --font-size-xs:    11px;
   --font-size-sm:    12px;
@@ -93,32 +93,46 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* BORDER RADIUS */
-  --radius-xs:   4px;
-  --radius-sm:   6px;
-  --radius-md:   10px;
-  --radius-lg:   16px;
-  --radius-xl:   20px;
-  --radius-2xl:  28px;
-  --radius-pill: 9999px;
-  --radius-card: 16px;
-  --radius-input: 10px;
+  /* BORDER RADIUS — aligné sur tailwind.config.js + CLAUDE.md */
+  --radius-xs:     4px;
+  --radius-sm:     8px;
+  --radius-md:     12px;
+  --radius-lg:     16px;
+  --radius-xl:     20px;
+  --radius-2xl:    24px;
+  --radius-pill:   9999px;
+  --radius-card:   16px;
+  --radius-input:  12px;
   --radius-button: 12px;
-  --radius-full: 9999px;
+  --radius-full:   9999px;
 
-  /* SHADOWS (elevation system) */
-  --shadow-xs:   0 1px 3px rgba(67, 97, 238, 0.06);
-  --shadow-sm:   0 2px 8px rgba(67, 97, 238, 0.08);
-  --shadow-md:   0 4px 16px rgba(67, 97, 238, 0.10);
-  --shadow-lg:   0 8px 32px rgba(67, 97, 238, 0.14);
-  --shadow-xl:   0 16px 48px rgba(67, 97, 238, 0.18);
-  --shadow-card: 0 2px 8px rgba(67, 97, 238, 0.08);
-  --shadow-fab:  0 8px 24px rgba(67, 97, 238, 0.20);
+  /* SHADOWS (elevation system) — navy tint pour xs/sm/md/card, brand pour lg/xl/fab */
+  --shadow-xs:   0 1px 3px rgba(28, 28, 58, 0.06);
+  --shadow-sm:   0 2px 8px rgba(28, 28, 58, 0.07);
+  --shadow-md:   0 4px 16px rgba(28, 28, 58, 0.10);
+  --shadow-lg:   0 8px 24px rgba(91, 87, 245, 0.20);
+  --shadow-xl:   0 16px 48px rgba(91, 87, 245, 0.18);
+  --shadow-card: 0 2px 12px rgba(28, 28, 58, 0.07);
+  --shadow-fab:  0 8px 24px rgba(91, 87, 245, 0.20);
 
   /* TRANSITIONS */
   --transition-fast:  150ms ease-out;
   --transition-base:  200ms ease-out;
   --transition-slow:  350ms ease-in-out;
+
+  /* MOBILE INTERACTION */
+  --touch-target-min: 44px;
+  --touch-gap-min: 8px;
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top-offset: env(safe-area-inset-top, 0px);
+  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
+  --nav-height: 86px;
+  --nav-base-height: 72px;
+  --page-gutter: clamp(16px, 4.5vw, 24px);
+  --page-max-width: 430px;
 }
 
 /* ─── BASE STYLES ─────────────────────────────────────────────────── */
@@ -126,6 +140,12 @@
   html {
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    min-height: 100%;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -135,8 +155,21 @@
     overscroll-behavior: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1.5;
+    margin: 0;
+    min-height: 100svh;
+    min-height: 100dvh;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100%;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -233,16 +266,54 @@
   .budget-bar {
     position: relative;
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
+    height: 8px;
+    border-radius: 4px;
     background: var(--neutral-200);
     overflow: hidden;
   }
   .budget-bar-fill {
     height: 100%;
-    border-radius: 3px;
+    border-radius: 4px;
     background: var(--primary-500);
     transition: width var(--transition-base);
+  }
+
+  .app-shell {
+    min-height: 100svh;
+    min-height: 100dvh;
+    height: 100%;
+    width: 100%;
+    max-width: var(--page-max-width);
+    margin: 0 auto;
+    background: var(--neutral-50);
+    padding-top: 0;
+    overflow-x: clip;
+  }
+
+  .pb-nav {
+    padding-bottom: calc(var(--nav-height) + var(--safe-bottom-offset));
+  }
+
+  .tap-target {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+
+  .icon-button {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 
@@ -261,5 +332,30 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+}
+
+@media (max-width: 430px) {
+  :root {
+    --space-6: 20px;
+    --space-8: 28px;
+    --space-16: 60px;
+    --nav-height: 84px;
+  }
+}
+
+html[data-standalone='true'] {
+  --safe-top-offset: env(safe-area-inset-top, 0px);
+  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

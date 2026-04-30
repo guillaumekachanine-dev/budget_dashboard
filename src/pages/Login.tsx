@@ -31,11 +31,38 @@ export function Login() {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-10">
-          <div className="w-14 h-14 rounded-2xl bg-primary-500 flex items-center justify-center mx-auto mb-4 shadow-md">
-            <span className="text-white font-bold text-xl font-mono">B</span>
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 'var(--radius-xl)',
+              background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+              <polyline points="16 7 22 7 22 13" />
+            </svg>
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">Budget</h1>
-          <p className="text-neutral-400 text-sm mt-1">Connexion à votre espace</p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-2xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-900)',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Budget
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+            Connexion à votre espace
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-card p-6 flex flex-col gap-4">
