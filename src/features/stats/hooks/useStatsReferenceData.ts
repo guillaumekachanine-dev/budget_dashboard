@@ -1,6 +1,7 @@
 import {
   clearSnapshot,
   hydrateStatsReferenceData,
+  resetSelectedPeriodToDefault,
   setSelectedPeriod,
   useStatsReferenceSnapshot,
   useStatsReferenceStore,
@@ -17,6 +18,7 @@ export function useStatsReferenceData() {
     storeUserId: userId,
     hydrateStatsReferenceData,
     setSelectedPeriod,
+    resetSelectedPeriodToDefault,
     clearSnapshot,
   }
 }

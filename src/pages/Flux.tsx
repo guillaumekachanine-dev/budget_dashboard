@@ -538,6 +538,7 @@ function FilterDropdown({
 
 export function Flux() {
   const [search, setSearch] = useState('')
+  const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('expense')
   const [period, setPeriod] = useState<PeriodFilter>('month')
   const [periodMode, setPeriodMode] = useState<PeriodMode>('current')
@@ -812,8 +813,15 @@ export function Flux() {
               </p>
             </div>
 
-            <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-              <div style={{ flex: '1 1 calc(50% - var(--space-3))', minWidth: 152 }}>
+            <div
+              style={{
+                width: '100%',
+                display: 'grid',
+                gridTemplateColumns: isMobileViewport ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <div>
                 <FilterDropdown
                   id="type"
                   label="Type"
@@ -835,7 +843,7 @@ export function Flux() {
                 />
               </div>
 
-              <div style={{ flex: '1 1 calc(50% - var(--space-3))', minWidth: 152 }}>
+              <div>
                 <FilterDropdown
                   id="period"
                   label="Période"
@@ -869,7 +877,7 @@ export function Flux() {
                 />
               </div>
 
-              <div style={{ flex: '1 1 calc(50% - var(--space-3))', minWidth: 152 }}>
+              <div>
                 <FilterDropdown
                   id="fixed"
                   label="Budget"
@@ -901,7 +909,7 @@ export function Flux() {
                 />
               </div>
 
-              <div style={{ flex: '1 1 calc(50% - var(--space-3))', minWidth: 152 }}>
+              <div>
                 <FilterDropdown
                   id="account"
                   label="Compte"
@@ -937,17 +945,6 @@ export function Flux() {
         </div>
       </motion.section>
 
-      <section style={{ padding: '0 var(--space-6)', display: 'grid', gap: 'var(--space-4)' }}>
-        <Input
-          type="search"
-          placeholder="Recherche"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          leftIcon={<Search size={14} />}
-          size="md"
-        />
-      </section>
-
       <section>
         <div style={{ padding: '0 var(--space-6)' }}>
           <div
@@ -964,6 +961,31 @@ export function Flux() {
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {operationsSummaryLabel}
               </span>
+              <button
+                type="button"
+                aria-label={showSearchInput ? 'Masquer la recherche' : 'Afficher la recherche'}
+                onClick={() => {
+                  setShowSearchInput((current) => {
+                    if (current) setSearch('')
+                    return !current
+                  })
+                }}
+                style={{
+                  border: '1px solid var(--neutral-200)',
+                  background: showSearchInput ? 'var(--neutral-100)' : 'var(--neutral-0)',
+                  width: 24,
+                  height: 24,
+                  borderRadius: 'var(--radius-full)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--neutral-700)',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <Search size={12} />
+              </button>
             </div>
             <span
               style={{
@@ -978,6 +1000,20 @@ export function Flux() {
             </span>
           </div>
         </div>
+
+        {showSearchInput ? (
+          <div style={{ padding: 'var(--space-3) var(--space-6) 0' }}>
+            <Input
+              type="search"
+              placeholder="Recherche"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              leftIcon={<Search size={14} />}
+              size="md"
+              autoFocus
+            />
+          </div>
+        ) : null}
 
         {isLoading ? (
           <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>Chargement…</div>
