@@ -6,18 +6,32 @@ import { getBudgetBucketVsActualByMonth } from '@/features/stats/api/getBudgetBu
 import { getBudgetGlobalVariableForPeriod } from '@/features/stats/api/getBudgetGlobalVariableForPeriod'
 import { getExpenseBudgetTotalForPeriod } from '@/features/stats/api/getExpenseBudgetTotalForPeriod'
 import { getMonthlyEvolution2026 } from '@/features/stats/api/getMonthlyEvolution2026'
-import { getLatestUsableStatsPeriod, hasUsableStatsPeriod } from '@/features/stats/api/getLatestUsableStatsPeriod'
+import {
+  getLatestUsableStatsPeriod,
+  getUsableStatsPeriodsByYear,
+  hasUsableStatsPeriod,
+  type UsableStatsPeriod,
+} from '@/features/stats/api/getLatestUsableStatsPeriod'
 import { getSavingsBudgetLinesByPeriod } from '@/features/stats/api/getSavingsBudgetLinesByPeriod'
 import { getSavingsBudgetTotalsByPeriod } from '@/features/stats/api/getSavingsBudgetTotalsByPeriod'
 import { getSavingsBudgetVsActualByPeriod } from '@/features/stats/api/getSavingsBudgetVsActualByPeriod'
 import { isValidUuid } from '@/features/stats/api/_shared'
-import type { StatsReferenceSnapshot, StatsSelectedPeriod } from '@/features/stats/types'
+import type {
+  StatsMonthlyReference,
+  StatsReferenceSnapshot,
+  StatsSelectedPeriod,
+} from '@/features/stats/types'
 import {
+  aggregateBudgetBucketVsActual,
+  aggregateBudgetSummary,
+  aggregateSavingsLines,
+  aggregateSavingsSummary,
   buildBudgetBucketVsActual,
   buildBudgetSummary,
   buildMonthlyEvolution2026,
   buildSavingsLines,
   buildSavingsSummary,
+  buildStatsPeriodOptions,
   buildTotalMonthlyNeed,
 } from '@/features/stats/utils/statsReferenceSelectors'
 
@@ -34,7 +48,7 @@ type StatsReferenceState = {
 
 type HydrateOptions = {
   force?: boolean
-  period?: Partial<StatsSelectedPeriod>
+  period?: StatsSelectedPeriod
   userId?: string | null
 }
 
@@ -76,6 +90,75 @@ function isSnapshotStale(snapshot: StatsReferenceSnapshot | null): boolean {
   return Date.now() - loadedAtMs > SNAPSHOT_STALE_AFTER_MS
 }
 
+export function isStatsReferenceSnapshotStale(snapshot: StatsReferenceSnapshot | null): boolean {
+  return isSnapshotStale(snapshot)
+}
+
+function buildMonthLabel(periodYear: number, periodMonth: number): string {
+  const date = new Date(periodYear, periodMonth - 1, 1)
+  return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+}
+
+function pickFinalSelectedPeriod(
+  candidate: StatsSelectedPeriod | null,
+  monthlyReferences: StatsMonthlyReference[],
+): StatsSelectedPeriod {
+  if (monthlyReferences.length === 0) {
+    return {
+      mode: 'year',
+      periodYear: new Date().getFullYear(),
+      label: `Année ${new Date().getFullYear()}`,
+    }
+  }
+
+  const latestMonth = monthlyReferences[0]
+
+  if (!candidate) {
+    return {
+      mode: 'month',
+      id: latestMonth.id,
+      periodYear: latestMonth.periodYear,
+      periodMonth: latestMonth.periodMonth,
+      label: latestMonth.label,
+    }
+  }
+
+  if (candidate.mode === 'year') {
+    const hasYearData = monthlyReferences.some((row) => row.periodYear === candidate.periodYear)
+    if (hasYearData) {
+      return {
+        mode: 'year',
+        periodYear: candidate.periodYear,
+        label: candidate.label || `Année ${candidate.periodYear}`,
+      }
+    }
+  }
+
+  if (candidate.mode === 'month') {
+    const matchedMonth = monthlyReferences.find(
+      (row) => row.periodYear === candidate.periodYear && row.periodMonth === candidate.periodMonth,
+    )
+
+    if (matchedMonth) {
+      return {
+        mode: 'month',
+        id: matchedMonth.id,
+        periodYear: matchedMonth.periodYear,
+        periodMonth: matchedMonth.periodMonth,
+        label: matchedMonth.label,
+      }
+    }
+  }
+
+  return {
+    mode: 'month',
+    id: latestMonth.id,
+    periodYear: latestMonth.periodYear,
+    periodMonth: latestMonth.periodMonth,
+    label: latestMonth.label,
+  }
+}
+
 async function resolveCurrentUserId(explicitUserId?: string | null): Promise<string | null> {
   if (typeof explicitUserId === 'string') return explicitUserId
   const { data, error } = await supabase.auth.getSession()
@@ -97,6 +180,18 @@ async function persistSnapshot(snapshot: StatsReferenceSnapshot | null, userId: 
   await writeOfflineValue(storageKey, snapshot)
 }
 
+function isSelectedPeriodShape(value: unknown): value is StatsSelectedPeriod {
+  if (!value || typeof value !== 'object') return false
+  const period = value as Record<string, unknown>
+  if (period.mode === 'month') {
+    return typeof period.periodYear === 'number' && typeof period.periodMonth === 'number'
+  }
+  if (period.mode === 'year') {
+    return typeof period.periodYear === 'number'
+  }
+  return false
+}
+
 async function restoreSnapshotAsync(userId?: string | null) {
   if (restoreTaskStarted) return
   restoreTaskStarted = true
@@ -106,6 +201,7 @@ async function restoreSnapshotAsync(userId?: string | null) {
 
   const persistedSnapshot = await readOfflineValue<StatsReferenceSnapshot>(getStorageKey(resolvedUserId))
   if (!persistedSnapshot) return
+  if (!isSelectedPeriodShape(persistedSnapshot.selectedPeriod)) return
 
   setState({
     snapshot: persistedSnapshot,
@@ -115,30 +211,104 @@ async function restoreSnapshotAsync(userId?: string | null) {
   })
 }
 
-function buildSelectedPeriod(
-  fallbackPeriod: { id: string | null; period_year: number; period_month: number; label: string | null } | null,
-  override?: Partial<StatsSelectedPeriod>,
-): StatsSelectedPeriod {
-  const rawId = override?.id ?? fallbackPeriod?.id ?? null
+function resolvePeriodFromStateOrInput(input?: StatsSelectedPeriod): StatsSelectedPeriod | null {
+  if (input) return input
+  if (state.snapshot?.selectedPeriod && isSelectedPeriodShape(state.snapshot.selectedPeriod)) {
+    return state.snapshot.selectedPeriod
+  }
+  return null
+}
+
+async function fetchMonthlyReference(period: UsableStatsPeriod): Promise<StatsMonthlyReference> {
+  const periodYear = period.period_year
+  const periodMonth = period.period_month
+
+  const [
+    budgetBucketTotals,
+    globalVariableBudget,
+    totalExpenseBudget,
+    budgetBucketVsActual,
+    savingsBudgetTotals,
+    savingsBudgetLines,
+    savingsBudgetVsActual,
+  ] = await Promise.all([
+    getBudgetBucketTotalsByPeriod(periodYear, periodMonth),
+    getBudgetGlobalVariableForPeriod(periodYear, periodMonth),
+    getExpenseBudgetTotalForPeriod(periodYear, periodMonth),
+    getBudgetBucketVsActualByMonth(periodYear, periodMonth),
+    getSavingsBudgetTotalsByPeriod(periodYear, periodMonth),
+    getSavingsBudgetLinesByPeriod(periodYear, periodMonth),
+    getSavingsBudgetVsActualByPeriod(periodYear, periodMonth),
+  ])
+
+  const budgetSummary = buildBudgetSummary(
+    budgetBucketTotals,
+    totalExpenseBudget,
+    globalVariableBudget,
+  )
+
+  const savingsSummary = buildSavingsSummary(
+    savingsBudgetTotals,
+    savingsBudgetVsActual,
+    savingsBudgetLines,
+  )
 
   return {
-    id: isValidUuid(rawId) ? rawId : null,
-    periodYear: override?.periodYear ?? fallbackPeriod?.period_year ?? null,
-    periodMonth: override?.periodMonth ?? fallbackPeriod?.period_month ?? null,
-    label: override?.label ?? fallbackPeriod?.label ?? null,
+    periodYear,
+    periodMonth,
+    label: period.label ?? buildMonthLabel(periodYear, periodMonth),
+    id: isValidUuid(period.id) ? period.id : null,
+    budgetSummary,
+    budgetBucketVsActual: buildBudgetBucketVsActual(budgetBucketVsActual),
+    savingsSummary,
+    savingsLines: buildSavingsLines(savingsBudgetLines, savingsBudgetVsActual),
+    totalMonthlyNeed: buildTotalMonthlyNeed(budgetSummary.totalExpenseBudget, savingsSummary.totalSavingsBudget),
   }
 }
 
-function resolvePeriodFromStateOrInput(input?: Partial<StatsSelectedPeriod>): Partial<StatsSelectedPeriod> {
-  if (input?.periodYear && input?.periodMonth) {
-    return input
+function buildDisplayData(
+  selectedPeriod: StatsSelectedPeriod,
+  monthlyReferences: StatsMonthlyReference[],
+): Pick<
+  StatsReferenceSnapshot,
+  'budgetSummary' | 'budgetBucketVsActual' | 'savingsSummary' | 'savingsLines' | 'totalMonthlyNeed'
+> {
+  if (selectedPeriod.mode === 'year') {
+    const yearRows = monthlyReferences.filter((row) => row.periodYear === selectedPeriod.periodYear)
+    const budgetSummary = aggregateBudgetSummary(yearRows)
+    const savingsSummary = aggregateSavingsSummary(yearRows)
+    return {
+      budgetSummary,
+      budgetBucketVsActual: aggregateBudgetBucketVsActual(yearRows),
+      savingsSummary,
+      savingsLines: aggregateSavingsLines(yearRows),
+      totalMonthlyNeed: buildTotalMonthlyNeed(budgetSummary.totalExpenseBudget, savingsSummary.totalSavingsBudget),
+    }
   }
 
-  if (state.snapshot?.selectedPeriod.periodYear && state.snapshot.selectedPeriod.periodMonth) {
-    return state.snapshot.selectedPeriod
-  }
+  const monthRow = monthlyReferences.find(
+    (row) => row.periodYear === selectedPeriod.periodYear && row.periodMonth === selectedPeriod.periodMonth,
+  ) ?? monthlyReferences[0]
 
-  return {}
+  return {
+    budgetSummary: monthRow?.budgetSummary ?? {
+      totalExpenseBudget: 0,
+      globalVariableBudget: 0,
+      socleFixeBudget: 0,
+      variableEssentielleBudget: 0,
+      provisionBudget: 0,
+      discretionnaireBudget: 0,
+      cagnotteProjetBudget: 0,
+    },
+    budgetBucketVsActual: monthRow?.budgetBucketVsActual ?? [],
+    savingsSummary: monthRow?.savingsSummary ?? {
+      totalSavingsBudget: 0,
+      totalSavingsActual: 0,
+      deltaSavings: 0,
+    },
+    savingsLines: monthRow?.savingsLines ?? [],
+    totalMonthlyNeed: monthRow?.totalMonthlyNeed ?? 0,
+  }
 }
 
 export async function hydrateStatsReferenceData(options: HydrateOptions = {}): Promise<StatsReferenceSnapshot> {
@@ -165,72 +335,51 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
     setState({ loading: true, error: null, userId: resolvedUserId })
 
     try {
-      const periodCandidate = resolvePeriodFromStateOrInput(options.period)
       const latestUsablePeriod = await getLatestUsableStatsPeriod()
+      if (!latestUsablePeriod) {
+        throw new Error('Impossible de déterminer une période Stats exploitable.')
+      }
 
-      let selectedPeriodSource = latestUsablePeriod
+      const availableUsablePeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
+      const usablePeriods = availableUsablePeriods.length > 0 ? availableUsablePeriods : [latestUsablePeriod]
 
-      if (periodCandidate.periodYear && periodCandidate.periodMonth) {
-        const candidatePeriodExists = await hasUsableStatsPeriod(periodCandidate.periodYear, periodCandidate.periodMonth)
-        if (candidatePeriodExists) {
-          selectedPeriodSource = {
-            id: periodCandidate.id ?? null,
-            period_year: periodCandidate.periodYear,
-            period_month: periodCandidate.periodMonth,
-            label: periodCandidate.label ?? null,
-          }
+      const monthlyReferences = await Promise.all(usablePeriods.map((period) => fetchMonthlyReference(period)))
+      monthlyReferences.sort((a, b) => {
+        if (a.periodYear !== b.periodYear) return b.periodYear - a.periodYear
+        return b.periodMonth - a.periodMonth
+      })
+
+      const periodCandidate = resolvePeriodFromStateOrInput(options.period)
+      let checkedCandidate = periodCandidate
+
+      if (periodCandidate?.mode === 'month') {
+        const exists = await hasUsableStatsPeriod(periodCandidate.periodYear, periodCandidate.periodMonth)
+        if (!exists) {
+          checkedCandidate = null
         }
       }
 
-      const selectedPeriod = buildSelectedPeriod(selectedPeriodSource, undefined)
-
-      if (!selectedPeriod.periodYear || !selectedPeriod.periodMonth) {
-        throw new Error('Impossible de déterminer la période Stats exploitable à hydrater.')
+      if (periodCandidate?.mode === 'year') {
+        const hasYearData = monthlyReferences.some((row) => row.periodYear === periodCandidate.periodYear)
+        if (!hasYearData) {
+          checkedCandidate = null
+        }
       }
 
-      const periodYear = selectedPeriod.periodYear
-      const periodMonth = selectedPeriod.periodMonth
-
-      const [
-        budgetBucketTotals,
-        globalVariableBudget,
-        totalExpenseBudget,
-        budgetBucketVsActual,
-        savingsBudgetTotals,
-        savingsBudgetLines,
-        savingsBudgetVsActual,
-        monthlyEvolution2026,
-      ] = await Promise.all([
-        getBudgetBucketTotalsByPeriod(periodYear, periodMonth),
-        getBudgetGlobalVariableForPeriod(periodYear, periodMonth),
-        getExpenseBudgetTotalForPeriod(periodYear, periodMonth),
-        getBudgetBucketVsActualByMonth(periodYear, periodMonth),
-        getSavingsBudgetTotalsByPeriod(periodYear, periodMonth),
-        getSavingsBudgetLinesByPeriod(periodYear, periodMonth),
-        getSavingsBudgetVsActualByPeriod(periodYear, periodMonth),
-        getMonthlyEvolution2026(),
-      ])
-
-      const budgetSummary = buildBudgetSummary(
-        budgetBucketTotals,
-        totalExpenseBudget,
-        globalVariableBudget,
-      )
-
-      const savingsSummary = buildSavingsSummary(
-        savingsBudgetTotals,
-        savingsBudgetVsActual,
-        savingsBudgetLines,
-      )
+      const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
+      const monthlyEvolution2026 = await getMonthlyEvolution2026()
+      const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
       const snapshot: StatsReferenceSnapshot = {
         loadedAt: new Date().toISOString(),
         selectedPeriod,
-        budgetSummary,
-        budgetBucketVsActual: buildBudgetBucketVsActual(budgetBucketVsActual),
-        savingsSummary,
-        savingsLines: buildSavingsLines(savingsBudgetLines, savingsBudgetVsActual),
-        totalMonthlyNeed: buildTotalMonthlyNeed(budgetSummary.totalExpenseBudget, savingsSummary.totalSavingsBudget),
+        availablePeriodOptions: buildStatsPeriodOptions(monthlyReferences),
+        monthlyReferences,
+        budgetSummary: displayData.budgetSummary,
+        budgetBucketVsActual: displayData.budgetBucketVsActual,
+        savingsSummary: displayData.savingsSummary,
+        savingsLines: displayData.savingsLines,
+        totalMonthlyNeed: displayData.totalMonthlyNeed,
         monthlyEvolution2026: buildMonthlyEvolution2026(monthlyEvolution2026),
       }
 
@@ -262,18 +411,7 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
   return task
 }
 
-export async function setSelectedPeriod(period: Partial<StatsSelectedPeriod>): Promise<void> {
-  const currentSnapshot = state.snapshot
-
-  if (!period.periodYear || !period.periodMonth) {
-    throw new Error('setSelectedPeriod exige periodYear et periodMonth.')
-  }
-
-  if (!currentSnapshot) {
-    await hydrateStatsReferenceData({ force: true, period })
-    return
-  }
-
+export async function setSelectedPeriod(period: StatsSelectedPeriod): Promise<void> {
   await hydrateStatsReferenceData({ force: true, period })
 }
 

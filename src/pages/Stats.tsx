@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import analyticsIcon from '@/assets/icons_app/analytics.png'
 import optimisationIcon from '@/assets/icons_app/optimisation.png'
@@ -31,13 +32,6 @@ const STATS_TABS: StatsTabConfig[] = [
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
 
-const EMPTY_PERIOD: StatsSelectedPeriod = {
-  id: null,
-  periodYear: null,
-  periodMonth: null,
-  label: null,
-}
-
 export function Stats() {
   const {
     snapshot,
@@ -45,10 +39,12 @@ export function Stats() {
     error,
     isHydrated,
     hydrateStatsReferenceData,
+    setSelectedPeriod,
   } = useStatsReferenceData()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics')
   const [showTabModal, setShowTabModal] = useState(false)
+  const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
 
   const activeTab = useMemo(
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
@@ -92,6 +88,49 @@ export function Stats() {
     })
   }, [hydrateStatsReferenceData])
 
+  const isPeriodOptionActive = useCallback((option: { mode: 'month' | 'year'; periodYear: number; periodMonth: number | null }, selected: StatsSelectedPeriod | null) => {
+    if (!selected) return false
+    if (option.mode !== selected.mode) return false
+    if (option.mode === 'year') return selected.periodYear === option.periodYear
+    if (selected.mode !== 'month') return false
+    return selected.periodYear === option.periodYear && selected.periodMonth === option.periodMonth
+  }, [])
+
+  const headerPeriodOptions = useMemo(() => {
+    const options = snapshot?.availablePeriodOptions ?? []
+    return options.map((option) => ({
+      key: option.key,
+      label: option.label,
+      active: isPeriodOptionActive(option, snapshot?.selectedPeriod ?? null),
+      showDividerBefore: option.mode === 'year',
+      onSelect: () => {
+        if (option.mode === 'year') {
+          void setSelectedPeriod({
+            mode: 'year',
+            periodYear: option.periodYear,
+            label: option.label,
+          }).catch(() => {
+            // l'erreur est exposée dans le store
+          })
+          return
+        }
+
+        if (!option.periodMonth) return
+        void setSelectedPeriod({
+          mode: 'month',
+          periodYear: option.periodYear,
+          periodMonth: option.periodMonth,
+          label: option.label,
+          id: snapshot?.monthlyReferences.find(
+            (row) => row.periodYear === option.periodYear && row.periodMonth === option.periodMonth,
+          )?.id ?? null,
+        }).catch(() => {
+          // l'erreur est exposée dans le store
+        })
+      },
+    }))
+  }, [isPeriodOptionActive, setSelectedPeriod, snapshot])
+
   useEffect(() => {
     if (loading) return
     if (isHydrated && snapshot) return
@@ -106,13 +145,23 @@ export function Stats() {
     return lockDocumentScroll()
   }, [showTabModal])
 
-  const selectedPeriod = snapshot?.selectedPeriod ?? EMPTY_PERIOD
+  const selectedPeriod = snapshot?.selectedPeriod ?? null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
         title="Stats"
-        rightLabel={activeTab.label}
+        rightSlot={(
+          <HeaderPeriodMenu
+            buttonLabel="Période"
+            buttonAriaLabel="Choisir une période Stats"
+            menuAriaLabel="Choisir une période Stats"
+            open={showHeaderPeriodMenu}
+            onOpenChange={setShowHeaderPeriodMenu}
+            onBeforeToggle={() => setShowTabModal(false)}
+            options={headerPeriodOptions}
+          />
+        )}
         actionIcon={(
           <img
             src={activeTab.iconSrc}
@@ -141,6 +190,8 @@ export function Stats() {
           {snapshot ? (
             <>
               <StatsTotalNeedCard
+                mode={snapshot.selectedPeriod.mode}
+                periodYear={snapshot.selectedPeriod.periodYear}
                 totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
                 totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
                 totalMonthlyNeed={snapshot.totalMonthlyNeed}
@@ -220,6 +271,8 @@ export function Stats() {
               />
 
               <StatsTotalNeedCard
+                mode={snapshot.selectedPeriod.mode}
+                periodYear={snapshot.selectedPeriod.periodYear}
                 totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
                 totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
                 totalMonthlyNeed={snapshot.totalMonthlyNeed}

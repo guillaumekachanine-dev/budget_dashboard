@@ -5,6 +5,7 @@ import { BottomNav } from '@/components/layout/BottomNav'
 import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
+import { StatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
 
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
@@ -61,6 +62,8 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <StatsReferenceBootstrap userId={user.id} enabled />
+
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/"         element={<Home />} />

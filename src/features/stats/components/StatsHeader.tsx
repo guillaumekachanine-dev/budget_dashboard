@@ -2,7 +2,7 @@ import { formatPeriodLabel } from '@/features/stats/utils/statsReferenceSelector
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 
 type StatsHeaderProps = {
-  selectedPeriod: StatsSelectedPeriod
+  selectedPeriod: StatsSelectedPeriod | null
   loadedAt: string | null
   loading: boolean
   error: string | null
@@ -26,7 +26,7 @@ export function StatsHeader({ selectedPeriod, loadedAt, loading, error, onRefres
               Période active
             </p>
             <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-extrabold)', textTransform: 'capitalize' }}>
-              {formatPeriodLabel(selectedPeriod)}
+              {selectedPeriod ? formatPeriodLabel(selectedPeriod) : 'Période indisponible'}
             </p>
           </div>
 

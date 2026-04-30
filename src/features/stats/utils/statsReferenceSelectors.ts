@@ -6,6 +6,8 @@ import type {
   SavingsBudgetTotalsSourceRow,
   SavingsBudgetVsActualSourceRow,
   StatsBudgetBucketKey,
+  StatsMonthlyReference,
+  StatsPeriodOption,
   StatsReferenceSnapshot,
   StatsSelectedPeriod,
 } from '@/features/stats/types'
@@ -23,6 +25,11 @@ const SAVINGS_CATEGORY_DEFAULTS = ['Réserve sécurité', 'Projet / apport', 'In
 function asNumber(value: unknown): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatMonthYearLabel(year: number, month: number): string {
+  const date = new Date(year, month - 1, 1)
+  return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 }
 
 function normalizeKey(value: string): string {
@@ -300,6 +307,136 @@ export function buildTotalMonthlyNeed(totalExpenseBudget: number, totalSavingsBu
   return asNumber(totalExpenseBudget) + asNumber(totalSavingsBudget)
 }
 
+export function buildStatsPeriodOptions(
+  monthlyReferences: StatsMonthlyReference[],
+): StatsPeriodOption[] {
+  if (monthlyReferences.length === 0) return []
+
+  const latestYear = monthlyReferences[0].periodYear
+  const months = monthlyReferences
+    .filter((row) => row.periodYear === latestYear)
+    .sort((a, b) => b.periodMonth - a.periodMonth)
+
+  const monthOptions: StatsPeriodOption[] = months.map((row) => ({
+    key: `month-${row.periodYear}-${row.periodMonth}`,
+    mode: 'month',
+    periodYear: row.periodYear,
+    periodMonth: row.periodMonth,
+    label: row.label || formatMonthYearLabel(row.periodYear, row.periodMonth),
+  }))
+
+  const yearOption: StatsPeriodOption = {
+    key: `year-${latestYear}`,
+    mode: 'year',
+    periodYear: latestYear,
+    periodMonth: null,
+    label: `Année ${latestYear}`,
+  }
+
+  return [...monthOptions, yearOption]
+}
+
+export function aggregateBudgetSummary(
+  monthlyReferences: StatsMonthlyReference[],
+): StatsReferenceSnapshot['budgetSummary'] {
+  return monthlyReferences.reduce<StatsReferenceSnapshot['budgetSummary']>((acc, row) => ({
+    totalExpenseBudget: acc.totalExpenseBudget + row.budgetSummary.totalExpenseBudget,
+    globalVariableBudget: acc.globalVariableBudget + row.budgetSummary.globalVariableBudget,
+    socleFixeBudget: acc.socleFixeBudget + row.budgetSummary.socleFixeBudget,
+    variableEssentielleBudget: acc.variableEssentielleBudget + row.budgetSummary.variableEssentielleBudget,
+    provisionBudget: acc.provisionBudget + row.budgetSummary.provisionBudget,
+    discretionnaireBudget: acc.discretionnaireBudget + row.budgetSummary.discretionnaireBudget,
+    cagnotteProjetBudget: acc.cagnotteProjetBudget + row.budgetSummary.cagnotteProjetBudget,
+  }), {
+    totalExpenseBudget: 0,
+    globalVariableBudget: 0,
+    socleFixeBudget: 0,
+    variableEssentielleBudget: 0,
+    provisionBudget: 0,
+    discretionnaireBudget: 0,
+    cagnotteProjetBudget: 0,
+  })
+}
+
+export function aggregateBudgetBucketVsActual(
+  monthlyReferences: StatsMonthlyReference[],
+): StatsReferenceSnapshot['budgetBucketVsActual'] {
+  const map = new Map<string, StatsReferenceSnapshot['budgetBucketVsActual'][number]>()
+
+  for (const row of monthlyReferences) {
+    for (const bucketRow of row.budgetBucketVsActual) {
+      const existing = map.get(bucketRow.budgetBucket) ?? {
+        budgetBucket: bucketRow.budgetBucket,
+        targetBudgetBucketEur: 0,
+        actualBudgetBucketEur: 0,
+        deltaBudgetBucketEur: 0,
+        consumptionRatio: null,
+      }
+
+      existing.targetBudgetBucketEur += asNumber(bucketRow.targetBudgetBucketEur)
+      existing.actualBudgetBucketEur += asNumber(bucketRow.actualBudgetBucketEur)
+      existing.deltaBudgetBucketEur = existing.actualBudgetBucketEur - existing.targetBudgetBucketEur
+      existing.consumptionRatio = existing.targetBudgetBucketEur > 0
+        ? existing.actualBudgetBucketEur / existing.targetBudgetBucketEur
+        : null
+
+      map.set(bucketRow.budgetBucket, existing)
+    }
+  }
+
+  return BUDGET_BUCKET_CONFIG
+    .map((item) => map.get(item.label) ?? {
+      budgetBucket: item.label,
+      targetBudgetBucketEur: 0,
+      actualBudgetBucketEur: 0,
+      deltaBudgetBucketEur: 0,
+      consumptionRatio: null,
+    })
+}
+
+export function aggregateSavingsSummary(
+  monthlyReferences: StatsMonthlyReference[],
+): StatsReferenceSnapshot['savingsSummary'] {
+  const totalSavingsBudget = monthlyReferences.reduce((sum, row) => sum + row.savingsSummary.totalSavingsBudget, 0)
+  const totalSavingsActual = monthlyReferences.reduce((sum, row) => sum + row.savingsSummary.totalSavingsActual, 0)
+
+  return {
+    totalSavingsBudget,
+    totalSavingsActual,
+    deltaSavings: totalSavingsActual - totalSavingsBudget,
+  }
+}
+
+export function aggregateSavingsLines(
+  monthlyReferences: StatsMonthlyReference[],
+): StatsReferenceSnapshot['savingsLines'] {
+  const map = new Map<string, StatsReferenceSnapshot['savingsLines'][number]>()
+
+  for (const row of monthlyReferences) {
+    for (const line of row.savingsLines) {
+      const existing = map.get(line.categoryName) ?? {
+        categoryName: line.categoryName,
+        targetSavingsAmountEur: 0,
+        actualSavingsAmountEur: 0,
+        deltaSavingsAmountEur: 0,
+      }
+
+      existing.targetSavingsAmountEur += asNumber(line.targetSavingsAmountEur)
+      existing.actualSavingsAmountEur += asNumber(line.actualSavingsAmountEur)
+      existing.deltaSavingsAmountEur = existing.actualSavingsAmountEur - existing.targetSavingsAmountEur
+      map.set(line.categoryName, existing)
+    }
+  }
+
+  const defaultOrder = new Map(SAVINGS_CATEGORY_DEFAULTS.map((name, index) => [name, index]))
+  return [...map.values()].sort((a, b) => {
+    const aRank = defaultOrder.get(a.categoryName) ?? 999
+    const bRank = defaultOrder.get(b.categoryName) ?? 999
+    if (aRank !== bRank) return aRank - bRank
+    return a.categoryName.localeCompare(b.categoryName)
+  })
+}
+
 export function buildMonthlyEvolution2026(rows: MonthlyEvolutionRow[]): StatsReferenceSnapshot['monthlyEvolution2026'] {
   return rows
     .map((row) => ({
@@ -328,9 +465,7 @@ export function formatCurrency(value: number, currency = 'EUR'): string {
 }
 
 export function formatPeriodLabel(period: StatsSelectedPeriod): string {
+  if (period.mode === 'year') return period.label
   if (period.label) return period.label
-  if (!period.periodYear || !period.periodMonth) return 'Période indisponible'
-
-  const date = new Date(period.periodYear, period.periodMonth - 1, 1)
-  return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return formatMonthYearLabel(period.periodYear, period.periodMonth)
 }
