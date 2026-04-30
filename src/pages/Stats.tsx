@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -38,13 +38,16 @@ export function Stats() {
     loading,
     error,
     isHydrated,
+    storeUserId,
     hydrateStatsReferenceData,
+    resetSelectedPeriodToDefault,
     setSelectedPeriod,
   } = useStatsReferenceData()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics')
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
+  const hasAppliedDefaultPeriodRef = useRef(false)
 
   const activeTab = useMemo(
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
@@ -139,6 +142,17 @@ export function Stats() {
       // l'erreur est exposée dans le store
     })
   }, [hydrateStatsReferenceData, isHydrated, loading, snapshot])
+
+  useEffect(() => {
+    if (loading) return
+    if (!isHydrated || !snapshot) return
+    if (hasAppliedDefaultPeriodRef.current) return
+    hasAppliedDefaultPeriodRef.current = true
+
+    void resetSelectedPeriodToDefault(storeUserId ?? undefined).catch(() => {
+      // l'erreur est exposée dans le store
+    })
+  }, [isHydrated, loading, resetSelectedPeriodToDefault, snapshot, storeUserId])
 
   useEffect(() => {
     if (!showTabModal) return

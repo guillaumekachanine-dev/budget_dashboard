@@ -50,6 +50,7 @@ type HydrateOptions = {
   force?: boolean
   period?: StatsSelectedPeriod
   userId?: string | null
+  ignoreStoredSelectedPeriod?: boolean
 }
 
 const listeners = new Set<() => void>()
@@ -211,8 +212,9 @@ async function restoreSnapshotAsync(userId?: string | null) {
   })
 }
 
-function resolvePeriodFromStateOrInput(input?: StatsSelectedPeriod): StatsSelectedPeriod | null {
+function resolvePeriodFromStateOrInput(input?: StatsSelectedPeriod, ignoreStoredSelectedPeriod = false): StatsSelectedPeriod | null {
   if (input) return input
+  if (ignoreStoredSelectedPeriod) return null
   if (state.snapshot?.selectedPeriod && isSelectedPeriodShape(state.snapshot.selectedPeriod)) {
     return state.snapshot.selectedPeriod
   }
@@ -335,13 +337,115 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
     setState({ loading: true, error: null, userId: resolvedUserId })
 
     try {
-      const latestUsablePeriod = await getLatestUsableStatsPeriod()
-      if (!latestUsablePeriod) {
-        throw new Error('Impossible de déterminer une période Stats exploitable.')
+      const periodCandidate = resolvePeriodFromStateOrInput(options.period, options.ignoreStoredSelectedPeriod === true)
+      console.info('[stats hydrate][temporary] selectedPeriod=', periodCandidate)
+      console.info('[stats hydrate][temporary] selectedPeriod.mode=', periodCandidate?.mode ?? 'none')
+
+      let checkedCandidate = periodCandidate
+      let fallbackReason: string | null = null
+      let usablePeriods: UsableStatsPeriod[] = []
+
+      if (periodCandidate?.mode === 'year') {
+        const yearPeriods = await getUsableStatsPeriodsByYear(periodCandidate.periodYear)
+        console.info(
+          '[stats hydrate][temporary] usable months for selected year=',
+          yearPeriods.map((period) => period.period_month),
+        )
+
+        if (yearPeriods.length > 0) {
+          usablePeriods = yearPeriods
+        } else {
+          fallbackReason = 'selected-year-no-usable-month'
+          const latestUsablePeriod = await getLatestUsableStatsPeriod()
+          if (latestUsablePeriod) {
+            const fallbackPeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
+            usablePeriods = fallbackPeriods.length > 0 ? fallbackPeriods : [latestUsablePeriod]
+            checkedCandidate = {
+              mode: 'year',
+              periodYear: latestUsablePeriod.period_year,
+              label: `Année ${latestUsablePeriod.period_year}`,
+            }
+          } else {
+            usablePeriods = []
+            checkedCandidate = {
+              mode: 'year',
+              periodYear: periodCandidate.periodYear,
+              label: periodCandidate.label || `Année ${periodCandidate.periodYear}`,
+            }
+          }
+        }
+      } else {
+        const latestUsablePeriod = await getLatestUsableStatsPeriod()
+        if (latestUsablePeriod) {
+          const basePeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
+          usablePeriods = basePeriods.length > 0 ? basePeriods : [latestUsablePeriod]
+        }
+
+        if (periodCandidate?.mode === 'month') {
+          const exists = await hasUsableStatsPeriod(periodCandidate.periodYear, periodCandidate.periodMonth)
+          if (!exists) {
+            checkedCandidate = null
+            fallbackReason = 'selected-month-not-usable'
+          } else {
+            const monthYearPeriods = await getUsableStatsPeriodsByYear(periodCandidate.periodYear)
+            if (monthYearPeriods.length > 0) {
+              usablePeriods = monthYearPeriods
+            }
+          }
+        }
       }
 
-      const availableUsablePeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
-      const usablePeriods = availableUsablePeriods.length > 0 ? availableUsablePeriods : [latestUsablePeriod]
+      if (usablePeriods.length === 0) {
+        const emptySelectedPeriod: StatsSelectedPeriod = checkedCandidate ?? {
+          mode: 'year',
+          periodYear: new Date().getFullYear(),
+          label: `Année ${new Date().getFullYear()}`,
+        }
+        const emptyMonthlyEvolution = await getMonthlyEvolution2026().catch(() => [])
+        const emptySnapshot: StatsReferenceSnapshot = {
+          loadedAt: new Date().toISOString(),
+          selectedPeriod: emptySelectedPeriod,
+          availablePeriodOptions: emptySelectedPeriod.mode === 'year'
+            ? [{
+                key: `year-${emptySelectedPeriod.periodYear}`,
+                mode: 'year',
+                periodYear: emptySelectedPeriod.periodYear,
+                periodMonth: null,
+                label: emptySelectedPeriod.label,
+              }]
+            : [],
+          monthlyReferences: [],
+          budgetSummary: {
+            totalExpenseBudget: 0,
+            globalVariableBudget: 0,
+            socleFixeBudget: 0,
+            variableEssentielleBudget: 0,
+            provisionBudget: 0,
+            discretionnaireBudget: 0,
+            cagnotteProjetBudget: 0,
+          },
+          budgetBucketVsActual: [],
+          savingsSummary: {
+            totalSavingsBudget: 0,
+            totalSavingsActual: 0,
+            deltaSavings: 0,
+          },
+          savingsLines: [],
+          totalMonthlyNeed: 0,
+          monthlyEvolution2026: buildMonthlyEvolution2026(emptyMonthlyEvolution),
+        }
+
+        setState({
+          snapshot: emptySnapshot,
+          loading: false,
+          error: null,
+          isHydrated: true,
+          userId: resolvedUserId,
+        })
+
+        await persistSnapshot(emptySnapshot, resolvedUserId)
+        return emptySnapshot
+      }
 
       const monthlyReferences = await Promise.all(usablePeriods.map((period) => fetchMonthlyReference(period)))
       monthlyReferences.sort((a, b) => {
@@ -349,24 +453,16 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
         return b.periodMonth - a.periodMonth
       })
 
-      const periodCandidate = resolvePeriodFromStateOrInput(options.period)
-      let checkedCandidate = periodCandidate
-
-      if (periodCandidate?.mode === 'month') {
-        const exists = await hasUsableStatsPeriod(periodCandidate.periodYear, periodCandidate.periodMonth)
-        if (!exists) {
-          checkedCandidate = null
-        }
-      }
-
-      if (periodCandidate?.mode === 'year') {
-        const hasYearData = monthlyReferences.some((row) => row.periodYear === periodCandidate.periodYear)
-        if (!hasYearData) {
-          checkedCandidate = null
-        }
-      }
-
       const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
+      const selectedYear = selectedPeriod.periodYear
+      const aggregationMonths = selectedPeriod.mode === 'year'
+        ? monthlyReferences
+          .filter((row) => row.periodYear === selectedYear)
+          .map((row) => row.periodMonth)
+        : [selectedPeriod.periodMonth]
+      console.info('[stats hydrate][temporary] final aggregation months used=', aggregationMonths)
+      console.info('[stats hydrate][temporary] fallbackReason=', fallbackReason)
+
       const monthlyEvolution2026 = await getMonthlyEvolution2026()
       const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
@@ -413,6 +509,56 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
 
 export async function setSelectedPeriod(period: StatsSelectedPeriod): Promise<void> {
   await hydrateStatsReferenceData({ force: true, period })
+}
+
+export async function resetSelectedPeriodToDefault(userId?: string | null): Promise<void> {
+  if (!state.snapshot?.monthlyReferences?.length) {
+    await hydrateStatsReferenceData({
+      force: true,
+      userId: userId ?? undefined,
+      ignoreStoredSelectedPeriod: true,
+    })
+    return
+  }
+
+  const latestMonth = state.snapshot.monthlyReferences[0]
+  const defaultSelectedPeriod: StatsSelectedPeriod = {
+    mode: 'month',
+    id: latestMonth.id,
+    periodYear: latestMonth.periodYear,
+    periodMonth: latestMonth.periodMonth,
+    label: latestMonth.label,
+  }
+
+  if (
+    state.snapshot.selectedPeriod.mode === 'month'
+    && state.snapshot.selectedPeriod.periodYear === defaultSelectedPeriod.periodYear
+    && state.snapshot.selectedPeriod.periodMonth === defaultSelectedPeriod.periodMonth
+  ) {
+    return
+  }
+
+  const displayData = buildDisplayData(defaultSelectedPeriod, state.snapshot.monthlyReferences)
+  const updatedSnapshot: StatsReferenceSnapshot = {
+    ...state.snapshot,
+    selectedPeriod: defaultSelectedPeriod,
+    budgetSummary: displayData.budgetSummary,
+    budgetBucketVsActual: displayData.budgetBucketVsActual,
+    savingsSummary: displayData.savingsSummary,
+    savingsLines: displayData.savingsLines,
+    totalMonthlyNeed: displayData.totalMonthlyNeed,
+  }
+
+  const resolvedUserId = await resolveCurrentUserId(userId ?? state.userId)
+
+  setState({
+    snapshot: updatedSnapshot,
+    error: null,
+    isHydrated: true,
+    userId: resolvedUserId,
+  })
+
+  await persistSnapshot(updatedSnapshot, resolvedUserId)
 }
 
 export async function clearSnapshot(): Promise<void> {

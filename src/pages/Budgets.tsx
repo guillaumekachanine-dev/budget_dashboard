@@ -21,7 +21,6 @@ import { useCategories } from '@/hooks/useCategories'
 import { getCurrentPeriod, formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
-import { readOfflineValue, writeOfflineValue } from '@/lib/offlineStorage'
 import type { Transaction } from '@/lib/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
@@ -123,15 +122,6 @@ interface LabelListContentProps {
   width?: number
   payload?: MonthlyBucket
 }
-
-interface BudgetsUiPrefs {
-  periodKey: PeriodKey
-  selectedMonth: number
-  dataDisplayMode: DataDisplayMode
-  activeSlide: number
-}
-
-const BUDGETS_UI_PREFS_KEY = 'budget-dashboard:budgets-ui-prefs'
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -380,6 +370,7 @@ export function Budgets() {
   const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(nowMonth + 1)
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
+  const searchParamsKey = searchParams.toString()
   const [showCatSheet, setShowCatSheet] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategoryTrendItem | null>(null)
@@ -410,37 +401,7 @@ export function Budgets() {
   const dragStartXRef = useRef<number | null>(null)
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-    void readOfflineValue<BudgetsUiPrefs>(BUDGETS_UI_PREFS_KEY).then((prefs) => {
-      if (!mounted || !prefs) return
-      if (prefs.periodKey === 'mois' || prefs.periodKey === 'annee') {
-        setPeriodKey(prefs.periodKey)
-      }
-      if (prefs.selectedMonth >= 1 && prefs.selectedMonth <= nowMonth + 1) {
-        setSelectedPeriodMonth(prefs.selectedMonth)
-      }
-      if (prefs.dataDisplayMode === 'reel' || prefs.dataDisplayMode === 'budget') {
-        setDataDisplayMode(prefs.dataDisplayMode)
-      }
-      if (Number.isInteger(prefs.activeSlide) && prefs.activeSlide >= 0 && prefs.activeSlide < 4) {
-        setActiveSlide(prefs.activeSlide)
-      }
-    })
-    return () => {
-      mounted = false
-    }
-  }, [nowMonth])
-
-  useEffect(() => {
-    void writeOfflineValue<BudgetsUiPrefs>(BUDGETS_UI_PREFS_KEY, {
-      periodKey,
-      selectedMonth: selectedPeriodMonth,
-      dataDisplayMode,
-      activeSlide,
-    })
-  }, [periodKey, selectedPeriodMonth, dataDisplayMode, activeSlide])
+  const hasAppliedDefaultParamsRef = useRef(false)
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -448,6 +409,22 @@ export function Budgets() {
     else nextParams.set('category', nextCategoryId)
     setSearchParams(nextParams, { replace: true })
   }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (hasAppliedDefaultParamsRef.current) return
+    hasAppliedDefaultParamsRef.current = true
+
+    setPeriodKey('mois')
+    setSelectedPeriodMonth(nowMonth + 1)
+    setDataDisplayMode('reel')
+    setActiveSlide(0)
+
+    if (searchParamsKey.includes('category=')) {
+      const nextParams = new URLSearchParams(searchParamsKey)
+      nextParams.delete('category')
+      setSearchParams(nextParams, { replace: true })
+    }
+  }, [nowMonth, searchParamsKey, setSearchParams])
 
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')

@@ -36,6 +36,15 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !('scrollRestoration' in window.history)) return
+    const previousMode = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    return () => {
+      window.history.scrollRestoration = previousMode
+    }
+  }, [])
+
+  useEffect(() => {
     if (!user) return
 
     const schedule = () => prefetchPrimaryRoutes()
