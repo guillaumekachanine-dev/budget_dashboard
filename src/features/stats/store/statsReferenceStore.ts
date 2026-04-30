@@ -8,7 +8,7 @@ import { getExpenseBudgetTotalForPeriod } from '@/features/stats/api/getExpenseB
 import { getMonthlyEvolution2026 } from '@/features/stats/api/getMonthlyEvolution2026'
 import {
   getLatestUsableStatsPeriod,
-  getUsableStatsPeriodsByYear,
+  getUsableStatsMonthlyPeriods,
   hasUsableStatsPeriod,
   type UsableStatsPeriod,
 } from '@/features/stats/api/getLatestUsableStatsPeriod'
@@ -22,10 +22,6 @@ import type {
   StatsSelectedPeriod,
 } from '@/features/stats/types'
 import {
-  aggregateBudgetBucketVsActual,
-  aggregateBudgetSummary,
-  aggregateSavingsLines,
-  aggregateSavingsSummary,
   buildBudgetBucketVsActual,
   buildBudgetSummary,
   buildMonthlyEvolution2026,
@@ -37,6 +33,7 @@ import {
 
 const STATS_REFERENCE_STORAGE_KEY_BASE = 'dashboard_budget:stats_reference_snapshot:v1'
 const SNAPSHOT_STALE_AFTER_MS = 5 * 60 * 1000
+const STATS_REFERENCE_YEAR = 2026
 
 type StatsReferenceState = {
   snapshot: StatsReferenceSnapshot | null
@@ -104,58 +101,36 @@ function pickFinalSelectedPeriod(
   candidate: StatsSelectedPeriod | null,
   monthlyReferences: StatsMonthlyReference[],
 ): StatsSelectedPeriod {
-  if (monthlyReferences.length === 0) {
-    return {
-      mode: 'year',
-      periodYear: new Date().getFullYear(),
-      label: `Année ${new Date().getFullYear()}`,
-    }
-  }
-
   const latestMonth = monthlyReferences[0]
 
-  if (!candidate) {
+  if (!latestMonth) {
     return {
-      mode: 'month',
-      id: latestMonth.id,
-      periodYear: latestMonth.periodYear,
-      periodMonth: latestMonth.periodMonth,
-      label: latestMonth.label,
+      id: null,
+      period_year: STATS_REFERENCE_YEAR,
+      period_month: new Date().getMonth() + 1,
+      label: null,
     }
   }
 
-  if (candidate.mode === 'year') {
-    const hasYearData = monthlyReferences.some((row) => row.periodYear === candidate.periodYear)
-    if (hasYearData) {
-      return {
-        mode: 'year',
-        periodYear: candidate.periodYear,
-        label: candidate.label || `Année ${candidate.periodYear}`,
-      }
-    }
-  }
-
-  if (candidate.mode === 'month') {
+  if (candidate) {
     const matchedMonth = monthlyReferences.find(
-      (row) => row.periodYear === candidate.periodYear && row.periodMonth === candidate.periodMonth,
+      (row) => row.periodYear === candidate.period_year && row.periodMonth === candidate.period_month,
     )
 
     if (matchedMonth) {
       return {
-        mode: 'month',
         id: matchedMonth.id,
-        periodYear: matchedMonth.periodYear,
-        periodMonth: matchedMonth.periodMonth,
+        period_year: matchedMonth.periodYear,
+        period_month: matchedMonth.periodMonth,
         label: matchedMonth.label,
       }
     }
   }
 
   return {
-    mode: 'month',
     id: latestMonth.id,
-    periodYear: latestMonth.periodYear,
-    periodMonth: latestMonth.periodMonth,
+    period_year: latestMonth.periodYear,
+    period_month: latestMonth.periodMonth,
     label: latestMonth.label,
   }
 }
@@ -184,13 +159,12 @@ async function persistSnapshot(snapshot: StatsReferenceSnapshot | null, userId: 
 function isSelectedPeriodShape(value: unknown): value is StatsSelectedPeriod {
   if (!value || typeof value !== 'object') return false
   const period = value as Record<string, unknown>
-  if (period.mode === 'month') {
-    return typeof period.periodYear === 'number' && typeof period.periodMonth === 'number'
-  }
-  if (period.mode === 'year') {
-    return typeof period.periodYear === 'number'
-  }
-  return false
+  return (
+    (typeof period.id === 'string' || period.id === null || period.id === undefined)
+    && typeof period.period_year === 'number'
+    && typeof period.period_month === 'number'
+    && (typeof period.label === 'string' || period.label === null || period.label === undefined)
+  )
 }
 
 async function restoreSnapshotAsync(userId?: string | null) {
@@ -275,21 +249,8 @@ function buildDisplayData(
   StatsReferenceSnapshot,
   'budgetSummary' | 'budgetBucketVsActual' | 'savingsSummary' | 'savingsLines' | 'totalMonthlyNeed'
 > {
-  if (selectedPeriod.mode === 'year') {
-    const yearRows = monthlyReferences.filter((row) => row.periodYear === selectedPeriod.periodYear)
-    const budgetSummary = aggregateBudgetSummary(yearRows)
-    const savingsSummary = aggregateSavingsSummary(yearRows)
-    return {
-      budgetSummary,
-      budgetBucketVsActual: aggregateBudgetBucketVsActual(yearRows),
-      savingsSummary,
-      savingsLines: aggregateSavingsLines(yearRows),
-      totalMonthlyNeed: buildTotalMonthlyNeed(budgetSummary.totalExpenseBudget, savingsSummary.totalSavingsBudget),
-    }
-  }
-
   const monthRow = monthlyReferences.find(
-    (row) => row.periodYear === selectedPeriod.periodYear && row.periodMonth === selectedPeriod.periodMonth,
+    (row) => row.periodYear === selectedPeriod.period_year && row.periodMonth === selectedPeriod.period_month,
   ) ?? monthlyReferences[0]
 
   return {
@@ -338,82 +299,39 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
 
     try {
       const periodCandidate = resolvePeriodFromStateOrInput(options.period, options.ignoreStoredSelectedPeriod === true)
-      console.info('[stats hydrate][temporary] selectedPeriod=', periodCandidate)
-      console.info('[stats hydrate][temporary] selectedPeriod.mode=', periodCandidate?.mode ?? 'none')
-
       let checkedCandidate = periodCandidate
-      let fallbackReason: string | null = null
-      let usablePeriods: UsableStatsPeriod[] = []
 
-      if (periodCandidate?.mode === 'year') {
-        const yearPeriods = await getUsableStatsPeriodsByYear(periodCandidate.periodYear)
-        console.info(
-          '[stats hydrate][temporary] usable months for selected year=',
-          yearPeriods.map((period) => period.period_month),
-        )
-
-        if (yearPeriods.length > 0) {
-          usablePeriods = yearPeriods
-        } else {
-          fallbackReason = 'selected-year-no-usable-month'
-          const latestUsablePeriod = await getLatestUsableStatsPeriod()
-          if (latestUsablePeriod) {
-            const fallbackPeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
-            usablePeriods = fallbackPeriods.length > 0 ? fallbackPeriods : [latestUsablePeriod]
-            checkedCandidate = {
-              mode: 'year',
-              periodYear: latestUsablePeriod.period_year,
-              label: `Année ${latestUsablePeriod.period_year}`,
-            }
-          } else {
-            usablePeriods = []
-            checkedCandidate = {
-              mode: 'year',
-              periodYear: periodCandidate.periodYear,
-              label: periodCandidate.label || `Année ${periodCandidate.periodYear}`,
-            }
-          }
-        }
-      } else {
-        const latestUsablePeriod = await getLatestUsableStatsPeriod()
-        if (latestUsablePeriod) {
-          const basePeriods = await getUsableStatsPeriodsByYear(latestUsablePeriod.period_year)
-          usablePeriods = basePeriods.length > 0 ? basePeriods : [latestUsablePeriod]
-        }
-
-        if (periodCandidate?.mode === 'month') {
-          const exists = await hasUsableStatsPeriod(periodCandidate.periodYear, periodCandidate.periodMonth)
-          if (!exists) {
-            checkedCandidate = null
-            fallbackReason = 'selected-month-not-usable'
-          } else {
-            const monthYearPeriods = await getUsableStatsPeriodsByYear(periodCandidate.periodYear)
-            if (monthYearPeriods.length > 0) {
-              usablePeriods = monthYearPeriods
-            }
-          }
+      if (checkedCandidate) {
+        const isExpectedYear = checkedCandidate.period_year === STATS_REFERENCE_YEAR
+        const exists = await hasUsableStatsPeriod(checkedCandidate.period_year, checkedCandidate.period_month)
+        if (!isExpectedYear || !exists) {
+          checkedCandidate = null
         }
       }
 
+      const usablePeriods = await getUsableStatsMonthlyPeriods(STATS_REFERENCE_YEAR)
+
       if (usablePeriods.length === 0) {
-        const emptySelectedPeriod: StatsSelectedPeriod = checkedCandidate ?? {
-          mode: 'year',
-          periodYear: new Date().getFullYear(),
-          label: `Année ${new Date().getFullYear()}`,
-        }
+        const latestPeriod = await getLatestUsableStatsPeriod()
+        const selectedPeriod: StatsSelectedPeriod = latestPeriod
+          ? {
+              id: latestPeriod.id,
+              period_year: latestPeriod.period_year,
+              period_month: latestPeriod.period_month,
+              label: latestPeriod.label,
+            }
+          : {
+              id: null,
+              period_year: STATS_REFERENCE_YEAR,
+              period_month: new Date().getMonth() + 1,
+              label: null,
+            }
+
         const emptyMonthlyEvolution = await getMonthlyEvolution2026().catch(() => [])
         const emptySnapshot: StatsReferenceSnapshot = {
           loadedAt: new Date().toISOString(),
-          selectedPeriod: emptySelectedPeriod,
-          availablePeriodOptions: emptySelectedPeriod.mode === 'year'
-            ? [{
-                key: `year-${emptySelectedPeriod.periodYear}`,
-                mode: 'year',
-                periodYear: emptySelectedPeriod.periodYear,
-                periodMonth: null,
-                label: emptySelectedPeriod.label,
-              }]
-            : [],
+          selectedPeriod,
+          availablePeriodOptions: [],
           monthlyReferences: [],
           budgetSummary: {
             totalExpenseBudget: 0,
@@ -454,15 +372,6 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
       })
 
       const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
-      const selectedYear = selectedPeriod.periodYear
-      const aggregationMonths = selectedPeriod.mode === 'year'
-        ? monthlyReferences
-          .filter((row) => row.periodYear === selectedYear)
-          .map((row) => row.periodMonth)
-        : [selectedPeriod.periodMonth]
-      console.info('[stats hydrate][temporary] final aggregation months used=', aggregationMonths)
-      console.info('[stats hydrate][temporary] fallbackReason=', fallbackReason)
-
       const monthlyEvolution2026 = await getMonthlyEvolution2026()
       const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
@@ -523,17 +432,15 @@ export async function resetSelectedPeriodToDefault(userId?: string | null): Prom
 
   const latestMonth = state.snapshot.monthlyReferences[0]
   const defaultSelectedPeriod: StatsSelectedPeriod = {
-    mode: 'month',
     id: latestMonth.id,
-    periodYear: latestMonth.periodYear,
-    periodMonth: latestMonth.periodMonth,
+    period_year: latestMonth.periodYear,
+    period_month: latestMonth.periodMonth,
     label: latestMonth.label,
   }
 
   if (
-    state.snapshot.selectedPeriod.mode === 'month'
-    && state.snapshot.selectedPeriod.periodYear === defaultSelectedPeriod.periodYear
-    && state.snapshot.selectedPeriod.periodMonth === defaultSelectedPeriod.periodMonth
+    state.snapshot.selectedPeriod.period_year === defaultSelectedPeriod.period_year
+    && state.snapshot.selectedPeriod.period_month === defaultSelectedPeriod.period_month
   ) {
     return
   }

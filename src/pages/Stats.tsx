@@ -91,12 +91,9 @@ export function Stats() {
     })
   }, [hydrateStatsReferenceData])
 
-  const isPeriodOptionActive = useCallback((option: { mode: 'month' | 'year'; periodYear: number; periodMonth: number | null }, selected: StatsSelectedPeriod | null) => {
+  const isPeriodOptionActive = useCallback((option: { period_year: number; period_month: number }, selected: StatsSelectedPeriod | null) => {
     if (!selected) return false
-    if (option.mode !== selected.mode) return false
-    if (option.mode === 'year') return selected.periodYear === option.periodYear
-    if (selected.mode !== 'month') return false
-    return selected.periodYear === option.periodYear && selected.periodMonth === option.periodMonth
+    return selected.period_year === option.period_year && selected.period_month === option.period_month
   }, [])
 
   const headerPeriodOptions = useMemo(() => {
@@ -105,28 +102,13 @@ export function Stats() {
       key: option.key,
       label: option.label,
       active: isPeriodOptionActive(option, snapshot?.selectedPeriod ?? null),
-      showDividerBefore: option.mode === 'year',
+      showDividerBefore: false,
       onSelect: () => {
-        if (option.mode === 'year') {
-          void setSelectedPeriod({
-            mode: 'year',
-            periodYear: option.periodYear,
-            label: option.label,
-          }).catch(() => {
-            // l'erreur est exposée dans le store
-          })
-          return
-        }
-
-        if (!option.periodMonth) return
         void setSelectedPeriod({
-          mode: 'month',
-          periodYear: option.periodYear,
-          periodMonth: option.periodMonth,
+          id: option.id,
+          period_year: option.period_year,
+          period_month: option.period_month,
           label: option.label,
-          id: snapshot?.monthlyReferences.find(
-            (row) => row.periodYear === option.periodYear && row.periodMonth === option.periodMonth,
-          )?.id ?? null,
         }).catch(() => {
           // l'erreur est exposée dans le store
         })
@@ -204,8 +186,6 @@ export function Stats() {
           {snapshot ? (
             <>
               <StatsTotalNeedCard
-                mode={snapshot.selectedPeriod.mode}
-                periodYear={snapshot.selectedPeriod.periodYear}
                 totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
                 totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
                 totalMonthlyNeed={snapshot.totalMonthlyNeed}
@@ -285,8 +265,6 @@ export function Stats() {
               />
 
               <StatsTotalNeedCard
-                mode={snapshot.selectedPeriod.mode}
-                periodYear={snapshot.selectedPeriod.periodYear}
                 totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
                 totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
                 totalMonthlyNeed={snapshot.totalMonthlyNeed}
