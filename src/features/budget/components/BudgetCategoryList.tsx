@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { BudgetActualCategoryMetric, BudgetLineWithCategory } from '@/features/budget/types'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
   computeBudgetConsumptionRatio,
   formatCurrency,
@@ -25,74 +26,77 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
   }, [actualCategoryMetrics])
 
   return (
-    <section style={{ padding: '0 var(--space-6)' }}>
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <article style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-150)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-4)' }}>
-          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-            Détail des sous-catégories
-          </h3>
+    <section style={{ padding: '0 var(--space-4)' }}>
+      <h3 style={{ margin: '0 0 var(--space-6) 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+        Répartition par catégorie
+      </h3>
 
-          {sorted.length === 0 ? (
-            <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>Aucune ligne de budget.</p>
-          ) : (
-            <div style={{ marginTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-              {sorted.map((line) => {
-                const budgetAmount = Number(line.amount ?? 0)
-                const actualAmount = hasActuals && line.category_id ? (actualByCategoryId.get(line.category_id) ?? 0) : 0
-                const consumptionRatio = computeBudgetConsumptionRatio(budgetAmount, actualAmount)
-                const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
-                const variance = budgetAmount - actualAmount
-                const isOverBudget = variance < 0
+      {sorted.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>Aucune ligne de budget.</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
+          {sorted.map((line) => {
+            const budgetAmount = Number(line.amount ?? 0)
+            const actualAmount = hasActuals && line.category_id ? (actualByCategoryId.get(line.category_id) ?? 0) : 0
+            const consumptionRatio = computeBudgetConsumptionRatio(budgetAmount, actualAmount)
+            const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
+            const actualPct = Math.round(consumptionRatio * 100)
+            const variance = budgetAmount - actualAmount
+            const isOverBudget = variance < 0
 
-                return (
-                  <div
-                    key={line.id}
-                    role={onLineClick ? 'button' : undefined}
-                    tabIndex={onLineClick ? 0 : undefined}
-                    onClick={onLineClick ? () => onLineClick(line) : undefined}
-                    onKeyDown={onLineClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onLineClick(line) } : undefined}
-                    style={{ display: 'grid', gap: 'var(--space-2)', borderTop: '1px solid var(--neutral-150)', paddingTop: 'var(--space-2)', cursor: onLineClick ? 'pointer' : undefined, borderRadius: onLineClick ? 'var(--radius-sm)' : undefined, transition: onLineClick ? 'background var(--transition-fast)' : undefined }}
-                    onMouseEnter={onLineClick ? (e) => { e.currentTarget.style.background = 'var(--neutral-50)' } : undefined}
-                    onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.background = '' } : undefined}
-                  >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'center' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {line.category_name ?? 'Catégorie'}
-                        </p>
-                        <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
-                          {line.parent_category_name ?? 'Autres'}
-                        </p>
-                      </div>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)' }}>
-                        {`${formatCurrency(actualAmount)} / ${formatCurrency(budgetAmount)}`}
-                      </p>
-                    </div>
+            return (
+              <div
+                key={line.id}
+                role={onLineClick ? 'button' : undefined}
+                tabIndex={onLineClick ? 0 : undefined}
+                onClick={onLineClick ? () => onLineClick(line) : undefined}
+                onKeyDown={onLineClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onLineClick(line) } : undefined}
+                style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 'var(--space-5)', cursor: onLineClick ? 'pointer' : undefined, transition: onLineClick ? 'opacity var(--transition-fast)' : undefined, opacity: onLineClick ? 1 : undefined }}
+                onMouseEnter={onLineClick ? (e) => { e.currentTarget.style.opacity = '0.7' } : undefined}
+                onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.opacity = '1' } : undefined}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                  <CategoryIcon categoryName={line.category_name ?? ''} size={56} />
+                </div>
 
-                    <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          width: `${progressPct}%`,
-                          height: '100%',
-                          borderRadius: 'var(--radius-pill)',
-                          background: isOverBudget ? 'var(--color-error)' : 'var(--primary-500)',
-                          transition: 'width var(--transition-base)',
-                        }}
-                      />
-                    </div>
+                <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {line.category_name ?? 'Catégorie'}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      {formatCurrency(budgetAmount)}
+                    </p>
+                  </div>
 
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                  <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        width: `${progressPct}%`,
+                        height: '100%',
+                        borderRadius: 'var(--radius-pill)',
+                        background: isOverBudget ? 'var(--color-error)' : 'var(--primary-500)',
+                        transition: 'width var(--transition-base)',
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                      {formatCurrency(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({actualPct}%)</span>
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
                       {hasActuals
                         ? (isOverBudget ? `Dépassement ${formatCurrency(Math.abs(variance))}` : `Restant ${formatCurrency(variance)}`)
                         : 'Pas encore de consommé'}
                     </p>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </article>
-      </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </section>
   )
 }
