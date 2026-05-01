@@ -10,9 +10,10 @@ interface BudgetCategoryListProps {
   lines: BudgetLineWithCategory[]
   actualCategoryMetrics: BudgetActualCategoryMetric[]
   hasActuals: boolean
+  onLineClick?: (line: BudgetLineWithCategory) => void
 }
 
-export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals }: BudgetCategoryListProps) {
+export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, onLineClick }: BudgetCategoryListProps) {
   const sorted = sortBudgetLinesForDisplay(lines)
   const actualByCategoryId = useMemo(() => {
     const map = new Map<string, number>()
@@ -44,7 +45,16 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals }:
                 const isOverBudget = variance < 0
 
                 return (
-                  <div key={line.id} style={{ display: 'grid', gap: 'var(--space-2)', borderTop: '1px solid var(--neutral-150)', paddingTop: 'var(--space-2)' }}>
+                  <div
+                    key={line.id}
+                    role={onLineClick ? 'button' : undefined}
+                    tabIndex={onLineClick ? 0 : undefined}
+                    onClick={onLineClick ? () => onLineClick(line) : undefined}
+                    onKeyDown={onLineClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onLineClick(line) } : undefined}
+                    style={{ display: 'grid', gap: 'var(--space-2)', borderTop: '1px solid var(--neutral-150)', paddingTop: 'var(--space-2)', cursor: onLineClick ? 'pointer' : undefined, borderRadius: onLineClick ? 'var(--radius-sm)' : undefined, transition: onLineClick ? 'background var(--transition-fast)' : undefined }}
+                    onMouseEnter={onLineClick ? (e) => { e.currentTarget.style.background = 'var(--neutral-50)' } : undefined}
+                    onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.background = '' } : undefined}
+                  >
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'center' }}>
                       <div style={{ minWidth: 0 }}>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

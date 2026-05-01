@@ -364,12 +364,17 @@ export function Budgets() {
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
+  const nowDay = now.getDate()
+  // Jours 1-3 du mois : on bascule par défaut sur le mois précédent
+  const isGracePeriod = nowDay <= 3
+  const defaultPeriodYear = isGracePeriod ? (nowMonth === 0 ? nowYear - 1 : nowYear) : nowYear
+  const defaultPeriodMonth = isGracePeriod ? (nowMonth === 0 ? 12 : nowMonth) : nowMonth + 1
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
-  const [selectedPeriodYear, setSelectedPeriodYear] = useState(nowYear)
-  const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(nowMonth + 1)
+  const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
+  const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(defaultPeriodMonth)
   const [availableBudgetPeriods, setAvailableBudgetPeriods] = useState<BudgetPeriodOption[]>([])
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
@@ -431,8 +436,8 @@ export function Budgets() {
     hasAppliedDefaultParamsRef.current = true
 
     setPeriodKey('mois')
-    setSelectedPeriodYear(nowYear)
-    setSelectedPeriodMonth(nowMonth + 1)
+    setSelectedPeriodYear(defaultPeriodYear)
+    setSelectedPeriodMonth(defaultPeriodMonth)
     setDataDisplayMode('reel')
     setActiveSlide(0)
 
@@ -441,7 +446,7 @@ export function Budgets() {
       nextParams.delete('category')
       setSearchParams(nextParams, { replace: true })
     }
-  }, [nowMonth, nowYear, searchParamsKey, setSearchParams])
+  }, [defaultPeriodMonth, defaultPeriodYear, searchParamsKey, setSearchParams])
 
   useEffect(() => {
     let active = true
@@ -455,7 +460,7 @@ export function Budgets() {
         if (!periods.length) return
 
         const hasCurrentSelection = periods.some(
-          (period) => period.period_year === nowYear && period.period_month === nowMonth + 1,
+          (period) => period.period_year === defaultPeriodYear && period.period_month === defaultPeriodMonth,
         )
 
         if (!hasCurrentSelection) {
@@ -478,11 +483,11 @@ export function Budgets() {
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
     setPeriodKey('mois')
-    setSelectedPeriodYear(nowYear)
-    setSelectedPeriodMonth(nowMonth + 1)
+    setSelectedPeriodYear(defaultPeriodYear)
+    setSelectedPeriodMonth(defaultPeriodMonth)
     setShowHeaderPeriodMenu(false)
     setShowCatSheet(false)
-  }, [nowMonth, nowYear, setSelectedCat])
+  }, [defaultPeriodMonth, defaultPeriodYear, setSelectedCat])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -651,10 +656,19 @@ export function Budgets() {
     flowType: 'expense',
   })
 
+  const subCategoryModalIds = useMemo(() => {
+    if (!selectedSubCategory) return undefined
+    const ids = [selectedSubCategory.id]
+    expenseSubCategories.forEach((c) => {
+      if (c.parent_id === selectedSubCategory.id) ids.push(c.id)
+    })
+    return ids
+  }, [selectedSubCategory, expenseSubCategories])
+
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
     flowType: 'expense',
-    categoryIds: selectedSubCategory ? [selectedSubCategory.id] : undefined,
+    categoryIds: subCategoryModalIds,
     debugSource: 'Budgets:subCategoryTransactions',
   }, {
     enabled: Boolean(selectedSubCategory),
@@ -1407,12 +1421,6 @@ export function Budgets() {
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
               {selectedCat === 'all' ? (
                 <div ref={donutAreaRef} style={{ position: 'relative', height: 336 }}>
-                  {selectedDonutSlice ? (
-                    <div ref={donutTooltipRef} style={{ position: 'absolute', top: 'var(--space-2)', left: '50%', transform: 'translateX(-50%)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', boxShadow: 'var(--shadow-md)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', zIndex: 3, minWidth: 220, textAlign: 'center' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>{selectedDonutSlice.name}</p>
-                      <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)' }}>{`${formatMoney(selectedDonutSlice.value)} · ${selectedSlicePct.toFixed(0)}%`}</p>
-                    </div>
-                  ) : null}
                   {donutTopFiveCallouts.length > 0 ? (
                     <svg width="100%" height="100%" viewBox={`0 0 ${Math.max(donutAreaSize.width, 1)} ${Math.max(donutAreaSize.height, 1)}`} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
                       {donutTopFiveCallouts.map((callout) => (
@@ -1429,12 +1437,22 @@ export function Budgets() {
                     <PieChart>
                       <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="54%" innerRadius={86} outerRadius={136} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: unknown) => {
                         const payload = extractPiePayload(slice)
-                        setSelectedDonutSlice({
-                          id: String(payload?.id ?? 'slice'),
-                          name: String(payload?.name ?? 'Catégorie'),
-                          value: Number(payload?.value ?? 0),
-                          color: String(payload?.color ?? 'var(--primary-500)'),
-                        })
+                        const id = String(payload?.id ?? '')
+                        const name = String(payload?.name ?? 'Catégorie')
+                        const value = Number(payload?.value ?? 0)
+                        const color = String(payload?.color ?? 'var(--primary-500)')
+                        setSelectedDonutSlice({ id, name, value, color })
+                        if (id) {
+                          setSelectedSubCategory({
+                            id,
+                            name,
+                            parentCategoryName: null,
+                            currentMonthAmount: value,
+                            previousMonthAmount: 0,
+                            threeMonthAvg: 0,
+                            trend: 'equal',
+                          })
+                        }
                       }} labelLine={false} label={(props: unknown) => {
                         const labelProps = (props ?? {}) as PieLabelProps
                         const payload = labelProps.payload
@@ -1761,63 +1779,69 @@ export function Budgets() {
       </motion.section>
 
       {selectedCat === 'all' ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingBottom: 'var(--space-4)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-              {dataDisplayMode === 'budget' ? 'Enveloppes budgétaires par catégorie' : 'Consommé VS restant par catégorie'}
-            </p>
-            <span style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
-          </div>
-
-          {budgetProgressRows.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--neutral-400)', padding: 'var(--space-8) 0' }}>Aucune catégorie à afficher</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              {budgetProgressRows.map((row) => {
-                const remainingAmount = Math.max(0, row.remaining)
-                const displayedRowAmount = dataDisplayMode === 'budget' ? row.budget : row.spent
-                const rowProgress = dataDisplayMode === 'budget'
-                  ? Math.max(0, Math.min(row.sharePct, 100))
-                  : row.progressPct
-                const rowTo = `/budgets?category=${row.id}`
+        <AnimatePresence mode="wait">
+          {activeSlide === 0 && configuredBudgetPeriod ? (
+            <motion.section key="slide0-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <BudgetVsActualSection
+                summary={configuredBudgetSummary}
+                categoryLines={configuredBudgetCategoryLines}
+                actuals={configuredBudgetActuals}
+                hasActuals={configuredBudgetHasActuals}
+              />
+              <BudgetCategoryList
+                lines={configuredBudgetCategoryLines}
+                actualCategoryMetrics={configuredBudgetActuals?.categoryActuals ?? []}
+                hasActuals={configuredBudgetHasActuals}
+                onLineClick={(line) => {
+                  if (!line.category_id) return
+                  setSelectedSubCategory({
+                    id: line.category_id,
+                    name: line.category_name ?? 'Catégorie',
+                    parentCategoryName: line.parent_category_name,
+                    currentMonthAmount: 0,
+                    previousMonthAmount: 0,
+                    threeMonthAvg: 0,
+                    trend: 'equal',
+                  })
+                }}
+              />
+            </motion.section>
+          ) : activeSlide === 1 && blockRows.length > 0 ? (
+            <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: '0 var(--space-4)' }}>
+              {(() => {
+                const totalBudgetBlocks = blockRows.reduce((s, r) => s + r.budgetAmount, 0)
                 return (
-                  <Link
-                    key={row.id}
-                    to={rowTo}
-                    style={{
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      display: 'grid',
-                      gap: 'var(--space-1)',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--neutral-200)',
-                      paddingBottom: 'var(--space-2)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {row.name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--primary-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                        {formatMoney(displayedRowAmount)}
-                      </p>
-                    </div>
-
-                    <div style={{ width: '100%', height: 7, borderRadius: 'var(--radius-pill)', background: 'var(--neutral-200)', overflow: 'hidden' }}>
-                      <div style={{ width: `${rowProgress}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: row.accent, transition: 'width var(--transition-base), background-color var(--transition-base)' }} />
-                    </div>
-
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      {dataDisplayMode === 'budget'
-                        ? `${row.sharePct.toFixed(0)}% du budget`
-                        : `Restant ${formatMoney(remainingAmount)}`}
+                  <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)' }}>
+                    <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--font-size-xs)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
+                      Répartition par blocs
                     </p>
-                  </Link>
+                    <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                      {blockRows.map((row) => {
+                        const displayedAmount = dataDisplayMode === 'budget' ? row.budgetAmount : row.actualAmount
+                        const barPct = totalBudgetBlocks > 0 ? Math.min((row.budgetAmount / totalBudgetBlocks) * 100, 100) : 0
+                        const sharePct = totalBudgetBlocks > 0 ? (row.budgetAmount / totalBudgetBlocks) * 100 : 0
+                        return (
+                          <div key={row.id}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{row.label}</span>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoney(displayedAmount)}</span>
+                            </div>
+                            <div style={{ width: '100%', height: 8, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)', overflow: 'hidden', marginBottom: 4 }}>
+                              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 'var(--radius-full)', background: row.color }} />
+                            </div>
+                            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textAlign: 'right' }}>
+                              {sharePct.toFixed(1)}% du budget total
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
-              })}
-            </div>
-          )}
-        </motion.section>
+              })()}
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
       ) : null}
 
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0', display: 'grid', gap: 'var(--space-4)' }}>
@@ -1863,17 +1887,6 @@ export function Budgets() {
         <>
           <BudgetSummaryCards summary={configuredBudgetSummary} />
           <BudgetParentGroups groups={configuredBudgetParentGroups} />
-          <BudgetVsActualSection
-            summary={configuredBudgetSummary}
-            categoryLines={configuredBudgetCategoryLines}
-            actuals={configuredBudgetActuals}
-            hasActuals={configuredBudgetHasActuals}
-          />
-          <BudgetCategoryList
-            lines={configuredBudgetCategoryLines}
-            actualCategoryMetrics={configuredBudgetActuals?.categoryActuals ?? []}
-            hasActuals={configuredBudgetHasActuals}
-          />
         </>
       ) : null}
 
@@ -1911,16 +1924,19 @@ export function Budgets() {
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <div style={{ padding: 'var(--space-4) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <div style={{ display: 'grid', gap: 2 }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>
                     {selectedBlock.label}
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--neutral-0)', fontFamily: 'var(--font-mono)', lineHeight: 1.15 }}>
+                    {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
                     {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
                   </p>
                 </div>
-                <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+                <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                   <X size={15} />
                 </button>
               </div>
@@ -1961,7 +1977,7 @@ export function Budgets() {
         ) : null}
       </AnimatePresence>
 
-      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null); setSubCategoryTransactionSequence([]) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
+      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null); setSubCategoryTransactionSequence([]); setSelectedDonutSlice(null) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
 
       <TransactionDetailsModal
         transaction={selectedTransaction}
