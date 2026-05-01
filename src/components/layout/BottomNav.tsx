@@ -36,54 +36,44 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
       onFocus={warmup}
       onTouchStart={warmup}
     >
-      {({ isActive }) => {
-        const iconColor = 'var(--neutral-0)'
-
-        return (
-          <div
+      {({ isActive }) => (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 3,
+            minWidth: 64,
+            padding: '6px 10px 8px',
+            opacity: isActive ? 1 : 0.58,
+            transition: 'opacity 200ms ease',
+          }}
+        >
+          <span
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              minWidth: 64,
-              padding: '8px 10px',
-              borderRadius: 'var(--radius-full)',
-              background: isActive
-                ? 'color-mix(in oklab, var(--neutral-0) 22%, transparent)'
-                : 'transparent',
-              opacity: isActive ? 1 : 0.62,
-              transition: 'all var(--transition-base)',
+              display: 'inline-flex',
+              color: 'var(--neutral-0)',
+              transform: isActive ? 'translateY(-3px)' : 'translateY(0)',
+              transition: 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
-            >
-            <span
-              style={{
-                display: 'inline-flex',
-                color: iconColor,
-                transform: isActive ? 'scale(1.06)' : 'scale(1)',
-                transition: 'transform var(--transition-fast)',
-              }}
-            >
-              <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.45 : 1.8} />
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: isActive ? 800 : 700,
-                lineHeight: 1,
-                color: iconColor,
-                maxWidth: 58,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {label}
-            </span>
-          </div>
-        )
-      }}
+          >
+            <Icon size={21} strokeWidth={isActive ? 2.4 : 1.8} />
+          </span>
+          <span
+            style={{
+              display: 'block',
+              width: isActive ? 20 : 4,
+              height: 3,
+              borderRadius: '3px',
+              background: 'var(--neutral-0)',
+              opacity: isActive ? 1 : 0,
+              flexShrink: 0,
+              transition: 'width 320ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 180ms ease',
+            }}
+          />
+        </div>
+      )}
     </NavLink>
   )
 }
@@ -120,15 +110,15 @@ const navRowStyle: CSSProperties = {
 const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: 6,
-  width: 56,
-  height: 56,
-  transform: 'translate(-50%, -44%)',
+  top: 'calc(var(--nav-base-height) / 2)',
+  width: 44,
+  height: 44,
+  transform: 'translate(-50%, calc(-50% - 5px))',
   borderRadius: 'var(--radius-full)',
   border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
   background: 'var(--neutral-0)',
   color: 'var(--primary-600)',
-  boxShadow: '0 0 0 3px color-mix(in oklab, var(--primary-300) 55%, transparent), var(--shadow-fab)',
+  boxShadow: '0 0 0 2px color-mix(in oklab, var(--primary-300) 45%, transparent), 0 4px 14px rgba(0,0,0,0.18)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -163,10 +153,12 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         onMouseLeave={() => setFabHovered(false)}
         style={{
           ...fabBaseStyle,
-          transform: fabHovered ? 'translate(-50%, -44%) scale(1.05)' : 'translate(-50%, -44%) scale(1)',
+          transform: fabHovered
+            ? 'translate(-50%, calc(-50% - 5px)) scale(1.07)'
+            : 'translate(-50%, calc(-50% - 5px)) scale(1)',
         }}
       >
-        <Plus size={26} strokeWidth={2.5} />
+        <Plus size={20} strokeWidth={2.4} />
       </button>
     </div>
   )
