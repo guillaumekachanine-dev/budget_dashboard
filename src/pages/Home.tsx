@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer,
@@ -12,6 +12,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  ReferenceDot,
+  ReferenceLine,
 } from 'recharts'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
@@ -20,13 +22,14 @@ import {
   getDaysRemainingInMonth,
   getMonthLabel,
 } from '@/lib/utils'
-import type { AccountWithBalance } from '@/lib/types'
+import type { AccountWithBalance, Transaction } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
+import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
-import { budgetDb } from '@/lib/supabaseBudget'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
+import { supabase } from '@/lib/supabase'
 import comptePrincipalIcon from '@/assets/bank_account_icons/Compte_principal_banque_populaire.png'
 import compteJointIcon from '@/assets/bank_account_icons/banque_postale_compte_joint.png'
 import peaIcon from '@/assets/bank_account_icons/Boursorama_PEA .png'
@@ -63,13 +66,24 @@ type HomeAccountEntry = {
   account: AccountWithBalance | null
 }
 
+type RecurringOperationRow = {
+  id: string
+  due_day?: number | null
+  day_of_month?: number | null
+  operation_day?: number | null
+  planned_day?: number | null
+  starts_on?: string | null
+  ends_on?: string | null
+  is_active?: boolean | null
+  recurrence_frequency?: string | null
+}
+
 type AccountVisualGroup = 'checking' | 'savings' | 'invest'
 
 const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
   { id: 'compte_principal', label: 'Compte principal', iconSrc: comptePrincipalIcon, keywords: ['compte principal', 'courant principal', 'principal'] },
   { id: 'compte_joint', label: 'Compte joint', iconSrc: compteJointIcon, keywords: ['compte joint', 'joint'], iconScale: 1.22 },
   { id: 'livret_a', label: 'Livret A', iconSrc: comptePrincipalIcon, keywords: ['livret a'] },
-  { id: 'ldds', label: 'LDDS', iconSrc: comptePrincipalIcon, keywords: ['ldds'] },
   { id: 'per', label: 'PER', iconSrc: comptePrincipalIcon, keywords: ['per'] },
   { id: 'pea', label: 'PEA', iconSrc: peaIcon, keywords: ['pea'], iconScale: 1.22 },
   { id: 'epargne_percol', label: 'Epargne PERCOL', iconSrc: percolIcon, keywords: ['percol', 'amundi'], iconScale: 1.22 },
@@ -87,6 +101,10 @@ function formatDateShort(isoDate: string): string {
   const date = new Date(`${isoDate}T00:00:00`)
   if (Number.isNaN(date.getTime())) return isoDate
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function toIsoDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 const SAVINGS_BOOKLET_IDS = ['livret_a', 'ldds'] as const
@@ -124,97 +142,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 const PROJECTION_SAVINGS_RATE = 0.015
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 const MONTHS_2026_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
-
-type HomeVisionMode = 'to_date' | 'end_of_month'
-type HomeBudgetBlockId = 'fixe' | 'variable_essentiel' | 'discretionnaire' | 'epargne' | 'cagnotte'
-
-interface RecurringObligationRow {
-  id: string
-  category_id: string | null
-  amount: number
-  due_day: number
-  recurrence_frequency: 'monthly' | 'quarterly' | 'yearly'
-  starts_on: string | null
-  ends_on: string | null
-}
-
-interface HomeVisionBlockConfig {
-  id: HomeBudgetBlockId
-  label: string
-  color: string
-}
-
-interface HomeVisionBlockRow extends HomeVisionBlockConfig {
-  budgetAmount: number
-  spentToDate: number
-  plannedOperationsCount: number
-  plannedOperationsAmount: number
-  consumedAmount: number
-  consumedRatio: number
-}
-
-const HOME_VISION_BLOCKS: HomeVisionBlockConfig[] = [
-  { id: 'fixe', label: 'Fixe', color: 'var(--primary-500)' },
-  { id: 'variable_essentiel', label: 'Variable essentiel', color: 'var(--color-success)' },
-  { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
-  { id: 'epargne', label: 'Épargne', color: 'var(--color-warning)' },
-  { id: 'cagnotte', label: 'Cagnotte', color: 'var(--viz-e)' },
-]
-
-function normalizeBudgetBucket(value: string | null | undefined): string {
-  if (!value) return ''
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\s-]+/g, '_')
-}
-
-function mapBudgetBucketToHomeBlock(bucket: string | null | undefined): HomeBudgetBlockId | null {
-  const normalized = normalizeBudgetBucket(bucket)
-  if (normalized === 'socle_fixe') return 'fixe'
-  if (normalized === 'variable_essentielle') return 'variable_essentiel'
-  if (normalized === 'discretionnaire') return 'discretionnaire'
-  if (normalized === 'provision') return 'epargne'
-  if (normalized === 'cagnotte_projet') return 'cagnotte'
-  return null
-}
-
-function resolveObligationDueDateForMonth(
-  obligation: RecurringObligationRow,
-  year: number,
-  month: number,
-): string | null {
-  const monthDays = new Date(year, month, 0).getDate()
-  const dueDay = Math.max(1, Math.min(monthDays, Number(obligation.due_day ?? 1)))
-  const dueDate = new Date(year, month - 1, dueDay)
-  const dueIso = dueDate.toISOString().slice(0, 10)
-
-  if (obligation.starts_on && dueIso < obligation.starts_on) return null
-  if (obligation.ends_on && dueIso > obligation.ends_on) return null
-
-  if (obligation.recurrence_frequency === 'monthly') return dueIso
-
-  if (!obligation.starts_on) return null
-
-  const startDate = new Date(`${obligation.starts_on}T00:00:00`)
-  if (Number.isNaN(startDate.getTime())) return null
-
-  const startMonth = startDate.getMonth() + 1
-  const monthsDiff = (year - startDate.getFullYear()) * 12 + (month - startMonth)
-  if (monthsDiff < 0) return null
-
-  if (obligation.recurrence_frequency === 'quarterly') {
-    return monthsDiff % 3 === 0 ? dueIso : null
-  }
-
-  if (obligation.recurrence_frequency === 'yearly') {
-    return month === startMonth && monthsDiff % 12 === 0 ? dueIso : null
-  }
-
-  return null
-}
 
 function DriftCategoryTransactionsModal({
   open,
@@ -325,12 +252,20 @@ function DriftCategoryTransactionsModal({
 
 export function Home() {
   const { year, month } = getCurrentPeriod()
+  const trajectoryYear = 2026
+  const now = new Date()
+  const maxTrajectoryMonth = now.getFullYear() <= trajectoryYear
+    ? (now.getFullYear() < trajectoryYear ? 12 : now.getMonth() + 1)
+    : 12
+  const [selectedTrajectoryMonth, setSelectedTrajectoryMonth] = useState<number>(Math.min(Math.max(month, 1), maxTrajectoryMonth))
+  const [showTrajectoryMonthMenu, setShowTrajectoryMonthMenu] = useState(false)
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
+  const { data: trajectorySummaries } = useBudgetSummaries(trajectoryYear, selectedTrajectoryMonth)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
+  const trajectoryTotalBudget = trajectorySummaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
 
-  const now = new Date()
   const todayIso = now.toISOString().slice(0, 10)
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
@@ -347,6 +282,46 @@ export function Home() {
     startDate: monthStart,
     endDate: monthEnd,
     flowType: 'savings',
+  })
+  const trajectoryMonthStart = new Date(trajectoryYear, selectedTrajectoryMonth - 1, 1).toISOString().slice(0, 10)
+  const trajectoryMonthEnd = new Date(trajectoryYear, selectedTrajectoryMonth, 0).toISOString().slice(0, 10)
+  const trajectoryDaysInMonth = new Date(trajectoryYear, selectedTrajectoryMonth, 0).getDate()
+  const trajectoryIsCurrentMonth = now.getFullYear() === trajectoryYear && now.getMonth() + 1 === selectedTrajectoryMonth
+  const trajectoryDaysElapsed = trajectoryIsCurrentMonth ? now.getDate() : trajectoryDaysInMonth
+  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayIso : trajectoryMonthEnd
+  const { data: trajectoryMonthExpenseTxns } = useTransactions({
+    startDate: trajectoryMonthStart,
+    endDate: trajectoryMonthEnd,
+    flowType: 'expense',
+  })
+  const { data: recurringOperationsRows } = useQuery<RecurringOperationRow[]>({
+    queryKey: ['home', 'recurring-operations', trajectoryYear, selectedTrajectoryMonth],
+    queryFn: async () => {
+      const recurringTableQuery = supabase
+        .schema('budget_dashboard')
+        .from('recurring_operations' as any)
+        .select('*')
+
+      const { data: recurringData, error: recurringError } = await recurringTableQuery
+      if (!recurringError && Array.isArray(recurringData)) return recurringData as unknown as RecurringOperationRow[]
+
+      const fallbackQuery = supabase
+        .schema('budget_dashboard')
+        .from('recurring_obligations')
+        .select('id, due_day, starts_on, ends_on, is_active, recurrence_frequency')
+      const { data: fallbackData } = await fallbackQuery
+      return (fallbackData ?? []) as RecurringOperationRow[]
+    },
+    staleTime: 60_000,
+  })
+  const trajectoryPreviousMonthYear = selectedTrajectoryMonth === 1 ? trajectoryYear - 1 : trajectoryYear
+  const trajectoryPreviousMonth = selectedTrajectoryMonth === 1 ? 12 : selectedTrajectoryMonth - 1
+  const trajectoryPreviousMonthStart = new Date(trajectoryPreviousMonthYear, trajectoryPreviousMonth - 1, 1).toISOString().slice(0, 10)
+  const trajectoryPreviousMonthEnd = new Date(trajectoryPreviousMonthYear, trajectoryPreviousMonth, 0).toISOString().slice(0, 10)
+  const { data: previousMonthExpenseTxns } = useTransactions({
+    startDate: trajectoryPreviousMonthStart,
+    endDate: trajectoryPreviousMonthEnd,
+    flowType: 'expense',
   })
   const { data: homeBudgetLines } = useQuery<{
     categoryLines: BudgetLineWithCategory[]
@@ -366,20 +341,6 @@ export function Home() {
     },
     staleTime: 60_000,
   })
-  const { data: recurringObligations } = useQuery<RecurringObligationRow[]>({
-    queryKey: ['home', 'recurring-obligations'],
-    queryFn: async () => {
-      const { data, error } = await budgetDb()
-        .from('recurring_obligations')
-        .select('id, category_id, amount, due_day, recurrence_frequency, starts_on, ends_on')
-        .eq('is_active', true)
-
-      if (error) throw error
-      return (data ?? []) as RecurringObligationRow[]
-    },
-    staleTime: 60_000,
-  })
-
   const realToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
@@ -436,62 +397,6 @@ export function Home() {
       .reduce((sum, t) => sum + Number(t.amount), 0)
   }, [monthExpenseTxns, todayIso])
 
-  const budgetBlockByCategoryId = useMemo(() => {
-    const map = new Map<string, HomeBudgetBlockId>()
-    const rows = homeBudgetLines?.categoryLines ?? []
-    for (const line of rows) {
-      if (!line.category_id) continue
-      const blockId = mapBudgetBucketToHomeBlock(line.budget_bucket)
-      if (!blockId) continue
-      map.set(line.category_id, blockId)
-    }
-    return map
-  }, [homeBudgetLines?.categoryLines])
-
-  const blockBudgetById = useMemo(() => {
-    const byBlock = new Map<HomeBudgetBlockId, number>()
-    const rows = homeBudgetLines?.categoryLines ?? []
-    for (const line of rows) {
-      const blockId = mapBudgetBucketToHomeBlock(line.budget_bucket)
-      if (!blockId) continue
-      byBlock.set(blockId, (byBlock.get(blockId) ?? 0) + Number(line.amount))
-    }
-    return byBlock
-  }, [homeBudgetLines?.categoryLines])
-
-  const spentToDateByBlock = useMemo(() => {
-    const byBlock = new Map<HomeBudgetBlockId, number>()
-    const rows = monthExpenseTxns ?? []
-    for (const txn of rows) {
-      if (txn.transaction_date > todayIso) continue
-      const mappedCategoryBlock = txn.category_id ? budgetBlockByCategoryId.get(txn.category_id) ?? null : null
-      const fallbackBlock = txn.budget_behavior === 'fixed' ? 'fixe' : txn.budget_behavior === 'variable' ? 'variable_essentiel' : null
-      const blockId = mappedCategoryBlock ?? fallbackBlock
-      if (!blockId) continue
-      byBlock.set(blockId, (byBlock.get(blockId) ?? 0) + Number(txn.amount))
-    }
-    return byBlock
-  }, [budgetBlockByCategoryId, monthExpenseTxns, todayIso])
-
-  const plannedObligationsByBlock = useMemo(() => {
-    const byBlock = new Map<HomeBudgetBlockId, { count: number; amount: number }>()
-    const rows = recurringObligations ?? []
-
-    for (const obligation of rows) {
-      const dueIso = resolveObligationDueDateForMonth(obligation, year, month)
-      if (!dueIso || dueIso <= todayIso) continue
-      if (!obligation.category_id) continue
-      const blockId = budgetBlockByCategoryId.get(obligation.category_id)
-      if (!blockId) continue
-      const previous = byBlock.get(blockId) ?? { count: 0, amount: 0 }
-      previous.count += 1
-      previous.amount += Number(obligation.amount ?? 0)
-      byBlock.set(blockId, previous)
-    }
-
-    return byBlock
-  }, [budgetBlockByCategoryId, month, recurringObligations, todayIso, year])
-
   const resteUtile = useMemo(() => {
     return Math.max(0, totalBudget - realToDate - plannedFuture)
   }, [plannedFuture, realToDate, totalBudget])
@@ -507,42 +412,8 @@ export function Home() {
     return (realToDate / daysElapsed) * daysInMonth
   }, [daysElapsed, daysInMonth, plannedFuture, realToDate])
 
-  const trajectoryData = useMemo(() => {
-    const txns = monthExpenseTxns ?? []
-    const daily = new Map<number, number>()
-    txns.forEach((t) => {
-      if (t.transaction_date < monthStart || t.transaction_date > monthEnd) return
-      const day = Number(t.transaction_date.slice(8, 10))
-      if (!Number.isFinite(day)) return
-      if (t.transaction_date > todayIso) return
-      daily.set(day, (daily.get(day) ?? 0) + Number(t.amount))
-    })
-
-    let cumul = 0
-    return Array.from({ length: daysInMonth }, (_, i) => {
-      const day = i + 1
-      cumul += daily.get(day) ?? 0
-      const planned = daysInMonth > 0 ? (totalBudget / daysInMonth) * day : 0
-      return {
-        day,
-        planned,
-        actual: day <= daysElapsed ? cumul : null,
-        delta: day <= daysElapsed ? cumul - planned : null,
-      }
-    })
-  }, [daysElapsed, daysInMonth, monthEnd, monthExpenseTxns, monthStart, todayIso, totalBudget])
-
-  const plannedToDate = useMemo(() => {
-    return daysElapsed > 0 ? (totalBudget / daysInMonth) * daysElapsed : 0
-  }, [daysElapsed, daysInMonth, totalBudget])
-
-  const deltaPct = useMemo(() => {
-    if (plannedToDate <= 0) return null
-    return ((realToDate - plannedToDate) / plannedToDate) * 100
-  }, [plannedToDate, realToDate])
-
   const driftCategories = useMemo(() => {
-    const rows = summaries ?? []
+    const rows = trajectorySummaries ?? []
     return [...rows]
       .filter((r) => r.budget_amount > 0)
       .map((r) => ({
@@ -551,9 +422,10 @@ export function Home() {
         spent: r.spent_amount,
         driftPct: (r.spent_amount / r.budget_amount) * 100 - 100,
       }))
+      .filter((r) => r.driftPct > 0)
       .sort((a, b) => b.driftPct - a.driftPct)
       .slice(0, 6)
-  }, [summaries])
+  }, [trajectorySummaries])
 
   const accountEntries = useMemo<HomeAccountEntry[]>(() => {
     const source = accounts ?? []
@@ -575,6 +447,10 @@ export function Home() {
   const [showAccountsModal, setShowAccountsModal] = useState(false)
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
+  const [trajectorySelectedTxn, setTrajectorySelectedTxn] = useState<Transaction | null>(null)
+  const [trajectoryLinkError, setTrajectoryLinkError] = useState<string | null>(null)
+  const [showTop5ExpensesInDrift, setShowTop5ExpensesInDrift] = useState(false)
+  const [selectedPlannedDay, setSelectedPlannedDay] = useState<number | null>(null)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -588,9 +464,21 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
+    if (selectedAccountPresetId === 'ldds') {
+      setSelectedAccountPresetId('livret_a')
+    }
+  }, [selectedAccountPresetId])
+
+  useEffect(() => {
     if (!showAccountsModal && !showDriftCategoryModal) return
     return lockDocumentScroll()
   }, [showAccountsModal, showDriftCategoryModal])
+
+  useEffect(() => {
+    if (!trajectoryLinkError) return
+    const timeoutId = window.setTimeout(() => setTrajectoryLinkError(null), 2200)
+    return () => window.clearTimeout(timeoutId)
+  }, [trajectoryLinkError])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -598,11 +486,22 @@ export function Home() {
     return accountEntries.find((entry) => entry.preset.id === selectedAccountPresetId) ?? accountEntries[0]
   }, [accountEntries, selectedAccountPresetId])
 
+  const livretAAccount = useMemo(
+    () => (accounts ?? []).find((account) => normalizeLabel(account.name).includes('livret a')) ?? null,
+    [accounts],
+  )
+  const lddsAccount = useMemo(
+    () => (accounts ?? []).find((account) => normalizeLabel(account.name).includes('ldds')) ?? null,
+    [accounts],
+  )
+
   const selectedAccount = selectedAccountEntry?.account ?? null
   const { data: selectedAccountTxns } = useTransactions({
     accountId: selectedAccount?.id ?? null,
     debugSource: 'Home:selectedAccountTxns',
   })
+  const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null })
+  const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
   const isLivretA = selectedPresetId === 'livret_a'
   const isLDDS = selectedPresetId === 'ldds'
@@ -610,12 +509,12 @@ export function Home() {
   const isPEA = selectedPresetId === 'pea'
   const isMainCheckingAccount = selectedPresetId === 'compte_principal'
   const isProjectionSavingsAccount = isLivretA || isLDDS
+  const isCombinedSavingsPage = isLivretA || isLDDS
   const isSavingsBooklet =
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1 | 2>(0)
-  const [homeVisionMode, setHomeVisionMode] = useState<HomeVisionMode>('to_date')
+  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1>(0)
 
   const mainAccountResteUtile = useMemo(() => (
     selectedBalance
@@ -636,28 +535,6 @@ export function Home() {
     return mainAccountResteUtile / daysRemaining
   }, [daysRemaining, mainAccountResteUtile])
 
-  const homeVisionRows = useMemo<HomeVisionBlockRow[]>(() => (
-    HOME_VISION_BLOCKS.map((block) => {
-      const budgetAmount = blockBudgetById.get(block.id) ?? 0
-      const spentToDate = spentToDateByBlock.get(block.id) ?? 0
-      const planned = plannedObligationsByBlock.get(block.id) ?? { count: 0, amount: 0 }
-      const consumedAmount = homeVisionMode === 'end_of_month'
-        ? spentToDate + planned.amount
-        : spentToDate
-      const consumedRatio = budgetAmount > 0 ? (consumedAmount / budgetAmount) * 100 : 0
-
-      return {
-        ...block,
-        budgetAmount,
-        spentToDate,
-        plannedOperationsCount: planned.count,
-        plannedOperationsAmount: planned.amount,
-        consumedAmount,
-        consumedRatio,
-      }
-    })
-  ), [blockBudgetById, homeVisionMode, plannedObligationsByBlock, spentToDateByBlock])
-
   const handleOpenAccountsModal = useCallback(() => {
     setShowAccountsModal((current) => !current)
   }, [])
@@ -670,6 +547,14 @@ export function Home() {
   useEffect(() => {
     if (!isMainCheckingAccount) setHomeInsightsSlide(0)
   }, [isMainCheckingAccount])
+
+  useEffect(() => {
+    setShowTop5ExpensesInDrift(false)
+  }, [homeInsightsSlide, selectedTrajectoryMonth])
+
+  useEffect(() => {
+    setSelectedPlannedDay(null)
+  }, [selectedTrajectoryMonth, homeInsightsSlide])
 
   const heroMetrics = useMemo(
     () => [
@@ -830,6 +715,187 @@ export function Home() {
     })
   }, [isProjectionSavingsAccount, selectedBalance])
 
+  const plannedTrajectoryItems = useMemo(() => {
+    const rows = recurringOperationsRows ?? []
+    return rows
+      .filter((row) => {
+        const active = row.is_active ?? true
+        if (!active) return false
+        if (row.starts_on && row.starts_on > trajectoryMonthEnd) return false
+        if (row.ends_on && row.ends_on < trajectoryMonthStart) return false
+        return true
+      })
+      .map((row) => {
+        const dueDayCandidates = [
+          row.due_day,
+          row.day_of_month,
+          row.operation_day,
+          row.planned_day,
+        ]
+        const numericDay = dueDayCandidates.find((value) => Number.isFinite(Number(value)))
+        const day = Number(numericDay ?? NaN)
+        return {
+          row,
+          day,
+        }
+      })
+      .filter((item) => Number.isFinite(item.day) && item.day > 0 && item.day <= trajectoryDaysInMonth)
+  }, [recurringOperationsRows, trajectoryDaysInMonth, trajectoryMonthEnd, trajectoryMonthStart])
+
+  const plannedMarkerDays = useMemo(
+    () => Array.from(new Set(plannedTrajectoryItems.map((item) => item.day))).sort((a, b) => a - b),
+    [plannedTrajectoryItems],
+  )
+  const plannedMarkerDaySet = useMemo(() => new Set(plannedMarkerDays), [plannedMarkerDays])
+
+  const plannedItemsByDay = useMemo(() => {
+    const map = new Map<number, typeof plannedTrajectoryItems>()
+    plannedTrajectoryItems.forEach((item) => {
+      const current = map.get(item.day) ?? []
+      current.push(item)
+      map.set(item.day, current)
+    })
+    return map
+  }, [plannedTrajectoryItems])
+
+  const previousMonthTxnsByKey = useMemo(() => {
+    const map = new Map<string, Transaction>()
+    ;(previousMonthExpenseTxns ?? []).forEach((txn) => {
+      const key = `${txn.normalized_label ?? txn.raw_label ?? ''}|${Math.round(Number(txn.amount) * 100)}|${txn.category_id ?? ''}`
+      map.set(key, txn)
+    })
+    return map
+  }, [previousMonthExpenseTxns])
+
+  const plannedTxnsByDay = useMemo(() => {
+    const map = new Map<number, Transaction[]>()
+    ;(trajectoryMonthExpenseTxns ?? [])
+      .filter((txn) => txn.is_recurring)
+      .forEach((txn) => {
+        const day = Number(txn.transaction_date.slice(8, 10))
+        if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
+        const current = map.get(day) ?? []
+        current.push(txn)
+        map.set(day, current)
+      })
+    return map
+  }, [trajectoryDaysInMonth, trajectoryMonthExpenseTxns])
+
+  const openPreviousMonthTxnFromPlannedDay = useCallback((day: number) => {
+    const plannedItems = plannedTxnsByDay.get(day) ?? []
+    if (!plannedItems.length) {
+      setTrajectoryLinkError('Opération planifiée introuvable pour cette date.')
+      return
+    }
+
+    const plannedTxn = plannedItems[0]
+    const key = `${plannedTxn.normalized_label ?? plannedTxn.raw_label ?? ''}|${Math.round(Number(plannedTxn.amount) * 100)}|${plannedTxn.category_id ?? ''}`
+    const previousMonthMatch = previousMonthTxnsByKey.get(key)
+
+    if (!previousMonthMatch) {
+      setTrajectoryLinkError('Modale M-1 indisponible pour cette opération.')
+      return
+    }
+
+    const previousMonthDay = Number(previousMonthMatch.transaction_date.slice(8, 10))
+    const remappedDate = toIsoDate(trajectoryYear, selectedTrajectoryMonth, Number.isFinite(previousMonthDay) ? previousMonthDay : day)
+    const mirroredTxn = {
+      ...previousMonthMatch,
+      transaction_date: remappedDate,
+    }
+
+    setTrajectorySelectedTxn(mirroredTxn)
+  }, [plannedTxnsByDay, previousMonthTxnsByKey, selectedTrajectoryMonth, trajectoryYear])
+
+  const trajectoryTooltipContent = useCallback((payload: any) => {
+    if (!payload.active || !payload.payload?.length) return null
+    const day = Number(payload.label)
+    const actualValue = payload.payload.find((entry: any) => entry.dataKey === 'actual')?.value
+    const plannedValue = payload.payload.find((entry: any) => entry.dataKey === 'planned')?.value
+    const plannedCount = plannedItemsByDay.get(day)?.length ?? 0
+
+    return (
+      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4, minWidth: 154 }}>
+        <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${day}`}</p>
+        <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${actualValue == null ? '—' : formatMoneyInteger(Number(actualValue))}`}</p>
+        {plannedCount > 0 ? (
+          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedValue == null ? '—' : formatMoneyInteger(Number(plannedValue))}`}</p>
+        ) : null}
+        {plannedCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => openPreviousMonthTxnFromPlannedDay(day)}
+            style={{
+              border: '1px solid var(--neutral-200)',
+              background: 'var(--neutral-0)',
+              color: 'var(--neutral-700)',
+              borderRadius: 'var(--radius-full)',
+              minHeight: 26,
+              padding: '0 10px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            ↗ Détail M-1
+          </button>
+        ) : null}
+      </div>
+    )
+  }, [openPreviousMonthTxnFromPlannedDay, plannedItemsByDay])
+
+  const trajectoryData = useMemo(() => {
+    const txns = trajectoryMonthExpenseTxns ?? []
+    const daily = new Map<number, number>()
+    txns.forEach((t) => {
+      if (t.transaction_date < trajectoryMonthStart || t.transaction_date > trajectoryMonthEnd) return
+      const day = Number(t.transaction_date.slice(8, 10))
+      if (!Number.isFinite(day)) return
+      if (t.transaction_date > trajectoryCutoffIso) return
+      daily.set(day, (daily.get(day) ?? 0) + Number(t.amount))
+    })
+
+    let cumul = 0
+    return Array.from({ length: trajectoryDaysInMonth }, (_, i) => {
+      const day = i + 1
+      cumul += daily.get(day) ?? 0
+      const planned = trajectoryDaysInMonth > 0 ? (trajectoryTotalBudget / trajectoryDaysInMonth) * day : 0
+      return {
+        day,
+        planned,
+        plannedMarker: plannedMarkerDaySet.has(day) ? planned : null,
+        actual: day <= trajectoryDaysElapsed ? cumul : null,
+        overBudget: day <= trajectoryDaysElapsed && cumul > Math.max(0, Number(trajectoryTotalBudget ?? 0)) ? cumul : null,
+        delta: day <= trajectoryDaysElapsed ? cumul - planned : null,
+      }
+    })
+  }, [plannedMarkerDaySet, trajectoryCutoffIso, trajectoryDaysElapsed, trajectoryDaysInMonth, trajectoryMonthEnd, trajectoryMonthExpenseTxns, trajectoryMonthStart, trajectoryTotalBudget])
+
+  const trajectoryDataByDay = useMemo(() => {
+    const map = new Map<number, { planned: number; actual: number | null }>()
+    trajectoryData.forEach((row) => {
+      map.set(Number(row.day), { planned: Number(row.planned), actual: row.actual == null ? null : Number(row.actual) })
+    })
+    return map
+  }, [trajectoryData])
+
+  const trajectoryRealToDate = useMemo(() => {
+    const rows = trajectoryMonthExpenseTxns ?? []
+    return rows
+      .filter((t) => t.transaction_date <= trajectoryCutoffIso)
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+  }, [trajectoryCutoffIso, trajectoryMonthExpenseTxns])
+
+  const trajectoryPlannedToDate = useMemo(
+    () => trajectoryDaysElapsed > 0 ? (trajectoryTotalBudget / trajectoryDaysInMonth) * trajectoryDaysElapsed : 0,
+    [trajectoryDaysElapsed, trajectoryDaysInMonth, trajectoryTotalBudget],
+  )
+
+  const trajectoryDeltaPct = useMemo(() => {
+    if (trajectoryPlannedToDate <= 0) return null
+    return ((trajectoryRealToDate - trajectoryPlannedToDate) / trajectoryPlannedToDate) * 100
+  }, [trajectoryPlannedToDate, trajectoryRealToDate])
+
   const perProjection2026Data = useMemo(() => {
     if (!isPER) return []
 
@@ -860,6 +926,38 @@ export function Home() {
     [driftCategories],
   )
 
+  const top5ExpenseRows = useMemo(() => {
+    const rows = trajectoryMonthExpenseTxns ?? []
+    const categoryNameById = new Map<string, string>()
+    ;(trajectorySummaries ?? []).forEach((summary) => {
+      categoryNameById.set(summary.category.id, summary.category.name)
+    })
+    const spentByCategory = new Map<string, { id: string; name: string; spent: number }>()
+    rows.forEach((txn) => {
+      if (txn.transaction_date > trajectoryCutoffIso || !txn.category_id) return
+      const current = spentByCategory.get(txn.category_id)
+      spentByCategory.set(txn.category_id, {
+        id: txn.category_id,
+        name: current?.name ?? categoryNameById.get(txn.category_id) ?? 'Catégorie',
+        spent: (current?.spent ?? 0) + Number(txn.amount),
+      })
+    })
+
+    const budgetsByCategory = new Map<string, number>()
+    ;(trajectorySummaries ?? []).forEach((summary) => {
+      budgetsByCategory.set(summary.category.id, Number(summary.budget_amount))
+    })
+
+    return Array.from(spentByCategory.values())
+      .sort((a, b) => b.spent - a.spent)
+      .slice(0, 5)
+      .map((row) => {
+        const budget = budgetsByCategory.get(row.id) ?? 0
+        const driftPct = budget > 0 ? ((row.spent - budget) / budget) * 100 : 0
+        return { ...row, driftPct }
+      })
+  }, [trajectoryCutoffIso, trajectoryMonthExpenseTxns, trajectorySummaries])
+
   const selectedDriftCategoryName = useMemo(() => {
     if (!selectedDriftCategoryId) return null
     return driftRows.find((r) => r.id === selectedDriftCategoryId)?.name ?? null
@@ -867,12 +965,14 @@ export function Home() {
 
   const selectedDriftCategoryTransactions = useMemo(() => {
     if (!selectedDriftCategoryId) return null
-    const rows = monthExpenseTxns ?? []
+    const rows = trajectoryMonthExpenseTxns ?? []
     return rows.filter((t) => t.category_id === selectedDriftCategoryId)
-  }, [selectedDriftCategoryId, monthExpenseTxns])
+  }, [selectedDriftCategoryId, trajectoryMonthExpenseTxns])
 
   const trajectoryDeltaColor =
-    deltaPct == null ? 'var(--neutral-500)' : deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
+    trajectoryDeltaPct == null ? 'var(--neutral-500)' : trajectoryDeltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
+  const monthlyBudgetCap = Math.max(0, Number(trajectoryTotalBudget ?? 0))
+  const monthlyBudgetCapLabel = formatMoneyInteger(monthlyBudgetCap)
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
   const heroPrimaryColor = accountVisualGroup === 'savings'
     ? 'var(--color-success)'
@@ -884,6 +984,40 @@ export function Home() {
     : accountVisualGroup === 'invest'
       ? 'color-mix(in oklab, var(--color-warning) 56%, var(--neutral-900) 44%)'
       : 'var(--primary-700)'
+  const livretABalance = Number(livretAAccount?.current_balance ?? 0)
+  const lddsBalance = Number(lddsAccount?.current_balance ?? 0)
+  const livretACeilingPct = Math.max(0, Math.min(100, (livretABalance / SAVINGS_BOOKLET_CEILINGS.livret_a) * 100))
+  const lddsCeilingPct = Math.max(0, Math.min(100, (lddsBalance / SAVINGS_BOOKLET_CEILINGS.ldds) * 100))
+  const combinedSavingsSections = [
+    {
+      id: 'livret_a',
+      title: 'Livret A',
+      balance: livretABalance,
+      ceiling: SAVINGS_BOOKLET_CEILINGS.livret_a,
+      ceilingPct: livretACeilingPct,
+      txns: livretATxns ?? [],
+      metrics: [
+        { key: 'statut-livret_a', label: 'Statut', value: livretACeilingPct >= 99.5 ? 'Plafond atteint' : `${livretACeilingPct.toFixed(0)}%` },
+        { key: 'liquidite-livret_a', label: 'Liquidité', value: 'Disponible' },
+        { key: 'taux-livret_a', label: "Taux d’intérêt", value: '1,5%' },
+        { key: 'interets-2025-livret_a', label: 'Intérêts 2025', value: '522€' },
+      ],
+    },
+    {
+      id: 'ldds',
+      title: 'LDDS',
+      balance: lddsBalance,
+      ceiling: SAVINGS_BOOKLET_CEILINGS.ldds,
+      ceilingPct: lddsCeilingPct,
+      txns: lddsTxns ?? [],
+      metrics: [
+        { key: 'statut-ldds', label: 'Statut', value: lddsCeilingPct >= 99.5 ? 'Plafond atteint' : `${lddsCeilingPct.toFixed(0)}%` },
+        { key: 'liquidite-ldds', label: 'Liquidité', value: 'Disponible' },
+        { key: 'taux-ldds', label: "Taux d’intérêt", value: '1,5%' },
+        { key: 'interets-2025-ldds', label: 'Intérêts 2025', value: '57€' },
+      ],
+    },
+  ]
 
   return (
     <div
@@ -926,185 +1060,213 @@ export function Home() {
         style={{ padding: '0 var(--space-6)' }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          <div
-            style={{
-              display: 'grid',
-              gap: 'var(--space-1)',
-              justifyItems: 'center',
-              textAlign: 'center',
-              marginBottom: 'var(--space-2)',
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                fontSize: 'var(--font-size-kpi)',
-                fontWeight: 'var(--font-weight-extrabold)',
-                lineHeight: 'var(--line-height-tight)',
-                fontFamily: 'var(--font-mono)',
-                color: heroAmountColor,
-              }}
-            >
-              {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
-            </p>
-            {isSavingsBooklet && savingsBookletCeiling ? (
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
-              </p>
-            ) : null}
-          </div>
-
-          <div
-            style={{
-              background: heroPrimaryColor,
-              color: 'var(--neutral-0)',
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-lg)',
-              display: 'grid',
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-              {displayedHeroMetrics.map((metric) => (
-                <div
-                  key={metric.key}
-                  style={{
-                    background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
-                    borderRadius: 'var(--radius-md)',
-                    padding: 'var(--space-3)',
-                    border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
-                    display: 'grid',
-                    gap: 'var(--space-1)',
-                    justifyItems: 'center',
-                    textAlign: 'center',
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
-                      fontWeight: 'var(--font-weight-semibold)',
-                      textTransform: 'uppercase',
-                      color: 'var(--neutral-700)',
-                      letterSpacing: '0.06em',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {metric.label}
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
-                      fontWeight: 'var(--font-weight-bold)',
-                      color: 'var(--neutral-900)',
-                      fontFamily: 'var(--font-mono)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {metric.value}
-                  </p>
+          {isCombinedSavingsPage ? (
+            <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+              {combinedSavingsSections.map((section) => (
+                <div key={section.id} style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
+                  <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: 'color-mix(in oklab, var(--color-success) 58%, var(--neutral-900) 42%)' }}>
+                      {formatMoneyInteger(section.balance)}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                      {`Plafond ${formatMoneyInteger(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
+                    </p>
+                  </div>
+                  <div style={{ background: 'var(--color-success)', color: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-lg)', display: 'grid' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                      {section.metrics.map((metric) => (
+                        <div key={metric.key} style={{ background: 'color-mix(in oklab, var(--color-success) 12%, var(--neutral-0) 88%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', border: '1px solid color-mix(in oklab, var(--color-success) 28%, var(--neutral-0) 72%)', display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
+                          <p style={{ margin: 0, fontSize: 10, fontWeight: 'var(--font-weight-semibold)', textTransform: 'uppercase', color: 'var(--neutral-700)', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {metric.label}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {metric.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-1)',
+                  justifyItems: 'center',
+                  textAlign: 'center',
+                  marginBottom: 'var(--space-2)',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--font-size-kpi)',
+                    fontWeight: 'var(--font-weight-extrabold)',
+                    lineHeight: 'var(--line-height-tight)',
+                    fontFamily: 'var(--font-mono)',
+                    color: heroAmountColor,
+                  }}
+                >
+                  {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                </p>
+                {isSavingsBooklet && savingsBookletCeiling ? (
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                    {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
+                  </p>
+                ) : null}
+              </div>
+
+              <div
+                style={{
+                  background: heroPrimaryColor,
+                  color: 'var(--neutral-0)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: 'var(--space-6)',
+                  boxShadow: 'var(--shadow-lg)',
+                  display: 'grid',
+                }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                  {displayedHeroMetrics.map((metric) => (
+                    <div
+                      key={metric.key}
+                      style={{
+                        background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
+                        borderRadius: 'var(--radius-md)',
+                        padding: 'var(--space-3)',
+                        border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
+                        display: 'grid',
+                        gap: 'var(--space-1)',
+                        justifyItems: 'center',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
+                          fontWeight: 'var(--font-weight-semibold)',
+                          textTransform: 'uppercase',
+                          color: 'var(--neutral-700)',
+                          letterSpacing: '0.06em',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {metric.label}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
+                          fontWeight: 'var(--font-weight-bold)',
+                          color: 'var(--neutral-900)',
+                          fontFamily: 'var(--font-mono)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {metric.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </motion.section>
 
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.12 }}
-        style={{ padding: '0 var(--space-6)' }}
-      >
+      {!isCombinedSavingsPage ? (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.12 }}
+          style={{ padding: '0 var(--space-6)' }}
+        >
         <div
           style={{
             maxWidth: 600,
             margin: '0 auto',
-            padding: 'var(--space-2) 0',
+            padding: 'var(--space-1) 0',
             borderBottom: '1px solid var(--neutral-200)',
             display: 'grid',
             gap: 'var(--space-2)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em' }}>
-              {isMainCheckingAccount
-                ? (
-                  homeInsightsSlide === 0
-                    ? 'Trajectoire · Consommé VS réel'
-                    : homeInsightsSlide === 1
-                      ? 'Consommé par bloc'
-                      : `Catégories en dérive · ${getMonthLabel(year, month)}`
-                )
-                : isPEA
-                  ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
-                  : isPER
-                    ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
-                    : isProjectionSavingsAccount
-                      ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
-                      : isSavingsBooklet
-                        ? 'Évolution des intérêts · Courbe sur 10 ans'
-                        : 'Trajectoire · Prévisions VS Réel'}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              {isMainCheckingAccount && homeInsightsSlide === 1 ? (
-                <div style={{ display: 'inline-flex', padding: 2, borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', border: '1px solid var(--neutral-200)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {isMainCheckingAccount
+                  ? (
+                    homeInsightsSlide === 0
+                      ? 'Consommé vs réel'
+                      : 'Catégories en dérive'
+                  )
+                  : isPEA
+                    ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
+                    : isPER
+                      ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
+                      : isProjectionSavingsAccount
+                        ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
+                        : isSavingsBooklet
+                          ? 'Évolution des intérêts · Courbe sur 10 ans'
+                          : 'Trajectoire · Prévisions VS Réel'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', position: 'relative' }}>
+              {isMainCheckingAccount ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {getMonthLabel(trajectoryYear, selectedTrajectoryMonth)}
+                  </p>
                   <button
                     type="button"
-                    onClick={() => setHomeVisionMode('to_date')}
-                    aria-pressed={homeVisionMode === 'to_date'}
-                    style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-full)',
-                      background: homeVisionMode === 'to_date' ? 'var(--neutral-0)' : 'transparent',
-                      color: homeVisionMode === 'to_date' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                      fontSize: 10,
-                      fontWeight: 'var(--font-weight-semibold)',
-                      padding: '3px 8px',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-sans)',
-                    }}
+                    onClick={() => setShowTrajectoryMonthMenu((current) => !current)}
+                    aria-label="Choisir le mois de trajectoire"
+                    style={{ border: 'none', background: 'transparent', color: 'var(--neutral-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, minWidth: 20, minHeight: 20, cursor: 'pointer' }}
                   >
-                    À date
+                    <ChevronDown size={14} style={{ transform: showTrajectoryMonthMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform var(--transition-base)' }} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setHomeVisionMode('end_of_month')}
-                    aria-pressed={homeVisionMode === 'end_of_month'}
-                    style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-full)',
-                      background: homeVisionMode === 'end_of_month' ? 'var(--neutral-0)' : 'transparent',
-                      color: homeVisionMode === 'end_of_month' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                      fontSize: 10,
-                      fontWeight: 'var(--font-weight-semibold)',
-                      padding: '3px 8px',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  >
-                    Fin de mois
-                  </button>
+                </>
+              ) : null}
+              {isMainCheckingAccount && showTrajectoryMonthMenu ? (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20, background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '6px', display: 'grid', gap: 2, minWidth: 160 }}>
+                  {Array.from({ length: maxTrajectoryMonth }, (_, idx) => idx + 1).map((m) => (
+                    <button
+                      key={`trajectory-month-${m}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTrajectoryMonth(m)
+                        setShowTrajectoryMonthMenu(false)
+                      }}
+                      style={{
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        background: selectedTrajectoryMonth === m ? 'var(--primary-50)' : 'transparent',
+                        color: selectedTrajectoryMonth === m ? 'var(--primary-700)' : 'var(--neutral-700)',
+                        textAlign: 'left',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '6px 8px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {getMonthLabel(trajectoryYear, m)}
+                    </button>
+                  ))}
                 </div>
               ) : null}
-              {isMainCheckingAccount && homeInsightsSlide === 1 ? (
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-semibold)', whiteSpace: 'nowrap' }}>
-                  {`${daysRemaining} j restants`}
-                </p>
-              ) : !isMainCheckingAccount ? null : isSavingsBooklet || isPER || isPEA ? null : (
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
-                  {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
-                </p>
-              )}
             </div>
           </div>
 
-          <div style={{ height: 420 }}>
+          <div style={{ height: 360 }}>
             {isMainCheckingAccount ? (
               <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
                 <div
@@ -1119,15 +1281,33 @@ export function Home() {
                   <div
                     style={{
                       display: 'flex',
-                      width: '300%',
+                      width: '200%',
                       height: '100%',
-                      transform: `translateX(-${homeInsightsSlide * (100 / 3)}%)`,
+                      transform: `translateX(-${homeInsightsSlide * (100 / 2)}%)`,
                       transition: 'transform 420ms ease',
                     }}
                   >
-                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)' }}>
+                    <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
+                        <div />
+                        {!isSavingsBooklet && !isPER && !isPEA ? (
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
+                            {trajectoryDeltaPct == null ? '—' : `${trajectoryDeltaPct > 0 ? '+' : ''}${trajectoryDeltaPct.toFixed(1)}%`}
+                          </p>
+                        ) : null}
+                      </div>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={trajectoryData}>
+                        <AreaChart
+                          data={trajectoryData}
+                          onClick={(state: any) => {
+                            const day = Number(state?.activeLabel)
+                            if (plannedMarkerDays.includes(day)) {
+                              setSelectedPlannedDay(day)
+                            } else {
+                              setSelectedPlannedDay(null)
+                            }
+                          }}
+                        >
                           <defs>
                             <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
@@ -1143,86 +1323,130 @@ export function Home() {
                             width={54}
                             tickFormatter={(value) => formatMoneyInteger(Number(value))}
                           />
-                          <Tooltip
-                            contentStyle={{
-                              background: 'var(--neutral-0)',
-                              border: '1px solid var(--neutral-200)',
-                              borderRadius: 12,
-                              boxShadow: 'var(--shadow-sm)',
-                              fontSize: 12,
+                          <Tooltip content={trajectoryTooltipContent} />
+                          <ReferenceLine
+                            y={monthlyBudgetCap}
+                            stroke="var(--neutral-400)"
+                            strokeDasharray="3 4"
+                            strokeOpacity={0.55}
+                            ifOverflow="extendDomain"
+                            label={{
+                              value: monthlyBudgetCapLabel,
+                              position: 'left',
+                              fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
+                              fontSize: 11,
+                              textAnchor: 'end',
+                              dx: -2,
                             }}
-                            formatter={(value: number) => formatMoneyInteger(Number(value))}
-                            labelFormatter={(label) => `Jour ${label}`}
                           />
                           <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                          <Area
+                            type="monotone"
+                            dataKey="overBudget"
+                            baseValue={monthlyBudgetCap}
+                            stroke="none"
+                            fill="var(--color-error)"
+                            fillOpacity={0.14}
+                            connectNulls={false}
+                            isAnimationActive={false}
+                          />
+                          {plannedMarkerDays.map((day) => (
+                            <ReferenceDot
+                              key={`planned-segment-${day}`}
+                              x={day}
+                              y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
+                              r={0}
+                              ifOverflow="visible"
+                              shape={(props: any) => {
+                                const { cx, cy } = props
+                                return (
+                                  <line
+                                    x1={cx}
+                                    y1={cy - 7}
+                                    x2={cx}
+                                    y2={cy + 7}
+                                    stroke="var(--neutral-700)"
+                                    strokeWidth={1.9}
+                                    strokeLinecap="round"
+                                    opacity={0.92}
+                                  />
+                                )
+                              }}
+                            />
+                          ))}
                           <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
                         </AreaChart>
                       </ResponsiveContainer>
+                      {selectedPlannedDay != null && plannedItemsByDay.get(selectedPlannedDay)?.length ? (
+                        <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4 }}>
+                          <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
+                          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
+                          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.planned ?? 0))}`}</p>
+                          <button
+                            type="button"
+                            onClick={() => openPreviousMonthTxnFromPlannedDay(selectedPlannedDay)}
+                            style={{
+                              border: '1px solid var(--neutral-200)',
+                              background: 'var(--neutral-0)',
+                              color: 'var(--neutral-700)',
+                              borderRadius: 'var(--radius-full)',
+                              minHeight: 26,
+                              padding: '0 10px',
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              justifySelf: 'start',
+                            }}
+                          >
+                            ↗ Détail M-1
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
-                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                      <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                        {homeVisionRows.map((row) => {
-                          const progressWidth = `${Math.max(0, Math.min(100, row.consumedRatio)).toFixed(1)}%`
-                          return (
-                            <div
-                              key={row.id}
-                              style={{
-                                display: 'grid',
-                                gap: 'var(--space-1)',
-                                paddingBottom: 'var(--space-2)',
-                                borderBottom: '1px solid var(--neutral-100)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-1)', minHeight: 20, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 11, fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-800)', minWidth: 0 }}>
-                                  {row.label}
-                                </span>
-                                {homeVisionMode === 'end_of_month' ? (
-                                  <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                    {row.plannedOperationsCount} opération{row.plannedOperationsCount > 1 ? 's' : ''} planifiée{row.plannedOperationsCount > 1 ? 's' : ''}{row.plannedOperationsCount > 0 ? ` : ${formatMoneyInteger(row.plannedOperationsAmount)}` : ''}
-                                  </span>
-                                ) : null}
-                                <span style={{ fontSize: 11, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', marginLeft: 'auto', flexShrink: 0 }}>
-                                  {formatMoneyInteger(row.budgetAmount)}
-                                </span>
-                              </div>
-
-                              <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                                <div
-                                  style={{
-                                    width: progressWidth,
-                                    height: '100%',
-                                    background: row.color,
-                                    borderRadius: 'var(--radius-full)',
-                                    transition: 'width var(--transition-base)',
-                                  }}
-                                />
-                              </div>
-
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                                <span>
-                                  {homeVisionMode === 'to_date'
-                                    ? `${formatMoneyInteger(row.spentToDate)}`
-                                    : `${formatMoneyInteger(row.consumedAmount)}`}
-                                </span>
-                                <span style={{ color: 'var(--neutral-700)', fontWeight: 'var(--font-weight-semibold)' }}>
-                                  {`${row.consumedRatio.toFixed(0)}%`}
-                                </span>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                    <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
                       {loadingSummaries ? (
                         <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
                           Chargement…
                         </p>
                       ) : driftRows.length === 0 ? (
-                        <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
-                          Aucune donnée
-                        </p>
+                        <div style={{ height: '100%', display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+                          <p style={{ margin: 0, textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+                            Rien à afficher le budget est sous contrôle. Pour le moment...
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
+                            style={{
+                              border: '1px solid var(--neutral-200)',
+                              borderRadius: 'var(--radius-full)',
+                              minHeight: 30,
+                              padding: '0 12px',
+                              background: 'var(--neutral-0)',
+                              color: 'var(--neutral-700)',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            voir le top 5 catégories (dépenses)
+                          </button>
+                          {showTop5ExpensesInDrift ? (
+                            <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                              {top5ExpenseRows.map((row, idx) => {
+                                const drift = Number(row.driftPct ?? 0)
+                                const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                                return (
+                                  <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                                    {`#${idx + 1}. ${row.name} - ${formatMoneyInteger(row.spent)} - `}
+                                    <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                      {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                    </span>
+                                  </p>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
                         <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                           {driftRows.map((row) => {
@@ -1279,12 +1503,12 @@ export function Home() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  {[0, 1, 2].map((idx) => (
+                  {[0, 1].map((idx) => (
                     <button
                       key={idx}
                       type="button"
-                      aria-label={idx === 0 ? 'Afficher la trajectoire' : idx === 1 ? 'Afficher la vision globale' : 'Afficher les catégories en dérive'}
-                      onClick={() => setHomeInsightsSlide(idx as 0 | 1 | 2)}
+                      aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
+                      onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
                       style={{
                         width: homeInsightsSlide === idx ? 18 : 8,
                         height: 8,
@@ -1414,25 +1638,70 @@ export function Home() {
                     width={54}
                     tickFormatter={(value) => formatMoneyInteger(Number(value))}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--neutral-0)',
-                      border: '1px solid var(--neutral-200)',
-                      borderRadius: 12,
-                      boxShadow: 'var(--shadow-sm)',
-                      fontSize: 12,
+                  <Tooltip content={trajectoryTooltipContent} />
+                  <ReferenceLine
+                    y={monthlyBudgetCap}
+                    stroke="var(--neutral-400)"
+                    strokeDasharray="3 4"
+                    strokeOpacity={0.55}
+                    ifOverflow="extendDomain"
+                    label={{
+                      value: monthlyBudgetCapLabel,
+                      position: 'left',
+                      fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
+                      fontSize: 11,
+                      textAnchor: 'end',
+                      dx: -2,
                     }}
-                    formatter={(value: number) => formatMoneyInteger(Number(value))}
-                    labelFormatter={(label) => `Jour ${label}`}
                   />
                   <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                  <Area
+                    type="monotone"
+                    dataKey="overBudget"
+                    baseValue={monthlyBudgetCap}
+                    stroke="none"
+                    fill="var(--color-error)"
+                    fillOpacity={0.14}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                  {plannedMarkerDays.map((day) => (
+                    <ReferenceDot
+                      key={`planned-segment-secondary-${day}`}
+                      x={day}
+                      y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
+                      r={0}
+                      ifOverflow="visible"
+                      shape={(props: any) => {
+                        const { cx, cy } = props
+                        return (
+                          <line
+                            x1={cx}
+                            y1={cy - 7}
+                            x2={cx}
+                            y2={cy + 7}
+                            stroke="var(--neutral-700)"
+                            strokeWidth={1.9}
+                            strokeLinecap="round"
+                            opacity={0.92}
+                          />
+                        )
+                      }}
+                    />
+                  ))}
                   <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
+          {trajectoryLinkError ? (
+            <p style={{ margin: 0, marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--color-error)', textAlign: 'center' }}>
+              {trajectoryLinkError}
+            </p>
+          ) : null}
         </div>
-      </motion.section>
+        </motion.section>
+      ) : null}
 
       <AnimatePresence>
         {showAccountsModal ? (
@@ -1497,36 +1766,56 @@ export function Home() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-5) var(--space-2)' }}>
-                {accountEntries.map((entry) => {
+                {accountEntries.filter((entry) => entry.preset.id !== 'ldds').map((entry) => {
                   const isActive = entry.preset.id === selectedAccountEntry?.preset.id
+                  const lddsIsActive = selectedAccountEntry?.preset.id === 'livret_a'
                   return (
-                    <button
-                      key={entry.preset.id}
-                      type="button"
-                      onClick={() => handleSelectAccountPreset(entry.preset.id)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: 0,
-                        cursor: 'pointer',
-                        display: 'grid',
-                        justifyItems: 'center',
-                        gap: 'var(--space-2)',
-                      }}
-                    >
-                      <img
-                        src={entry.preset.iconSrc}
-                        alt={entry.preset.label}
-                        width={56}
-                        height={56}
-                        style={{ width: 56, height: 56, objectFit: 'contain', transform: `scale(${entry.preset.iconScale ?? 1})` }}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span style={{ fontSize: 'var(--font-size-sm)', lineHeight: 1.35, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
-                        {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
-                      </span>
-                    </button>
+                    <div key={entry.preset.id} style={{ display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAccountPreset(entry.preset.id)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          padding: 0,
+                          cursor: 'pointer',
+                          display: 'grid',
+                          justifyItems: 'center',
+                          gap: 'var(--space-2)',
+                        }}
+                      >
+                        <img
+                          src={entry.preset.iconSrc}
+                          alt={entry.preset.label}
+                          width={56}
+                          height={56}
+                          style={{ width: 56, height: 56, objectFit: 'contain', transform: `scale(${entry.preset.iconScale ?? 1})` }}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <span style={{ fontSize: 'var(--font-size-sm)', lineHeight: 1.35, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
+                          {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
+                        </span>
+                      </button>
+                      {entry.preset.id === 'livret_a' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectAccountPreset('livret_a')}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            marginTop: '-2px',
+                            fontSize: 11,
+                            fontWeight: lddsIsActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                            color: lddsIsActive ? 'var(--primary-600)' : 'var(--neutral-600)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          LDDS
+                        </button>
+                      ) : null}
+                    </div>
                   )
                 })}
               </div>
@@ -1534,6 +1823,12 @@ export function Home() {
           </>
         ) : null}
       </AnimatePresence>
+
+      <TransactionDetailsModal
+        transaction={trajectorySelectedTxn}
+        transactionList={trajectorySelectedTxn ? [trajectorySelectedTxn] : []}
+        onClose={() => setTrajectorySelectedTxn(null)}
+      />
 
       <DriftCategoryTransactionsModal
         open={showDriftCategoryModal}

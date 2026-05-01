@@ -51,17 +51,19 @@ export function PageHeader({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          minHeight: 'calc(var(--space-6) + var(--space-1))',
+          minHeight: 44,
         }}
       >
         <h1
           style={{
             margin: 0,
             fontSize: 'var(--font-size-2xl)',
-            lineHeight: 'var(--line-height-tight)',
+            lineHeight: 1.1,
             fontWeight: 'var(--font-weight-extrabold)',
             color: 'var(--neutral-0)',
             letterSpacing: '-0.02em',
+            display: 'inline-flex',
+            alignItems: 'center',
           }}
         >
           {onTitleClick ? (
@@ -92,7 +94,8 @@ export function PageHeader({
             style={{
               position: 'absolute',
               left: '50%',
-              transform: 'translateX(-50%)',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
               margin: 0,
               fontSize: 'var(--font-size-base)',
               fontWeight: 'var(--font-weight-semibold)',
@@ -110,6 +113,8 @@ export function PageHeader({
             style={{
               position: 'absolute',
               right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
             }}
           >
             {rightSlot}
@@ -119,6 +124,8 @@ export function PageHeader({
             style={{
               position: 'absolute',
               right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
               margin: 0,
               fontSize: 'var(--font-size-base)',
               fontWeight: 'var(--font-weight-semibold)',
