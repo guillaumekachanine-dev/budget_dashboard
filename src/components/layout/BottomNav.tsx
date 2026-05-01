@@ -38,13 +38,13 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
       {({ isActive }) => (
         <div
           style={{
+            position: 'relative',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 3,
+            height: '100%',
             minWidth: 64,
-            padding: '6px 10px 8px',
+            padding: '0 10px',
             opacity: isActive ? 1 : 0.58,
             transition: 'opacity 200ms ease',
           }}
@@ -53,22 +53,26 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
             style={{
               display: 'inline-flex',
               color: 'var(--neutral-0)',
-              transform: isActive ? 'translateY(-3px)' : 'translateY(0)',
-              transition: 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              transform: isActive ? 'translateY(-4px) scale(1.08)' : 'translateY(0) scale(1)',
+              transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
-            <Icon size={21} strokeWidth={isActive ? 2.4 : 1.8} />
+            <Icon size={23} strokeWidth={isActive ? 2.4 : 1.9} />
           </span>
           <span
             style={{
+              position: 'absolute',
+              bottom: 0,
               display: 'block',
               width: isActive ? 20 : 4,
               height: 3,
               borderRadius: '3px',
               background: 'var(--neutral-0)',
               opacity: isActive ? 1 : 0,
+              transform: isActive ? 'scaleX(1)' : 'scaleX(0.35)',
+              transformOrigin: 'center',
               flexShrink: 0,
-              transition: 'width 320ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 180ms ease',
+              transition: 'width 320ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           />
         </div>

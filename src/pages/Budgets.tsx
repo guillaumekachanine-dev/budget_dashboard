@@ -525,7 +525,7 @@ export function Budgets() {
 
   useEffect(() => {
     if (selectedCat !== 'all') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     }
   }, [selectedCat])
 
@@ -759,7 +759,7 @@ export function Budgets() {
   }, [selectedCat, selectedCatInfo, summaries])
   const categoryBlockLabel = useMemo(() => {
     const bucketLabel = formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)
-    return `Socle ${bucketLabel.toLowerCase()}`
+    return bucketLabel.toLowerCase()
   }, [dominantCategoryBudgetLine?.budget_bucket])
   const budgetByCategoryId = useMemo(
     () =>
@@ -1398,8 +1398,8 @@ export function Budgets() {
 
       {isCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 <button
                   type="button"
@@ -1424,40 +1424,32 @@ export function Budgets() {
                 >
                   <ArrowLeft size={13} />
                 </button>
-                <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                  {selectedCatInfo?.name ?? '—'}
-                </p>
+                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
+                  <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                    {selectedCatInfo?.name ?? '—'}
+                  </p>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
+                    - {categoryBlockLabel}
+                  </span>
+                </div>
               </div>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                  {categoryBlockLabel}
-                </p>
-              </div>
+            </div>
             <div style={{ border: `1px solid ${accentFromLabel(selectedCatInfo?.name)}`, borderRadius: 'var(--radius-lg)', background: 'var(--neutral-0)', padding: 'var(--space-2) var(--space-3)', display: 'grid', gap: 'var(--space-1)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-1) var(--space-2)' }}>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget alloué</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-2) var(--space-3)' }}>
+                <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 2 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget</p>
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
                     {formatMoney(categoryMonthlyBudget)} <span style={{ color: 'var(--neutral-500)' }}>({toleranceByBucket(dominantCategoryBudgetLine?.budget_bucket)})</span>
                   </p>
                 </div>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 2 }}>
                   <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Rang</p>
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
                     {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
                   </p>
                 </div>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Moyenne dépenses (6m)</p>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {formatMoney(sixMonthAverageAmount)}
-                  </p>
-                </div>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Écart moyen (6M)</p>
-                  <p style={{ margin: 0, fontSize: 13, color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
-                  </p>
-                </div>
+                <div aria-hidden="true" style={{ minHeight: 30 }} />
+                <div aria-hidden="true" style={{ minHeight: 30 }} />
               </div>
             </div>
           </div>
@@ -1465,7 +1457,7 @@ export function Budgets() {
       ) : null}
 
       {isCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
           <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
             Historique 6 mois
           </h3>
@@ -1487,6 +1479,18 @@ export function Budgets() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne dépenses</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
+            </div>
+            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
+            </div>
+            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48 }} />
           </div>
 
           <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
@@ -1968,7 +1972,7 @@ export function Budgets() {
 
                     <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {`Socle ${row.label.toLowerCase()}`}
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
