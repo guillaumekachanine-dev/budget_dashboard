@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Search, ChevronDown, ArrowLeft } from 'lucide-react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -31,7 +31,6 @@ import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCards'
 import { BudgetParentGroups } from '@/features/budget/components/BudgetParentGroups'
-import { BudgetVsActualSection } from '@/features/budget/components/BudgetVsActualSection'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
 
@@ -181,11 +180,6 @@ function getPeriodRange(
   return { startDate, endDate }
 }
 
-function getPeriodLabel(key: PeriodKey, selectedYear: number, selectedMonth: number): string {
-  if (key === 'annee') return `Année ${selectedYear}`
-  return formatPeriodLabel(selectedYear, selectedMonth)
-}
-
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
@@ -256,7 +250,9 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
 interface SubCategoryTransactionsModalProps {
   open: boolean
   onClose: () => void
-  title: string
+  categoryName: string
+  categoryColor: string
+  categoryAmount: number
   transactions: Transaction[]
   loading: boolean
   onSelectTransaction: (transaction: Transaction) => void
@@ -265,7 +261,9 @@ interface SubCategoryTransactionsModalProps {
 function SubCategoryTransactionsModal({
   open,
   onClose,
-  title,
+  categoryName,
+  categoryColor,
+  categoryAmount,
   transactions,
   loading,
   onSelectTransaction,
@@ -307,10 +305,10 @@ function SubCategoryTransactionsModal({
               pointerEvents: 'auto',
             }}
           >
-            <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{title}</p>
-              <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
-                <X size={15} />
+            <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>{categoryName} - {formatMoney(categoryAmount)}</p>
+              <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+                <X size={20} />
               </button>
             </div>
             <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
@@ -369,7 +367,6 @@ export function Budgets() {
   const isGracePeriod = nowDay <= 3
   const defaultPeriodYear = isGracePeriod ? (nowMonth === 0 ? nowYear - 1 : nowYear) : nowYear
   const defaultPeriodMonth = isGracePeriod ? (nowMonth === 0 ? 12 : nowMonth) : nowMonth + 1
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
@@ -517,6 +514,12 @@ export function Budgets() {
     return () => resizeObserver.disconnect()
   }, [])
 
+  useEffect(() => {
+    if (selectedCat !== 'all') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [selectedCat])
+
   const configuredBudgetPeriod = useMemo(() => {
     if (!budgetPayload) return null
 
@@ -555,6 +558,31 @@ export function Budgets() {
       recommendation_comment: null,
     }))
   }, [payloadByCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
+
+  const configuredBudgetParentCategoryLines = useMemo<BudgetLineWithCategory[]>(() => {
+    if (!budgetPayload) return []
+    const periodYear = Number(budgetPayload.selected_period?.period_year ?? selectedPeriodYear)
+    const periodMonth = Number(budgetPayload.selected_period?.period_month ?? selectedPeriodMonth)
+
+    return payloadByParentCategory.map((row) => ({
+      id: `${row.parent_category_id}:${periodYear}-${periodMonth}`,
+      period_id: '',
+      category_id: row.parent_category_id,
+      budget_kind: 'category' as const,
+      amount: Number(row.budget_amount ?? 0),
+      currency: 'EUR',
+      notes: null,
+      category_name: row.parent_category_name,
+      parent_category_id: null,
+      parent_category_name: null,
+      budget_bucket: '',
+      budget_method: null,
+      decision_status: null,
+      final_budget_monthly_eur: null,
+      manual_budget_monthly_eur: null,
+      recommendation_comment: null,
+    }))
+  }, [payloadByParentCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
 
   const configuredBudgetSummary = useMemo(() => {
     const byBucket = new Map(payloadByBucket.map((row) => [row.budget_bucket, Number(row.budget_amount ?? 0)]))
@@ -595,9 +623,16 @@ export function Budgets() {
         parent_category_name: row.parent_category_name,
         amount_total: Number(row.actual_amount ?? 0),
       })),
+      parentCategoryActuals: payloadByParentCategory.map((row) => ({
+        category_id: row.parent_category_id,
+        category_name: row.parent_category_name,
+        parent_category_id: null,
+        parent_category_name: null,
+        amount_total: Number(row.actual_amount ?? 0),
+      })),
       totalActualExpense: Number(budgetPayload.summary.actual_total_to_date ?? 0),
     }
-  }, [budgetPayload, payloadByCategory])
+  }, [budgetPayload, payloadByCategory, payloadByParentCategory])
 
   const configuredBudgetHasActuals = useMemo(() => {
     if (!configuredBudgetActuals) return false
@@ -1013,9 +1048,6 @@ export function Budgets() {
     [selectedBlockId, blockRows],
   )
 
-  const subCategoryModalTitle = selectedSubCategory
-    ? `${selectedSubCategory.name} - ${getPeriodLabel(periodKey, selectedPeriodYear, selectedPeriodMonth)}`
-    : ''
   const configuredPeriodLabel = configuredBudgetPeriod
     ? formatPeriodLabel(
       configuredBudgetPeriod.period_year,
@@ -1056,16 +1088,6 @@ export function Budgets() {
   const showExtendedSlides = selectedCat === 'all'
   const isCategoryMode = selectedCat !== 'all'
   const slideCount = showExtendedSlides ? 3 : 2
-  const slideTitles = showExtendedSlides
-    ? ([
-        'Répartition par catégorie',
-        'Répartition par bloc',
-        'Évolutions 6 derniers mois',
-      ] as const)
-    : ([
-        'Répartition par sous-catégorie',
-        'Évolutions 6 derniers mois',
-      ] as const)
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
@@ -1175,10 +1197,6 @@ export function Budgets() {
     const total = rows.reduce((sum, row) => sum + ((row.amount - row.budget) / row.budget) * 100, 0)
     return total / rows.length
   }, [monthlyHistory])
-  const selectedPeriodGapPct = useMemo(() => {
-    if (totalMonthlyBudget <= 0) return null
-    return ((selectedPeriodSpent - totalMonthlyBudget) / totalMonthlyBudget) * 100
-  }, [selectedPeriodSpent, totalMonthlyBudget])
   const historyBudgetTarget = Math.max(0, Number(totalMonthlyBudget))
   const historyYAxisTicks = useMemo(() => {
     const maxHistory = monthlyHistory.reduce((max, row) => Math.max(max, Number(row.amount ?? 0)), 0)
@@ -1233,7 +1251,7 @@ export function Budgets() {
           <div style={{ maxWidth: 600, margin: '0 auto' }}>
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => setSelectedCat('all')}
               aria-label="Retour"
               style={{
                 border: 'none',
@@ -1257,21 +1275,88 @@ export function Budgets() {
 
       {showRealBudgetToggle ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
-              <button type="button" onClick={() => setDataDisplayMode('reel')} style={{ border: '1px solid var(--neutral-200)', background: dataDisplayMode === 'reel' ? 'var(--primary-50)' : 'var(--neutral-0)', color: dataDisplayMode === 'reel' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
-                Réel
+              <button
+                type="button"
+                onClick={() => setDataDisplayMode('reel')}
+                style={{
+                  border: '1px solid var(--neutral-200)',
+                  background: dataDisplayMode === 'reel' ? 'var(--primary-50)' : 'var(--neutral-0)',
+                  color: dataDisplayMode === 'reel' ? 'var(--primary-600)' : 'var(--neutral-600)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  textAlign: 'center',
+                  minWidth: 140,
+                  minHeight: 48
+                }}
+              >
+                <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Réel</span>
+                <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
+                  {formatMoney(selectedPeriodSpent).replace(/\s+€/, '€')}
+                </span>
               </button>
-              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700 }}>-</span>
-              <button type="button" onClick={() => setDataDisplayMode('budget')} style={{ border: '1px solid var(--neutral-200)', background: dataDisplayMode === 'budget' ? 'var(--primary-50)' : 'var(--neutral-0)', color: dataDisplayMode === 'budget' ? 'var(--primary-600)' : 'var(--neutral-600)', fontSize: 'var(--font-size-sm)', fontWeight: 700, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minWidth: 124, textAlign: 'center', cursor: 'pointer' }}>
-                Budget
+              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700, flexShrink: 0 }}>-</span>
+              <button
+                type="button"
+                onClick={() => setDataDisplayMode('budget')}
+                style={{
+                  border: '1px solid var(--neutral-200)',
+                  background: dataDisplayMode === 'budget' ? 'var(--primary-50)' : 'var(--neutral-0)',
+                  color: dataDisplayMode === 'budget' ? 'var(--primary-600)' : 'var(--neutral-600)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  textAlign: 'center',
+                  minWidth: 140,
+                  minHeight: 48
+                }}
+              >
+                <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Budget</span>
+                <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
+                  {formatMoney(totalMonthlyBudget).replace(/\s+€/, '€')}
+                </span>
               </button>
             </div>
-            {showExtendedSlides ? (
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: selectedPeriodGapPct == null ? 'var(--neutral-500)' : selectedPeriodGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
-                {selectedPeriodGapPct == null ? '—' : formatPercentSigned(selectedPeriodGapPct)}
-              </p>
-            ) : null}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', width: '100%', maxWidth: 'calc(2 * 140px + var(--space-2) + 16px)' }}>
+              <div style={{ height: 8, background: 'var(--neutral-200)', borderRadius: 'var(--radius-full)', overflow: 'hidden', position: 'relative', width: '100%' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    background: totalMonthlyBudget > 0 && selectedPeriodSpent <= totalMonthlyBudget
+                      ? 'var(--color-success)'
+                      : 'var(--color-error)',
+                    width: `${totalMonthlyBudget > 0 ? (selectedPeriodSpent / totalMonthlyBudget) * 100 : 0}%`,
+                    transition: 'width 300ms ease'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
+                  Progression
+                </span>
+                <span style={{
+                  fontSize: 'var(--font-size-xs)',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  color: totalMonthlyBudget > 0 && selectedPeriodSpent <= totalMonthlyBudget ? 'var(--color-success)' : 'var(--color-error)'
+                }}>
+                  {totalMonthlyBudget > 0 ? `${((selectedPeriodSpent / totalMonthlyBudget) * 100).toFixed(0)}%` : '0%'}
+                </span>
+              </div>
+            </div>
           </div>
         </motion.section>
       ) : null}
@@ -1319,7 +1404,7 @@ export function Budgets() {
         </motion.section>
       ) : null}
 
-      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: '6px', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
@@ -1643,10 +1728,6 @@ export function Budgets() {
           </div>
         </div>
 
-        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
-          {slideTitles[activeSlide]}
-        </p>
-
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
           {Array.from({ length: slideCount }).map((_, idx) => (
             <button
@@ -1686,63 +1767,62 @@ export function Budgets() {
         <AnimatePresence mode="wait">
           {activeSlide === 0 && configuredBudgetPeriod ? (
             <motion.section key="slide0-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              <BudgetVsActualSection
-                summary={configuredBudgetSummary}
-                categoryLines={configuredBudgetCategoryLines}
-                actuals={configuredBudgetActuals}
-                hasActuals={configuredBudgetHasActuals}
-              />
               <BudgetCategoryList
-                lines={configuredBudgetCategoryLines}
-                actualCategoryMetrics={configuredBudgetActuals?.categoryActuals ?? []}
+                lines={configuredBudgetParentCategoryLines}
+                actualCategoryMetrics={configuredBudgetActuals?.parentCategoryActuals ?? []}
                 hasActuals={configuredBudgetHasActuals}
                 onLineClick={(line) => {
                   if (!line.category_id) return
-                  setSelectedSubCategory({
-                    id: line.category_id,
-                    name: line.category_name ?? 'Catégorie',
-                    parentCategoryName: line.parent_category_name,
-                    currentMonthAmount: 0,
-                    previousMonthAmount: 0,
-                    threeMonthAvg: 0,
-                    trend: 'equal',
-                  })
+                  setSelectedCat(line.category_id)
                 }}
               />
             </motion.section>
           ) : activeSlide === 1 && blockRows.length > 0 ? (
-            <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: '0 var(--space-4)' }}>
-              {(() => {
-                const totalBudgetBlocks = blockRows.reduce((s, r) => s + r.budgetAmount, 0)
+            <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-7)' }}>
+              <h3 style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                Répartition par blocs
+              </h3>
+              {blockRows.map((row) => {
+                const budgetAmount = Number(row.budgetAmount ?? 0)
+                const actualAmount = Number(row.actualAmount ?? 0)
+                const consumptionRatio = budgetAmount > 0 ? actualAmount / budgetAmount : 0
+                const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
+                const variance = budgetAmount - actualAmount
+                const isOverBudget = variance < 0
                 return (
-                  <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)' }}>
-                    <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--font-size-xs)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-                      Répartition par blocs
-                    </p>
-                    <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                      {blockRows.map((row) => {
-                        const displayedAmount = dataDisplayMode === 'budget' ? row.budgetAmount : row.actualAmount
-                        const barPct = totalBudgetBlocks > 0 ? Math.min((row.budgetAmount / totalBudgetBlocks) * 100, 100) : 0
-                        const sharePct = totalBudgetBlocks > 0 ? (row.budgetAmount / totalBudgetBlocks) * 100 : 0
-                        return (
-                          <div key={row.id}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{row.label}</span>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoney(displayedAmount)}</span>
-                            </div>
-                            <div style={{ width: '100%', height: 8, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)', overflow: 'hidden', marginBottom: 4 }}>
-                              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 'var(--radius-full)', background: row.color }} />
-                            </div>
-                            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textAlign: 'right' }}>
-                              {sharePct.toFixed(1)}% du budget total
-                            </p>
-                          </div>
-                        )
-                      })}
+                  <div key={row.id} style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {row.label}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                        {formatMoney(budgetAmount)}
+                      </p>
+                    </div>
+
+                    <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${progressPct}%`,
+                          height: '100%',
+                          borderRadius: 'var(--radius-pill)',
+                          background: isOverBudget ? 'var(--color-error)' : 'var(--primary-500)',
+                          transition: 'width var(--transition-base)',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                        {formatMoney(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
+                        {isOverBudget ? `Dépassement ${formatMoney(Math.abs(variance))}` : `Restant ${formatMoney(variance)}`}
+                      </p>
                     </div>
                   </div>
                 )
-              })()}
+              })}
             </motion.section>
           ) : null}
         </AnimatePresence>
@@ -1828,20 +1908,17 @@ export function Budgets() {
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ padding: 'var(--space-4) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>
-                    {selectedBlock.label}
+              <div style={{ padding: 'var(--space-3) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-0)' }}>
+                    Dépenses <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
                   </p>
-                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--neutral-0)', fontFamily: 'var(--font-mono)', lineHeight: 1.15 }}>
-                    {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.72)' }}>
                     {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
                   </p>
                 </div>
-                <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
-                  <X size={15} />
+                <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }} aria-label="Fermer">
+                  <X size={20} />
                 </button>
               </div>
               <div style={{ maxHeight: 'calc(82dvh - 72px)', overflowY: 'auto' }}>
@@ -1881,7 +1958,7 @@ export function Budgets() {
         ) : null}
       </AnimatePresence>
 
-      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null); setSubCategoryTransactionSequence([]); setSelectedDonutSlice(null) }} title={subCategoryModalTitle} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
+      <SubCategoryTransactionsModal open={Boolean(selectedSubCategory)} onClose={() => { setSelectedSubCategory(null); setSubCategoryToReopen(null); setPendingTransaction(null); setSubCategoryTransactionSequence([]); setSelectedDonutSlice(null) }} categoryName={selectedSubCategory?.name ?? ''} categoryColor={selectedDonutSlice?.color ?? 'var(--primary-500)'} categoryAmount={selectedSubCategory?.currentMonthAmount ?? 0} transactions={subCategoryTransactions ?? []} loading={loadingSubCategoryTransactions} onSelectTransaction={handleSelectTransactionFromSubCategory} />
 
       <TransactionDetailsModal
         transaction={selectedTransaction}
