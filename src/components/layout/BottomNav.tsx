@@ -20,11 +20,10 @@ const RIGHT_ITEMS = [
 type NavItemProps = {
   to: string
   icon: typeof Home
-  label: string
   end?: boolean
 }
 
-function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
+function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
   const warmup = () => prefetchRoute(to as RoutePath)
 
   return (
@@ -134,14 +133,14 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
     <div style={rootStyle}>
       <nav style={navStyle} aria-label="Navigation principale">
         <div style={navRowStyle}>
-          {LEFT_ITEMS.map(({ to, icon, label }, i) => (
-            <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
+          {LEFT_ITEMS.map(({ to, icon }, i) => (
+            <NavItem key={to} to={to} icon={icon} end={i === 0} />
           ))}
 
           <div aria-hidden="true" />
 
-          {RIGHT_ITEMS.map(({ to, icon, label }) => (
-            <NavItem key={to} to={to} icon={icon} label={label} />
+          {RIGHT_ITEMS.map(({ to, icon }) => (
+            <NavItem key={to} to={to} icon={icon} />
           ))}
         </div>
       </nav>
