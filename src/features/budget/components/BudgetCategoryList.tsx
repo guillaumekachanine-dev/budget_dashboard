@@ -26,7 +26,7 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
   }, [actualCategoryMetrics])
 
   return (
-    <section style={{ padding: '0 var(--space-4)' }}>
+    <section style={{ padding: '0 var(--space-5)' }}>
       <h3 style={{ margin: '0 0 var(--space-6) 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
         Répartition par catégorie
       </h3>
