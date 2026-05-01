@@ -285,13 +285,13 @@ function SubCategoryTransactionsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 240, background: 'rgba(13,13,31,0.56)' }}
           />
           <div
             style={{
               position: 'fixed',
               inset: 0,
-              zIndex: 221,
+              zIndex: 241,
               display: 'grid',
               placeItems: 'center',
               padding: 'var(--space-4)',
@@ -2146,7 +2146,53 @@ export function Budgets() {
                       const displayedAmount = dataDisplayMode === 'budget' ? line.budgetAmount : line.actualAmount
                       const secondaryAmount = dataDisplayMode === 'budget' ? line.actualAmount : line.budgetAmount
                       return (
-                        <div key={line.id} style={{ borderBottom: '1px solid var(--neutral-200)', padding: 'var(--space-2) var(--space-5)', display: 'grid', gap: '2px' }}>
+                        <div
+                          key={line.id}
+                          onClick={() => {
+                            setSelectedSubCategory({
+                              id: line.id,
+                              name: line.categoryName,
+                              parentCategoryName: line.parentCategoryName,
+                              currentMonthAmount: displayedAmount,
+                              previousMonthAmount: 0,
+                              threeMonthAvg: 0,
+                              trend: 'equal',
+                            })
+                          }}
+                          style={{
+                            borderBottom: '1px solid var(--neutral-200)',
+                            padding: 'var(--space-2) var(--space-5)',
+                            display: 'grid',
+                            gap: '2px',
+                            cursor: 'pointer',
+                            background: 'transparent',
+                            transition: 'background var(--transition-fast)',
+                          }}
+                          onMouseEnter={(e) => {
+                            const el = e.currentTarget as HTMLDivElement
+                            el.style.background = 'rgba(91, 87, 245, 0.06)'
+                          }}
+                          onMouseLeave={(e) => {
+                            const el = e.currentTarget as HTMLDivElement
+                            el.style.background = 'transparent'
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSelectedSubCategory({
+                                id: line.id,
+                                name: line.categoryName,
+                                parentCategoryName: line.parentCategoryName,
+                                currentMonthAmount: displayedAmount,
+                                previousMonthAmount: 0,
+                                threeMonthAvg: 0,
+                                trend: 'equal',
+                              })
+                            }
+                          }}
+                        >
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
                               {line.categoryName}
