@@ -190,6 +190,14 @@ const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> 
   { id: 'cagnotte', label: 'Cagnotte', color: 'var(--viz-e)' },
 ]
 
+const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
+  fixe: '#5B57F5',
+  variable_essentiel: '#2ED47A',
+  epargne: '#FFAB2E',
+  discretionnaire: '#FC5A5A',
+  cagnotte: '#4A4A62',
+}
+
 function accentFromLabel(label: string | null | undefined): string {
   const safeLabel = typeof label === 'string' && label.trim().length > 0 ? label : 'categorie'
   const key = safeLabel.trim().toLowerCase()
@@ -386,6 +394,7 @@ export function Budgets() {
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
+  const [showConfiguredBudgetPanel, setShowConfiguredBudgetPanel] = useState(false)
   const {
     data: budgetPayload,
     loading: configuredBudgetLoading,
@@ -748,11 +757,10 @@ export function Budgets() {
     if (idx < 0) return null
     return { index: idx + 1, total: ranked.length }
   }, [selectedCat, selectedCatInfo, summaries])
-  const categoryMethodLabel = useMemo(() => {
-    const method = dominantCategoryBudgetLine?.budget_method
-    if (!method) return 'Calcul auto'
-    return method.replace(/_/g, ' ')
-  }, [dominantCategoryBudgetLine?.budget_method])
+  const categoryBlockLabel = useMemo(() => {
+    const bucketLabel = formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)
+    return `Socle ${bucketLabel.toLowerCase()}`
+  }, [dominantCategoryBudgetLine?.budget_bucket])
   const budgetByCategoryId = useMemo(
     () =>
       (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
@@ -1218,7 +1226,7 @@ export function Budgets() {
   }, [historyBudgetTarget, monthlyHistory])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: isCategoryMode ? 'var(--space-4)' : 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isCategoryMode ? 'var(--space-6)' : 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
         title="Budgets"
         titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
@@ -1246,36 +1254,11 @@ export function Budgets() {
         )}
       />
 
-      {isCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} style={{ padding: '0 var(--space-6)', marginTop: 'calc(var(--space-2) * -1)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
-            <button
-              type="button"
-              onClick={() => setSelectedCat('all')}
-              aria-label="Retour"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--neutral-700)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-                padding: 0,
-                cursor: 'pointer',
-                fontSize: 'var(--font-size-sm)',
-                fontWeight: 700,
-              }}
-            >
-              <ArrowLeft size={16} />
-              Retour
-            </button>
-          </div>
-        </motion.section>
-      ) : null}
-
-      {showRealBudgetToggle ? (
+      {showExtendedSlides ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 112, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'var(--space-2)', alignItems: 'center' }}>
+            {showRealBudgetToggle ? (
+              <>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
               <button
                 type="button"
@@ -1357,45 +1340,122 @@ export function Budgets() {
                 </span>
               </div>
             </div>
+              </>
+            ) : activeSlide === 2 ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
+                <div
+                  style={{
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-600)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    textAlign: 'center',
+                    minWidth: 140,
+                    minHeight: 56
+                  }}
+                >
+                  <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Montant moyen</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
+                    {formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}
+                  </span>
+                </div>
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700, flexShrink: 0 }}>-</span>
+                <div
+                  style={{
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-600)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    textAlign: 'center',
+                    minWidth: 140,
+                    minHeight: 56
+                  }}
+                >
+                  <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Écart moyen</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', lineHeight: 1.2 }}>
+                    {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div aria-hidden="true" style={{ width: '100%', height: 80 }} />
+            )}
           </div>
         </motion.section>
       ) : null}
 
       {isCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-2)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {`catégorie : ${selectedCatInfo?.name ?? '—'}`}
-              </p>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                {categoryRanking ? `Rang ${categoryRanking.index}/${categoryRanking.total}` : 'Rang —'}
-              </p>
-            </div>
-            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', background: 'var(--neutral-0)', padding: 'var(--space-2) var(--space-3)', display: 'grid', gap: 'var(--space-1)' }}>
+              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCat('all')}
+                  aria-label="Retour"
+                  style={{
+                    border: 'none',
+                    background: accentFromLabel(selectedCatInfo?.name),
+                    color: 'var(--neutral-0)',
+                    width: 20,
+                    height: 20,
+                    minWidth: 20,
+                    minHeight: 20,
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                </button>
+                <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                  {selectedCatInfo?.name ?? '—'}
+                </p>
+              </div>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {categoryBlockLabel}
+                </p>
+              </div>
+            <div style={{ border: `1px solid ${accentFromLabel(selectedCatInfo?.name)}`, borderRadius: 'var(--radius-lg)', background: 'var(--neutral-0)', padding: 'var(--space-2) var(--space-3)', display: 'grid', gap: 'var(--space-1)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-1) var(--space-2)' }}>
                 <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Bloc</p>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
-                    {formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)}
-                  </p>
-                </div>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget mensuel</p>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget alloué</p>
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {formatMoney(categoryMonthlyBudget)}
+                    {formatMoney(categoryMonthlyBudget)} <span style={{ color: 'var(--neutral-500)' }}>({toleranceByBucket(dominantCategoryBudgetLine?.budget_bucket)})</span>
                   </p>
                 </div>
                 <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Méthode</p>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
-                    {categoryMethodLabel}
-                  </p>
-                </div>
-                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Tolérance</p>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Rang</p>
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {toleranceByBucket(dominantCategoryBudgetLine?.budget_bucket)}
+                    {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
+                  </p>
+                </div>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Moyenne dépenses (6m)</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
+                    {formatMoney(sixMonthAverageAmount)}
+                  </p>
+                </div>
+                <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Écart moyen (6M)</p>
+                  <p style={{ margin: 0, fontSize: 13, color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
+                    {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
                   </p>
                 </div>
               </div>
@@ -1404,6 +1464,103 @@ export function Budgets() {
         </motion.section>
       ) : null}
 
+      {isCategoryMode ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
+          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+            Historique 6 mois
+          </h3>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                <ReferenceLine y={totalMonthlyBudget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                    const item = payload
+                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                  }} />
+                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={accentFromLabel(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+            Répartition par sous-catégorie
+          </h3>
+
+          <div
+            style={{
+              height: 336,
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-xl)',
+              background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
+              padding: 'var(--space-3)',
+              display: 'grid',
+              alignContent: 'start',
+              gap: 'var(--space-2)',
+            }}
+          >
+            {categoryBarRows.length === 0 ? (
+              <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                Aucune sous-catégorie active sur cette période
+              </div>
+            ) : (
+              categoryBarRows.map((row) => {
+                const source = subCategoryRowById.get(row.id)
+                if (!source) return null
+                const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
+                const accent = accentFromLabel(row.name)
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => setSelectedSubCategory(source)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: '3px 2px',
+                      cursor: 'pointer',
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-sm)', background: accent, flexShrink: 0 }} />
+                      <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {row.name}
+                      </span>
+                    </span>
+                    <span style={{ display: 'grid', gap: 2 }}>
+                      <span style={{ width: '100%', height: 11, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                        <span
+                          style={{
+                            width: `${row.displayAmount <= 0 ? 0 : Math.max(6, Math.min(barWidth, 100))}%`,
+                            height: '100%',
+                            display: 'block',
+                            borderRadius: 'var(--radius-full)',
+                            background: accent,
+                          }}
+                        />
+                      </span>
+                      <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                        {formatMoney(row.displayAmount)}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </motion.section>
+      ) : (
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: '6px', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
@@ -1612,7 +1769,7 @@ export function Budgets() {
                             {formatMoney(blockDonutTotal)}
                           </span>
                           <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
-                            {dataDisplayMode === 'budget' ? 'budgétés par bloc' : 'dépensés par bloc'}
+                            {dataDisplayMode === 'budget' ? 'budgétés' : 'dépensés'}
                           </span>
                         </div>
                       </div>
@@ -1663,8 +1820,8 @@ export function Budgets() {
             )}
 
             {showExtendedSlides ? (
-              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-3)' }}>
-                <div style={{ height: 332 }}>
+              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-2)' }}>
+                <div style={{ height: 356, transform: 'translateY(-24px)' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
@@ -1692,7 +1849,19 @@ export function Budgets() {
                         width={68}
                       />
                       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                      <ReferenceLine y={historyBudgetTarget} stroke="var(--color-error)" strokeWidth={2} strokeDasharray="4 4" />
+                      <ReferenceLine
+                        y={historyBudgetTarget}
+                        stroke="var(--color-error)"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        label={{
+                          value: formatMoney(historyBudgetTarget),
+                          position: 'insideLeft',
+                          fill: 'var(--color-error)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
                         <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
                           const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
@@ -1704,24 +1873,6 @@ export function Budgets() {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)', padding: '0 var(--space-2)', justifyItems: 'center', textAlign: 'center' }}>
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Montant moyen
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                      {formatMoney(sixMonthAverageAmount)}
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Écart moyen
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
-                      {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
-                    </span>
-                  </div>
                 </div>
               </div>
             ) : null}
@@ -1762,6 +1913,7 @@ export function Budgets() {
           ))}
         </div>
       </motion.section>
+      )}
 
       {selectedCat === 'all' ? (
         <AnimatePresence mode="wait">
@@ -1778,10 +1930,11 @@ export function Budgets() {
               />
             </motion.section>
           ) : activeSlide === 1 && blockRows.length > 0 ? (
-            <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-7)' }}>
+            <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
               <h3 style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Répartition par blocs
               </h3>
+              <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
               {blockRows.map((row) => {
                 const budgetAmount = Number(row.budgetAmount ?? 0)
                 const actualAmount = Number(row.actualAmount ?? 0)
@@ -1790,89 +1943,142 @@ export function Budgets() {
                 const variance = budgetAmount - actualAmount
                 const isOverBudget = variance < 0
                 return (
-                  <div key={row.id} style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {row.label}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                        {formatMoney(budgetAmount)}
-                      </p>
-                    </div>
-
-                    <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                      <div
+                  <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 'var(--space-5)', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                      <span
+                        aria-hidden="true"
                         style={{
-                          width: `${progressPct}%`,
-                          height: '100%',
-                          borderRadius: 'var(--radius-pill)',
-                          background: isOverBudget ? 'var(--color-error)' : 'var(--primary-500)',
-                          transition: 'width var(--transition-base)',
+                          width: 56,
+                          height: 56,
+                          borderRadius: 'var(--radius-full)',
+                          border: '1px dashed var(--neutral-300)',
+                          background: 'var(--neutral-100)',
+                          color: 'var(--neutral-500)',
+                          fontSize: 'var(--font-size-xs)',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontFamily: 'var(--font-mono)',
                         }}
-                      />
+                      >
+                        ICON
+                      </span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                        {formatMoney(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
-                      </p>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-                        {isOverBudget ? `Dépassement ${formatMoney(Math.abs(variance))}` : `Restant ${formatMoney(variance)}`}
-                      </p>
+                    <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {`Socle ${row.label.toLowerCase()}`}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                          {formatMoney(budgetAmount)}
+                        </p>
+                      </div>
+
+                      <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${progressPct}%`,
+                            height: '100%',
+                            borderRadius: 'var(--radius-pill)',
+                            background: BLOCK_PROGRESS_COLORS[row.id],
+                            transition: 'width var(--transition-base)',
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                          {formatMoney(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
+                        </p>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
+                          {isOverBudget ? `Dépassement ${formatMoney(Math.abs(variance))}` : `Restant ${formatMoney(variance)}`}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )
               })}
+              </div>
             </motion.section>
           ) : null}
         </AnimatePresence>
       ) : null}
 
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0', display: 'grid', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingBottom: 'var(--space-2)' }}>
+        <button
+          type="button"
+          onClick={() => setShowConfiguredBudgetPanel((current) => !current)}
+          aria-expanded={showConfiguredBudgetPanel}
+          aria-controls="configured-budget-panel"
+          style={{ border: 'none', background: 'transparent', width: '100%', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', textAlign: 'left' }}
+        >
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
             Pilotage budget configuré
           </p>
           <span style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
-        </div>
+          <ChevronDown
+            size={16}
+            style={{
+              color: 'var(--neutral-600)',
+              transform: showConfiguredBudgetPanel ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform var(--transition-base)',
+              flexShrink: 0,
+            }}
+          />
+        </button>
 
-        <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'grid', gap: 4 }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Période budgétaire
-            </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-              {configuredPeriodLabel}
-            </p>
-          </div>
+        <AnimatePresence initial={false}>
+          {showConfiguredBudgetPanel ? (
+            <motion.div
+              id="configured-budget-panel"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: 'grid', gap: 'var(--space-4)' }}
+            >
+              <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    Période budgétaire
+                  </p>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+                    {configuredPeriodLabel}
+                  </p>
+                </div>
 
-          {configuredBudgetLoading ? (
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-              Chargement du payload Budgets…
-            </p>
-          ) : null}
+                {configuredBudgetLoading ? (
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+                    Chargement du payload Budgets…
+                  </p>
+                ) : null}
 
-          {configuredBudgetError ? (
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 600 }}>
-                {configuredBudgetError}
-              </p>
-              <div>
-                <Button type="button" variant="secondary" size="sm" onClick={() => void reloadConfiguredBudget()}>
-                  Réessayer
-                </Button>
+                {configuredBudgetError ? (
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 600 }}>
+                      {configuredBudgetError}
+                    </p>
+                    <div>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => void reloadConfiguredBudget()}>
+                        Réessayer
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ) : null}
-        </div>
-      </motion.section>
 
-      {configuredBudgetPeriod ? (
-        <>
-          <BudgetSummaryCards summary={configuredBudgetSummary} />
-          <BudgetParentGroups groups={configuredBudgetParentGroups} />
-        </>
-      ) : null}
+              {configuredBudgetPeriod ? (
+                <>
+                  <BudgetSummaryCards summary={configuredBudgetSummary} />
+                  <BudgetParentGroups groups={configuredBudgetParentGroups} />
+                </>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </motion.section>
 
       <AnimatePresence>
         {selectedBlock ? (
@@ -1884,76 +2090,82 @@ export function Budgets() {
               onClick={() => setSelectedBlockId(null)}
               style={{ position: 'fixed', inset: 0, zIndex: 230, background: 'rgba(13,13,31,0.56)' }}
             />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label={`Détail du bloc ${selectedBlock.label}`}
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+            <div
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
-                bottom: 0,
+                inset: 0,
                 zIndex: 231,
-                width: '100%',
-                maxWidth: 512,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                borderRadius: '24px 24px 0 0',
-                maxHeight: '82dvh',
-                overflow: 'hidden',
-                boxShadow: 'var(--shadow-lg)',
+                display: 'grid',
+                placeItems: 'center',
+                padding: 'var(--space-4)',
+                pointerEvents: 'none',
               }}
             >
-              <div style={{ padding: 'var(--space-3) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-0)' }}>
-                    Dépenses <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.72)' }}>
-                    {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
-                  </p>
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Détail du bloc ${selectedBlock.label}`}
+                initial={{ y: 24, opacity: 0, scale: 0.98 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 24, opacity: 0, scale: 0.98 }}
+                transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+                style={{
+                  width: 'min(560px, 100%)',
+                  background: 'var(--neutral-0)',
+                  borderRadius: 'var(--radius-2xl)',
+                  maxHeight: 'min(82dvh, calc(100dvh - var(--space-8)))',
+                  overflow: 'hidden',
+                  boxShadow: 'var(--shadow-lg)',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <div style={{ padding: 'var(--space-3) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>
+                      Bloc <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.72)' }}>
+                      {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }} aria-label="Fermer">
+                    <X size={20} />
+                  </button>
                 </div>
-                <button type="button" onClick={() => setSelectedBlockId(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }} aria-label="Fermer">
-                  <X size={20} />
-                </button>
-              </div>
-              <div style={{ maxHeight: 'calc(82dvh - 72px)', overflowY: 'auto' }}>
-                {selectedBlock.lines.length === 0 ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>
-                    Aucune ligne disponible
-                  </p>
-                ) : (
-                  selectedBlock.lines.map((line) => {
-                    const displayedAmount = dataDisplayMode === 'budget' ? line.budgetAmount : line.actualAmount
-                    const secondaryAmount = dataDisplayMode === 'budget' ? line.actualAmount : line.budgetAmount
-                    return (
-                      <div key={line.id} style={{ borderBottom: '1px solid var(--neutral-200)', padding: 'var(--space-3) var(--space-5)', display: 'grid', gap: 'var(--space-1)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
-                            {line.categoryName}
-                          </span>
-                          <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
-                            {formatMoney(displayedAmount)}
-                          </span>
+                <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
+                  {selectedBlock.lines.length === 0 ? (
+                    <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>
+                      Aucune ligne disponible
+                    </p>
+                  ) : (
+                    selectedBlock.lines.map((line) => {
+                      const displayedAmount = dataDisplayMode === 'budget' ? line.budgetAmount : line.actualAmount
+                      const secondaryAmount = dataDisplayMode === 'budget' ? line.actualAmount : line.budgetAmount
+                      return (
+                        <div key={line.id} style={{ borderBottom: '1px solid var(--neutral-200)', padding: 'var(--space-2) var(--space-5)', display: 'grid', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
+                              {line.categoryName}
+                            </span>
+                            <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                              {formatMoney(displayedAmount)}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-500)' }}>
+                              {line.parentCategoryName ?? 'Autres'}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                              {dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-500)' }}>
-                            {line.parentCategoryName ?? 'Autres'}
-                          </span>
-                          <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                            {dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </motion.div>
+                      )
+                    })
+                  )}
+                </div>
+              </motion.div>
+            </div>
           </>
         ) : null}
       </AnimatePresence>
