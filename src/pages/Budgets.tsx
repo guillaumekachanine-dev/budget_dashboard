@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Search, ChevronDown, ArrowLeft } from 'lucide-react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -649,13 +649,6 @@ export function Budgets() {
     categoryIds: selectedCategoryIds,
   })
 
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const { data: currentMonthAllExpenseTxns } = useTransactions({
-    startDate: currentMonthStart,
-    endDate: todayStr(),
-    flowType: 'expense',
-  })
-
   const subCategoryModalIds = useMemo(() => {
     if (!selectedSubCategory) return undefined
     const ids = [selectedSubCategory.id]
@@ -915,94 +908,6 @@ export function Budgets() {
     () => new Map(listSubCategoryRows.map((row) => [row.id, row])),
     [listSubCategoryRows],
   )
-  const budgetProgressRows = useMemo(() => {
-    const monthTxs = currentMonthAllExpenseTxns ?? []
-    const monthSpentByCategory = monthTxs.reduce<Map<string, number>>((acc, tx) => {
-      if (!tx.category_id) return acc
-      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
-      return acc
-    }, new Map<string, number>())
-
-    const monthSpentByRoot = monthTxs.reduce<Map<string, number>>((acc, tx) => {
-      if (!tx.category_id) return acc
-      const category = categoryById.get(tx.category_id)
-      if (!category) return acc
-      const rootId = category.parent_id ?? category.id
-      acc.set(rootId, (acc.get(rootId) ?? 0) + Number(tx.amount))
-      return acc
-    }, new Map<string, number>())
-
-    const budgetByCategory = (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
-      acc.set(summary.category.id, (acc.get(summary.category.id) ?? 0) + Number(summary.budget_amount))
-      return acc
-    }, new Map<string, number>())
-
-    const budgetByRoot = (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
-      const rootId = summary.category.parent_id ?? summary.category.id
-      acc.set(rootId, (acc.get(rootId) ?? 0) + Number(summary.budget_amount))
-      return acc
-    }, new Map<string, number>())
-
-    const rows = selectedCat === 'all'
-      ? rootExpenseCategories.map((rootCategory) => {
-        const spent = monthSpentByRoot.get(rootCategory.id) ?? 0
-        const budget = budgetByRoot.get(rootCategory.id) ?? 0
-        return {
-          id: rootCategory.id,
-          name: rootCategory.name,
-          parentCategoryName: null as string | null,
-          spent,
-          budget,
-          sharePct: totalMonthlyBudget > 0 ? (budget / totalMonthlyBudget) * 100 : 0,
-          accent: accentFromLabel(rootCategory.name),
-        }
-      })
-      : (() => {
-        const selectedCategory = categoryById.get(selectedCat)
-        if (!selectedCategory) return []
-        const children = selectedCategory.parent_id
-          ? [selectedCategory]
-          : expenseSubCategories.filter((subCategory) => subCategory.parent_id === selectedCat)
-        const parentBudget = budgetByCategory.get(selectedCat) ?? totalMonthlyBudget
-        return children.map((childCategory) => {
-          const spent = monthSpentByCategory.get(childCategory.id) ?? 0
-          const budget = budgetByCategory.get(childCategory.id) ?? 0
-          return {
-            id: childCategory.id,
-            name: childCategory.name,
-            parentCategoryName: childCategory.parent_id ? categoryById.get(childCategory.parent_id)?.name ?? null : null,
-            spent,
-            budget,
-            sharePct: parentBudget > 0 ? (budget / parentBudget) * 100 : 0,
-            accent: accentFromLabel(childCategory.name),
-          }
-        })
-      })()
-
-    const filtered = rows
-      .filter((row) => row.spent > 0 || row.budget > 0)
-      .sort((a, b) => b.spent - a.spent)
-
-    const topFiveIds = new Set(filtered.slice(0, 5).map((row) => row.id))
-
-    return filtered.map((row) => {
-      const ratio = row.budget > 0 ? row.spent / row.budget : 0
-      const progressPct = row.budget > 0 ? Math.min(ratio * 100, 100) : (row.spent > 0 ? 100 : 0)
-      const statusColor = ratio > 1
-        ? 'var(--color-error)'
-        : ratio >= 0.8
-          ? 'var(--color-warning)'
-          : 'var(--color-success)'
-
-      return {
-        ...row,
-        progressPct,
-        remaining: row.budget - row.spent,
-        statusColor,
-        isTopFive: selectedCat === 'all' && topFiveIds.has(row.id),
-      }
-    })
-  }, [currentMonthAllExpenseTxns, categoryById, summaries, selectedCat, rootExpenseCategories, totalMonthlyBudget, expenseSubCategories])
 
   const periodSpentByCategory = useMemo(() => {
     return (periodTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
@@ -1254,7 +1159,6 @@ export function Budgets() {
     }
   }
 
-  const selectedSlicePct = selectedDonutSlice && pieTotal > 0 ? (selectedDonutSlice.value / pieTotal) * 100 : 0
   const donutCenterAmount = dataDisplayMode === 'budget' ? totalMonthlyBudget : selectedPeriodSpent
   const donutCenterLabel = dataDisplayMode === 'budget' ? 'budgétés' : 'dépensés'
   const categoryBarMaxAmount = useMemo(
