@@ -83,12 +83,25 @@ type AccountVisualGroup = 'checking' | 'savings' | 'invest'
 const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
   { id: 'compte_principal', label: 'Compte principal', iconSrc: comptePrincipalIcon, keywords: ['compte principal', 'courant principal', 'principal'] },
   { id: 'compte_joint', label: 'Compte joint', iconSrc: compteJointIcon, keywords: ['compte joint', 'joint'], iconScale: 1.22 },
-  { id: 'livret_a', label: 'Livret A', iconSrc: comptePrincipalIcon, keywords: ['livret a'] },
+  { id: 'livret_a', label: 'Epargne', iconSrc: comptePrincipalIcon, keywords: ['livret a', 'epargne'] },
+  { id: 'placements', label: 'Placements', iconSrc: peaIcon, keywords: ['placements', 'pea'], iconScale: 1.22 },
   { id: 'per', label: 'PER', iconSrc: comptePrincipalIcon, keywords: ['per'] },
   { id: 'pea', label: 'PEA', iconSrc: peaIcon, keywords: ['pea'], iconScale: 1.22 },
   { id: 'epargne_percol', label: 'Epargne PERCOL', iconSrc: percolIcon, keywords: ['percol', 'amundi'], iconScale: 1.22 },
   { id: 'compte_crypto', label: 'Compte crypto', iconSrc: cryptoIcon, keywords: ['crypto', 'bitcoin'], missing: true },
 ]
+
+const VISIBLE_ACCOUNT_PRESET_IDS = new Set(['compte_principal', 'compte_joint', 'livret_a', 'placements'])
+
+function mapPresetIdToDisplayed(presetId: string): string {
+  if (presetId === 'per') {
+    return 'livret_a'
+  }
+  if (presetId === 'pea' || presetId === 'epargne_percol' || presetId === 'compte_crypto') {
+    return 'placements'
+  }
+  return presetId
+}
 
 function normalizeLabel(value: string): string {
   return value
@@ -466,6 +479,11 @@ export function Home() {
   useEffect(() => {
     if (selectedAccountPresetId === 'ldds') {
       setSelectedAccountPresetId('livret_a')
+      return
+    }
+    const mapped = mapPresetIdToDisplayed(selectedAccountPresetId ?? '')
+    if (mapped !== selectedAccountPresetId) {
+      setSelectedAccountPresetId(mapped)
     }
   }, [selectedAccountPresetId])
 
@@ -494,6 +512,22 @@ export function Home() {
     () => (accounts ?? []).find((account) => normalizeLabel(account.name).includes('ldds')) ?? null,
     [accounts],
   )
+  const perAccount = useMemo(
+    () => accountEntries.find((entry) => entry.preset.id === 'per')?.account ?? null,
+    [accountEntries],
+  )
+  const peaAccount = useMemo(
+    () => accountEntries.find((entry) => entry.preset.id === 'pea')?.account ?? null,
+    [accountEntries],
+  )
+  const percolAccount = useMemo(
+    () => accountEntries.find((entry) => entry.preset.id === 'epargne_percol')?.account ?? null,
+    [accountEntries],
+  )
+  const cryptoAccount = useMemo(
+    () => accountEntries.find((entry) => entry.preset.id === 'compte_crypto')?.account ?? null,
+    [accountEntries],
+  )
 
   const selectedAccount = selectedAccountEntry?.account ?? null
   const { data: selectedAccountTxns } = useTransactions({
@@ -507,9 +541,11 @@ export function Home() {
   const isLDDS = selectedPresetId === 'ldds'
   const isPER = selectedPresetId === 'per'
   const isPEA = selectedPresetId === 'pea'
+  const isPlacements = selectedPresetId === 'placements'
   const isMainCheckingAccount = selectedPresetId === 'compte_principal'
   const isProjectionSavingsAccount = isLivretA || isLDDS
-  const isCombinedSavingsPage = isLivretA || isLDDS
+  const isEpargneTab = selectedPresetId === 'livret_a'
+  const isCombinedSavingsPage = isEpargneTab || isPlacements
   const isSavingsBooklet =
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
@@ -649,7 +685,7 @@ export function Home() {
     return [
       { key: `statut-${accountKey}`, label: 'Statut', value: 'Plafond atteint' },
       { key: `liquidite-${accountKey}`, label: 'Liquidité', value: 'Disponible' },
-      { key: `taux-${accountKey}`, label: "Taux d’intérêt", value: '1,5%' },
+      { key: `taux-${accountKey}`, label: "Taux d'intérêt", value: '1,5%' },
       { key: `interets-2025-${accountKey}`, label: 'Intérêts 2025', value: interests2025 },
     ]
   }, [isLivretA, isProjectionSavingsAccount])
@@ -986,38 +1022,113 @@ export function Home() {
       : 'var(--primary-700)'
   const livretABalance = Number(livretAAccount?.current_balance ?? 0)
   const lddsBalance = Number(lddsAccount?.current_balance ?? 0)
+  const perBalance = Number(perAccount?.current_balance ?? 0)
+  const peaBalance = Number(peaAccount?.current_balance ?? 0)
+  const percolBalance = Number(percolAccount?.current_balance ?? 0)
+  const cryptoBalance = Number(cryptoAccount?.current_balance ?? 0)
   const livretACeilingPct = Math.max(0, Math.min(100, (livretABalance / SAVINGS_BOOKLET_CEILINGS.livret_a) * 100))
   const lddsCeilingPct = Math.max(0, Math.min(100, (lddsBalance / SAVINGS_BOOKLET_CEILINGS.ldds) * 100))
-  const combinedSavingsSections = [
-    {
-      id: 'livret_a',
-      title: 'Livret A',
-      balance: livretABalance,
-      ceiling: SAVINGS_BOOKLET_CEILINGS.livret_a,
-      ceilingPct: livretACeilingPct,
-      txns: livretATxns ?? [],
-      metrics: [
-        { key: 'statut-livret_a', label: 'Statut', value: livretACeilingPct >= 99.5 ? 'Plafond atteint' : `${livretACeilingPct.toFixed(0)}%` },
-        { key: 'liquidite-livret_a', label: 'Liquidité', value: 'Disponible' },
-        { key: 'taux-livret_a', label: "Taux d’intérêt", value: '1,5%' },
-        { key: 'interets-2025-livret_a', label: 'Intérêts 2025', value: '522€' },
-      ],
-    },
-    {
-      id: 'ldds',
-      title: 'LDDS',
-      balance: lddsBalance,
-      ceiling: SAVINGS_BOOKLET_CEILINGS.ldds,
-      ceilingPct: lddsCeilingPct,
-      txns: lddsTxns ?? [],
-      metrics: [
-        { key: 'statut-ldds', label: 'Statut', value: lddsCeilingPct >= 99.5 ? 'Plafond atteint' : `${lddsCeilingPct.toFixed(0)}%` },
-        { key: 'liquidite-ldds', label: 'Liquidité', value: 'Disponible' },
-        { key: 'taux-ldds', label: "Taux d’intérêt", value: '1,5%' },
-        { key: 'interets-2025-ldds', label: 'Intérêts 2025', value: '57€' },
-      ],
-    },
-  ]
+  const combinedSavingsSections = useMemo(() => {
+    if (isEpargneTab) {
+      return [
+        {
+          id: 'livret_a',
+          title: 'Livret A',
+          balance: livretABalance,
+          ceiling: SAVINGS_BOOKLET_CEILINGS.livret_a,
+          ceilingPct: livretACeilingPct,
+          txns: livretATxns ?? [],
+          color: 'var(--color-success)',
+          metrics: [
+            { key: 'statut-livret_a', label: 'Statut', value: livretACeilingPct >= 99.5 ? 'Plafond atteint' : `${livretACeilingPct.toFixed(0)}%` },
+            { key: 'liquidite-livret_a', label: 'Liquidite', value: 'Disponible' },
+            { key: 'taux-livret_a', label: 'Taux', value: '1,5%' },
+            { key: 'interets-2025-livret_a', label: 'Interets 2025', value: '522 EUR' },
+          ],
+        },
+        {
+          id: 'ldds',
+          title: 'LDDS',
+          balance: lddsBalance,
+          ceiling: SAVINGS_BOOKLET_CEILINGS.ldds,
+          ceilingPct: lddsCeilingPct,
+          txns: lddsTxns ?? [],
+          color: 'var(--color-success)',
+          metrics: [
+            { key: 'statut-ldds', label: 'Statut', value: lddsCeilingPct >= 99.5 ? 'Plafond atteint' : `${lddsCeilingPct.toFixed(0)}%` },
+            { key: 'liquidite-ldds', label: 'Liquidite', value: 'Disponible' },
+            { key: 'taux-ldds', label: 'Taux', value: '1,5%' },
+            { key: 'interets-2025-ldds', label: 'Interets 2025', value: '57 EUR' },
+          ],
+        },
+        {
+          id: 'per',
+          title: 'PER',
+          balance: perBalance,
+          ceiling: null,
+          ceilingPct: null,
+          txns: [],
+          color: 'var(--color-success)',
+          metrics: [
+            { key: 'solde-per', label: 'Solde', value: formatMoneyInteger(perBalance) },
+            { key: 'liquidite-per', label: 'Liquidite', value: 'Bloque' },
+            { key: 'perf-per', label: 'Performance', value: '+2,3%' },
+            { key: 'simulation-2026-per', label: 'Projection 2026', value: formatMoneyInteger(perBalance + 3000) },
+          ],
+        },
+      ]
+    }
+    if (isPlacements) {
+      return [
+        {
+          id: 'pea',
+          title: 'PEA',
+          balance: peaBalance,
+          ceiling: null,
+          ceilingPct: null,
+          txns: [],
+          color: 'var(--color-warning)',
+          metrics: [
+            { key: 'solde-pea', label: 'Solde', value: formatMoneyInteger(peaBalance) },
+            { key: 'liquidite-pea', label: 'Liquidite', value: 'Disponible' },
+            { key: 'perf-pea', label: 'Performance', value: '+8,2%' },
+            { key: 'gain-pea', label: 'Gain realise', value: formatMoneyInteger(peaBalance * 0.082) },
+          ],
+        },
+        {
+          id: 'epargne_percol',
+          title: 'PERCOL',
+          balance: percolBalance,
+          ceiling: null,
+          ceilingPct: null,
+          txns: [],
+          color: 'var(--color-warning)',
+          metrics: [
+            { key: 'solde-percol', label: 'Solde', value: formatMoneyInteger(percolBalance) },
+            { key: 'liquidite-percol', label: 'Liquidite', value: 'Bloque' },
+            { key: 'perf-percol', label: 'Performance', value: '+1,5%' },
+            { key: 'gain-percol', label: 'Gain realise', value: formatMoneyInteger(percolBalance * 0.015) },
+          ],
+        },
+        {
+          id: 'compte_crypto',
+          title: 'Compte Crypto',
+          balance: cryptoBalance,
+          ceiling: null,
+          ceilingPct: null,
+          txns: [],
+          color: 'var(--color-warning)',
+          metrics: [
+            { key: 'solde-crypto', label: 'Solde', value: formatMoneyInteger(cryptoBalance) },
+            { key: 'liquidite-crypto', label: 'Liquidite', value: 'Disponible' },
+            { key: 'perf-crypto', label: 'Performance', value: '+45,2%' },
+            { key: 'gain-crypto', label: 'Gain realise', value: formatMoneyInteger(cryptoBalance * 0.452) },
+          ],
+        },
+      ]
+    }
+    return []
+  }, [isEpargneTab, isPlacements, livretABalance, livretACeilingPct, lddsBalance, lddsCeilingPct, perBalance, peaBalance, percolBalance, cryptoBalance, livretATxns, lddsTxns])
 
   return (
     <div
@@ -1066,17 +1177,19 @@ export function Home() {
                 <div key={section.id} style={{ display: 'grid', gap: 'var(--space-2)' }}>
                   <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
                   <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: 'color-mix(in oklab, var(--color-success) 58%, var(--neutral-900) 42%)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: `color-mix(in oklab, ${section.color} 58%, var(--neutral-900) 42%)` }}>
                       {formatMoneyInteger(section.balance)}
                     </p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                      {`Plafond ${formatMoneyInteger(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
-                    </p>
+                    {section.ceiling !== null && section.ceilingPct !== null ? (
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                        {`Plafond ${formatMoneyInteger(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
+                      </p>
+                    ) : null}
                   </div>
-                  <div style={{ background: 'var(--color-success)', color: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-lg)', display: 'grid' }}>
+                  <div style={{ background: section.color, color: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-lg)', display: 'grid' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
                       {section.metrics.map((metric) => (
-                        <div key={metric.key} style={{ background: 'color-mix(in oklab, var(--color-success) 12%, var(--neutral-0) 88%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', border: '1px solid color-mix(in oklab, var(--color-success) 28%, var(--neutral-0) 72%)', display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
+                        <div key={metric.key} style={{ background: `color-mix(in oklab, ${section.color} 12%, var(--neutral-0) 88%)`, borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', border: `1px solid color-mix(in oklab, ${section.color} 28%, var(--neutral-0) 72%)`, display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
                           <p style={{ margin: 0, fontSize: 10, fontWeight: 'var(--font-weight-semibold)', textTransform: 'uppercase', color: 'var(--neutral-700)', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {metric.label}
                           </p>
@@ -1538,7 +1651,7 @@ export function Home() {
                 }}
               >
                 <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-                  Évolution de l’indice ETF sur 1 an: à faire plus tard
+                  Évolution de l'indice ETF sur 1 an: à faire plus tard
                 </p>
               </div>
             ) : isPER ? (
@@ -1766,9 +1879,8 @@ export function Home() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-5) var(--space-2)' }}>
-                {accountEntries.filter((entry) => entry.preset.id !== 'ldds').map((entry) => {
-                  const isActive = entry.preset.id === selectedAccountEntry?.preset.id
-                  const lddsIsActive = selectedAccountEntry?.preset.id === 'livret_a'
+                {accountEntries.filter((entry) => VISIBLE_ACCOUNT_PRESET_IDS.has(entry.preset.id)).map((entry) => {
+                  const isActive = entry.preset.id === selectedAccountEntry?.preset.id || (entry.preset.id === 'placements' && selectedAccountEntry?.preset.id === 'placements')
                   return (
                     <div key={entry.preset.id} style={{ display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
                       <button
@@ -1797,24 +1909,6 @@ export function Home() {
                           {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
                         </span>
                       </button>
-                      {entry.preset.id === 'livret_a' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSelectAccountPreset('livret_a')}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            padding: 0,
-                            marginTop: '-2px',
-                            fontSize: 11,
-                            fontWeight: lddsIsActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
-                            color: lddsIsActive ? 'var(--primary-600)' : 'var(--neutral-600)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          LDDS
-                        </button>
-                      ) : null}
                     </div>
                   )
                 })}

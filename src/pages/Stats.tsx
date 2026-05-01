@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, RotateCw } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { lockDocumentScroll } from '@/lib/scrollLock'
@@ -8,7 +8,6 @@ import analyticsIcon from '@/assets/icons_app/analytics.png'
 import optimisationIcon from '@/assets/icons_app/optimisation.png'
 import epargneIcon from '@/assets/icons_app/epargne.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
-import { StatsHeader } from '@/features/stats/components/StatsHeader'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetBucketsCard'
 import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
@@ -19,7 +18,7 @@ import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
 
 const optimizationTableColumns = 'minmax(0,1.25fr) minmax(0,0.72fr) minmax(0,0.84fr) minmax(0,0.84fr)'
 
-type StatsTabId = 'analytics' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics' | 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -27,7 +26,8 @@ type StatsTabConfig = {
 }
 
 const STATS_TABS: StatsTabConfig[] = [
-  { id: 'analytics', label: 'analytics', iconSrc: analyticsIcon },
+  { id: 'analytics', label: 'analytics 2026', iconSrc: analyticsIcon },
+  { id: 'analytics_2025', label: 'analytics 2025', iconSrc: analyticsIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
@@ -36,7 +36,6 @@ export function Stats() {
   const {
     snapshot,
     loading,
-    error,
     isHydrated,
     storeUserId,
     hydrateStatsReferenceData,
@@ -143,13 +142,22 @@ export function Stats() {
 
   const selectedPeriod = snapshot?.selectedPeriod ?? null
 
+  const lastUpdateText = (() => {
+    if (!snapshot?.loadedAt) return 'Jamais mis à jour'
+    const date = new Date(snapshot.loadedAt)
+    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
+    return `Mis à jour le ${date.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
+  })()
+
+  const monthButtonLabel = selectedPeriod?.label ?? 'Mois'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
-        title="Stats"
+        title="Analytics"
         rightSlot={(
           <HeaderPeriodMenu
-            buttonLabel="Période"
+            buttonLabel={monthButtonLabel}
             buttonAriaLabel="Choisir une période Stats"
             menuAriaLabel="Choisir une période Stats"
             open={showHeaderPeriodMenu}
@@ -157,6 +165,38 @@ export function Stats() {
             onBeforeToggle={() => setShowTabModal(false)}
             options={headerPeriodOptions}
           />
+        )}
+        headerSubtitle={(
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-medium)' }}>
+              {lastUpdateText}
+            </p>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              aria-label="Actualiser les données"
+              style={{
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                padding: '6px 12px',
+                background: 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)',
+                color: 'var(--primary-600)',
+                fontSize: '12px',
+                fontWeight: 'var(--font-weight-semibold)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all var(--transition-base)',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-1)',
+              }}
+            >
+              <RotateCw size={13} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              {loading ? 'Chargement' : 'Actualiser'}
+            </button>
+          </div>
         )}
         actionIcon={(
           <img
@@ -171,14 +211,6 @@ export function Stats() {
         )}
         actionAriaLabel="Choisir un onglet stats"
         onActionClick={handleToggleTabModal}
-      />
-
-      <StatsHeader
-        selectedPeriod={selectedPeriod}
-        loadedAt={snapshot?.loadedAt ?? null}
-        loading={loading}
-        error={error}
-        onRefresh={handleRefresh}
       />
 
       {activeTab.id === 'analytics' ? (
@@ -213,6 +245,17 @@ export function Stats() {
             </motion.section>
           )}
         </>
+      ) : null}
+
+      {activeTab.id === 'analytics_2025' ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ padding: '0 var(--space-6)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 220, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)' }}>Analytics 2025</p>
+              <p style={{ margin: '8px 0 0', fontSize: 'var(--font-size-sm)' }}>Les données 2025 seront disponibles prochainement.</p>
+            </div>
+          </div>
+        </motion.section>
       ) : null}
 
       {activeTab.id === 'optimisation' ? (
@@ -344,7 +387,7 @@ export function Stats() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-5) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-4) var(--space-1)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
@@ -366,9 +409,9 @@ export function Stats() {
                       <img
                         src={tab.iconSrc}
                         alt={tab.label}
-                        width={56}
-                        height={56}
-                        style={{ width: 56, height: 56, objectFit: 'contain' }}
+                        width={44}
+                        height={44}
+                        style={{ width: 44, height: 44, objectFit: 'contain' }}
                         loading="lazy"
                         decoding="async"
                       />

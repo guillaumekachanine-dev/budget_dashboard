@@ -164,7 +164,7 @@ export function TransactionDetailsModal({
             style={{
               position: 'fixed',
               inset: 0,
-              zIndex: 100,
+              zIndex: 250,
               background: 'rgba(0,0,0,0.4)',
             }}
           />
@@ -177,7 +177,7 @@ export function TransactionDetailsModal({
             style={{
               position: 'fixed',
               inset: 0,
-              zIndex: 101,
+              zIndex: 251,
               display: 'grid',
               placeItems: 'center',
               padding: 'var(--space-4)',
