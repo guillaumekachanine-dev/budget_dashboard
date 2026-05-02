@@ -8,7 +8,6 @@
  */
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -27,10 +26,9 @@ const fmt = (n: number) =>
 
 type Props = {
   monthlyProfile: MonthlyBudget2026Point[]
-  buckets: Budget2026BucketSummary[]
 }
 
-export function Annual2026Seasonality({ monthlyProfile, buckets }: Props) {
+export function Annual2026Seasonality({ monthlyProfile }: Props) {
   if (monthlyProfile.length === 0) return null
 
   // Buckets présents dans les données

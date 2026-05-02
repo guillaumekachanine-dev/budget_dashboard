@@ -41,7 +41,6 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
         <PotentialSummaryCard
           totalOptimizableSavings={totalOptimizableSavings}
           totalAnnualPotential={totalAnnualPotential}
-          totalMonthlyBudget={totalMonthlyBudget}
           currentSavings={totalSavings}
         />
 
@@ -73,12 +72,10 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
 function PotentialSummaryCard({
   totalOptimizableSavings,
   totalAnnualPotential,
-  totalMonthlyBudget,
   currentSavings,
 }: {
   totalOptimizableSavings: number
   totalAnnualPotential: number
-  totalMonthlyBudget: number
   currentSavings: number
 }) {
   const boostPct = currentSavings > 0

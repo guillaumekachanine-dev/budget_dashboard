@@ -260,7 +260,7 @@ function buildOptimizations(
     .filter((s): s is Budget2026OptimizationScenario => s !== null)
 }
 
-function buildMonthlyProfile(totalBudget: number, buckets: Budget2026BucketSummary[]): MonthlyBudget2026Point[] {
+function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2026Point[] {
   // Budget est constant Jan–Mai 2026. On simule une légère variance saisonnière
   // sur les buckets discrétionnaires pour rendre le graphe vivant.
   const seasonalMultipliers: Record<number, Partial<Record<string, number>>> = {
@@ -344,7 +344,7 @@ export function useAnnual2026Analysis(): Annual2026Analysis {
         const categories = buildCategories(effectiveLines, totalMonthlyBudget)
         const insights = buildInsights(effectiveLines, buckets, categories, summary)
         const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(totalMonthlyBudget, buckets)
+        const monthlyProfile = buildMonthlyProfile(buckets)
 
         setState({
           loading: false,
@@ -379,7 +379,7 @@ export function useAnnual2026Analysis(): Annual2026Analysis {
         const categories = buildCategories(effectiveLines, totalMonthlyBudget)
         const insights = buildInsights(effectiveLines, buckets, categories, summary)
         const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(totalMonthlyBudget, buckets)
+        const monthlyProfile = buildMonthlyProfile(buckets)
 
         setState({
           loading: false,
