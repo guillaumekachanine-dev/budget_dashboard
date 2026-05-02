@@ -76,7 +76,7 @@ export function Annual2026Tab() {
 
       {/* Section 5 — Saisonnalité YTD */}
       {monthlyProfile.length > 0 && buckets.length > 0 ? (
-        <Annual2026Seasonality monthlyProfile={monthlyProfile} buckets={buckets} />
+        <Annual2026Seasonality monthlyProfile={monthlyProfile} />
       ) : null}
 
       {/* Section 6 — Optimisations */}

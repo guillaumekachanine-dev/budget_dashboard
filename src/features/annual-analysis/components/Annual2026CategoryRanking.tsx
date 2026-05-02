@@ -230,7 +230,7 @@ function AnnualProjectionCard({ categories }: { categories: Budget2026CategorySu
         Projection coût annuel — top postes
       </h3>
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-        {categories.map((cat, i) => (
+        {categories.map((cat) => (
           <div key={cat.name} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
