@@ -5,7 +5,6 @@ import { Annual2026InsightsGrid } from './Annual2026InsightsGrid'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking } from './Annual2026CategoryRanking'
 import { Annual2026Seasonality } from './Annual2026Seasonality'
-import { Annual2026Optimization } from './Annual2026Optimization'
 
 export function Annual2026Tab() {
   const {
@@ -15,7 +14,6 @@ export function Annual2026Tab() {
     buckets,
     categories,
     insights,
-    optimizations,
     monthlyProfile,
   } = useAnnual2026Analysis()
 
@@ -79,14 +77,6 @@ export function Annual2026Tab() {
         <Annual2026Seasonality monthlyProfile={monthlyProfile} />
       ) : null}
 
-      {/* Section 6 — Optimisations */}
-      {optimizations.length > 0 && summary ? (
-        <Annual2026Optimization
-          scenarios={optimizations}
-          totalMonthlyBudget={summary.totalMonthlyBudget}
-          totalSavings={summary.totalSavingsBudget}
-        />
-      ) : null}
     </motion.div>
   )
 }

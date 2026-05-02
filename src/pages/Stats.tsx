@@ -10,15 +10,14 @@ import epargneIcon from '@/assets/icons_app/epargne.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
 import { Annual2026Tab } from '@/features/annual-analysis/components/Annual2026Tab'
+import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
+import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetBucketsCard'
 import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
 import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
 import { StatsMonthlyEvolutionCard } from '@/features/stats/components/StatsMonthlyEvolutionCard'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
-import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
-
-const optimizationTableColumns = 'minmax(0,1.25fr) minmax(0,0.72fr) minmax(0,0.84fr) minmax(0,0.84fr)'
 
 type StatsTabId = 'analytics' | 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
@@ -45,6 +44,7 @@ export function Stats() {
     resetSelectedPeriodToDefault,
     setSelectedPeriod,
   } = useStatsReferenceData()
+  const annual2026 = useAnnual2026Analysis()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics')
   const [showTabModal, setShowTabModal] = useState(false)
@@ -55,28 +55,6 @@ export function Stats() {
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
     [activeTabId],
   )
-
-  const optimizationScenarios = useMemo(() => {
-    const rows = snapshot?.budgetBucketVsActual ?? []
-
-    return rows
-      .filter((row) => row.actualBudgetBucketEur > row.targetBudgetBucketEur)
-      .sort((a, b) => b.deltaBudgetBucketEur - a.deltaBudgetBucketEur)
-      .slice(0, 5)
-      .map((row, index) => {
-        const reductionPercents = [6, 8, 10, 12, 15]
-        const reduction = reductionPercents[index] ?? 8
-        const monthlyImpact = (row.actualBudgetBucketEur * reduction) / 100
-
-        return {
-          id: row.budgetBucket,
-          name: row.budgetBucket,
-          reduction,
-          monthlyImpact,
-          sixMonthImpact: monthlyImpact * 6,
-        }
-      })
-  }, [snapshot])
 
   const handleToggleTabModal = useCallback(() => {
     setShowTabModal((current) => !current)
@@ -259,43 +237,21 @@ export function Stats() {
       ) : null}
 
       {activeTab.id === 'optimisation' ? (
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: '0 var(--space-4)' }}
-        >
-          <div style={{ width: '100%', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-150)', padding: 'var(--space-4)' }}>
-            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)' }}>Scénarios d’optimisation</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-              Simulation basée sur les buckets en dépassement ce mois.
-            </p>
-
-            <div style={{ width: '100%', borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: 'var(--space-2) 0', marginTop: 'var(--space-4)' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'left' }}>Bucket</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>Scénario</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>Fin de mois</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>6 mois</span>
-            </div>
-
-            {!snapshot ? (
-              <p style={{ margin: 'var(--space-4) 0 0', fontSize: 13, color: 'var(--neutral-400)' }}>
-                Snapshot indisponible.
-              </p>
-            ) : optimizationScenarios.length === 0 ? (
-              <p style={{ margin: 'var(--space-4) 0 0', fontSize: 13, color: 'var(--neutral-400)' }}>
-                Aucun dépassement bucket détecté pour proposer un scénario.
-              </p>
-            ) : optimizationScenarios.map((scenario) => (
-              <div key={scenario.id} style={{ borderBottom: '1px solid var(--neutral-200)', display: 'grid', gridTemplateColumns: optimizationTableColumns, gap: 'var(--space-1)', padding: '10px 0', alignItems: 'center' }}>
-                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>{scenario.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>{`-${scenario.reduction}%`}</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatCurrency(scenario.monthlyImpact)}`}</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{`+${formatCurrency(scenario.sixMonthImpact)}`}</span>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+          {annual2026.optimizations.length > 0 && annual2026.summary ? (
+            <Annual2026Optimization
+              scenarios={annual2026.optimizations}
+              totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
+              totalSavings={annual2026.summary.totalSavingsBudget}
+            />
+          ) : (
+            <section style={{ padding: '0 var(--space-6)' }}>
+              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
+                Aucun scénario d’optimisation disponible.
               </div>
-            ))}
-          </div>
-        </motion.section>
+            </section>
+          )}
+        </motion.div>
       ) : null}
 
       {activeTab.id === 'epargne' ? (

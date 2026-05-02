@@ -21,7 +21,7 @@ const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
   { value: 'all', label: 'Toutes' },
   { value: 'expense', label: 'Depenses' },
   { value: 'income', label: 'Revenus' },
-  { value: 'transfer', label: 'Transferts internes' },
+  { value: 'transfer', label: 'Transferts' },
 ]
 
 const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
@@ -313,6 +313,8 @@ function FilterDropdown({
   onClose,
   headerContent,
   compactValue = false,
+  heroTone = false,
+  fitContent = false,
 }: {
   id: Exclude<QuickParamPicker, null>
   label: string
@@ -324,6 +326,8 @@ function FilterDropdown({
   onClose: () => void
   headerContent?: React.ReactNode
   compactValue?: boolean
+  heroTone?: boolean
+  fitContent?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -392,7 +396,7 @@ function FilterDropdown({
   }
 
   return (
-    <div ref={wrapperRef} style={{ position: 'relative', minHeight: 58 }}>
+    <div ref={wrapperRef} style={{ position: 'relative', minHeight: heroTone ? 34 : 58 }}>
       {showMobileOverlay ? (
         <AnimatePresence>
           {isOpen ? (
@@ -416,45 +420,70 @@ function FilterDropdown({
         aria-label={`Filtre ${label}`}
         onClick={onToggle}
         onKeyDown={onTriggerKeyDown}
-        whileHover={{ scale: 1.05 }}
+        whileHover={heroTone ? undefined : { scale: 1.05 }}
         transition={{ duration: 0.16, ease: 'easeOut' }}
         style={{
           width: '100%',
-          minHeight: 58,
-          border: `1px solid ${isOpen ? 'var(--primary-500)' : 'var(--neutral-200)'}`,
-          borderRadius: 'var(--radius-md)',
-          background: isOpen ? 'var(--primary-50)' : 'var(--neutral-0)',
-          color: isOpen ? 'var(--primary-700)' : 'var(--neutral-700)',
-          padding: 'var(--space-3) var(--space-4)',
+          minHeight: heroTone ? 34 : 58,
+          border: heroTone
+            ? 'none'
+            : `1px solid ${isOpen ? 'var(--primary-500)' : 'var(--neutral-200)'}`,
+          borderRadius: heroTone ? 0 : 'var(--radius-md)',
+          background: heroTone
+            ? 'transparent'
+            : (isOpen ? 'var(--primary-50)' : 'var(--neutral-0)'),
+          color: heroTone
+            ? 'var(--neutral-0)'
+            : (isOpen ? 'var(--primary-700)' : 'var(--neutral-700)'),
+          padding: heroTone ? 0 : 'var(--space-3) var(--space-4)',
           cursor: 'pointer',
           transition: 'all var(--transition-fast)',
-          boxShadow: isOpen ? 'var(--shadow-md)' : 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-2)',
+          boxShadow: heroTone ? 'none' : (isOpen ? 'var(--shadow-md)' : 'none'),
+          display: 'grid',
+          gap: heroTone ? 2 : 'var(--space-2)',
+          justifyItems: 'start',
+          textAlign: 'left',
         }}
       >
-        <span style={{ display: 'grid', textAlign: 'left', gap: 2 }}>
-          <span style={{ fontSize: 'var(--font-size-xs)', opacity: 0.72, fontWeight: 'var(--font-weight-semibold)', textTransform: 'uppercase' }}>{label}</span>
+        <span style={{ display: 'grid', textAlign: 'left', gap: 2, minWidth: 0 }}>
           <span
             style={{
-              fontSize: compactValue ? 'var(--font-size-xs)' : 'var(--font-size-sm)',
-              fontWeight: 'var(--font-weight-medium)',
+              fontSize: heroTone ? 9 : 'var(--font-size-xs)',
+              opacity: heroTone ? 0.68 : 0.72,
+              color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
+              fontWeight: 'var(--font-weight-semibold)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            {label}
+            <ChevronDown
+              size={12}
+              style={{
+                transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform var(--transition-fast)',
+                color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
+                flexShrink: 0,
+              }}
+            />
+          </span>
+          <span
+            style={{
+              fontSize: heroTone ? 13 : (compactValue ? 'var(--font-size-xs)' : 'var(--font-size-sm)'),
+              fontWeight: heroTone ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+              fontFamily: heroTone ? 'var(--font-mono)' : 'inherit',
+              color: heroTone ? 'var(--neutral-0)' : 'inherit',
               whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             {value}
           </span>
         </span>
-        <ChevronDown
-          size={16}
-          style={{
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform var(--transition-fast)',
-            flexShrink: 0,
-          }}
-        />
       </motion.button>
 
       <AnimatePresence>
@@ -473,15 +502,15 @@ function FilterDropdown({
               position: 'absolute',
               top: 'calc(100% + var(--space-2))',
               left: 0,
-              zIndex: 50,
+              zIndex: 220,
               background: 'var(--neutral-0)',
               border: '1px solid var(--neutral-200)',
               borderRadius: 'var(--radius-lg)',
               boxShadow: 'var(--shadow-lg)',
               padding: 'var(--space-3)',
-              width: '100%',
-              minWidth: '100%',
-              maxWidth: '100%',
+              width: fitContent ? 'max-content' : '100%',
+              minWidth: fitContent ? 132 : '100%',
+              maxWidth: fitContent ? 260 : '100%',
               maxHeight: 300,
               overflowY: 'auto',
               transformOrigin: 'top center',
@@ -541,7 +570,7 @@ export function Flux() {
   const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('expense')
   const [period, setPeriod] = useState<PeriodFilter>('month')
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('rolling')
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('current')
 
   const [showTypeSheet, setShowTypeSheet] = useState(false)
   const [showPeriodSheet, setShowPeriodSheet] = useState(false)
@@ -560,7 +589,7 @@ export function Flux() {
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
-  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('rolling')
+  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
   const [draftOnlyFixed, setDraftOnlyFixed] = useState(false)
   const [draftOnlyJoint, setDraftOnlyJoint] = useState(false)
   const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)
@@ -672,23 +701,6 @@ export function Flux() {
     setQuickParamPicker(null)
   }, [showAdvancedSheet, showCategorySheet, showHeaderCategorySheet])
 
-  const filterSummaryMainLabel = useMemo(() => {
-    const endIso = range.endDate ?? todayIso()
-    const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
-    const startIso = range.startDate ?? inferredStart
-    const start = formatDateLabel(startIso)
-    const end = formatDateLabel(endIso)
-    const flowPart = flow === 'expense'
-      ? 'dépenses'
-      : flow === 'income'
-        ? 'revenus'
-        : flow === 'transfer'
-          ? 'transferts internes'
-          : 'opérations'
-    const budgetPart = onlyFixed ? 'fixes' : 'variables'
-    const flowPartCapitalized = flowPart.slice(0, 1).toUpperCase() + flowPart.slice(1)
-    return `${flowPartCapitalized} ${budgetPart} du ${start} au ${end}`
-  }, [filtered, flow, onlyFixed, range.endDate, range.startDate])
   const selectedCategoryLabel = useMemo(() => {
     if (selectedCategoryId) return categoryById.get(selectedCategoryId)?.name ?? 'Catégorie'
     if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.name ?? 'Catégorie'
@@ -701,20 +713,30 @@ export function Flux() {
     return typeLabel
   }, [typeLabel])
   const cardPeriodValue = useMemo(() => {
-    if (period === 'month') {
-      const nowDate = new Date()
-      const month = nowDate.toLocaleDateString('fr-FR', { month: 'long' })
-      const year = nowDate.getFullYear()
-      return `${month.slice(0, 1).toUpperCase() + month.slice(1)} ${year}`
-    }
     if (period === 'day') return 'Jour'
     if (period === 'week') return 'Semaine'
-    if (period === 'year') return 'Année'
-    return periodLabel
+    if (period === 'month') return 'Mois'
+    if (period === 'year') {
+      const endIso = range.endDate ?? todayIso()
+      const year = new Date(endIso + 'T00:00:00').getFullYear()
+      return Number.isFinite(year) ? String(year) : String(new Date().getFullYear())
+    }
+    return periodLabel === 'Annee' ? String(new Date().getFullYear()) : periodLabel
   }, [period, periodLabel])
-  const cardBudgetValue = onlyFixed ? 'Budget fixe' : 'Budget variable'
-  const cardAccountValue = onlyJoint ? 'Compte joint' : 'Compte perso'
+  const cardBudgetValue = onlyFixed ? 'Fixe' : 'Variable'
+  const cardAccountValue = onlyJoint ? 'Joint' : 'Perso'
   const isTransferType = flow === 'transfer'
+  const selectedPeriodHeader = useMemo(() => {
+    const endIso = range.endDate ?? (filtered.length ? filtered[0].transaction_date : todayIso())
+    const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
+    const startIso = range.startDate ?? inferredStart
+
+    return {
+      startLabel: formatDateLabel(startIso),
+      endLabel: formatDateLabel(endIso),
+      text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)} - ${filtered.length} ${resultNoun(flow)}`,
+    }
+  }, [filtered, flow, range.endDate, range.startDate])
 
   const draftTypeLabel = FLOW_OPTIONS.find((o) => o.value === draftFlow)?.label ?? 'Depenses'
   const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
@@ -770,57 +792,34 @@ export function Flux() {
         transition={{ duration: 0.3 }}
         style={{ padding: '0 var(--space-6)' }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
-          <p
-            style={{
-              margin: 0,
-              textAlign: 'center',
-              fontSize: 'var(--font-size-kpi)',
-              fontWeight: 'var(--font-weight-extrabold)',
-              lineHeight: 'var(--line-height-tight)',
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--primary-700)',
-            }}
-          >
-            {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
-          </p>
-
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
           <div
             style={{
-              background: 'var(--viz-c)',
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-4) var(--space-6)',
-              boxShadow: 'var(--shadow-lg)',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 'var(--space-3)',
+              background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 88%, #000 12%) 0%, color-mix(in oklab, var(--color-warning) 70%, #000 30%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
+              borderRadius: 'var(--radius-2xl)',
+              padding: 'var(--space-6)',
+              boxShadow: 'var(--shadow-card)',
               position: 'relative',
+              overflow: 'visible',
             }}
           >
-            <div style={{ width: '100%', display: 'grid', justifyItems: 'center', textAlign: 'center', gap: '2px' }}>
-              <p
-                style={{
-                  margin: 0,
-                  width: '100%',
-                  fontSize: isTransferType ? 'var(--font-size-xs)' : 'var(--font-size-md)',
-                  fontWeight: 'var(--font-weight-bold)',
-                  color: 'var(--neutral-0)',
-                  opacity: 0.96,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {filterSummaryMainLabel}
+            <span style={{ position: 'absolute', right: -8, top: -12, fontSize: 88, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.06)', lineHeight: 1, userSelect: 'none', pointerEvents: 'none', letterSpacing: '-0.04em' }}>
+              FLUX
+            </span>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
+                {selectedPeriodHeader.text}
               </p>
             </div>
 
-            <div
-              style={{
-                width: '100%',
-                display: 'grid',
-                gridTemplateColumns: isMobileViewport ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
-                gap: 'var(--space-3)',
-              }}
-            >
+            <p style={{ margin: '8px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
+            </p>
+
+            <div style={{ margin: 'var(--space-5) 0 var(--space-4)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
               <div>
                 <FilterDropdown
                   id="type"
@@ -831,6 +830,8 @@ export function Flux() {
                   showMobileOverlay={isMobileViewport}
                   onToggle={() => setQuickParamPicker((current) => (current === 'type' ? null : 'type'))}
                   onClose={closeQuickPicker}
+                  heroTone
+                  fitContent
                   options={FLOW_OPTIONS.map((opt) => ({
                     value: opt.value,
                     label: opt.label,
@@ -852,6 +853,8 @@ export function Flux() {
                   showMobileOverlay={isMobileViewport}
                   onToggle={() => setQuickParamPicker((current) => (current === 'period' ? null : 'period'))}
                   onClose={closeQuickPicker}
+                  heroTone
+                  fitContent
                   headerContent={(
                     <SegmentedToggle
                       left="Fixe"
@@ -886,6 +889,8 @@ export function Flux() {
                   showMobileOverlay={isMobileViewport}
                   onToggle={() => setQuickParamPicker((current) => (current === 'fixed' ? null : 'fixed'))}
                   onClose={closeQuickPicker}
+                  heroTone
+                  fitContent
                   options={[
                     {
                       value: 'variable',
@@ -918,10 +923,12 @@ export function Flux() {
                   showMobileOverlay={isMobileViewport}
                   onToggle={() => setQuickParamPicker((current) => (current === 'account' ? null : 'account'))}
                   onClose={closeQuickPicker}
+                  heroTone
+                  fitContent
                   options={[
                     {
                       value: 'perso',
-                      label: 'Compte perso',
+                      label: 'Perso',
                       selected: !onlyJoint,
                       onSelect: () => {
                         setOnlyJoint(false)
@@ -930,7 +937,7 @@ export function Flux() {
                     },
                     {
                       value: 'joint',
-                      label: 'Compte joint',
+                      label: 'Joint',
                       selected: onlyJoint,
                       onSelect: () => {
                         setOnlyJoint(true)
