@@ -64,10 +64,12 @@ type SettingsListProps = {
   isRecurring: boolean
   accountMode: AccountMode
   canUseJoint: boolean
+  imputability: string
   onCategoryClick: () => void
   onBehaviorToggle: () => void
   onRecurringToggle: () => void
   onAccountModeToggle: () => void
+  onImputabilityToggle: () => void
 }
 
 const ALL_CATEGORY_TOKEN = '__all__'
@@ -105,21 +107,26 @@ function todayIso(): string {
 }
 
 function parseMoney(value: string): number | null {
-  const sanitized = value.replace(/\s/g, '').replace('€', '').replace(/,/g, '.').trim()
-  const parsed = Number(sanitized)
+  const normalized = value.replace(/\s/g, '').replace('€', '').replace(/,/g, '.').trim()
+  const sanitized = normalized.replace(/[^\d.]/g, '')
+  if (!sanitized) return null
+  const parts = sanitized.split('.')
+  if (parts.length > 2) return null
+  const [integerPart = '', decimalPart = ''] = parts
+  const rebuilt = decimalPart ? `${integerPart}.${decimalPart.slice(0, 2)}` : integerPart
+  const parsed = Number(rebuilt)
   if (!Number.isFinite(parsed)) return null
-  const floored = Math.floor(parsed)
-  if (floored <= 0) return null
-  return floored
+  if (parsed <= 0) return null
+  return Math.round(parsed * 100) / 100
 }
 
-function formatMoneyInteger(amount: number): string {
+function formatMoney(amount: number): string {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.floor(amount))
+    maximumFractionDigits: 2,
+  }).format(amount)
 }
 
 function isValidDate(value: string): boolean {
@@ -141,7 +148,17 @@ function readFormattedAmount(value: string, focused: boolean): string {
   if (focused) return value
   const parsed = parseMoney(value)
   if (parsed == null) return ''
-  return formatMoneyInteger(parsed)
+  return formatMoney(parsed)
+}
+
+function toAmountInputValue(value: string): string {
+  return value.replace(/\s/g, '').replace('€', '').replace(/,/g, '.').replace(/[^\d.]/g, '')
+}
+
+function imputabilityLabel(personalShareRatio: number): string {
+  if (personalShareRatio <= 0) return 'Non (0%)'
+  if (personalShareRatio <= 0.5) return 'Partagé (50%)'
+  return 'Personnel (100%)'
 }
 
 function budgetBehaviorLabel(value: BudgetBehavior): string {
@@ -173,9 +190,10 @@ function AmountInput({ value, focused, error, inputRef, onFocus, onBlur, onChang
         <input
           ref={inputRef}
           id="transaction-amount"
-          type={focused ? 'tel' : 'text'}
-          inputMode="numeric"
+          type="text"
+          inputMode="decimal"
           autoComplete="off"
+          autoFocus
           value={value}
           onFocus={onFocus}
           onBlur={onBlur}
@@ -241,10 +259,12 @@ function SettingsList({
   isRecurring,
   accountMode,
   canUseJoint,
+  imputability,
   onCategoryClick,
   onBehaviorToggle,
   onRecurringToggle,
   onAccountModeToggle,
+  onImputabilityToggle,
 }: SettingsListProps) {
   return (
     <section className="mx-[var(--space-6)]">
@@ -258,7 +278,7 @@ function SettingsList({
           onClick={onAccountModeToggle}
           disabled={!canUseJoint}
         />
-        <SettingsRow label="Imputabilité" value="Personnel (100%)" />
+        <SettingsRow label="Imputabilité" value={imputability} onClick={onImputabilityToggle} />
       </div>
     </section>
   )
@@ -606,6 +626,12 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     setValue('transactionType', nextType)
   }
 
+  const handleImputabilityToggle = () => {
+    const current = values.personalShareRatio
+    const next = current >= 1 ? 0.5 : current >= 0.5 ? 0 : 1
+    setValue('personalShareRatio', next)
+  }
+
   const onSubmit = async (formValues: FormValues) => {
     if (!user) return
 
@@ -785,8 +811,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   inputRef={amountRef}
                   onFocus={() => {
                     setAmountFocused(true)
-                    const parsed = parseMoney(values.amount)
-                    setValue('amount', parsed == null ? values.amount : String(parsed))
+                    setValue('amount', toAmountInputValue(values.amount))
                   }}
                   onBlur={() => {
                     setAmountFocused(false)
@@ -818,6 +843,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     isRecurring={values.isRecurring}
                     accountMode={values.accountMode}
                     canUseJoint={canUseJoint}
+                    imputability={imputabilityLabel(values.personalShareRatio)}
                     onCategoryClick={() => {
                       setPickerMode('category')
                       setPickerClosing('none')
@@ -825,6 +851,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     onBehaviorToggle={handleBehaviorToggle}
                     onRecurringToggle={handleRecurringToggle}
                     onAccountModeToggle={handleAccountModeToggle}
+                    onImputabilityToggle={handleImputabilityToggle}
                   />
                   <div className="px-[var(--space-6)]">
                     <FieldError message={errors.categoryId?.message} />
