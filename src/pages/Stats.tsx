@@ -9,6 +9,7 @@ import optimisationIcon from '@/assets/icons_app/optimisation.png'
 import epargneIcon from '@/assets/icons_app/epargne.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
+import { Annual2026Tab } from '@/features/annual-analysis/components/Annual2026Tab'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetBucketsCard'
 import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
@@ -19,7 +20,7 @@ import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
 
 const optimizationTableColumns = 'minmax(0,1.25fr) minmax(0,0.72fr) minmax(0,0.84fr) minmax(0,0.84fr)'
 
-type StatsTabId = 'analytics' | 'analytics_2025' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics' | 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -28,6 +29,7 @@ type StatsTabConfig = {
 
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics', label: 'analytics 2026', iconSrc: analyticsIcon },
+  { id: 'analytics_2026', label: 'plan 2026', iconSrc: analyticsIcon },
   { id: 'analytics_2025', label: 'analytics 2025', iconSrc: analyticsIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
@@ -252,6 +254,10 @@ export function Stats() {
         <Annual2025Tab />
       ) : null}
 
+      {activeTab.id === 'analytics_2026' ? (
+        <Annual2026Tab />
+      ) : null}
+
       {activeTab.id === 'optimisation' ? (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -381,7 +387,7 @@ export function Stats() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-4) var(--space-1)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 'var(--space-4) var(--space-1)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 

@@ -1,0 +1,377 @@
+{
+  "meta": {
+    "analysis_year": 2025,
+    "currency": "EUR",
+    "ratio_fields_are_unit_ratios": true,
+    "percentage_example": {
+      "raw": 0.207749,
+      "display": "20,8 %"
+    }
+  },
+  "annualTotals": {
+    "expense_total_year": 38143.78,
+    "income_total_year": 85562.45,
+    "savings_total_year": 16042.11,
+    "net_cashflow_year": 31376.56,
+    "avg_monthly_expense": 3178.65
+  },
+  "keyInsights": {
+    "largest_leaf_expense": {
+      "title": "Plus gros poste annuel",
+      "subtitle": "Achats divers",
+      "insight_level": "warning",
+      "value_text": "Retraits d'espèces",
+      "value_numeric": 5825.0,
+      "parent_category_name": "Achats divers",
+      "share_of_year_expense_pct": 0.152712,
+      "rank_in_year": 1
+    },
+    "largest_parent_expense": {
+      "title": "Catégorie dominante",
+      "subtitle": "Famille de dépenses la plus lourde sur l’année",
+      "insight_level": "warning",
+      "value_text": "Achats divers",
+      "value_numeric": 15862.94,
+      "share_of_year_expense_pct": 0.415872,
+      "rank_in_year": 1
+    },
+    "dominant_bucket": {
+      "title": "Bloc dominant",
+      "subtitle": "Bucket le plus lourd sur 2025",
+      "insight_level": "warning",
+      "value_text": "provision",
+      "value_numeric": 7924.34,
+      "share_of_year_expense_pct": 0.207749,
+      "rank_in_year": 1
+    },
+    "hors_pilotage_alert": {
+      "title": "Poids du hors pilotage",
+      "subtitle": "Part des dépenses encore mal classées / peu pilotables",
+      "insight_level": "alert",
+      "value_text": null,
+      "value_numeric": 7726.32,
+      "share_of_year_expense_pct": 0.202558
+    },
+    "cash_withdrawals_alert": {
+      "title": "Poids des retraits d'espèces",
+      "subtitle": "Poste opaque à surveiller / requalifier",
+      "insight_level": "alert",
+      "value_text": "Retraits d'espèces",
+      "value_numeric": 5825.0,
+      "parent_category_name": "Achats divers",
+      "share_of_year_expense_pct": 0.152712
+    }
+  },
+  "yearlyBuckets": [
+    {
+      "rank_in_year": 1,
+      "budget_bucket": "provision",
+      "amount_total_year": 7924.34,
+      "share_of_year_expense_pct": 0.207749
+    },
+    {
+      "rank_in_year": 2,
+      "budget_bucket": "discretionnaire",
+      "amount_total_year": 7865.22,
+      "share_of_year_expense_pct": 0.206199
+    },
+    {
+      "rank_in_year": 3,
+      "budget_bucket": "hors_pilotage",
+      "amount_total_year": 7726.32,
+      "share_of_year_expense_pct": 0.202558
+    },
+    {
+      "rank_in_year": 4,
+      "budget_bucket": "socle_fixe",
+      "amount_total_year": 6831.94,
+      "share_of_year_expense_pct": 0.17911
+    },
+    {
+      "rank_in_year": 5,
+      "budget_bucket": "cagnotte_projet",
+      "amount_total_year": 4168.55,
+      "share_of_year_expense_pct": 0.109285
+    },
+    {
+      "rank_in_year": 6,
+      "budget_bucket": "variable_essentielle",
+      "amount_total_year": 3627.41,
+      "share_of_year_expense_pct": 0.095098
+    }
+  ],
+  "topParentCategories": [
+    {
+      "rank_in_year": 1,
+      "category_name": "Achats divers",
+      "amount_total_year": 15862.94,
+      "share_of_year_expense_pct": 0.415872
+    },
+    {
+      "rank_in_year": 2,
+      "category_name": "Logement",
+      "amount_total_year": 5999.96,
+      "share_of_year_expense_pct": 0.157299
+    },
+    {
+      "rank_in_year": 3,
+      "category_name": "Alimentation",
+      "amount_total_year": 5386.96,
+      "share_of_year_expense_pct": 0.141228
+    },
+    {
+      "rank_in_year": 4,
+      "category_name": "Business",
+      "amount_total_year": 3810.35,
+      "share_of_year_expense_pct": 0.099894
+    },
+    {
+      "rank_in_year": 5,
+      "category_name": "Voyages",
+      "amount_total_year": 2259.52,
+      "share_of_year_expense_pct": 0.059237
+    }
+  ],
+  "topLeafCategories": [
+    {
+      "rank_in_year": 1,
+      "category_name": "Retraits d'espèces",
+      "parent_category_name": "Achats divers",
+      "amount_total_year": 5825.0,
+      "share_of_year_expense_pct": 0.152712
+    },
+    {
+      "rank_in_year": 2,
+      "category_name": "Frais exceptionnels",
+      "parent_category_name": "Achats divers",
+      "amount_total_year": 5063.23,
+      "share_of_year_expense_pct": 0.132741
+    },
+    {
+      "rank_in_year": 3,
+      "category_name": "Loyer / crédit",
+      "parent_category_name": "Logement",
+      "amount_total_year": 4930.38,
+      "share_of_year_expense_pct": 0.129258
+    },
+    {
+      "rank_in_year": 4,
+      "category_name": "Courses",
+      "parent_category_name": "Alimentation",
+      "amount_total_year": 2383.83,
+      "share_of_year_expense_pct": 0.062496
+    },
+    {
+      "rank_in_year": 5,
+      "category_name": "Petits achats alimentaires",
+      "parent_category_name": "Alimentation",
+      "amount_total_year": 2288.08,
+      "share_of_year_expense_pct": 0.059986
+    }
+  ],
+  "seasonality": {
+    "peak_month": {
+      "period_month": 11,
+      "label": "Novembre",
+      "amount_total": 5487.74,
+      "rank_desc": 1
+    },
+    "low_month": {
+      "period_month": 9,
+      "label": "Septembre",
+      "amount_total": 1724.52,
+      "rank_asc": 1
+    },
+    "spread": {
+      "peak_month_label": "Novembre",
+      "low_month_label": "Septembre",
+      "peak_amount": 5487.74,
+      "low_amount": 1724.52,
+      "spread_amount": 3763.22
+    },
+    "expenseSeasonalityRanking": [
+      {
+        "period_month": 1,
+        "label": "Janvier",
+        "amount_total": 3583.4,
+        "rank_desc": 4,
+        "rank_asc": 9
+      },
+      {
+        "period_month": 2,
+        "label": "Février",
+        "amount_total": 2285.78,
+        "rank_desc": 10,
+        "rank_asc": 3
+      },
+      {
+        "period_month": 3,
+        "label": "Mars",
+        "amount_total": 4523.97,
+        "rank_desc": 2,
+        "rank_asc": 11
+      },
+      {
+        "period_month": 4,
+        "label": "Avril",
+        "amount_total": 1729.74,
+        "rank_desc": 11,
+        "rank_asc": 2
+      },
+      {
+        "period_month": 5,
+        "label": "Mai",
+        "amount_total": 2829.59,
+        "rank_desc": 8,
+        "rank_asc": 5
+      },
+      {
+        "period_month": 6,
+        "label": "Juin",
+        "amount_total": 4274.36,
+        "rank_desc": 3,
+        "rank_asc": 10
+      },
+      {
+        "period_month": 7,
+        "label": "Juillet",
+        "amount_total": 2852.24,
+        "rank_desc": 7,
+        "rank_asc": 6
+      },
+      {
+        "period_month": 8,
+        "label": "Août",
+        "amount_total": 2910.25,
+        "rank_desc": 6,
+        "rank_asc": 7
+      },
+      {
+        "period_month": 9,
+        "label": "Septembre",
+        "amount_total": 1724.52,
+        "rank_desc": 12,
+        "rank_asc": 1
+      },
+      {
+        "period_month": 10,
+        "label": "Octobre",
+        "amount_total": 2786.89,
+        "rank_desc": 9,
+        "rank_asc": 4
+      },
+      {
+        "period_month": 11,
+        "label": "Novembre",
+        "amount_total": 5487.74,
+        "rank_desc": 1,
+        "rank_asc": 12
+      },
+      {
+        "period_month": 12,
+        "label": "Décembre",
+        "amount_total": 3155.3,
+        "rank_desc": 5,
+        "rank_asc": 8
+      }
+    ]
+  },
+  "monthlyProfile": [
+    {
+      "period_month": 1,
+      "label": "Janvier",
+      "expense_total": 3583.4,
+      "income_total": 27438.78,
+      "savings_total": 2000.0,
+      "net_cashflow": 21855.38
+    },
+    {
+      "period_month": 2,
+      "label": "Février",
+      "expense_total": 2285.78,
+      "income_total": 3288.6,
+      "savings_total": 12000.0,
+      "net_cashflow": -10997.18
+    },
+    {
+      "period_month": 3,
+      "label": "Mars",
+      "expense_total": 4523.97,
+      "income_total": 3822.6,
+      "savings_total": 1000.0,
+      "net_cashflow": -1701.37
+    },
+    {
+      "period_month": 4,
+      "label": "Avril",
+      "expense_total": 1729.74,
+      "income_total": 7591.48,
+      "savings_total": 0.0,
+      "net_cashflow": 5861.74
+    },
+    {
+      "period_month": 5,
+      "label": "Mai",
+      "expense_total": 2829.59,
+      "income_total": 3877.28,
+      "savings_total": 0.0,
+      "net_cashflow": 1047.69
+    },
+    {
+      "period_month": 6,
+      "label": "Juin",
+      "expense_total": 4274.36,
+      "income_total": 3232.67,
+      "savings_total": 0.0,
+      "net_cashflow": -1041.69
+    },
+    {
+      "period_month": 7,
+      "label": "Juillet",
+      "expense_total": 2852.24,
+      "income_total": 14162.39,
+      "savings_total": 0.0,
+      "net_cashflow": 11310.15
+    },
+    {
+      "period_month": 8,
+      "label": "Août",
+      "expense_total": 2910.25,
+      "income_total": 3435.53,
+      "savings_total": 0.0,
+      "net_cashflow": 525.28
+    },
+    {
+      "period_month": 9,
+      "label": "Septembre",
+      "expense_total": 1724.52,
+      "income_total": 2795.09,
+      "savings_total": 0.0,
+      "net_cashflow": 1070.57
+    },
+    {
+      "period_month": 10,
+      "label": "Octobre",
+      "expense_total": 2786.89,
+      "income_total": 7607.01,
+      "savings_total": 0.0,
+      "net_cashflow": 4820.12
+    },
+    {
+      "period_month": 11,
+      "label": "Novembre",
+      "expense_total": 5487.74,
+      "income_total": 5330.82,
+      "savings_total": 0.0,
+      "net_cashflow": -156.92
+    },
+    {
+      "period_month": 12,
+      "label": "Décembre",
+      "expense_total": 3155.3,
+      "income_total": 2980.2,
+      "savings_total": 1042.11,
+      "net_cashflow": -1217.21
+    }
+  ]
+}
