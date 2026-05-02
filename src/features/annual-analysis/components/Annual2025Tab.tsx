@@ -23,7 +23,7 @@ export function Annual2025Tab() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      style={{ display: 'grid', gap: 'var(--space-6)' }}
+      style={{ display: 'grid', gap: 'var(--space-7)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
     >
       {annualTotals ? (
         <AnnualOverviewHero data={annualTotals} />
@@ -57,21 +57,15 @@ export function Annual2025Tab() {
 
 function Annual2025Skeleton() {
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-6)' }}>
+    <div style={{ display: 'grid', gap: 'var(--space-7)', padding: '0 var(--space-6)', paddingBottom: 'calc(var(--space-8) + 56px)' }}>
       {/* Hero skeleton */}
-      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', display: 'grid', gap: 'var(--space-3)' }}>
-        <SkeletonBlock height={100} radius="var(--radius-2xl)" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-          <SkeletonBlock height={80} radius="var(--radius-xl)" />
-          <SkeletonBlock height={80} radius="var(--radius-xl)" />
-          <SkeletonBlock height={80} radius="var(--radius-xl)" />
-          <SkeletonBlock height={80} radius="var(--radius-xl)" />
-        </div>
+      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%' }}>
+        <SkeletonBlock height={168} radius="var(--radius-2xl)" />
       </div>
 
-      {/* Insights skeleton */}
-      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', display: 'grid', gap: 'var(--space-3)' }}>
-        {[72, 68, 72, 84, 84].map((h, i) => (
+      {/* Insights skeleton — 2-col */}
+      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+        {[88, 80, 88, 80, 80].map((h, i) => (
           <SkeletonBlock key={i} height={h} radius="var(--radius-xl)" />
         ))}
       </div>
@@ -80,6 +74,7 @@ function Annual2025Skeleton() {
       <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', display: 'grid', gap: 'var(--space-4)' }}>
         <SkeletonBlock height={280} radius="var(--radius-2xl)" />
         <SkeletonBlock height={240} radius="var(--radius-2xl)" />
+        <SkeletonBlock height={200} radius="var(--radius-2xl)" />
       </div>
     </div>
   )

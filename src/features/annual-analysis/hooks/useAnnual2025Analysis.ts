@@ -39,7 +39,7 @@ function parseMonthlyProfile(insight: Annual2025InsightRow | undefined): Monthly
       month_label: typeof item.month_label === 'string' ? item.month_label : `M${asNumber(item.period_month)}`,
       expense_total: asNumber(item.expense_total),
       income_total: asNumber(item.income_total),
-      savings_capacity: asNumber(item.savings_capacity),
+      savings_capacity: asNumber(item.savings_capacity ?? item.savings_total),
       net_cashflow: asNumber(item.net_cashflow),
     }
   })
@@ -52,11 +52,11 @@ function parseTop5Categories(insight: Annual2025InsightRow | undefined): Top5Cat
   return rows.map((c: unknown) => {
     const item = c as Record<string, unknown>
     return {
-      rank: asNumber(item.rank),
+      rank: asNumber(item.rank ?? item.rank_in_year),
       category_name: typeof item.category_name === 'string' ? item.category_name : '',
       parent_category_name: typeof item.parent_category_name === 'string' ? item.parent_category_name : null,
-      amount: asNumber(item.amount),
-      pct: asNumber(item.pct),
+      amount: asNumber(item.amount ?? item.amount_total_year),
+      pct: asNumber(item.pct ?? item.share_of_year_expense_pct),
     }
   })
 }

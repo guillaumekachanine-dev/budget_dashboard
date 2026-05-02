@@ -1,5 +1,6 @@
 import type { Top5CategoryItem } from '@/features/annual-analysis/types'
-import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
+import { formatCurrencyRounded as formatCurrency } from '@/lib/utils'
+import { formatPct } from './_constants'
 
 type Props = {
   top5ParentCategories: Top5CategoryItem[]
@@ -12,15 +13,15 @@ export function AnnualTopCategoriesSection({ top5ParentCategories, top5LeafCateg
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
         <h2 style={styles.sectionTitle}>Classements 2025</h2>
         <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
-          <TopListCard
-            title="Top 5 catégories"
-            subtitle="Familles de dépenses les plus importantes"
+          <RankCard
+            title="Top familles de dépenses"
+            subtitle="Catégories parentes"
             items={top5ParentCategories}
             showParent={false}
           />
-          <TopListCard
-            title="Top 5 sous-catégories"
-            subtitle="Postes les plus importants toutes familles confondues"
+          <RankCard
+            title="Top sous-catégories"
+            subtitle="Postes les plus importants"
             items={top5LeafCategories}
             showParent
           />
@@ -30,7 +31,7 @@ export function AnnualTopCategoriesSection({ top5ParentCategories, top5LeafCateg
   )
 }
 
-function TopListCard({
+function RankCard({
   title,
   subtitle,
   items,
@@ -41,6 +42,8 @@ function TopListCard({
   items: Top5CategoryItem[]
   showParent: boolean
 }) {
+  const maxAmount = items.reduce((m, i) => Math.max(m, i.amount), 0)
+
   return (
     <div style={styles.card}>
       <h3 style={styles.cardTitle}>{title}</h3>
@@ -49,17 +52,14 @@ function TopListCard({
       {items.length === 0 ? (
         <p style={styles.empty}>Aucune donnée disponible.</p>
       ) : (
-        <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 0 }}>
-          {/* Header */}
-          <div style={{ ...styles.row, borderBottom: '1px solid var(--neutral-200)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-            <span style={styles.headerCell}>#</span>
-            <span style={{ ...styles.headerCell, textAlign: 'left' }}>Catégorie</span>
-            <span style={{ ...styles.headerCell, textAlign: 'right' }}>%</span>
-            <span style={{ ...styles.headerCell, textAlign: 'right' }}>Montant</span>
-          </div>
-
+        <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
           {items.map((item, index) => (
-            <RankRow key={item.rank ?? index} item={item} showParent={showParent} isLast={index === items.length - 1} />
+            <RankRow
+              key={item.rank ?? index}
+              item={item}
+              showParent={showParent}
+              maxAmount={maxAmount}
+            />
           ))}
         </div>
       )}
@@ -67,71 +67,102 @@ function TopListCard({
   )
 }
 
-function RankRow({ item, showParent, isLast }: { item: Top5CategoryItem; showParent: boolean; isLast: boolean }) {
-  const rankColors = ['var(--primary-500)', 'var(--neutral-700)', 'var(--neutral-500)', 'var(--neutral-400)', 'var(--neutral-400)']
-  const rankColor = rankColors[(item.rank ?? 1) - 1] ?? 'var(--neutral-400)'
+const RANK_ACCENTS = ['#5B57F5', '#7B77FF', '#9E9BFF', '#B0BEC5', '#CFD8DC']
+
+function RankRow({
+  item,
+  showParent,
+  maxAmount,
+}: {
+  item: Top5CategoryItem
+  showParent: boolean
+  maxAmount: number
+}) {
+  const barWidth = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0
+  const rank = item.rank ?? 0
+  const accentColor = RANK_ACCENTS[(rank - 1) % RANK_ACCENTS.length] ?? '#B0BEC5'
 
   return (
-    <div style={{
-      ...styles.row,
-      borderBottom: isLast ? 'none' : '1px solid var(--neutral-100)',
-      padding: '10px 0',
-    }}>
-      {/* Rang */}
-      <span style={{
-        fontFamily: 'var(--font-mono)',
-        fontWeight: 'var(--font-weight-bold)',
-        fontSize: 'var(--font-size-sm)',
-        color: rankColor,
-        textAlign: 'center',
-      }}>
-        {item.rank ?? '—'}
-      </span>
-
-      {/* Nom */}
-      <span style={{ display: 'grid', gap: 1 }}>
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr auto', gap: 10, alignItems: 'baseline' }}>
+        {/* Rang */}
         <span style={{
-          fontSize: 'var(--font-size-sm)',
-          fontWeight: 'var(--font-weight-semibold)',
-          color: 'var(--neutral-800)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          fontWeight: 700,
+          color: accentColor,
+          textAlign: 'right',
+          lineHeight: 1,
         }}>
-          {item.category_name}
+          {rank}
         </span>
-        {showParent && item.parent_category_name ? (
+
+        {/* Nom + parent */}
+        <span style={{ minWidth: 0 }}>
           <span style={{
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 600,
+            color: 'var(--neutral-800)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'block',
+          }}>
+            {item.category_name}
+          </span>
+          {showParent && item.parent_category_name ? (
+            <span style={{
+              display: 'block',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--neutral-400)',
+              marginTop: 1,
+            }}>
+              {item.parent_category_name}
+            </span>
+          ) : null}
+        </span>
+
+        {/* % + montant */}
+        <span style={{ textAlign: 'right', flexShrink: 0 }}>
+          <span style={{
+            display: 'block',
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 700,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--neutral-900)',
+            whiteSpace: 'nowrap',
+          }}>
+            {formatCurrency(item.amount)}
+          </span>
+          <span style={{
+            display: 'block',
             fontSize: 'var(--font-size-xs)',
             color: 'var(--neutral-400)',
+            fontFamily: 'var(--font-mono)',
+            marginTop: 1,
           }}>
-            {item.parent_category_name}
+            {formatPct(item.pct)}%
           </span>
-        ) : null}
-      </span>
+        </span>
+      </div>
 
-      {/* % */}
-      <span style={{
-        fontSize: 'var(--font-size-sm)',
-        color: 'var(--neutral-500)',
-        fontFamily: 'var(--font-mono)',
-        textAlign: 'right',
-        whiteSpace: 'nowrap',
+      {/* Progress bar */}
+      <div style={{
+        marginTop: 6,
+        marginLeft: 30,
+        height: 3,
+        borderRadius: 99,
+        background: 'var(--neutral-100)',
+        overflow: 'hidden',
       }}>
-        {item.pct.toFixed(1)}%
-      </span>
-
-      {/* Montant */}
-      <span style={{
-        fontSize: 'var(--font-size-sm)',
-        fontWeight: 'var(--font-weight-semibold)',
-        color: 'var(--neutral-900)',
-        fontFamily: 'var(--font-mono)',
-        textAlign: 'right',
-        whiteSpace: 'nowrap',
-      }}>
-        {formatCurrency(item.amount)}
-      </span>
+        <div style={{
+          height: '100%',
+          width: `${barWidth.toFixed(1)}%`,
+          borderRadius: 99,
+          background: accentColor,
+          transition: 'width 0.4s ease',
+        }} />
+      </div>
     </div>
   )
 }
@@ -148,31 +179,21 @@ const styles = {
     borderRadius: 'var(--radius-2xl)',
     boxShadow: 'var(--shadow-card)',
     border: '1px solid var(--neutral-150)',
-    padding: 'var(--space-4)',
+    padding: 'var(--space-5)',
   } as React.CSSProperties,
   cardTitle: {
     margin: 0,
-    fontSize: 'var(--font-size-md)',
+    fontSize: 'var(--font-size-base)',
     fontWeight: 'var(--font-weight-bold)',
     color: 'var(--neutral-900)',
   } as React.CSSProperties,
   cardSubtitle: {
     margin: '3px 0 0',
-    fontSize: 'var(--font-size-sm)',
-    color: 'var(--neutral-500)',
-  } as React.CSSProperties,
-  row: {
-    display: 'grid',
-    gridTemplateColumns: '28px 1fr 44px 80px',
-    alignItems: 'center',
-    gap: 'var(--space-2)',
-  } as React.CSSProperties,
-  headerCell: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: 'var(--neutral-500)',
+    fontSize: 'var(--font-size-xs)',
+    color: 'var(--neutral-400)',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
+    fontWeight: 600,
   } as React.CSSProperties,
   empty: {
     margin: 'var(--space-4) 0 0',
