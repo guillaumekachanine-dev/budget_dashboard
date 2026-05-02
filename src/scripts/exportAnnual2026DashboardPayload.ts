@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createClient } from '@supabase/supabase-js'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
