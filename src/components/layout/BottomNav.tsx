@@ -85,7 +85,7 @@ const rootStyle: CSSProperties = {
   position: 'fixed',
   left: 0,
   right: 0,
-  bottom: 0,
+  bottom: 'calc(var(--safe-bottom-compensation) * -1)',
   zIndex: 50,
   maxWidth: 'var(--page-max-width)',
   margin: '0 auto',
@@ -93,7 +93,8 @@ const rootStyle: CSSProperties = {
 
 const navStyle: CSSProperties = {
   position: 'relative',
-  minHeight: 'calc(var(--nav-base-height) + var(--safe-bottom-offset))',
+  boxSizing: 'border-box',
+  height: 'calc(var(--nav-base-height) + var(--safe-bottom-offset))',
   paddingBottom: 'var(--safe-bottom-offset)',
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
   borderTop: 'none',
