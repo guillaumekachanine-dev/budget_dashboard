@@ -2,6 +2,10 @@ import type { Annual2025InsightRow } from '@/features/annual-analysis/types'
 import { formatCurrency } from '@/features/stats/utils/statsReferenceSelectors'
 import { LEVEL_CONFIG } from './_constants'
 
+function objPayload(row: Annual2025InsightRow): Record<string, unknown> {
+  return Array.isArray(row.payload) ? {} : row.payload
+}
+
 type Props = {
   insightByKey: Record<string, Annual2025InsightRow>
 }
@@ -11,7 +15,7 @@ const INSIGHT_KEYS_CONFIG = [
     key: 'largest_leaf_expense',
     title: 'Plus gros poste annuel',
     renderBody: (row: Annual2025InsightRow) => {
-      const parentName = row.payload.parent_category_name as string | undefined
+      const parentName = objPayload(row).parent_category_name as string | undefined
       return (
         <>
           <p style={styles.insightValue}>{row.value_text ?? '—'}</p>
@@ -29,7 +33,7 @@ const INSIGHT_KEYS_CONFIG = [
     key: 'largest_parent_expense',
     title: 'Famille dominante',
     renderBody: (row: Annual2025InsightRow) => {
-      const pct = row.payload.pct as number | undefined
+      const pct = objPayload(row).pct as number | undefined
       return (
         <>
           <p style={styles.insightValue}>{row.value_text ?? '—'}</p>
@@ -47,7 +51,7 @@ const INSIGHT_KEYS_CONFIG = [
     key: 'dominant_bucket',
     title: 'Bloc dominant',
     renderBody: (row: Annual2025InsightRow) => {
-      const pct = row.payload.pct as number | undefined
+      const pct = objPayload(row).pct as number | undefined
       return (
         <>
           <p style={styles.insightValue}>{row.value_text ?? '—'}</p>
@@ -65,7 +69,7 @@ const INSIGHT_KEYS_CONFIG = [
     key: 'hors_pilotage_alert',
     title: 'Hors pilotage',
     renderBody: (row: Annual2025InsightRow) => {
-      const pct = row.payload.pct as number | undefined
+      const pct = objPayload(row).pct as number | undefined
       return (
         <>
           {row.value_numeric != null ? (
@@ -85,7 +89,7 @@ const INSIGHT_KEYS_CONFIG = [
     key: 'cash_withdrawals_alert',
     title: 'Retraits espèces',
     renderBody: (row: Annual2025InsightRow) => {
-      const pct = row.payload.pct as number | undefined
+      const pct = objPayload(row).pct as number | undefined
       return (
         <>
           {row.value_numeric != null ? (
