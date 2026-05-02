@@ -18,7 +18,6 @@ import {
   YAxis,
 } from 'recharts'
 import type { MonthlyBudget2026Point } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import type { Budget2026BucketSummary } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { BUCKET_COLORS, BUCKET_LABELS, BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
 
 const fmt = (n: number) =>
