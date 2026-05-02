@@ -1,0 +1,1621 @@
+{
+  "meta": {
+    "analysis_year": 2026,
+    "currency": "EUR",
+    "generated_at": "2026-05-02T11:37:18.553Z",
+    "source": "supabase_live",
+    "ratio_fields_are_unit_ratios": true
+  },
+  "periods": {
+    "available_months": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "latest_available_month": 5,
+    "latest_available_period": {
+      "period_year": 2026,
+      "period_month": 5
+    }
+  },
+  "current_reference_month": {
+    "period_year": 2026,
+    "period_month": 5,
+    "label": "Mai 2026",
+    "expense_budget_total": 5664.16,
+    "savings_target_total": 500,
+    "total_monthly_need": 6164.16
+  },
+  "budget_monthly_series": [
+    {
+      "period_year": 2026,
+      "period_month": 1,
+      "label": "Janvier 2026",
+      "period_id": "238b36b6-cb65-426c-ae75-ead436fe7ad3",
+      "total_budget_monthly": 5664.16,
+      "global_variable_budget": 2140,
+      "category_budget_total": 3524.16,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 2,
+      "label": "Février 2026",
+      "period_id": "233460ce-7ef6-485e-9976-9c9aac725430",
+      "total_budget_monthly": 5664.16,
+      "global_variable_budget": 2140,
+      "category_budget_total": 3524.16,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 3,
+      "label": "Mars 2026",
+      "period_id": "afbd4dab-bf85-42cd-ae84-da7ae704f5d2",
+      "total_budget_monthly": 5664.16,
+      "global_variable_budget": 2140,
+      "category_budget_total": 3524.16,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 4,
+      "label": "Avril 2026",
+      "period_id": "593ccc7d-6d38-4e99-9542-7dbc38bbc366",
+      "total_budget_monthly": 5664.16,
+      "global_variable_budget": 2140,
+      "category_budget_total": 3524.16,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 5,
+      "label": "Mai 2026",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "total_budget_monthly": 5664.16,
+      "global_variable_budget": 2140,
+      "category_budget_total": 3524.16,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 6,
+      "label": "Juin 2026",
+      "period_id": "3447e2e8-7eb0-49ed-93b3-bbf6fd62c1f8",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 7,
+      "label": "Juillet 2026",
+      "period_id": "5ccbc1be-ce2c-4e4e-8fe9-510dac3b0ed6",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 8,
+      "label": "Août 2026",
+      "period_id": "92f2326a-613a-46a6-b100-62c450747a78",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 9,
+      "label": "Septembre 2026",
+      "period_id": "4da7f261-7f89-438a-a5bf-72406f542a29",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 10,
+      "label": "Octobre 2026",
+      "period_id": "9c54fc70-f4d0-42ae-8a30-6f0a27da49a9",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 11,
+      "label": "Novembre 2026",
+      "period_id": "36fe4374-92d9-433e-b080-3d68c8fe4056",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 12,
+      "label": "Décembre 2026",
+      "period_id": "95d55dc4-7924-4a3b-bc56-bb5de6734bf9",
+      "total_budget_monthly": 0,
+      "global_variable_budget": 0,
+      "category_budget_total": 0,
+      "buckets": []
+    }
+  ],
+  "budget_lines_current_month": [
+    {
+      "id": "8aa49b4d-2930-42d8-b8bb-28a266e529f5",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "882f3400-64e8-4169-874f-7d5d85a8cefb",
+      "category_name": "Projet / apport",
+      "parent_category_id": "e34c9eb5-bca4-4abc-b936-b4488b9bfbc8",
+      "parent_category_name": "Épargne",
+      "flow_type": "savings",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 200,
+      "currency": "EUR",
+      "notes": "Budget épargne mensuelle ; Épargne projet / apport mensuelle"
+    },
+    {
+      "id": "2c4a916c-1744-4bda-a719-7d208b9c27e6",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "fcc861cf-2238-4f0d-831f-3ace93f4f503",
+      "category_name": "IT",
+      "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+      "parent_category_name": "Abonnements",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 16.48,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "60392c9b-b529-4e73-afb5-3e7c73076533",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "94782c8a-e0bc-4fcb-83da-9d0538d30e78",
+      "category_name": "LLM",
+      "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+      "parent_category_name": "Abonnements",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 52.3,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "3fee4c60-ca3f-4875-951e-6ea562083e89",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "64922f30-6f58-4d2b-a347-ecc7188f745d",
+      "category_name": "Téléphonie mobile",
+      "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+      "parent_category_name": "Abonnements",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 15.99,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "849909c7-b920-4896-8e08-2885d0368b78",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "6f41651a-e356-4688-8a8e-9e7bfd346da6",
+      "category_name": "Amazon / e-commerce",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 30,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_15"
+    },
+    {
+      "id": "608c17eb-657f-4166-9f70-8724bbe24dfe",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "9f2478b6-c10d-4a19-b250-db8ab2135d55",
+      "category_name": "Cadeaux",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 155,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "ec13214b-0817-4f03-be37-4889bdbc347f",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "fdc7d61b-660d-4435-86fa-932ccc8beef3",
+      "category_name": "Coiffeur",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 20,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "3d3e60dc-a32b-4b9d-91b0-51afd96dd559",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "45e43429-edda-445e-bbd3-a5fc64e32e82",
+      "category_name": "Divers",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 130,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_15"
+    },
+    {
+      "id": "189db886-abc2-45ee-b482-341e58381cc3",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "77437c76-b278-4b1d-b155-d9c23fec1b2b",
+      "category_name": "Frais exceptionnels",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 320,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "21ee396d-c66d-41b9-a380-eccd3a5962f3",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "ba5352f4-9821-48e9-97d2-a393e15a6315",
+      "category_name": "Maison",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "6182db3c-1250-4d36-a049-2155d679648c",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "7f37d3d2-936f-4f63-aeb7-a65c1e0bdff8",
+      "category_name": "Vêtements",
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 85,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "58863551-12c6-4e28-b9b0-a6fa7e1495b5",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "7f36cd1e-382f-49d7-bb9b-365b94e5c662",
+      "category_name": "Alimentation rapide",
+      "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+      "parent_category_name": "Alimentation",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 60,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "b89474a0-78f6-48a0-acc5-45e6ac10eeff",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "0ca5d9ef-c516-4a1c-9dbe-45f9f6cd745b",
+      "category_name": "Courses",
+      "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+      "parent_category_name": "Alimentation",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 250,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_08"
+    },
+    {
+      "id": "7c906d99-a868-49c7-b20f-da72c508025c",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "42edccae-fcc9-4ab7-8d41-851dc6dc606c",
+      "category_name": "Abonnements professionnels",
+      "parent_category_id": "d9f6c514-8c29-4657-80f5-26b44bafd531",
+      "parent_category_name": "Business",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "974ceae8-752d-4797-833f-4f50e804a0d0",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "e001158e-5f46-4da9-9e72-6391efb4b94a",
+      "category_name": "Achats professionnels",
+      "parent_category_id": "d9f6c514-8c29-4657-80f5-26b44bafd531",
+      "parent_category_name": "Business",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 60,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "54ab9793-8222-4f87-98d9-e332ad74d9d0",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "b74ba5fd-344f-4dde-86c5-5d4f67d1c1a6",
+      "category_name": "Formations",
+      "parent_category_id": "d9f6c514-8c29-4657-80f5-26b44bafd531",
+      "parent_category_name": "Business",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 80,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "1beca21a-e3b7-4550-ad42-e1eee3379969",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "55ef5a28-ae75-49ca-85d7-27d95defba7f",
+      "category_name": "Achats bébé",
+      "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+      "parent_category_name": "Famille / enfant",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 145,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_08"
+    },
+    {
+      "id": "7117963b-d162-439b-b392-76a43cb4645a",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "6a5b0a0a-806d-4fdc-a563-5b86b7a2b696",
+      "category_name": "Divers enfant",
+      "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+      "parent_category_name": "Famille / enfant",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_10"
+    },
+    {
+      "id": "629ccfd7-8abb-4109-887d-237219b49647",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "f50868fc-4de2-4651-b09f-de315d7e929e",
+      "category_name": "Frais bancaires",
+      "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+      "parent_category_name": "Frais bancaires / impôts",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 15.64,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "a1d88ada-a125-4f2a-b3a3-0fb8c0adde77",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "09aec1e2-8b15-480d-86a9-b0a65f01631c",
+      "category_name": "Taxes / frais administratifs",
+      "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+      "parent_category_name": "Frais bancaires / impôts",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "2ed4a64e-62df-481d-9d8c-7f6b3be9708d",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "7d2ba7c0-1ff8-4001-ba9a-05002a16e883",
+      "category_name": "Assurance habitation",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 33.65,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "3dbb7152-19c8-4c35-a5ef-55fef5eddbab",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "9066566e-a623-4179-8ab3-9181c02eff68",
+      "category_name": "Charges logement",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 149.25,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "5ca63451-fbed-4466-a6ae-0252d0bc028d",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "bebb7217-200e-4d16-849e-b6cd14e93ce3",
+      "category_name": "Électricité",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 32.35,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "85e08c13-4244-4ea2-abce-06efcccee9af",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "08f5dba6-2730-457b-93f7-24140d04e150",
+      "category_name": "Internet / télécom logement",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 20,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "dd482479-7b14-4a69-91b3-767ed8bed429",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "89825ac5-1916-4a97-a623-ada8327b7b2d",
+      "category_name": "Loyer / crédit",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 330,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "a46a89c2-6ad4-425f-ac95-56f9f8c51747",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "b6b57caa-82df-48b8-b883-9638070560c5",
+      "category_name": "Stockage",
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 146,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "964692d0-bc04-41ec-9176-04e9717dcaff",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "42ba71f3-d92b-44dd-acad-22ae86f91f52",
+      "category_name": "Culture",
+      "parent_category_id": "95ef91c6-e2f3-445b-a110-c749dd2d6ded",
+      "parent_category_name": "Loisirs",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 50,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "0af3ff2f-05b8-49a4-a117-14fc31ef131f",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "6f57163d-d4c0-46d1-b163-935c601a09af",
+      "category_name": "Loisirs",
+      "parent_category_id": "95ef91c6-e2f3-445b-a110-c749dd2d6ded",
+      "parent_category_name": "Loisirs",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 30,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "2b3e4f29-49b2-4f3a-a266-e70061b3ff9e",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "3a7a3a1c-8d57-4ef0-a8c8-dabcff12b58f",
+      "category_name": "Médecin / soins",
+      "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+      "parent_category_name": "Santé",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 25,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "89cfa4aa-26ad-480b-bc68-8c8532a9f55b",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "0fd624d7-93fa-40aa-8335-872a52e4f5de",
+      "category_name": "Optique",
+      "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+      "parent_category_name": "Santé",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "8e51653c-3b02-4fea-a4d2-b3301973cda2",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "e5698e8e-09ff-4496-984d-dc1e6e206e6f",
+      "category_name": "Pharmacie",
+      "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+      "parent_category_name": "Santé",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 30,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_10"
+    },
+    {
+      "id": "9c1529db-cba7-4e92-a521-a8b154562ec1",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "67761468-971a-4c08-9430-e2d384c63cd4",
+      "category_name": "Vétérinaire",
+      "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+      "parent_category_name": "Santé",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "9b8d79fe-310a-4ac3-8331-a915c407b993",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "26e50cfd-0b11-484b-b5f4-9bc29fe5a5c2",
+      "category_name": "Autres",
+      "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+      "parent_category_name": "Sorties",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 45,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_15"
+    },
+    {
+      "id": "2df15832-19c1-402c-b98d-52b3ab658f98",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "caca21fd-1c3c-4175-a868-972d962d5901",
+      "category_name": "Cafés / bars",
+      "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+      "parent_category_name": "Sorties",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 30,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "f1309f5b-4746-423b-9b35-e956aaa3f21b",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "23a73f75-86f6-436a-a247-e572c7e59953",
+      "category_name": "Restaurants",
+      "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+      "parent_category_name": "Sorties",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 70,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=discretionary_minus_10"
+    },
+    {
+      "id": "97b9eb84-339f-4519-8686-47d778a8bd27",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "136995f7-74ce-4a8b-8433-668d353dc701",
+      "category_name": "Assurance auto",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 62,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "8530ead7-d943-4bf8-8921-c4c5282f3c06",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "b2062882-2ba3-40a2-8141-dd4e993ad26f",
+      "category_name": "Carburant",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 65,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_08"
+    },
+    {
+      "id": "b3bdc00e-8bcd-4086-84b1-8b97bd3fbb49",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "fc53d342-062a-47b5-94e5-c0367edceb7a",
+      "category_name": "Entretien véhicule",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 15,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=provision ; method=provision_monthly"
+    },
+    {
+      "id": "5d508605-6600-492f-bf80-b64e9ae07e33",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "eac5f19e-2455-49ee-b24b-ca1510467431",
+      "category_name": "Parking",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 5,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_05"
+    },
+    {
+      "id": "f3af10a1-bf88-4ce8-b85f-5fbd8a189ea8",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "7d8af098-1e12-44d8-a86c-88a649e14cfe",
+      "category_name": "Péages",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_05"
+    },
+    {
+      "id": "e9ba308d-42a3-4fa4-8800-37d5bc80974e",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "335f546f-8f63-4073-91b0-4f0fc53aef8d",
+      "category_name": "Transport public",
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 15,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=variable_essentielle ; method=essential_buffer_05"
+    },
+    {
+      "id": "c0c2b32c-78ec-4dba-a7cc-1e86b90d5edd",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "acacac44-fecb-46f3-972f-e0c54704c6b3",
+      "category_name": "Activités",
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "7b156e6d-52d4-4771-bb28-f1ad7c18b260",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "39adc1a6-713d-4821-af5b-14fa46dfa60d",
+      "category_name": "Froustilles",
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 20,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "2161400e-91d9-4573-b722-618a7e598d7f",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "1e0fbcd1-1183-42af-a73a-4e5ffd7dea62",
+      "category_name": "Logement voyage",
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 50,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "aec0894d-9d02-4e05-8280-918a60ba6d60",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "a64508ca-1f7f-4a62-a5d4-7adcc6061fc3",
+      "category_name": "Repas voyage",
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 10,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "693a0ceb-19f8-42e5-b02e-b4f5c00a82ea",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "a4494cdc-d3fd-46bb-934a-b9331eead659",
+      "category_name": "Autres abonnements",
+      "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+      "parent_category_name": "Abonnements",
+      "flow_type": "expense",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 10.5,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=socle_fixe ; method=fixed_real"
+    },
+    {
+      "id": "2dfbc981-a454-4565-b153-c2a3c05fdb0c",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "fc0e644a-6082-42d0-b2d4-c947b4d7f8a2",
+      "category_name": "Trajet",
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 60,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=cagnotte_projet ; method=project_cagnotte"
+    },
+    {
+      "id": "34c081d7-0fc6-4a4b-a2ac-a9a9427142f8",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "26705eb6-da60-47a5-be25-4ed3c6160944",
+      "category_name": "Petits achats alimentaires",
+      "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+      "parent_category_name": "Alimentation",
+      "flow_type": "expense",
+      "budget_behavior": "variable",
+      "budget_kind": "category",
+      "amount": 205,
+      "currency": "EUR",
+      "notes": "Injecté depuis budget_recommendations ; bucket=discretionnaire ; method=manual_bucket_override"
+    },
+    {
+      "id": "ec07caad-182d-4f2a-8901-f7c839a6b9d7",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "d0c8ac99-3d13-4192-b98e-c44d11ab588f",
+      "category_name": "Réserve sécurité",
+      "parent_category_id": "e34c9eb5-bca4-4abc-b936-b4488b9bfbc8",
+      "parent_category_name": "Épargne",
+      "flow_type": "savings",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 200,
+      "currency": "EUR",
+      "notes": "Budget épargne mensuelle ; Épargne de sécurité mensuelle"
+    },
+    {
+      "id": "50d04288-3ad9-40ce-81b7-d06274045cf1",
+      "period_id": "0e89af56-8d24-44db-a71d-2827a430aa88",
+      "category_id": "c545251d-a45c-47fa-8c78-5be914f7a106",
+      "category_name": "Investissement",
+      "parent_category_id": "e34c9eb5-bca4-4abc-b936-b4488b9bfbc8",
+      "parent_category_name": "Épargne",
+      "flow_type": "savings",
+      "budget_behavior": "fixed",
+      "budget_kind": "category",
+      "amount": 100,
+      "currency": "EUR",
+      "notes": "Budget épargne mensuelle ; Épargne dédiée à l’investissement"
+    }
+  ],
+  "budget_parent_category_totals_current_month": [
+    {
+      "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+      "parent_category_name": "Achats divers",
+      "total_budget_amount": 750,
+      "line_count": 7
+    },
+    {
+      "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+      "parent_category_name": "Logement",
+      "total_budget_amount": 711.25,
+      "line_count": 6
+    },
+    {
+      "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+      "parent_category_name": "Alimentation",
+      "total_budget_amount": 515,
+      "line_count": 3
+    },
+    {
+      "parent_category_id": "e34c9eb5-bca4-4abc-b936-b4488b9bfbc8",
+      "parent_category_name": "Épargne",
+      "total_budget_amount": 500,
+      "line_count": 3
+    },
+    {
+      "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+      "parent_category_name": "Transport",
+      "total_budget_amount": 172,
+      "line_count": 6
+    },
+    {
+      "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+      "parent_category_name": "Famille / enfant",
+      "total_budget_amount": 155,
+      "line_count": 2
+    },
+    {
+      "parent_category_id": "d9f6c514-8c29-4657-80f5-26b44bafd531",
+      "parent_category_name": "Business",
+      "total_budget_amount": 150,
+      "line_count": 3
+    },
+    {
+      "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+      "parent_category_name": "Voyages",
+      "total_budget_amount": 150,
+      "line_count": 5
+    },
+    {
+      "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+      "parent_category_name": "Sorties",
+      "total_budget_amount": 145,
+      "line_count": 3
+    },
+    {
+      "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+      "parent_category_name": "Abonnements",
+      "total_budget_amount": 95.27,
+      "line_count": 4
+    },
+    {
+      "parent_category_id": "95ef91c6-e2f3-445b-a110-c749dd2d6ded",
+      "parent_category_name": "Loisirs",
+      "total_budget_amount": 80,
+      "line_count": 2
+    },
+    {
+      "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+      "parent_category_name": "Santé",
+      "total_budget_amount": 75,
+      "line_count": 4
+    },
+    {
+      "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+      "parent_category_name": "Frais bancaires / impôts",
+      "total_budget_amount": 25.64,
+      "line_count": 2
+    }
+  ],
+  "savings_budget": {
+    "monthly_target_total": 500,
+    "lines_current_month": [
+      {
+        "category_id": "882f3400-64e8-4169-874f-7d5d85a8cefb",
+        "category_name": "Projet / apport",
+        "target_savings_amount_eur": 200,
+        "actual_savings_amount_eur": 0,
+        "delta_savings_amount_eur": -200
+      },
+      {
+        "category_id": "d0c8ac99-3d13-4192-b98e-c44d11ab588f",
+        "category_name": "Réserve sécurité",
+        "target_savings_amount_eur": 200,
+        "actual_savings_amount_eur": 0,
+        "delta_savings_amount_eur": -200
+      },
+      {
+        "category_id": "c545251d-a45c-47fa-8c78-5be914f7a106",
+        "category_name": "Investissement",
+        "target_savings_amount_eur": 100,
+        "actual_savings_amount_eur": 0,
+        "delta_savings_amount_eur": -100
+      }
+    ]
+  },
+  "actuals_monthly_series": [
+    {
+      "month_start": "2026-01-01",
+      "period_year": 2026,
+      "period_month": 1,
+      "variable_expense_total": 2156.4700000000003,
+      "fixed_expense_total": 1097.3900000000003,
+      "expense_total": 3253.8599999999988,
+      "income_total": 16337.4,
+      "savings_total": 0,
+      "net_cashflow": 13083.54,
+      "savings_capacity_observed": 13083.54,
+      "transaction_count": 130
+    },
+    {
+      "month_start": "2026-02-01",
+      "period_year": 2026,
+      "period_month": 2,
+      "variable_expense_total": 2827.9700000000016,
+      "fixed_expense_total": 1068.7800000000002,
+      "expense_total": 3896.749999999999,
+      "income_total": 1169.47,
+      "savings_total": 0,
+      "net_cashflow": -2727.279999999999,
+      "savings_capacity_observed": -2727.279999999999,
+      "transaction_count": 134
+    },
+    {
+      "month_start": "2026-03-01",
+      "period_year": 2026,
+      "period_month": 3,
+      "variable_expense_total": 2401.880000000001,
+      "fixed_expense_total": 1000.0700000000002,
+      "expense_total": 3401.9499999999994,
+      "income_total": 588.3399999999999,
+      "savings_total": 0,
+      "net_cashflow": -2813.6099999999997,
+      "savings_capacity_observed": -2813.6099999999997,
+      "transaction_count": 132
+    },
+    {
+      "month_start": "2026-04-01",
+      "period_year": 2026,
+      "period_month": 4,
+      "variable_expense_total": 3070.76,
+      "fixed_expense_total": 614.1500000000001,
+      "expense_total": 3684.91,
+      "income_total": 1070.2,
+      "savings_total": 0,
+      "net_cashflow": -2614.71,
+      "savings_capacity_observed": -2614.71,
+      "transaction_count": 103
+    },
+    {
+      "month_start": "2026-05-01",
+      "period_year": 2026,
+      "period_month": 5,
+      "variable_expense_total": 42,
+      "fixed_expense_total": 0,
+      "expense_total": 42,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": -42,
+      "savings_capacity_observed": -42,
+      "transaction_count": 2
+    },
+    {
+      "month_start": "2026-06-01",
+      "period_year": 2026,
+      "period_month": 6,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-07-01",
+      "period_year": 2026,
+      "period_month": 7,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-08-01",
+      "period_year": 2026,
+      "period_month": 8,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-09-01",
+      "period_year": 2026,
+      "period_month": 9,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-10-01",
+      "period_year": 2026,
+      "period_month": 10,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-11-01",
+      "period_year": 2026,
+      "period_month": 11,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    },
+    {
+      "month_start": "2026-12-01",
+      "period_year": 2026,
+      "period_month": 12,
+      "variable_expense_total": 0,
+      "fixed_expense_total": 0,
+      "expense_total": 0,
+      "income_total": 0,
+      "savings_total": 0,
+      "net_cashflow": 0,
+      "savings_capacity_observed": 0,
+      "transaction_count": 0
+    }
+  ],
+  "bucket_budget_vs_actual_by_month": [],
+  "savings_budget_vs_actual_by_month": [
+    {
+      "period_year": 2026,
+      "period_month": 1,
+      "target_savings_amount_eur": 500,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": -500
+    },
+    {
+      "period_year": 2026,
+      "period_month": 2,
+      "target_savings_amount_eur": 500,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": -500
+    },
+    {
+      "period_year": 2026,
+      "period_month": 3,
+      "target_savings_amount_eur": 500,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": -500
+    },
+    {
+      "period_year": 2026,
+      "period_month": 4,
+      "target_savings_amount_eur": 500,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": -500
+    },
+    {
+      "period_year": 2026,
+      "period_month": 5,
+      "target_savings_amount_eur": 500,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": -500
+    },
+    {
+      "period_year": 2026,
+      "period_month": 6,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 7,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 8,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 9,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 10,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 11,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    },
+    {
+      "period_year": 2026,
+      "period_month": 12,
+      "target_savings_amount_eur": 0,
+      "actual_savings_amount_eur": 0,
+      "delta_savings_amount_eur": 0
+    }
+  ],
+  "top_categories_actual_by_month": [
+    {
+      "period_year": 2026,
+      "period_month": 1,
+      "top_categories": [
+        {
+          "category_id": "cac78d28-95d8-4b27-ad69-c3a721b2e441",
+          "category_name": "Retraits d'espèces",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 640
+        },
+        {
+          "category_id": "0ca5d9ef-c516-4a1c-9dbe-45f9f6cd745b",
+          "category_name": "Courses",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 558.5500000000001
+        },
+        {
+          "category_id": "89825ac5-1916-4a97-a623-ada8327b7b2d",
+          "category_name": "Loyer / crédit",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 330
+        },
+        {
+          "category_id": "f31e8dbe-db91-4c3d-8d95-5ae72fdfc26d",
+          "category_name": "Impôts",
+          "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+          "parent_category_name": "Frais bancaires / impôts",
+          "amount_total": 264.97
+        },
+        {
+          "category_id": "26705eb6-da60-47a5-be25-4ed3c6160944",
+          "category_name": "Petits achats alimentaires",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 202
+        },
+        {
+          "category_id": "55ef5a28-ae75-49ca-85d7-27d95defba7f",
+          "category_name": "Achats bébé",
+          "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+          "parent_category_name": "Famille / enfant",
+          "amount_total": 183.81
+        },
+        {
+          "category_id": "23a73f75-86f6-436a-a247-e572c7e59953",
+          "category_name": "Restaurants",
+          "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+          "parent_category_name": "Sorties",
+          "amount_total": 152
+        },
+        {
+          "category_id": "45e43429-edda-445e-bbd3-a5fc64e32e82",
+          "category_name": "Divers",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 135.88000000000002
+        },
+        {
+          "category_id": "b6b57caa-82df-48b8-b883-9638070560c5",
+          "category_name": "Stockage",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 127.16
+        },
+        {
+          "category_id": "94782c8a-e0bc-4fcb-83da-9d0538d30e78",
+          "category_name": "LLM",
+          "parent_category_id": "cfeb6287-af4d-4ede-806e-0ed2627fcf4e",
+          "parent_category_name": "Abonnements",
+          "amount_total": 73.08
+        }
+      ]
+    },
+    {
+      "period_year": 2026,
+      "period_month": 2,
+      "top_categories": [
+        {
+          "category_id": "cac78d28-95d8-4b27-ad69-c3a721b2e441",
+          "category_name": "Retraits d'espèces",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 720
+        },
+        {
+          "category_id": "1e0fbcd1-1183-42af-a73a-4e5ffd7dea62",
+          "category_name": "Logement voyage",
+          "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+          "parent_category_name": "Voyages",
+          "amount_total": 542.33
+        },
+        {
+          "category_id": "0ca5d9ef-c516-4a1c-9dbe-45f9f6cd745b",
+          "category_name": "Courses",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 335.26
+        },
+        {
+          "category_id": "89825ac5-1916-4a97-a623-ada8327b7b2d",
+          "category_name": "Loyer / crédit",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 330
+        },
+        {
+          "category_id": "55ef5a28-ae75-49ca-85d7-27d95defba7f",
+          "category_name": "Achats bébé",
+          "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+          "parent_category_name": "Famille / enfant",
+          "amount_total": 246.43
+        },
+        {
+          "category_id": "f31e8dbe-db91-4c3d-8d95-5ae72fdfc26d",
+          "category_name": "Impôts",
+          "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+          "parent_category_name": "Frais bancaires / impôts",
+          "amount_total": 225.38
+        },
+        {
+          "category_id": "9f2478b6-c10d-4a19-b250-db8ab2135d55",
+          "category_name": "Cadeaux",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 200
+        },
+        {
+          "category_id": "fc53d342-062a-47b5-94e5-c0367edceb7a",
+          "category_name": "Entretien véhicule",
+          "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+          "parent_category_name": "Transport",
+          "amount_total": 170
+        },
+        {
+          "category_id": "b6b57caa-82df-48b8-b883-9638070560c5",
+          "category_name": "Stockage",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 146
+        },
+        {
+          "category_id": "23a73f75-86f6-436a-a247-e572c7e59953",
+          "category_name": "Restaurants",
+          "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+          "parent_category_name": "Sorties",
+          "amount_total": 125.94999999999999
+        }
+      ]
+    },
+    {
+      "period_year": 2026,
+      "period_month": 3,
+      "top_categories": [
+        {
+          "category_id": "cac78d28-95d8-4b27-ad69-c3a721b2e441",
+          "category_name": "Retraits d'espèces",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 660
+        },
+        {
+          "category_id": "0ca5d9ef-c516-4a1c-9dbe-45f9f6cd745b",
+          "category_name": "Courses",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 473.31
+        },
+        {
+          "category_id": "89825ac5-1916-4a97-a623-ada8327b7b2d",
+          "category_name": "Loyer / crédit",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 330
+        },
+        {
+          "category_id": "55ef5a28-ae75-49ca-85d7-27d95defba7f",
+          "category_name": "Achats bébé",
+          "parent_category_id": "3c27c116-af0e-41e5-abb9-63ed0dfadf5b",
+          "parent_category_name": "Famille / enfant",
+          "amount_total": 328.91
+        },
+        {
+          "category_id": "9f2478b6-c10d-4a19-b250-db8ab2135d55",
+          "category_name": "Cadeaux",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 215
+        },
+        {
+          "category_id": "26705eb6-da60-47a5-be25-4ed3c6160944",
+          "category_name": "Petits achats alimentaires",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 166.11
+        },
+        {
+          "category_id": "b2062882-2ba3-40a2-8141-dd4e993ad26f",
+          "category_name": "Carburant",
+          "parent_category_id": "13e0b240-74df-4886-9bd3-f5cf2164c5d4",
+          "parent_category_name": "Transport",
+          "amount_total": 151.26999999999998
+        },
+        {
+          "category_id": "b6b57caa-82df-48b8-b883-9638070560c5",
+          "category_name": "Stockage",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 146
+        },
+        {
+          "category_id": "f31e8dbe-db91-4c3d-8d95-5ae72fdfc26d",
+          "category_name": "Impôts",
+          "parent_category_id": "bce98f17-182c-4f52-879c-c36c20705df5",
+          "parent_category_name": "Frais bancaires / impôts",
+          "amount_total": 135
+        },
+        {
+          "category_id": "9066566e-a623-4179-8ab3-9181c02eff68",
+          "category_name": "Charges logement",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 117.73
+        }
+      ]
+    },
+    {
+      "period_year": 2026,
+      "period_month": 4,
+      "top_categories": [
+        {
+          "category_id": "b74ba5fd-344f-4dde-86c5-5d4f67d1c1a6",
+          "category_name": "Formations",
+          "parent_category_id": "d9f6c514-8c29-4657-80f5-26b44bafd531",
+          "parent_category_name": "Business",
+          "amount_total": 1608.13
+        },
+        {
+          "category_id": "9066566e-a623-4179-8ab3-9181c02eff68",
+          "category_name": "Charges logement",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 330
+        },
+        {
+          "category_id": "cac78d28-95d8-4b27-ad69-c3a721b2e441",
+          "category_name": "Retraits d'espèces",
+          "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+          "parent_category_name": "Achats divers",
+          "amount_total": 280
+        },
+        {
+          "category_id": "a64508ca-1f7f-4a62-a5d4-7adcc6061fc3",
+          "category_name": "Repas voyage",
+          "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+          "parent_category_name": "Voyages",
+          "amount_total": 193.19
+        },
+        {
+          "category_id": "39adc1a6-713d-4821-af5b-14fa46dfa60d",
+          "category_name": "Froustilles",
+          "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+          "parent_category_name": "Voyages",
+          "amount_total": 165.59
+        },
+        {
+          "category_id": "b6b57caa-82df-48b8-b883-9638070560c5",
+          "category_name": "Stockage",
+          "parent_category_id": "e530a320-eb46-4fc5-8f92-7faefacd6f33",
+          "parent_category_name": "Logement",
+          "amount_total": 146
+        },
+        {
+          "category_id": "0ca5d9ef-c516-4a1c-9dbe-45f9f6cd745b",
+          "category_name": "Courses",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 134.60999999999999
+        },
+        {
+          "category_id": "1e0fbcd1-1183-42af-a73a-4e5ffd7dea62",
+          "category_name": "Logement voyage",
+          "parent_category_id": "a975a6e6-62d9-4686-8107-f4d76a7bd93d",
+          "parent_category_name": "Voyages",
+          "amount_total": 125
+        },
+        {
+          "category_id": "23a73f75-86f6-436a-a247-e572c7e59953",
+          "category_name": "Restaurants",
+          "parent_category_id": "c6edb257-33fb-4879-acbb-88d4d8287079",
+          "parent_category_name": "Sorties",
+          "amount_total": 105.45
+        },
+        {
+          "category_id": "26705eb6-da60-47a5-be25-4ed3c6160944",
+          "category_name": "Petits achats alimentaires",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 104.47
+        }
+      ]
+    },
+    {
+      "period_year": 2026,
+      "period_month": 5,
+      "top_categories": [
+        {
+          "category_id": "e9edfa53-3ea7-425d-b382-beeb22ea05e6",
+          "category_name": "Mutuelle",
+          "parent_category_id": "6dcceeb2-760a-401d-9d86-c5e2c3f3e02a",
+          "parent_category_name": "Santé",
+          "amount_total": 34
+        },
+        {
+          "category_id": "7f36cd1e-382f-49d7-bb9b-365b94e5c662",
+          "category_name": "Alimentation rapide",
+          "parent_category_id": "7f3091ae-a8d2-4109-8352-4b016b3ead1f",
+          "parent_category_name": "Alimentation",
+          "amount_total": 8
+        }
+      ]
+    },
+    {
+      "period_year": 2026,
+      "period_month": 6,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 7,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 8,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 9,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 10,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 11,
+      "top_categories": []
+    },
+    {
+      "period_year": 2026,
+      "period_month": 12,
+      "top_categories": []
+    }
+  ],
+  "insights": {
+    "dominant_budget_bucket_current_month": null,
+    "dominant_parent_category_budget_current_month": {
+      "label": "Achats divers",
+      "value": 750,
+      "extra": {
+        "parent_category_id": "7d6afd72-1b22-47ce-aec3-707e2c214290",
+        "line_count": 7
+      }
+    },
+    "highest_budget_line_current_month": {
+      "label": "Loyer / crédit",
+      "value": 330,
+      "extra": {
+        "category_id": "89825ac5-1916-4a97-a623-ada8327b7b2d",
+        "parent_category_name": "Logement",
+        "budget_behavior": "fixed"
+      }
+    },
+    "highest_actual_month": {
+      "label": "2026-02",
+      "value": 3896.749999999999,
+      "extra": {
+        "income_total": 1169.47,
+        "net_cashflow": -2727.279999999999
+      }
+    },
+    "lowest_actual_month": {
+      "label": "2026-06",
+      "value": 0,
+      "extra": {
+        "income_total": 0,
+        "net_cashflow": 0
+      }
+    },
+    "quality_flags": [
+      "bucket_views_not_accessible_or_empty"
+    ]
+  },
+  "data_quality": {
+    "actuals_available": true,
+    "actuals_month_count": 12,
+    "budget_month_count": 12,
+    "missing_sections": [
+      "bucket_budget_vs_actual_by_month"
+    ]
+  }
+}
