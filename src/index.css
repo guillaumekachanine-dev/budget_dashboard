@@ -129,8 +129,9 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top-offset: env(safe-area-inset-top, 0px);
   --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
-  --nav-height: 86px;
+  --safe-bottom-compensation: 0px;
   --nav-base-height: 72px;
+  --nav-height: var(--nav-base-height);
   --page-gutter: clamp(16px, 4.5vw, 24px);
   --page-max-width: 430px;
 }
@@ -340,13 +341,13 @@
     --space-6: 20px;
     --space-8: 28px;
     --space-16: 60px;
-    --nav-height: 84px;
   }
 }
 
 html[data-standalone='true'] {
   --safe-top-offset: env(safe-area-inset-top, 0px);
   --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
+  --safe-bottom-compensation: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-reduced-motion: reduce) {
