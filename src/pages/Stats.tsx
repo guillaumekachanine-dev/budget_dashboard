@@ -8,6 +8,7 @@ import analyticsIcon from '@/assets/icons_app/analytics.png'
 import optimisationIcon from '@/assets/icons_app/optimisation.png'
 import epargneIcon from '@/assets/icons_app/epargne.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
+import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetBucketsCard'
 import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
@@ -248,14 +249,7 @@ export function Stats() {
       ) : null}
 
       {activeTab.id === 'analytics_2025' ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 220, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)' }}>Analytics 2025</p>
-              <p style={{ margin: '8px 0 0', fontSize: 'var(--font-size-sm)' }}>Les données 2025 seront disponibles prochainement.</p>
-            </div>
-          </div>
-        </motion.section>
+        <Annual2025Tab />
       ) : null}
 
       {activeTab.id === 'optimisation' ? (
