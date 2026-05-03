@@ -25,6 +25,20 @@ export function Annual2025Tab() {
       transition={{ duration: 0.2 }}
       style={{ display: 'grid', gap: 'var(--space-7)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
     >
+      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', padding: '0 var(--space-6)', marginBottom: 'calc(var(--space-5) * -1)' }}>
+        <h2 style={{
+          margin: 0,
+          fontSize: '56px',
+          fontWeight: 900,
+          color: 'var(--neutral-900)',
+          lineHeight: 1,
+          letterSpacing: '-0.05em',
+          opacity: 0.12,
+          userSelect: 'none',
+        }}>
+          2025
+        </h2>
+      </div>
       {annualTotals ? (
         <AnnualOverviewHero data={annualTotals} />
       ) : (
@@ -58,6 +72,11 @@ export function Annual2025Tab() {
 function Annual2025Skeleton() {
   return (
     <div style={{ display: 'grid', gap: 'var(--space-7)', padding: '0 var(--space-6)', paddingBottom: 'calc(var(--space-8) + 56px)' }}>
+      {/* Year title skeleton */}
+      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%', marginBottom: 'calc(var(--space-5) * -1)' }}>
+        <SkeletonBlock height={56} radius="var(--radius-lg)" />
+      </div>
+
       {/* Hero skeleton */}
       <div style={{ maxWidth: 600, margin: '0 auto', width: '100%' }}>
         <SkeletonBlock height={168} radius="var(--radius-2xl)" />

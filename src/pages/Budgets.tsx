@@ -1067,18 +1067,24 @@ export function Budgets() {
     ? `Année ${selectedPeriodYear}`
     : formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth)
   const headerPeriodOptions = useMemo(() => {
-    const monthOptions = availableBudgetPeriods.map((period) => ({
-      key: `period-${period.period_year}-${period.period_month}`,
-      label: formatPeriodLabel(period.period_year, period.period_month, period.label),
-      active: periodKey === 'mois'
-        && selectedPeriodYear === period.period_year
-        && selectedPeriodMonth === period.period_month,
-      onSelect: () => {
-        setPeriodKey('mois')
-        setSelectedPeriodYear(period.period_year)
-        setSelectedPeriodMonth(period.period_month)
-      },
-    }))
+    const monthOptions = availableBudgetPeriods
+      .filter((period) => {
+        if (period.period_year < nowYear) return true
+        if (period.period_year === nowYear) return period.period_month <= (nowMonth + 1)
+        return false
+      })
+      .map((period) => ({
+        key: `period-${period.period_year}-${period.period_month}`,
+        label: formatPeriodLabel(period.period_year, period.period_month, period.label),
+        active: periodKey === 'mois'
+          && selectedPeriodYear === period.period_year
+          && selectedPeriodMonth === period.period_month,
+        onSelect: () => {
+          setPeriodKey('mois')
+          setSelectedPeriodYear(period.period_year)
+          setSelectedPeriodMonth(period.period_month)
+        },
+      }))
 
     const yearOption = {
       key: `year-${selectedPeriodYear}`,

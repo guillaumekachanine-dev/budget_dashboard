@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
@@ -14,8 +14,8 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
-type PeriodMode = 'current' | 'rolling'
-type QuickParamPicker = 'type' | 'period' | 'fixed' | 'account' | null
+type PeriodMode = 'current' | 'rolling' | 'future'
+type QuickParamPicker = 'type' | 'period' | 'modalite' | 'fixed' | 'account' | null
 
 const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
   { value: 'all', label: 'Toutes' },
@@ -60,6 +60,38 @@ function startOfIsoYear(d: Date): string {
 
 function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: string; endDate?: string } {
   const now = new Date()
+
+  if (mode === 'future') {
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const start = startOfIsoDay(tomorrow)
+    
+    switch (period) {
+      case 'day': return { startDate: start, endDate: start }
+      case 'week': {
+        const end = new Date(tomorrow)
+        end.setDate(tomorrow.getDate() + 6)
+        return { startDate: start, endDate: startOfIsoDay(end) }
+      }
+      case 'month': {
+        const end = new Date(tomorrow)
+        end.setDate(tomorrow.getDate() + 29)
+        return { startDate: start, endDate: startOfIsoDay(end) }
+      }
+      case 'quarter': {
+        const end = new Date(tomorrow)
+        end.setDate(tomorrow.getDate() + 89)
+        return { startDate: start, endDate: startOfIsoDay(end) }
+      }
+      case 'year': {
+        const end = new Date(tomorrow)
+        end.setDate(tomorrow.getDate() + 364)
+        return { startDate: start, endDate: startOfIsoDay(end) }
+      }
+      case 'all': return {}
+    }
+  }
+
   switch (period) {
     case 'day': {
       const start = startOfIsoDay(now)
@@ -264,40 +296,10 @@ function SegmentedToggle({
   )
 }
 
-function Switch({ value, onChange }: { value: boolean; onChange: (next: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      style={{
-        width: 42,
-        height: 24,
-        borderRadius: 'var(--radius-full)',
-        border: value ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-        background: value ? 'var(--primary-500)' : 'var(--neutral-200)',
-        position: 'relative',
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        style={{
-          position: 'absolute',
-          top: 2,
-          left: value ? 20 : 2,
-          width: 18,
-          height: 18,
-          borderRadius: '50%',
-          background: '#fff',
-          transition: 'left var(--transition-base)',
-        }}
-      />
-    </button>
-  )
-}
-
 type FilterDropdownOption = {
   value: string
   label: string
+  hasSeparator?: boolean
   selected: boolean
   onSelect: () => void
 }
@@ -315,6 +317,8 @@ function FilterDropdown({
   compactValue = false,
   heroTone = false,
   fitContent = false,
+  hideLabel = false,
+  largeValue = false,
 }: {
   id: Exclude<QuickParamPicker, null>
   label: string
@@ -328,6 +332,8 @@ function FilterDropdown({
   compactValue?: boolean
   heroTone?: boolean
   fitContent?: boolean
+  hideLabel?: boolean
+  largeValue?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -446,42 +452,60 @@ function FilterDropdown({
         }}
       >
         <span style={{ display: 'grid', textAlign: 'left', gap: 2, minWidth: 0 }}>
-          <span
-            style={{
-              fontSize: heroTone ? 9 : 'var(--font-size-xs)',
-              opacity: heroTone ? 0.68 : 0.72,
-              color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-              fontWeight: 'var(--font-weight-semibold)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            {label}
-            <ChevronDown
-              size={12}
+          {!hideLabel && (
+            <span
               style={{
-                transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform var(--transition-fast)',
+                fontSize: heroTone ? 9 : 'var(--font-size-xs)',
+                opacity: heroTone ? 0.68 : 0.72,
                 color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-                flexShrink: 0,
+                fontWeight: 'var(--font-weight-semibold)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
               }}
-            />
-          </span>
+            >
+              {label}
+              <ChevronDown
+                size={12}
+                style={{
+                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform var(--transition-fast)',
+                  color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
+                  flexShrink: 0,
+                }}
+              />
+            </span>
+          )}
           <span
             style={{
-              fontSize: heroTone ? 13 : (compactValue ? 'var(--font-size-xs)' : 'var(--font-size-sm)'),
+              fontSize: hideLabel
+                ? (heroTone ? 14 : 'var(--font-size-sm)')
+                : (heroTone ? (largeValue ? 14 : 13) : (compactValue ? 'var(--font-size-xs)' : 'var(--font-size-sm)')),
               fontWeight: heroTone ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
               fontFamily: heroTone ? 'var(--font-mono)' : 'inherit',
               color: heroTone ? 'var(--neutral-0)' : 'inherit',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
             {value}
+            {hideLabel && (
+              <ChevronDown
+                size={12}
+                style={{
+                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform var(--transition-fast)',
+                  color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
+                  flexShrink: 0,
+                }}
+              />
+            )}
           </span>
         </span>
       </motion.button>
@@ -521,41 +545,45 @@ function FilterDropdown({
           >
             {headerContent ? <div style={{ paddingBottom: 'var(--space-1)' }}>{headerContent}</div> : null}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {options.map((opt, index) => (
-                <motion.button
-                  key={opt.value}
-                  ref={(element) => {
-                    optionRefs.current[index] = element
-                  }}
-                  type="button"
-                  role="option"
-                  aria-selected={opt.selected}
-                  onClick={opt.onSelect}
-                  whileHover={{ backgroundColor: 'var(--neutral-50)', color: 'var(--primary-500)' }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  style={{
-                    border: 'none',
-                    borderLeft: opt.selected ? '3px solid var(--primary-500)' : '3px solid transparent',
-                    background: opt.selected ? 'var(--primary-50)' : 'transparent',
-                    color: opt.selected ? 'var(--primary-700)' : 'var(--neutral-700)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: 'var(--space-2) var(--space-2)',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: opt.selected ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    textAlign: 'left',
-                    outline: focusedIndex === index ? '1px solid var(--primary-300)' : 'none',
-                  }}
-                  onMouseEnter={() => setFocusedIndex(index)}
-                >
-                  <span>{opt.label}</span>
-                  {opt.selected ? <Check size={16} color="var(--primary-500)" /> : null}
-                </motion.button>
+                <Fragment key={opt.value}>
+                  <motion.button
+                    ref={(element) => {
+                      optionRefs.current[index] = element
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={opt.selected}
+                    onClick={opt.onSelect}
+                    whileHover={{ backgroundColor: 'var(--neutral-50)', color: 'var(--primary-500)' }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    style={{
+                      border: 'none',
+                      borderLeft: opt.selected ? '3px solid var(--primary-500)' : '3px solid transparent',
+                      background: opt.selected ? 'var(--primary-50)' : 'transparent',
+                      color: opt.selected ? 'var(--primary-700)' : 'var(--neutral-700)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px 8px',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: opt.selected ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      textAlign: 'left',
+                      outline: focusedIndex === index ? '1px solid var(--primary-300)' : 'none',
+                    }}
+                    onMouseEnter={() => setFocusedIndex(index)}
+                  >
+                    <span>{opt.label}</span>
+                    {opt.selected ? <Check size={16} color="var(--primary-500)" /> : null}
+                  </motion.button>
+                  {opt.hasSeparator && (
+                    <div style={{ height: 1, background: 'var(--neutral-200)', margin: '4px 0' }} />
+                  )}
+                </Fragment>
               ))}
             </div>
           </motion.div>
@@ -583,15 +611,15 @@ export function Flux() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
 
   const [excludeRecurring] = useState(false)
-  const [onlyFixed, setOnlyFixed] = useState(false)
-  const [onlyJoint, setOnlyJoint] = useState(false)
+  const [budgetFilter, setBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
+  const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
   const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
   const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
-  const [draftOnlyFixed, setDraftOnlyFixed] = useState(false)
-  const [draftOnlyJoint, setDraftOnlyJoint] = useState(false)
+  const [draftBudgetFilter, setDraftBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
+  const [draftAccountFilter, setDraftAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
   const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)
   const [draftSelectedCategoryId, setDraftSelectedCategoryId] = useState<string | null>(null)
   const [showTypeMenu, setShowTypeMenu] = useState(false)
@@ -630,8 +658,10 @@ export function Flux() {
     let list = (txns ?? []) as Transaction[]
 
     if (excludeRecurring) list = list.filter((t) => !t.is_recurring)
-    if (onlyFixed) list = list.filter((t) => t.budget_behavior === 'fixed')
-    if (onlyJoint) list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
+    if (budgetFilter === 'fixed') list = list.filter((t) => t.budget_behavior === 'fixed')
+    if (budgetFilter === 'variable') list = list.filter((t) => t.budget_behavior === 'variable' || t.budget_behavior === null)
+    if (accountFilter === 'joint') list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
+    if (accountFilter === 'perso') list = list.filter((t) => !(t.account?.name?.toLowerCase().includes('joint') ?? false))
 
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -639,9 +669,18 @@ export function Flux() {
     }
 
     return list
-  }, [txns, excludeRecurring, onlyFixed, onlyJoint, search])
+  }, [txns, excludeRecurring, budgetFilter, accountFilter, search])
 
   const totalAmount = useMemo(() => filtered.reduce((sum, t) => sum + signedAmount(t), 0), [filtered])
+
+  useEffect(() => {
+    if (detailsTxn) {
+      const updated = filtered.find((t) => t.id === detailsTxn.id)
+      if (updated && updated !== detailsTxn) {
+        setDetailsTxn(updated)
+      }
+    }
+  }, [filtered, detailsTxn])
 
   const typeLabel = FLOW_OPTIONS.find((o) => o.value === flow)?.label ?? 'Depenses'
   const periodLabel = PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? 'Mois'
@@ -723,8 +762,8 @@ export function Flux() {
     }
     return periodLabel === 'Annee' ? String(new Date().getFullYear()) : periodLabel
   }, [period, periodLabel])
-  const cardBudgetValue = onlyFixed ? 'Fixe' : 'Variable'
-  const cardAccountValue = onlyJoint ? 'Joint' : 'Perso'
+  const cardBudgetValue = budgetFilter === 'all' ? 'Tout' : (budgetFilter === 'fixed' ? 'Fixe' : 'Variable')
+  const cardAccountValue = accountFilter === 'all' ? 'Tout' : (accountFilter === 'joint' ? 'Joint' : 'Perso')
   const isTransferType = flow === 'transfer'
   const selectedPeriodHeader = useMemo(() => {
     const endIso = range.endDate ?? (filtered.length ? filtered[0].transaction_date : todayIso())
@@ -734,9 +773,9 @@ export function Flux() {
     return {
       startLabel: formatDateLabel(startIso),
       endLabel: formatDateLabel(endIso),
-      text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)} - ${filtered.length} ${resultNoun(flow)}`,
+      text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)}`,
     }
-  }, [filtered, flow, range.endDate, range.startDate])
+  }, [range.endDate, range.startDate, filtered])
 
   const draftTypeLabel = FLOW_OPTIONS.find((o) => o.value === draftFlow)?.label ?? 'Depenses'
   const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
@@ -757,8 +796,8 @@ export function Flux() {
     setFlow(draftFlow)
     setPeriod(draftPeriod)
     setPeriodMode(draftPeriodMode)
-    setOnlyFixed(draftOnlyFixed)
-    setOnlyJoint(draftOnlyJoint)
+    setBudgetFilter(draftBudgetFilter)
+    setAccountFilter(draftAccountFilter)
     setSelectedParentCategoryId(draftSelectedParentCategoryId)
     setSelectedCategoryId(draftSelectedCategoryId)
     setShowTypeMenu(false)
@@ -797,7 +836,7 @@ export function Flux() {
             style={{
               background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 88%, #000 12%) 0%, color-mix(in oklab, var(--color-warning) 70%, #000 30%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
               borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-6)',
+              padding: 'var(--space-5)',
               boxShadow: 'var(--shadow-card)',
               position: 'relative',
               overflow: 'visible',
@@ -813,14 +852,12 @@ export function Flux() {
               </p>
             </div>
 
-            <p style={{ margin: '8px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+            <p style={{ margin: '2px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
               {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
             </p>
 
-            <div style={{ margin: 'var(--space-5) 0 var(--space-4)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
-              <div>
+            <div style={{ marginTop: 0 }}>
+              <div style={{ display: 'inline-flex' }}>
                 <FilterDropdown
                   id="type"
                   label="Type"
@@ -832,9 +869,12 @@ export function Flux() {
                   onClose={closeQuickPicker}
                   heroTone
                   fitContent
+                  hideLabel
+                  largeValue
                   options={FLOW_OPTIONS.map((opt) => ({
                     value: opt.value,
                     label: opt.label,
+                    hasSeparator: opt.value === 'all',
                     selected: flow === opt.value,
                     onSelect: () => {
                       setFlow(opt.value)
@@ -843,7 +883,11 @@ export function Flux() {
                   }))}
                 />
               </div>
+            </div>
 
+            <div style={{ margin: 'var(--space-4) 0 var(--space-3)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
               <div>
                 <FilterDropdown
                   id="period"
@@ -855,15 +899,8 @@ export function Flux() {
                   onClose={closeQuickPicker}
                   heroTone
                   fitContent
-                  headerContent={(
-                    <SegmentedToggle
-                      left="Fixe"
-                      right="Glissant"
-                      value={periodMode === 'current' ? 'left' : 'right'}
-                      onChange={(next) => setPeriodMode(next === 'left' ? 'current' : 'rolling')}
-                    />
-                  )}
                   options={[
+                    { value: 'all', label: 'Toute', hasSeparator: true },
                     { value: 'day', label: 'Jour' },
                     { value: 'week', label: 'Semaine' },
                     { value: 'month', label: 'Mois' },
@@ -871,12 +908,56 @@ export function Flux() {
                   ].map((option) => ({
                     value: option.value,
                     label: option.label,
+                    hasSeparator: option.hasSeparator,
                     selected: period === option.value,
                     onSelect: () => {
                       setPeriod(option.value as PeriodFilter)
                       closeQuickPicker()
                     },
                   }))}
+                />
+              </div>
+
+              <div>
+                <FilterDropdown
+                  id="modalite"
+                  label="Modalité"
+                  value={periodMode === 'current' ? 'Fixe' : (periodMode === 'rolling' ? 'Glissant' : 'À venir')}
+                  isOpen={quickParamPicker === 'modalite'}
+                  showMobileOverlay={isMobileViewport}
+                  onToggle={() => setQuickParamPicker((current) => (current === 'modalite' ? null : 'modalite'))}
+                  onClose={closeQuickPicker}
+                  heroTone
+                  fitContent
+                  options={[
+                    {
+                      value: 'current',
+                      label: 'Fixe',
+                      selected: periodMode === 'current',
+                      onSelect: () => {
+                        setPeriodMode('current')
+                        closeQuickPicker()
+                      },
+                    },
+                    {
+                      value: 'rolling',
+                      label: 'Glissant',
+                      selected: periodMode === 'rolling',
+                      onSelect: () => {
+                        setPeriodMode('rolling')
+                        closeQuickPicker()
+                      },
+                    },
+                    {
+                      value: 'future',
+                      label: 'À venir',
+                      selected: periodMode === 'future',
+                      onSelect: () => {
+                        setPeriodMode('future')
+                        closeQuickPicker()
+                      },
+                    },
+                  ]}
                 />
               </div>
 
@@ -893,20 +974,30 @@ export function Flux() {
                   fitContent
                   options={[
                     {
+                      value: 'all',
+                      label: 'Tout',
+                      hasSeparator: true,
+                      selected: budgetFilter === 'all',
+                      onSelect: () => {
+                        setBudgetFilter('all')
+                        closeQuickPicker()
+                      },
+                    },
+                    {
                       value: 'variable',
                       label: 'Variable',
-                      selected: !onlyFixed,
+                      selected: budgetFilter === 'variable',
                       onSelect: () => {
-                        setOnlyFixed(false)
+                        setBudgetFilter('variable')
                         closeQuickPicker()
                       },
                     },
                     {
                       value: 'fixed',
                       label: 'Fixe',
-                      selected: onlyFixed,
+                      selected: budgetFilter === 'fixed',
                       onSelect: () => {
-                        setOnlyFixed(true)
+                        setBudgetFilter('fixed')
                         closeQuickPicker()
                       },
                     },
@@ -927,20 +1018,30 @@ export function Flux() {
                   fitContent
                   options={[
                     {
+                      value: 'all',
+                      label: 'Tout',
+                      hasSeparator: true,
+                      selected: accountFilter === 'all',
+                      onSelect: () => {
+                        setAccountFilter('all')
+                        closeQuickPicker()
+                      },
+                    },
+                    {
                       value: 'perso',
                       label: 'Perso',
-                      selected: !onlyJoint,
+                      selected: accountFilter === 'perso',
                       onSelect: () => {
-                        setOnlyJoint(false)
+                        setAccountFilter('perso')
                         closeQuickPicker()
                       },
                     },
                     {
                       value: 'joint',
                       label: 'Joint',
-                      selected: onlyJoint,
+                      selected: accountFilter === 'joint',
                       onSelect: () => {
-                        setOnlyJoint(true)
+                        setAccountFilter('joint')
                         closeQuickPicker()
                       },
                     },
@@ -1652,17 +1753,59 @@ export function Flux() {
 
                   <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)' }}>{draftOnlyFixed ? 'Fixe' : 'Variable'}</span>
-                      <Switch value={draftOnlyFixed} onChange={setDraftOnlyFixed} />
+                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                      {['all', 'variable', 'fixed'].map(val => {
+                        const label = val === 'all' ? 'Tout' : (val === 'fixed' ? 'Fixe' : 'Variable');
+                        const isSelected = draftBudgetFilter === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setDraftBudgetFilter(val as any)}
+                            style={{
+                              padding: '6px 0',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: isSelected ? 'var(--primary-500)' : '#fff',
+                              color: isSelected ? '#fff' : 'var(--neutral-700)',
+                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
+                              borderRadius: 'var(--radius-sm)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
                   <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)' }}>{draftOnlyJoint ? 'Joint' : 'Perso'}</span>
-                      <Switch value={draftOnlyJoint} onChange={setDraftOnlyJoint} />
+                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                      {['all', 'perso', 'joint'].map(val => {
+                        const label = val === 'all' ? 'Tout' : (val === 'joint' ? 'Joint' : 'Perso');
+                        const isSelected = draftAccountFilter === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setDraftAccountFilter(val as any)}
+                            style={{
+                              padding: '6px 0',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: isSelected ? 'var(--primary-500)' : '#fff',
+                              color: isSelected ? '#fff' : 'var(--neutral-700)',
+                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
+                              borderRadius: 'var(--radius-sm)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1786,6 +1929,7 @@ export function Flux() {
         transactionList={filtered}
         onNavigate={setDetailsTxn}
         onClose={() => setDetailsTxn(null)}
+        showEditControls={true}
       />
     </div>
   )

@@ -46,7 +46,7 @@ type AmountInputProps = {
   onChange: (next: string) => void
 }
 
-type CategoryPickerModalProps = {
+export type CategoryPickerModalProps = {
   open: boolean
   mode: 'category' | 'subcategory'
   title: string
@@ -72,7 +72,7 @@ type SettingsListProps = {
   onImputabilityToggle: () => void
 }
 
-const ALL_CATEGORY_TOKEN = '__all__'
+export const ALL_CATEGORY_TOKEN = '__all__'
 const TRANSACTION_ORDER: TransactionType[] = ['expense', 'income', 'transfer']
 const TRANSACTION_LABEL: Record<TransactionType, string> = {
   expense: 'Dépense',
@@ -284,7 +284,7 @@ function SettingsList({
   )
 }
 
-function CategoryPickerModal({
+export function CategoryPickerModal({
   open,
   mode,
   title,
@@ -327,7 +327,7 @@ function CategoryPickerModal({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0"
-            style={{ background: 'rgba(13,13,31,0.45)', zIndex: mode === 'subcategory' ? 131 : 121 }}
+            style={{ background: 'rgba(13,13,31,0.45)', zIndex: mode === 'subcategory' ? 401 : 400 }}
             onClick={onClose}
           />
 
@@ -341,7 +341,7 @@ function CategoryPickerModal({
             transition={{ type: 'spring', damping: 30, stiffness: 330 }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[420px] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
             style={{
-              zIndex: mode === 'subcategory' ? 132 : 122,
+              zIndex: mode === 'subcategory' ? 402 : 401,
               borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
               padding: 'var(--space-4) var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
               maxHeight: '72dvh',
