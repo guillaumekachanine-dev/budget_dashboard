@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, ChevronDown, ArrowLeft } from 'lucide-react'
+import { X, Search, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -429,6 +429,8 @@ export function Budgets() {
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
   const hasAppliedDefaultParamsRef = useRef(false)
+  const topSectionRef = useRef<HTMLElement | null>(null)
+  const lowerSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -494,6 +496,48 @@ export function Budgets() {
     setShowHeaderPeriodMenu(false)
     setShowCatSheet(false)
   }, [defaultPeriodMonth, defaultPeriodYear, setSelectedCat])
+
+  const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
+    const startY = window.scrollY
+    const distance = targetY - startY
+    if (Math.abs(distance) < 2) return
+
+    const startTime = performance.now()
+    const easeInOutCubic = (t: number) => {
+      if (t < 0.5) return 4 * t * t * t
+      return 1 - Math.pow(-2 * t + 2, 3) / 2
+    }
+
+    const step = (nowTs: number) => {
+      const elapsed = nowTs - startTime
+      const progress = Math.min(1, elapsed / duration)
+      const eased = easeInOutCubic(progress)
+      window.scrollTo(0, startY + distance * eased)
+      if (progress < 1) window.requestAnimationFrame(step)
+    }
+
+    window.requestAnimationFrame(step)
+  }, [])
+
+  const resolveTopOffset = useCallback(() => {
+    const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+    const headerPx = Number.parseFloat(rawHeader || '0')
+    return Number.isFinite(headerPx) ? headerPx + 10 : 78
+  }, [])
+
+  const scrollToLowerSection = useCallback(() => {
+    const target = lowerSectionTitleRef.current
+    if (!target) return
+    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
+    smoothScrollToY(Math.max(0, y))
+  }, [resolveTopOffset, smoothScrollToY])
+
+  const scrollToTopSection = useCallback(() => {
+    const target = topSectionRef.current
+    if (!target) return
+    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
+    smoothScrollToY(Math.max(0, y))
+  }, [resolveTopOffset, smoothScrollToY])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -1571,7 +1615,7 @@ export function Budgets() {
           </div>
         </motion.section>
       ) : (
-      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: '6px', justifyItems: 'center' }}>
+      <motion.section ref={topSectionRef} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: '6px', justifyItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
@@ -1922,6 +1966,32 @@ export function Budgets() {
             </button>
           ))}
         </div>
+
+        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-4)' }}>
+          <button
+            type="button"
+            onClick={scrollToLowerSection}
+            aria-label="Aller aux listes budgets"
+            style={{
+              width: 38,
+              height: 38,
+              minWidth: 38,
+              minHeight: 38,
+              borderRadius: 'var(--radius-full)',
+              border: '1px solid var(--neutral-200)',
+              background: 'var(--neutral-0)',
+              color: 'var(--neutral-700)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-card)',
+              transition: 'transform var(--transition-fast), background var(--transition-fast)',
+            }}
+          >
+            <ArrowDown size={16} />
+          </button>
+        </div>
       </motion.section>
       )}
 
@@ -1929,6 +1999,9 @@ export function Budgets() {
         <AnimatePresence mode="wait">
           {activeSlide === 0 && configuredBudgetPeriod ? (
             <motion.section key="slide0-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <h3 ref={lowerSectionTitleRef} style={{ margin: '0 var(--space-5)', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                Listes budgets
+              </h3>
               <BudgetCategoryList
                 lines={configuredBudgetParentCategoryLines}
                 actualCategoryMetrics={configuredBudgetActuals?.parentCategoryActuals ?? []}
@@ -1938,10 +2011,34 @@ export function Budgets() {
                   setSelectedCat(line.category_id)
                 }}
               />
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-5)' }}>
+                <button
+                  type="button"
+                  onClick={scrollToTopSection}
+                  aria-label="Revenir au carrousel"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    minWidth: 38,
+                    minHeight: 38,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-700)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  <ArrowUp size={16} />
+                </button>
+              </div>
             </motion.section>
           ) : activeSlide === 1 && blockRows.length > 0 ? (
             <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
-              <h3 style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+              <h3 ref={lowerSectionTitleRef} style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Répartition par blocs
               </h3>
               <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
@@ -2010,6 +2107,30 @@ export function Budgets() {
                   </div>
                 )
               })}
+              </div>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={scrollToTopSection}
+                  aria-label="Revenir au carrousel"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    minWidth: 38,
+                    minHeight: 38,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-700)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  <ArrowUp size={16} />
+                </button>
               </div>
             </motion.section>
           ) : null}
