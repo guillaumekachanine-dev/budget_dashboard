@@ -130,13 +130,57 @@ export function Stats() {
     return `Mis à jour le ${date.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
   })()
 
+  const lastUpdateHeaderText = (() => {
+    if (!snapshot?.loadedAt) return 'Jamais mis à jour'
+    const date = new Date(snapshot.loadedAt)
+    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
+
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+
+    return `Dernière actualisation : ${day}/${month} à ${hours}:${minutes}`
+  })()
+
   const monthButtonLabel = selectedPeriod?.label ?? 'Mois'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
         title="Analytics"
-        rightSlot={(
+        rightSlot={activeTabId === 'analytics_2025' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', transform: 'translateY(4px)' }}>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              aria-label="Actualiser les données"
+              style={{
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                padding: '4px 10px',
+                background: 'rgba(255, 255, 255, 0.15)',
+                color: 'var(--neutral-0)',
+                fontSize: '11px',
+                fontWeight: 'var(--font-weight-semibold)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all var(--transition-base)',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-1)',
+              }}
+            >
+              <RotateCw size={11} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              {loading ? 'Chargement' : 'Actualiser'}
+            </button>
+            <p style={{ margin: 0, fontSize: '9px', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'var(--font-weight-medium)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+              {lastUpdateHeaderText}
+            </p>
+          </div>
+        ) : (
           <HeaderPeriodMenu
             buttonLabel={monthButtonLabel}
             buttonAriaLabel="Choisir une période Stats"
@@ -147,7 +191,7 @@ export function Stats() {
             options={headerPeriodOptions}
           />
         )}
-        headerSubtitle={(
+        headerSubtitle={activeTabId === 'analytics_2025' ? null : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
             <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-medium)' }}>
               {lastUpdateText}

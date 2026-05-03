@@ -435,7 +435,7 @@ export function Home() {
         spent: r.spent_amount,
         driftPct: (r.spent_amount / r.budget_amount) * 100 - 100,
       }))
-      .filter((r) => r.driftPct > 0)
+      .filter((r) => r.driftPct >= 0)
       .sort((a, b) => b.driftPct - a.driftPct)
       .slice(0, 6)
   }, [trajectorySummaries])
@@ -1379,7 +1379,7 @@ export function Home() {
             </div>
           </div>
 
-          <div style={{ height: 360 }}>
+          <div style={{ height: 300 }}>
             {isMainCheckingAccount ? (
               <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
                 <div
@@ -1600,8 +1600,8 @@ export function Home() {
                                   <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
                                     {row.name}
                                   </span>
-                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                    {`${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: drift === 0 ? 'var(--color-warning)' : driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {drift === 0 ? '=' : `${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
                                   </span>
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
@@ -1615,7 +1615,7 @@ export function Home() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-1)' }}>
                   {[0, 1].map((idx) => (
                     <button
                       key={idx}
@@ -1623,16 +1623,25 @@ export function Home() {
                       aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
                       onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
                       style={{
-                        width: homeInsightsSlide === idx ? 18 : 8,
-                        height: 8,
-                        borderRadius: 'var(--radius-full)',
+                        padding: '16px 12px',
                         border: 'none',
-                        padding: 0,
-                        background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
+                        background: 'transparent',
                         cursor: 'pointer',
-                        transition: 'width var(--transition-base), background-color var(--transition-fast)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                    />
+                    >
+                      <div
+                        style={{
+                          width: homeInsightsSlide === idx ? 22 : 10,
+                          height: 10,
+                          borderRadius: 'var(--radius-full)',
+                          background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
+                          transition: 'width var(--transition-base), background-color var(--transition-fast)',
+                        }}
+                      />
+                    </button>
                   ))}
                 </div>
               </div>
