@@ -430,7 +430,8 @@ export function Budgets() {
   const [isDragging, setIsDragging] = useState(false)
   const hasAppliedDefaultParamsRef = useRef(false)
   const topSectionRef = useRef<HTMLElement | null>(null)
-  const lowerSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const categoriesSectionRef = useRef<HTMLElement | null>(null)
+  const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -498,7 +499,8 @@ export function Budgets() {
   }, [defaultPeriodMonth, defaultPeriodYear, setSelectedCat])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
-    const startY = window.scrollY
+    const scroller = document.scrollingElement as HTMLElement | null
+    const startY = scroller?.scrollTop ?? window.scrollY
     const distance = targetY - startY
     if (Math.abs(distance) < 2) return
 
@@ -512,7 +514,9 @@ export function Budgets() {
       const elapsed = nowTs - startTime
       const progress = Math.min(1, elapsed / duration)
       const eased = easeInOutCubic(progress)
-      window.scrollTo(0, startY + distance * eased)
+      const nextY = startY + distance * eased
+      if (scroller) scroller.scrollTo({ top: nextY, left: 0, behavior: 'auto' })
+      else window.scrollTo(0, nextY)
       if (progress < 1) window.requestAnimationFrame(step)
     }
 
@@ -526,11 +530,15 @@ export function Budgets() {
   }, [])
 
   const scrollToLowerSection = useCallback(() => {
-    const target = lowerSectionTitleRef.current
+    const target = activeSlide === 0
+      ? categoriesSectionRef.current
+      : activeSlide === 1
+        ? blocksSectionTitleRef.current
+        : null
     if (!target) return
     const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
     smoothScrollToY(Math.max(0, y))
-  }, [resolveTopOffset, smoothScrollToY])
+  }, [activeSlide, resolveTopOffset, smoothScrollToY])
 
   const scrollToTopSection = useCallback(() => {
     const target = topSectionRef.current
@@ -1147,6 +1155,9 @@ export function Budgets() {
   const isCategoryMode = selectedCat !== 'all'
   const slideCount = showExtendedSlides ? 3 : 2
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
+  const canJumpToCategoriesSection = selectedCat === 'all' && activeSlide === 0 && Boolean(configuredBudgetPeriod)
+  const canJumpToBlocksSection = selectedCat === 'all' && activeSlide === 1 && blockRows.length > 0
+  const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
@@ -1967,41 +1978,40 @@ export function Budgets() {
           ))}
         </div>
 
-        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-4)' }}>
-          <button
-            type="button"
-            onClick={scrollToLowerSection}
-            aria-label="Aller aux listes budgets"
-            style={{
-              width: 38,
-              height: 38,
-              minWidth: 38,
-              minHeight: 38,
-              borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--neutral-200)',
-              background: 'var(--neutral-0)',
-              color: 'var(--neutral-700)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-card)',
-              transition: 'transform var(--transition-fast), background var(--transition-fast)',
-            }}
-          >
-            <ArrowDown size={16} />
-          </button>
-        </div>
+        {showSectionTravelShortcuts ? (
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-4)' }}>
+            <button
+              type="button"
+              onClick={scrollToLowerSection}
+              aria-label={canJumpToCategoriesSection ? 'Aller à la répartition par catégories' : 'Aller à la répartition par blocs'}
+              style={{
+                width: 38,
+                height: 38,
+                minWidth: 38,
+                minHeight: 38,
+                borderRadius: 'var(--radius-full)',
+                border: '1px solid var(--neutral-200)',
+                background: 'var(--neutral-0)',
+                color: 'var(--neutral-700)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-card)',
+                transition: 'transform var(--transition-fast), background var(--transition-fast)',
+              }}
+            >
+              <ArrowDown size={16} />
+            </button>
+          </div>
+        ) : null}
       </motion.section>
       )}
 
       {selectedCat === 'all' ? (
         <AnimatePresence mode="wait">
           {activeSlide === 0 && configuredBudgetPeriod ? (
-            <motion.section key="slide0-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              <h3 ref={lowerSectionTitleRef} style={{ margin: '0 var(--space-5)', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Listes budgets
-              </h3>
+            <motion.section ref={categoriesSectionRef} key="slide0-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-3)' }}>
               <BudgetCategoryList
                 lines={configuredBudgetParentCategoryLines}
                 actualCategoryMetrics={configuredBudgetActuals?.parentCategoryActuals ?? []}
@@ -2038,7 +2048,7 @@ export function Budgets() {
             </motion.section>
           ) : activeSlide === 1 && blockRows.length > 0 ? (
             <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
-              <h3 ref={lowerSectionTitleRef} style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+              <h3 ref={blocksSectionTitleRef} style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Répartition par blocs
               </h3>
               <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
