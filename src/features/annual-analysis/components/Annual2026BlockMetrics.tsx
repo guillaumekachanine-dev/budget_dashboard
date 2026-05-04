@@ -2,12 +2,24 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { BUCKET_LABELS, BUCKET_ORDER, MONTH_LABELS_SHORT } from './_constants'
 
+export type MetricsScopeKind = 'bloc' | 'categorie'
+export type MetricsDisplayMode = 'tableau' | 'graphique'
+
+export interface MetricsScopeSelection {
+  kind: MetricsScopeKind
+  id: string
+}
+
 interface Annual2026BlockMetricsProps {
-  summary?: unknown
-  buckets?: unknown[]
+  hideParameterRow?: boolean
+  scopeSelection?: MetricsScopeSelection
+  period?: string
+  displayMode?: MetricsDisplayMode
+  compactMobile?: boolean
 }
 
 interface CategoryRow {
@@ -82,15 +94,87 @@ function fmtPercentCompact(value: number): string {
   return `${value > 0 ? '+' : ''}${formatted}%`
 }
 
-export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
+function getActiveYearMonth(): number {
+  const now = new Date()
+  if (now.getFullYear() !== YEAR_2026) return 12
+  return Math.max(1, Math.min(12, now.getMonth() + 1))
+}
+
+async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows: AnalyticsRow[]; periodRows: BudgetPeriodRow[]; budgetRows: BudgetRow[] }> {
+  const [analyticsRes, periodsRes] = await Promise.all([
+    budgetDb()
+      .from('analytics_monthly_category_metrics')
+      .select('period_month, category_id, amount_total')
+      .eq('flow_type', 'expense')
+      .eq('period_year', YEAR_2026)
+      .in('period_month', months),
+    budgetDb()
+      .from('budget_periods')
+      .select('id, period_month')
+      .eq('period_year', YEAR_2026)
+      .in('period_month', months),
+  ])
+
+  if (analyticsRes.error) throw new Error(`analytics query failed: ${analyticsRes.error.message}`)
+  if (periodsRes.error) throw new Error(`periods query failed: ${periodsRes.error.message}`)
+
+  const periodRows = (periodsRes.data ?? []) as BudgetPeriodRow[]
+  const periodIds = periodRows.map((row) => row.id)
+
+  let budgetRows: BudgetRow[] = []
+  if (periodIds.length > 0) {
+    const budgetsRes = await budgetDb()
+      .from('budgets')
+      .select('period_id, category_id, amount')
+      .eq('budget_kind', 'category')
+      .in('period_id', periodIds)
+    if (budgetsRes.error) throw new Error(`budgets query failed: ${budgetsRes.error.message}`)
+    budgetRows = (budgetsRes.data ?? []) as BudgetRow[]
+  }
+
+  return {
+    analyticsRows: (analyticsRes.data ?? []) as AnalyticsRow[],
+    periodRows,
+    budgetRows,
+  }
+}
+
+export function Annual2026BlockMetrics({
+  hideParameterRow = false,
+  scopeSelection,
+  period,
+  displayMode = 'tableau',
+  compactMobile = false,
+}: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
   const [selectedBlock, setSelectedBlock] = useState(BUCKET_ORDER[0])
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState('2026')
 
+  useEffect(() => {
+    if (!scopeSelection) return
+    if (scopeSelection.kind === 'bloc') {
+      setAnalysisType('bloc')
+      setSelectedBlock(scopeSelection.id)
+    } else {
+      setAnalysisType('catégorie')
+      setSelectedCategoryId(scopeSelection.id)
+    }
+  }, [scopeSelection])
+
+  useEffect(() => {
+    if (!period) return
+    setSelectedPeriod(period)
+  }, [period])
+
   const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, 5)]
   const selectedMonths = useMemo(() => periodMonths(selectedPeriod), [selectedPeriod])
   const range = useMemo(() => periodDateRange(selectedMonths), [selectedMonths])
+
+  const yearMonths = useMemo(() => {
+    const lastMonth = getActiveYearMonth()
+    return Array.from({ length: lastMonth }, (_, i) => i + 1)
+  }, [])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['budget-metrics-categories'],
@@ -128,14 +212,6 @@ export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
     setSelectedCategoryId(rootCategories[0].id)
   }, [analysisType, selectedCategoryId, rootCategories])
 
-  useEffect(() => {
-    if (analysisType !== 'catégorie') return
-    if (!selectedCategoryId) return
-    if (categoryById.has(selectedCategoryId)) return
-    if (!rootCategories.length) return
-    setSelectedCategoryId(rootCategories[0].id)
-  }, [analysisType, selectedCategoryId, categoryById, rootCategories])
-
   const { data: bucketMapRows = [] } = useQuery({
     queryKey: ['budget-metrics-bucket-map'],
     staleTime: 5 * 60_000,
@@ -151,44 +227,13 @@ export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
   const { data: periodDataset } = useQuery({
     queryKey: ['budget-metrics-period-dataset', selectedMonths.join(',')],
     staleTime: 30_000,
-    queryFn: async () => {
-      const [analyticsRes, periodsRes] = await Promise.all([
-        budgetDb()
-          .from('analytics_monthly_category_metrics')
-          .select('period_month, category_id, amount_total')
-          .eq('flow_type', 'expense')
-          .eq('period_year', YEAR_2026)
-          .in('period_month', selectedMonths),
-        budgetDb()
-          .from('budget_periods')
-          .select('id, period_month')
-          .eq('period_year', YEAR_2026)
-          .in('period_month', selectedMonths),
-      ])
+    queryFn: () => fetchDatasetForMonths(selectedMonths),
+  })
 
-      if (analyticsRes.error) throw new Error(`analytics query failed: ${analyticsRes.error.message}`)
-      if (periodsRes.error) throw new Error(`periods query failed: ${periodsRes.error.message}`)
-
-      const periodRows = (periodsRes.data ?? []) as BudgetPeriodRow[]
-      const periodIds = periodRows.map((row) => row.id)
-
-      let budgetRows: BudgetRow[] = []
-      if (periodIds.length > 0) {
-        const budgetsRes = await budgetDb()
-          .from('budgets')
-          .select('period_id, category_id, amount')
-          .eq('budget_kind', 'category')
-          .in('period_id', periodIds)
-        if (budgetsRes.error) throw new Error(`budgets query failed: ${budgetsRes.error.message}`)
-        budgetRows = (budgetsRes.data ?? []) as BudgetRow[]
-      }
-
-      return {
-        analyticsRows: (analyticsRes.data ?? []) as AnalyticsRow[],
-        periodRows,
-        budgetRows,
-      }
-    },
+  const { data: yearDataset } = useQuery({
+    queryKey: ['budget-metrics-year-dataset', yearMonths.join(',')],
+    staleTime: 30_000,
+    queryFn: () => fetchDatasetForMonths(yearMonths),
   })
 
   const scopeCategoryIds = useMemo(() => {
@@ -275,7 +320,6 @@ export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
       const resolveRoot = (categoryId: string): string | null => {
         const cached = rootIdCache.get(categoryId)
         if (cached) return cached
-
         let current = categoryById.get(categoryId) ?? null
         while (current?.parent_id) current = categoryById.get(current.parent_id) ?? null
         const rootId = current?.id ?? null
@@ -313,6 +357,43 @@ export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
     categoryById,
   ])
 
+  const yearlySeries = useMemo(() => {
+    const analyticsRows = yearDataset?.analyticsRows ?? []
+    const budgetRows = yearDataset?.budgetRows ?? []
+    const periodRows = yearDataset?.periodRows ?? []
+    const selectedCategoryIdSet = new Set(scopeCategoryIds)
+    const monthActualMap = new Map<number, number>()
+    const monthBudgetMap = new Map<number, number>()
+
+    for (const month of yearMonths) {
+      monthActualMap.set(month, 0)
+      monthBudgetMap.set(month, 0)
+    }
+
+    for (const row of analyticsRows) {
+      if (!selectedCategoryIdSet.has(row.category_id)) continue
+      monthActualMap.set(row.period_month, (monthActualMap.get(row.period_month) ?? 0) + Number(row.amount_total ?? 0))
+    }
+
+    const periodMonthById = new Map(periodRows.map((row) => [row.id, row.period_month]))
+    for (const row of budgetRows) {
+      if (!row.category_id || !selectedCategoryIdSet.has(row.category_id)) continue
+      const month = periodMonthById.get(row.period_id)
+      if (!month) continue
+      monthBudgetMap.set(month, (monthBudgetMap.get(month) ?? 0) + Number(row.amount ?? 0))
+    }
+
+    const rows = yearMonths.map((month) => ({
+      month,
+      monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
+      amount: monthActualMap.get(month) ?? 0,
+      budget: monthBudgetMap.get(month) ?? 0,
+    }))
+
+    const budgetTarget = rows.length ? rows.reduce((sum, row) => sum + row.budget, 0) / rows.length : 0
+    return { rows, budgetTarget }
+  }, [yearDataset, scopeCategoryIds, yearMonths])
+
   const currentItemLabel = analysisType === 'bloc'
     ? (BUCKET_LABELS[selectedBlock] ?? selectedBlock)
     : (categoryNameById.get(selectedCategoryId) ?? 'Catégorie')
@@ -328,62 +409,82 @@ export function Annual2026BlockMetrics(_props: Annual2026BlockMetricsProps) {
   ]
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-6)', marginTop: 'var(--space-4)' }}>
+    <div style={{ display: 'grid', gap: compactMobile ? 'var(--space-2)' : 'var(--space-3)', padding: hideParameterRow ? '0' : '0 var(--space-6)', marginTop: hideParameterRow ? 0 : 'var(--space-4)' }}>
       <div style={{ maxWidth: 600, margin: '0 auto', width: '100%' }}>
-        <h3 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-          Métriques 2026
-        </h3>
+        {!hideParameterRow ? (
+          <>
+            <h3 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+              Métriques 2026
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+              <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
+                <Selector
+                  label="Type"
+                  value={analysisType === 'bloc' ? 'Bloc' : 'Catégorie'}
+                  options={[
+                    { id: 'bloc', label: 'Bloc' },
+                    { id: 'catégorie', label: 'Catégorie' },
+                  ]}
+                  onSelect={(id) => setAnalysisType(id === 'catégorie' ? 'catégorie' : 'bloc')}
+                />
+              </div>
+              <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
+                <Selector
+                  label={analysisType === 'bloc' ? 'Bloc' : 'Cat.'}
+                  value={currentItemLabel}
+                  options={analysisType === 'bloc'
+                    ? BUCKET_ORDER.map((bucketKey) => ({ id: bucketKey, label: BUCKET_LABELS[bucketKey] ?? bucketKey }))
+                    : rootCategories.map((category) => ({ id: category.id, label: category.name }))}
+                  onSelect={analysisType === 'bloc' ? setSelectedBlock : setSelectedCategoryId}
+                />
+              </div>
+              <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
+                <Selector
+                  label="Période"
+                  value={selectedPeriod}
+                  options={periods.map((periodOption) => ({ id: periodOption, label: periodOption }))}
+                  onSelect={setSelectedPeriod}
+                />
+              </div>
+            </div>
+          </>
+        ) : null}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
-          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
-            <Selector
-              label="Type"
-              value={analysisType === 'bloc' ? 'Bloc' : 'Catégorie'}
-              options={[
-                { id: 'bloc', label: 'Bloc' },
-                { id: 'catégorie', label: 'Catégorie' },
-              ]}
-              onSelect={(id) => setAnalysisType(id === 'catégorie' ? 'catégorie' : 'bloc')}
-            />
+        {displayMode === 'graphique' ? (
+          <div style={{ margin: compactMobile ? 'var(--space-1) var(--space-3) var(--space-3)' : 'var(--space-1) var(--space-5) var(--space-4)', height: compactMobile ? 294 : 308, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '100%', height: compactMobile ? 234 : 252 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={yearlySeries.rows} margin={{ top: 8, right: 4, left: -10, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
+                  <XAxis dataKey="monthLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => fmtCurrencyCompact(Number(value))} width={68} />
+                  <Tooltip formatter={(value: number) => fmtCurrencyCompact(Number(value))} />
+                  <ReferenceLine y={yearlySeries.budgetTarget} stroke="var(--color-error)" strokeWidth={2} strokeDasharray="4 4" />
+                  <Bar dataKey="amount" fill="var(--primary-500)" radius={[6, 6, 0, 0]} maxBarSize={34} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
-            <Selector
-              label={analysisType === 'bloc' ? 'Bloc' : 'Cat.'}
-              value={currentItemLabel}
-              options={analysisType === 'bloc'
-                ? BUCKET_ORDER.map((bucketKey) => ({ id: bucketKey, label: BUCKET_LABELS[bucketKey] ?? bucketKey }))
-                : rootCategories.map((category) => ({ id: category.id, label: category.name }))}
-              onSelect={analysisType === 'bloc' ? setSelectedBlock : setSelectedCategoryId}
-            />
-          </div>
-          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>
-            <Selector
-              label="Période"
-              value={selectedPeriod}
-              options={periods.map((period) => ({ id: period, label: period }))}
-              onSelect={setSelectedPeriod}
-            />
-          </div>
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-2) var(--space-6)' }}
-        >
-          {metrics.map((metric) => (
-            <div key={metric.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: 'var(--space-1) 0', borderBottom: '1px solid var(--neutral-50)' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                  {metric.label}
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-1)', maxWidth: compactMobile ? 300 : 340, margin: '0 auto', width: '100%' }}
+          >
+            {metrics.map((metric) => (
+              <div key={metric.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'baseline', gap: 'var(--space-2)', padding: '6px 0', borderBottom: '1px solid var(--neutral-100)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                    {metric.label}
+                  </p>
+                </div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: metric.color, fontFamily: 'var(--font-mono)' }}>
+                  {metric.value}
                 </p>
               </div>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: metric.color, fontFamily: 'var(--font-mono)' }}>
-                {metric.value}
-              </p>
-            </div>
-          ))}
-        </motion.div>
+            ))}
+          </motion.div>
+        )}
       </div>
     </div>
   )

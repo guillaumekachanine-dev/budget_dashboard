@@ -1,28 +1,41 @@
 import { useState, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import { 
-  Wallet, 
   ArrowDownCircle, 
   ArrowUpCircle, 
   PiggyBank, 
   Zap,
   LayoutList,
-  LineChart as LineChartIcon
+  LineChart as LineChartIcon,
+  type LucideIcon,
 } from 'lucide-react'
 import {
   Area,
   AreaChart,
   CartesianGrid,
   Legend,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import type { MonthlyBudget2026Point } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import { budgetDb } from '@/lib/supabaseBudget'
 
 type Props = {
   monthlyProfile: MonthlyBudget2026Point[]
+}
+
+type MonthlySynthRow = {
+  month: number
+  monthLabel: string
+  budget: number
+  expense: number
+  income: number
+  savings: number
+  deltaRealBudgetPct: number
 }
 
 const fmt = (n: number) => {
@@ -35,26 +48,119 @@ const fmtPct = (r: number) => {
   return `${val}%`
 }
 
+const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+
+function getCurrentMonthCutoff2026(): number {
+  const now = new Date()
+  if (now.getFullYear() < 2026) return 0
+  if (now.getFullYear() > 2026) return 12
+  return Math.max(1, Math.min(12, now.getMonth() + 1))
+}
+
 const CHART_SERIES = [
-  { key: 'expense',  name: 'Dépenses',     color: '#FC5A5A', gradId: 'gExp',  dashed: false },
-  { key: 'income',   name: 'Revenus',      color: '#2ED47A', gradId: 'gInc',  dashed: false },
-  { key: 'savings',  name: 'Épargne',      color: '#FFAB2E', gradId: 'gSav',  dashed: false },
-  { key: 'net',      name: 'Net cashflow', color: '#5B57F5', gradId: 'gNet',  dashed: true  },
+  { key: 'budget',  name: 'Budget',   color: '#5B57F5', gradId: 'gBudget', dashed: true },
+  { key: 'expense', name: 'Dépenses', color: '#FC5A5A', gradId: 'gExp', dashed: false },
+  { key: 'income',  name: 'Revenus',  color: '#2ED47A', gradId: 'gInc', dashed: false },
+  { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
 ]
+const CHART_MAX_Y = 8000
 
 export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>('table')
+  const monthCutoff = getCurrentMonthCutoff2026()
 
-  if (monthlyProfile.length === 0) return null
-
-  // Dummy chart data for UI implementation
-  const chartData = monthlyProfile.map((p) => ({
-    label: p.month,
-    expense: p.totalExpenseBudget,
-    income: 3200,
-    savings: 500,
-    net: 3200 - (p.totalExpenseBudget + 500)
+  const fallbackRows: MonthlySynthRow[] = monthlyProfile.map((point) => ({
+    month: point.month,
+    monthLabel: point.monthLabel,
+    budget: Number(point.totalExpenseBudget ?? 0),
+    expense: Number(point.totalExpenseBudget ?? 0),
+    income: 0,
+    savings: 0,
+    deltaRealBudgetPct: 0,
   }))
+
+  const { data: dbRows } = useQuery({
+    queryKey: ['annual-2026-monthly-synth', monthCutoff],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<MonthlySynthRow[]> => {
+      const [metricsRes, bucketTotalsRes, savingsTotalsRes] = await Promise.all([
+        budgetDb()
+          .from('analytics_monthly_metrics')
+          .select('period_month, expense_total, income_total')
+          .eq('period_year', 2026)
+          .order('period_month', { ascending: true }),
+        budgetDb()
+          .from('budget_bucket_totals_by_period')
+          .select('period_month, total_budget_bucket_eur')
+          .eq('period_year', 2026),
+        budgetDb()
+          .from('savings_budget_totals_by_period')
+          .select('period_month, total_savings_budget_eur')
+          .eq('period_year', 2026),
+      ])
+
+      if (metricsRes.error) throw new Error(`monthly metrics query failed: ${metricsRes.error.message}`)
+      if (bucketTotalsRes.error) throw new Error(`budget bucket totals query failed: ${bucketTotalsRes.error.message}`)
+      if (savingsTotalsRes.error) throw new Error(`savings totals query failed: ${savingsTotalsRes.error.message}`)
+
+      const expenseByMonth = new Map<number, number>()
+      const incomeByMonth = new Map<number, number>()
+      const budgetByMonth = new Map<number, number>()
+      const savingsByMonth = new Map<number, number>()
+      const monthSet = new Set<number>()
+
+      for (const row of metricsRes.data ?? []) {
+        const month = Number(row.period_month ?? 0)
+        if (!Number.isFinite(month) || month <= 0) continue
+        monthSet.add(month)
+        expenseByMonth.set(month, Number(row.expense_total ?? 0))
+        incomeByMonth.set(month, Number(row.income_total ?? 0))
+      }
+
+      for (const row of bucketTotalsRes.data ?? []) {
+        const month = Number(row.period_month ?? 0)
+        if (!Number.isFinite(month) || month <= 0) continue
+        monthSet.add(month)
+        budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(row.total_budget_bucket_eur ?? 0))
+      }
+
+      for (const row of savingsTotalsRes.data ?? []) {
+        const month = Number(row.period_month ?? 0)
+        if (!Number.isFinite(month) || month <= 0) continue
+        monthSet.add(month)
+        savingsByMonth.set(month, Number(row.total_savings_budget_eur ?? 0))
+      }
+
+      return [...monthSet]
+        .sort((a, b) => a - b)
+        .filter((month) => month <= monthCutoff)
+        .map((month) => {
+          const budget = budgetByMonth.get(month) ?? 0
+          const expense = expenseByMonth.get(month) ?? 0
+          return {
+            month,
+            monthLabel: MONTH_LABELS[month - 1] ?? `M${month}`,
+            budget,
+            expense,
+            income: incomeByMonth.get(month) ?? 0,
+            savings: savingsByMonth.get(month) ?? 0,
+            deltaRealBudgetPct: budget > 0 ? (expense - budget) / budget : 0,
+          }
+        })
+    },
+  })
+
+  const rows = (dbRows && dbRows.length > 0 ? dbRows : fallbackRows).filter((row) => row.month <= monthCutoff)
+  if (rows.length === 0) return null
+
+  const chartData = rows.map((row) => ({
+    label: row.monthLabel,
+    budget: row.budget,
+    expense: row.expense,
+    income: row.income,
+    savings: row.savings,
+  }))
+  const overflowIncomeRows = rows.filter((row) => row.income > CHART_MAX_Y)
 
   return (
     <div style={{ padding: '0 var(--space-4)' }}>
@@ -120,13 +226,10 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                   transition={{ duration: 0.2 }}
                   style={{ overflowX: 'auto', margin: '0 -4px' }}
                 >
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 320 }}>
                     <thead>
                       <tr>
                         <th style={{ ...thStyle, ...cardSubStyle, margin: 0 }}>Mois</th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={Wallet} color="var(--neutral-400)" label="Solde" />
-                        </th>
                         <th style={{ ...thStyle, textAlign: 'center' }}>
                           <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
                         </th>
@@ -134,40 +237,33 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                           <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
                         </th>
                         <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={PiggyBank} color="#00E5FF" label="Épargne" />
+                          <IconHeader icon={PiggyBank} color="#FFAB2E" label="Épargne" />
                         </th>
                         <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={Zap} color="var(--neutral-400)" label="Delta" />
+                          <IconHeader icon={Zap} color="var(--neutral-400)" label="% Écart réel/budget" />
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {monthlyProfile.map((p, idx) => {
-                        const mockSolde = 12500 + (idx * 150)
-                        const mockRevenus = 3200
-                        const mockEpargne = 500
-                        const mockEquilibre = p.totalExpenseBudget + mockEpargne
-                        const mockDeltaPct = (mockRevenus - mockEquilibre) / mockEquilibre
-                        
+                      {rows.map((row) => {
+                        const deltaColor = row.deltaRealBudgetPct > 0 ? '#E57373' : '#81C784'
+                        const deltaPrefix = row.deltaRealBudgetPct > 0 ? '+' : ''
                         return (
-                          <tr key={p.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                          <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
                             <td style={{ ...tdStyle, paddingLeft: 0 }}>
-                              <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{p.monthLabel}</span>
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)' }}>
-                              {fmt(mockSolde)}
+                              <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
                             </td>
                             <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
-                              {fmt(p.totalExpenseBudget)}
+                              {fmt(row.expense)}
                             </td>
                             <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
-                              {fmt(mockRevenus)}
+                              {fmt(row.income)}
                             </td>
                             <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)' }}>
-                              {fmt(mockEpargne)}
+                              {fmt(row.savings)}
                             </td>
-                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)', paddingRight: 'var(--space-4)' }}>
-                              {mockDeltaPct >= 0 ? '+' : ''}{fmtPct(mockDeltaPct)}
+                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, paddingRight: 'var(--space-4)', fontWeight: 700 }}>
+                              {deltaPrefix}{fmtPct(row.deltaRealBudgetPct)}
                             </td>
                           </tr>
                         )
@@ -210,7 +306,10 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                           axisLine={false}
                           tickLine={false}
                           width={40}
-                          tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
+                          domain={[0, CHART_MAX_Y]}
+                          allowDataOverflow
+                          tickCount={5}
+                          tickFormatter={(v: number) => `${Math.round(v).toLocaleString('fr-FR')}€`}
                         />
                         <Tooltip
                           contentStyle={{
@@ -247,9 +346,33 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                             activeDot={{ r: 4, strokeWidth: 0 }}
                           />
                         ))}
+                        {overflowIncomeRows.map((row, idx) => (
+                          <ReferenceDot
+                            key={`overflow-income-${row.month}`}
+                            x={row.monthLabel}
+                            y={CHART_MAX_Y}
+                            r={3.5}
+                            fill="#2ED47A"
+                            stroke="#2ED47A"
+                            isFront
+                            label={idx === 0 ? {
+                              value: 'hors échelle',
+                              position: 'top',
+                              fill: 'var(--neutral-500)',
+                              fontSize: 10,
+                              fontFamily: 'var(--font-sans)',
+                              fontWeight: 600,
+                            } : undefined}
+                          />
+                        ))}
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
+                  {overflowIncomeRows.length > 0 ? (
+                    <p style={chartNoteStyle}>
+                      Revenus {overflowIncomeRows[0]?.monthLabel}: {fmt(overflowIncomeRows[0]?.income ?? 0)} (hors échelle &gt; {fmt(CHART_MAX_Y)})
+                    </p>
+                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -260,7 +383,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   )
 }
 
-function IconHeader({ icon: Icon, color, label }: { icon: any, color: string, label: string }) {
+function IconHeader({ icon: Icon, color, label }: { icon: LucideIcon; color: string; label: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center' }} title={label}>
       <Icon size={14} color={color} strokeWidth={2.5} />
@@ -285,6 +408,14 @@ const cardSubStyle: CSSProperties = {
   margin: '2px 0 0', fontSize: 10,
   color: 'var(--neutral-400)', textTransform: 'uppercase',
   letterSpacing: '0.05em', fontWeight: 600,
+}
+
+const chartNoteStyle: CSSProperties = {
+  margin: 'var(--space-2) 0 0',
+  fontSize: 10,
+  color: 'var(--neutral-500)',
+  fontFamily: 'var(--font-sans)',
+  fontWeight: 600,
 }
 
 const thStyle: CSSProperties = {

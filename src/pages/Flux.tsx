@@ -181,6 +181,17 @@ function formatMoneyInteger(amount: number): string {
   }).format(Math.floor(amount))
 }
 
+function formatCategoryModalLabel(name: string): string {
+  const normalized = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
+  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
+  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
+  return name
+}
+
 function resultNoun(flow: FlowFilter): string {
   if (flow === 'expense') return 'dépenses'
   if (flow === 'income') return 'revenus'
@@ -1304,16 +1315,16 @@ export function Flux() {
               transition={{ type: 'spring', damping: 30, stiffness: 330 }}
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
                 top: 0,
                 zIndex: 61,
-                width: '100%',
+                width: 'auto',
                 maxWidth: 420,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
                 maxHeight: '78dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
@@ -1329,7 +1340,7 @@ export function Flux() {
 
               <div style={{ overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                   {rootCategories.map((cat) => (
                     <button
                       key={cat.id}
@@ -1340,19 +1351,18 @@ export function Flux() {
                         setShowHeaderCategorySheet(false)
                       }}
                       style={{
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-0)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: '10px 8px',
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '6px 4px',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 6,
+                        gap: 5,
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
+                      <CategoryIcon categoryName={cat.name} size={34} fallback={null} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
                     </button>
                   ))}
                   </div>
@@ -1366,21 +1376,18 @@ export function Flux() {
                         setShowHeaderCategorySheet(false)
                       }}
                       style={{
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-0)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: '10px 8px',
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '6px 4px',
                         minWidth: 88,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 6,
+                        gap: 5,
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                        <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
-                      </div>
+                      <CategoryIcon categoryName="Toutes catégories" size={34} fallback="💰" />
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
                   </div>

@@ -31,12 +31,14 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
-import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCards'
-import { BudgetParentGroups } from '@/features/budget/components/BudgetParentGroups'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
-import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { Annual2026BlockMetrics } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
+import {
+  Annual2026BlockMetrics,
+  type MetricsDisplayMode,
+  type MetricsScopeSelection,
+} from '@/features/annual-analysis/components/Annual2026BlockMetrics'
+import { BUCKET_LABELS, BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -152,6 +154,17 @@ function formatTxDateDayMonth(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '--/--'
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
+
+function formatCategoryModalLabel(name: string): string {
+  const normalized = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
+  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
+  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
+  return name
 }
 
 function txLabel(tx: Transaction): string {
@@ -407,7 +420,6 @@ function SubCategoryTransactionsModal({
 }
 
 export function Budgets() {
-  const annual2026Metrics = useAnnual2026Analysis()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
@@ -435,12 +447,14 @@ export function Budgets() {
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
-  const [showConfiguredBudgetPanel, setShowConfiguredBudgetPanel] = useState(false)
+  const [slideThreeScopeSelection, setSlideThreeScopeSelection] = useState<MetricsScopeSelection>({
+    kind: 'bloc',
+    id: BUCKET_ORDER[0],
+  })
+  const [slideThreePeriod, setSlideThreePeriod] = useState('2026')
+  const [slideThreeDisplayMode, setSlideThreeDisplayMode] = useState<MetricsDisplayMode>('tableau')
   const {
     data: budgetPayload,
-    loading: configuredBudgetLoading,
-    error: configuredBudgetError,
-    reload: reloadConfiguredBudget,
   } = useBudgetPagePayload({
     periodYear: selectedPeriodYear,
     periodMonth: selectedPeriodMonth,
@@ -475,6 +489,17 @@ export function Budgets() {
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const smoothScrollFrameRef = useRef<number | null>(null)
   const shouldFocusCategoriesSectionRef = useRef(false)
+  const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === 'undefined' ? 1024 : window.innerWidth))
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const isCompactMobile = viewportWidth <= 360
+  const slideHeaderHorizontalPadding = isCompactMobile ? 'var(--space-4)' : 'var(--space-6)'
+  const slideThreeParamCardWidth = isCompactMobile ? 132 : 140
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -766,34 +791,6 @@ export function Budgets() {
     }))
   }, [payloadByParentCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
 
-  const configuredBudgetSummary = useMemo(() => {
-    const byBucket = new Map(payloadByBucket.map((row) => [row.budget_bucket, Number(row.budget_amount ?? 0)]))
-    const totalBudgetMonthly = Number(budgetPayload?.summary.budget_total_reference ?? 0)
-
-    return {
-      totalBudgetMonthly,
-      globalVariableBudget: 0,
-      socleFixeBudget: byBucket.get('socle_fixe') ?? 0,
-      variableEssentielleBudget: byBucket.get('variable_essentielle') ?? 0,
-      provisionBudget: byBucket.get('provision') ?? 0,
-      discretionnaireBudget: byBucket.get('discretionnaire') ?? 0,
-      cagnotteProjetBudget: byBucket.get('cagnotte_projet') ?? 0,
-      horsPilotageBudget: byBucket.get('hors_pilotage') ?? 0,
-    }
-  }, [budgetPayload, payloadByBucket])
-
-  const configuredBudgetParentGroups = useMemo(() => {
-    if (!budgetPayload) return []
-    return payloadByParentCategory.map((parentRow) => ({
-      parentCategoryId: parentRow.parent_category_id,
-      parentCategoryName: parentRow.parent_category_name,
-      totalAmount: Number(parentRow.budget_amount ?? 0),
-      lines: configuredBudgetCategoryLines.filter((line) => (
-        (line.parent_category_id ?? line.category_id) === parentRow.parent_category_id
-      )),
-    }))
-  }, [payloadByParentCategory, configuredBudgetCategoryLines])
-
   const configuredBudgetActuals = useMemo(() => {
     if (!budgetPayload) return null
     return {
@@ -838,6 +835,26 @@ export function Budgets() {
   const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
   const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const slideThreeCategoryOptions = useMemo(
+    () => [
+      ...BUCKET_ORDER.map((bucketKey) => ({
+        value: `bloc:${bucketKey}`,
+        label: `bloc . ${(BUCKET_LABELS[bucketKey] ?? bucketKey).toLowerCase()}`,
+      })),
+      ...rootExpenseCategories.map((category) => ({
+        value: `cat:${category.id}`,
+        label: category.name,
+      })),
+    ],
+    [rootExpenseCategories],
+  )
+  const slideThreeSelectedCategoryValue = useMemo(
+    () => (slideThreeScopeSelection.kind === 'bloc'
+      ? `bloc:${slideThreeScopeSelection.id}`
+      : `cat:${slideThreeScopeSelection.id}`),
+    [slideThreeScopeSelection],
+  )
+  const slideThreePeriods = useMemo(() => ['2026', ...MONTH_LABELS_SHORT.slice(0, 5)], [])
 
   useEffect(() => {
     if (selectedCat === 'all' || !categoriesFetched) return
@@ -1288,13 +1305,6 @@ export function Budgets() {
     [selectedBlockId, blockRows],
   )
 
-  const configuredPeriodLabel = configuredBudgetPeriod
-    ? formatPeriodLabel(
-      configuredBudgetPeriod.period_year,
-      configuredBudgetPeriod.period_month,
-      configuredBudgetPeriod.label,
-    )
-    : 'Aucune période'
   const headerPeriodLabel = periodKey === 'annee'
     ? `Année ${selectedPeriodYear}`
     : formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth)
@@ -1447,25 +1457,6 @@ export function Budgets() {
     return total / rows.length
   }, [monthlyHistory])
   const historyBudgetTarget = Math.max(0, Number(selectedCat === 'all' ? totalMonthlyBudget : categoryMonthlyBudget))
-  const historyYAxisTicks = useMemo(() => {
-    const maxHistory = monthlyHistory.reduce((max, row) => Math.max(max, Number(row.amount ?? 0)), 0)
-    const maxValue = Math.max(maxHistory, historyBudgetTarget)
-    if (maxValue <= 0) return [0]
-
-    const step = Math.max(100, Math.ceil((maxValue / 4) / 100) * 100)
-    const top = Math.ceil(maxValue / step) * step
-    const ticks: number[] = []
-
-    for (let value = 0; value <= top; value += step) ticks.push(value)
-
-    if (!ticks.some((value) => Math.abs(value - historyBudgetTarget) < step * 0.04)) {
-      ticks.push(historyBudgetTarget)
-      ticks.sort((a, b) => a - b)
-    }
-
-    return ticks
-  }, [historyBudgetTarget, monthlyHistory])
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isCategoryMode ? 'var(--space-6)' : 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
@@ -1496,7 +1487,7 @@ export function Budgets() {
       />
 
       {showExtendedSlides ? (
-        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: `0 ${slideHeaderHorizontalPadding}` }}>
           <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 112, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'var(--space-2)', alignItems: 'center' }}>
             {showRealBudgetToggle ? (
               <>
@@ -1583,51 +1574,149 @@ export function Budgets() {
             </div>
               </>
             ) : activeSlide === 2 ? (
-              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
-                <div
-                  style={{
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    color: 'var(--neutral-600)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: 'var(--space-2) var(--space-3)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4,
-                    textAlign: 'center',
-                    minWidth: 140,
-                    minHeight: 56
-                  }}
-                >
-                  <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Montant moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-                    {formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}
-                  </span>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
+                  <label
+                    style={{
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      color: 'var(--neutral-600)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      textAlign: 'center',
+                      minWidth: slideThreeParamCardWidth,
+                      width: slideThreeParamCardWidth,
+                      minHeight: 48,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1, color: 'var(--neutral-600)' }}>catégorie</span>
+                    <select
+                      aria-label="Choisir une catégorie ou un bloc"
+                      value={slideThreeSelectedCategoryValue}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        if (value.startsWith('bloc:')) {
+                          setSlideThreeScopeSelection({ kind: 'bloc', id: value.slice(5) })
+                        } else if (value.startsWith('cat:')) {
+                          setSlideThreeScopeSelection({ kind: 'categorie', id: value.slice(4) })
+                        }
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--neutral-700)',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        lineHeight: 1.2,
+                        width: '100%',
+                        textAlign: 'center',
+                        textAlignLast: 'center',
+                        outline: 'none',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        cursor: 'pointer',
+                        paddingRight: 12,
+                      }}
+                    >
+                      {slideThreeCategoryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label
+                    style={{
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      color: 'var(--neutral-600)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      textAlign: 'center',
+                      minWidth: slideThreeParamCardWidth,
+                      width: slideThreeParamCardWidth,
+                      minHeight: 48,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1, color: 'var(--neutral-600)' }}>période</span>
+                    <select
+                      aria-label="Choisir une période"
+                      value={slideThreePeriod}
+                      onChange={(event) => setSlideThreePeriod(event.target.value)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--neutral-700)',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        lineHeight: 1.2,
+                        width: '100%',
+                        textAlign: 'center',
+                        textAlignLast: 'center',
+                        outline: 'none',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        cursor: 'pointer',
+                        paddingRight: 12,
+                      }}
+                    >
+                      {slideThreePeriods.map((periodOption) => (
+                        <option key={periodOption} value={periodOption}>{periodOption}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700, flexShrink: 0 }}>-</span>
-                <div
-                  style={{
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    color: 'var(--neutral-600)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: 'var(--space-2) var(--space-3)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4,
-                    textAlign: 'center',
-                    minWidth: 140,
-                    minHeight: 56
-                  }}
-                >
-                  <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Écart moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', lineHeight: 1.2 }}>
-                    {sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}
-                  </span>
+
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', padding: 2, background: 'var(--neutral-0)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSlideThreeDisplayMode('tableau')}
+                    aria-pressed={slideThreeDisplayMode === 'tableau'}
+                    style={{
+                      border: 'none',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: slideThreeDisplayMode === 'tableau' ? 'var(--primary-500)' : 'transparent',
+                      color: slideThreeDisplayMode === 'tableau' ? 'var(--neutral-0)' : 'var(--neutral-600)',
+                    }}
+                  >
+                    tableau
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSlideThreeDisplayMode('graphique')}
+                    aria-pressed={slideThreeDisplayMode === 'graphique'}
+                    style={{
+                      border: 'none',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: slideThreeDisplayMode === 'graphique' ? 'var(--primary-500)' : 'transparent',
+                      color: slideThreeDisplayMode === 'graphique' ? 'var(--neutral-0)' : 'var(--neutral-600)',
+                    }}
+                  >
+                    graphique
+                  </button>
                 </div>
               </div>
             ) : (
@@ -2060,59 +2149,13 @@ export function Budgets() {
 
             {showExtendedSlides ? (
               <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-2)' }}>
-                <div style={{ height: 356, transform: 'translateY(-24px)' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={({ x, y, payload }: { x?: number; y?: number; payload?: { value?: number } }) => {
-                          const value = Number(payload?.value ?? 0)
-                          const isBudgetTick = Math.abs(value - historyBudgetTarget) < 0.5
-                          return (
-                            <text
-                              x={x ?? 0}
-                              y={y ?? 0}
-                              dy={3}
-                              textAnchor="end"
-                              fontSize={11}
-                              fill={isBudgetTick ? 'var(--color-error)' : 'var(--neutral-500)'}
-                              fontWeight={isBudgetTick ? 700 : 500}
-                            >
-                              {formatMoney(value)}
-                            </text>
-                          )
-                        }}
-                        ticks={historyYAxisTicks}
-                        width={68}
-                      />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                      <ReferenceLine
-                        y={historyBudgetTarget}
-                        stroke="var(--color-error)"
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                        label={{
-                          value: formatMoney(historyBudgetTarget),
-                          position: 'insideLeft',
-                          fill: 'var(--color-error)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                        }}
-                      />
-                      <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                        <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                          const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                          const item = payload
-                          if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
-                        }} />
-                        {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <Annual2026BlockMetrics
+                  hideParameterRow
+                  scopeSelection={slideThreeScopeSelection}
+                  period={slideThreePeriod}
+                  displayMode={slideThreeDisplayMode}
+                  compactMobile={isCompactMobile}
+                />
               </div>
             ) : null}
           </div>
@@ -2322,93 +2365,6 @@ export function Budgets() {
         </AnimatePresence>
       ) : null}
 
-      {selectedCat === 'all' && activeSlide === 2 && annual2026Metrics.summary ? (
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22 }}
-          style={{ display: 'grid', gap: 'var(--space-4)' }}
-        >
-          {annual2026Metrics.buckets.length > 0 ? (
-            <Annual2026BlockMetrics summary={annual2026Metrics.summary} buckets={annual2026Metrics.buckets} />
-          ) : null}
-        </motion.section>
-      ) : null}
-
-      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0', display: 'grid', gap: 'var(--space-4)' }}>
-        <button
-          type="button"
-          onClick={() => setShowConfiguredBudgetPanel((current) => !current)}
-          aria-expanded={showConfiguredBudgetPanel}
-          aria-controls="configured-budget-panel"
-          style={{ border: 'none', background: 'transparent', width: '100%', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', textAlign: 'left' }}
-        >
-          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)' }}>
-            Pilotage budget configuré
-          </p>
-          <span style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
-          <ChevronDown
-            size={16}
-            style={{
-              color: 'var(--neutral-600)',
-              transform: showConfiguredBudgetPanel ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform var(--transition-base)',
-              flexShrink: 0,
-            }}
-          />
-        </button>
-
-        <AnimatePresence initial={false}>
-          {showConfiguredBudgetPanel ? (
-            <motion.div
-              id="configured-budget-panel"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-              style={{ display: 'grid', gap: 'var(--space-4)' }}
-            >
-              <div style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--neutral-200)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    Période budgétaire
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-                    {configuredPeriodLabel}
-                  </p>
-                </div>
-
-                {configuredBudgetLoading ? (
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-                    Chargement du payload Budgets…
-                  </p>
-                ) : null}
-
-                {configuredBudgetError ? (
-                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 600 }}>
-                      {configuredBudgetError}
-                    </p>
-                    <div>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => void reloadConfiguredBudget()}>
-                        Réessayer
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {configuredBudgetPeriod ? (
-                <>
-                  <BudgetSummaryCards summary={configuredBudgetSummary} />
-                  <BudgetParentGroups groups={configuredBudgetParentGroups} />
-                </>
-              ) : null}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </motion.section>
-
       <AnimatePresence>
         {selectedBlock ? (
           <>
@@ -2576,16 +2532,16 @@ export function Budgets() {
               transition={{ type: 'spring', damping: 30, stiffness: 330 }}
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
                 top: 0,
                 zIndex: 61,
-                width: '100%',
+                width: 'auto',
                 maxWidth: 420,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
                 maxHeight: '78dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
@@ -2601,7 +2557,7 @@ export function Budgets() {
 
               <div style={{ overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                     {rootExpenseCategories.map((cat) => (
                       <button
                         key={cat.id}
@@ -2612,19 +2568,18 @@ export function Budgets() {
                           setShowCatSheet(false)
                         }}
                         style={{
-                          border: '1px solid var(--neutral-200)',
-                          background: 'var(--neutral-0)',
-                          borderRadius: 'var(--radius-lg)',
-                          padding: '10px 8px',
+                          border: 'none',
+                          background: 'transparent',
+                          padding: '6px 4px',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
-                          gap: 6,
+                          gap: 5,
                           cursor: 'pointer',
                         }}
                       >
-                        <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
+                        <CategoryIcon categoryName={cat.name} size={34} fallback={null} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
                       </button>
                     ))}
                   </div>
@@ -2638,21 +2593,18 @@ export function Budgets() {
                         setShowCatSheet(false)
                       }}
                       style={{
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-0)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: '10px 8px',
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '6px 4px',
                         minWidth: 88,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 6,
+                        gap: 5,
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                        <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
-                      </div>
+                      <CategoryIcon categoryName="Toutes catégories" size={34} fallback="💰" />
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
                   </div>

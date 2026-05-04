@@ -34,7 +34,7 @@ export function Annual2026BudgetDNA({ buckets, categories, totalMonthly }: Props
         {/* ── 1. Barre d'allocation ── */}
         <div style={cardStyle}>
           <h3 style={cardTitleStyle}>Allocation par bloc budgétaire</h3>
-          <p style={cardSubStyle}>Chaque euro planifié, réparti par nature de dépense</p>
+          <p style={cardSubStyle}>budget mensuel</p>
 
           {/* Barre stacked */}
           <div style={{

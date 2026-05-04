@@ -4,6 +4,7 @@ import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
 import { Annual2026MonthlyTable } from './Annual2026MonthlyTable'
+import { ConfiguredBudgetPilotagePanel } from '@/features/budget/components/ConfiguredBudgetPilotagePanel'
 
 export function Annual2026Tab() {
   const {
@@ -51,9 +52,10 @@ export function Annual2026Tab() {
       {/* 1ère partie : Vue d'ensemble - 2026 */}
       {summary && buckets.length > 0 ? (
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-          <SectionTitle title="Vue d'ensemble - 2026" />
           <Annual2026Hero summary={summary} buckets={buckets} />
+          <SectionTitle title="Vue d'ensemble 2026" />
           <Annual2026MonthlyTable monthlyProfile={monthlyProfile} />
+          {categories.length > 0 ? <AnnualProjectionCard categories={categories} /> : null}
         </div>
       ) : null}
 
@@ -66,14 +68,11 @@ export function Annual2026Tab() {
             categories={categories}
             totalMonthly={summary.totalMonthlyBudget}
           />
-          {categories.length > 0 ? (
-            <>
-              <Annual2026CategoryRanking categories={categories} />
-              <AnnualProjectionCard categories={categories} />
-            </>
-          ) : null}
+          {categories.length > 0 ? <Annual2026CategoryRanking categories={categories} /> : null}
         </div>
       ) : null}
+
+      <ConfiguredBudgetPilotagePanel />
     </motion.div>
   )
 }

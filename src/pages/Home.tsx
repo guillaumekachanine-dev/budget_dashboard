@@ -570,6 +570,27 @@ export function Home() {
     if (daysRemaining <= 0) return mainAccountResteUtile
     return mainAccountResteUtile / daysRemaining
   }, [daysRemaining, mainAccountResteUtile])
+  const todayDayMonthLabel = useMemo(
+    () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+    [now],
+  )
+  const consumedVariablePct = useMemo(() => {
+    if (variableBudgetMonthly <= 0) return 0
+    return (variableSpentToDate / variableBudgetMonthly) * 100
+  }, [variableBudgetMonthly, variableSpentToDate])
+  const consumedVariablePctClamped = useMemo(
+    () => Math.max(0, Math.min(100, consumedVariablePct)),
+    [consumedVariablePct],
+  )
+  const consumedVariablePctDisplay = useMemo(
+    () => `${Math.round(consumedVariablePct)}%`,
+    [consumedVariablePct],
+  )
+  const fakeResteUtile = 950
+  const fakeBudgetPerDay = useMemo(() => {
+    if (daysRemaining <= 0) return fakeResteUtile
+    return fakeResteUtile / daysRemaining
+  }, [daysRemaining, fakeResteUtile])
 
   const handleOpenAccountsModal = useCallback(() => {
     setShowAccountsModal((current) => !current)
@@ -1133,9 +1154,10 @@ export function Home() {
   return (
     <div
       style={{
+        minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-8)',
+        gap: 'var(--space-4)',
         paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))',
       }}
     >
@@ -1165,9 +1187,9 @@ export function Home() {
       />
 
       <motion.section
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.05 }}
+        transition={{ duration: 0.3 }}
         style={{ padding: '0 var(--space-6)' }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
@@ -1205,92 +1227,206 @@ export function Home() {
             </div>
           ) : (
             <>
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 'var(--space-1)',
-                  justifyItems: 'center',
-                  textAlign: 'center',
-                  marginBottom: 'var(--space-2)',
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 'var(--font-size-kpi)',
-                    fontWeight: 'var(--font-weight-extrabold)',
-                    lineHeight: 'var(--line-height-tight)',
+              {isMainCheckingAccount ? (
+                <div style={{
+                  background: 'linear-gradient(140deg, #1A1730 0%, #2D2B6B 45%, #3D3AB8 100%)',
+                  borderRadius: 'var(--radius-2xl)',
+                  padding: 'var(--space-5)',
+                  minHeight: 206,
+                  boxShadow: 'var(--shadow-card)',
+                  position: 'relative',
+                  overflow: 'visible',
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    right: -16,
+                    bottom: -20,
+                    fontSize: 110,
+                    fontWeight: 900,
                     fontFamily: 'var(--font-mono)',
-                    color: heroAmountColor,
-                  }}
-                >
-                  {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
-                </p>
-                {isSavingsBooklet && savingsBookletCeiling ? (
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                    {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
-                  </p>
-                ) : null}
-              </div>
+                    color: 'rgba(255,255,255,0.04)',
+                    lineHeight: 1,
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                    letterSpacing: '-0.04em',
+                  }}>
+                    {now.getFullYear()}
+                  </span>
 
-              <div
-                style={{
-                  background: heroPrimaryColor,
-                  color: 'var(--neutral-0)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: 'var(--space-6)',
-                  boxShadow: 'var(--shadow-lg)',
-                  display: 'grid',
-                }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-                  {displayedHeroMetrics.map((metric) => (
+                  <div style={{
+                    position: 'absolute',
+                    top: -60,
+                    right: -60,
+                    width: 200,
+                    height: 200,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(91,87,245,0.25) 0%, transparent 70%)',
+                    pointerEvents: 'none',
+                  }} />
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <p style={{
+                      margin: 0,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: 'rgba(255,255,255,0.5)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                    }}>
+                      compte courant
+                    </p>
                     <div
-                      key={metric.key}
+                      aria-label={`Progression consommé ${consumedVariablePctDisplay}`}
                       style={{
-                        background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
-                        borderRadius: 'var(--radius-md)',
-                        padding: 'var(--space-3)',
-                        border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
+                        width: 52,
+                        height: 52,
+                        borderRadius: '50%',
+                        background: `conic-gradient(${consumedVariablePct > 100 ? 'rgba(252,90,90,0.98)' : 'rgba(46,212,122,0.95)'} ${consumedVariablePctClamped}%, rgba(226,228,234,0.9) ${consumedVariablePctClamped}% 100%)`,
                         display: 'grid',
-                        gap: 'var(--space-1)',
-                        justifyItems: 'center',
-                        textAlign: 'center',
+                        placeItems: 'center',
+                        alignSelf: 'center',
                       }}
                     >
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
-                          fontWeight: 'var(--font-weight-semibold)',
-                          textTransform: 'uppercase',
-                          color: 'var(--neutral-700)',
-                          letterSpacing: '0.06em',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {metric.label}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
-                          fontWeight: 'var(--font-weight-bold)',
-                          color: 'var(--neutral-900)',
-                          fontFamily: 'var(--font-mono)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {metric.value}
-                      </p>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#FFFFFF', display: 'grid', placeItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                          {consumedVariablePctDisplay}
+                        </span>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <p style={{
+                    margin: '2px 0 0',
+                    fontSize: 'clamp(28px, 8vw, 40px)',
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-mono)',
+                    color: '#FFFFFF',
+                    lineHeight: 1.1,
+                    letterSpacing: '-0.02em',
+                  }}>
+                    {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                  </p>
+                  <p style={{
+                    margin: '4px 0 0',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.4)',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {`solde au ${todayDayMonthLabel}`}
+                  </p>
+
+                  <div style={{ margin: 'var(--space-4) 0 var(--space-3)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', alignItems: 'start' }}>
+                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>variable</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableBudgetMonthly).replace(/\s+€/, '€')}</p>
+                    </div>
+                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>consommé</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableSpentToDate).replace(/\s+€/, '€')}</p>
+                    </div>
+                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>reste utile</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(fakeResteUtile).replace(/\s+€/, '€')}</p>
+                    </div>
+                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>budget/jour</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(fakeBudgetPerDay).replace(/\s+€/, '€')}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: 'var(--space-1)',
+                      justifyItems: 'center',
+                      textAlign: 'center',
+                      marginBottom: 'var(--space-2)',
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 'var(--font-size-kpi)',
+                        fontWeight: 'var(--font-weight-extrabold)',
+                        lineHeight: 'var(--line-height-tight)',
+                        fontFamily: 'var(--font-mono)',
+                        color: heroAmountColor,
+                      }}
+                    >
+                      {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                    </p>
+                    {isSavingsBooklet && savingsBookletCeiling ? (
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                        {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div
+                    style={{
+                      background: heroPrimaryColor,
+                      color: 'var(--neutral-0)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: 'var(--space-6)',
+                      boxShadow: 'var(--shadow-lg)',
+                      display: 'grid',
+                    }}
+                  >
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                      {displayedHeroMetrics.map((metric) => (
+                        <div
+                          key={metric.key}
+                          style={{
+                            background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
+                            borderRadius: 'var(--radius-md)',
+                            padding: 'var(--space-3)',
+                            border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
+                            display: 'grid',
+                            gap: 'var(--space-1)',
+                            justifyItems: 'center',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
+                              fontWeight: 'var(--font-weight-semibold)',
+                              textTransform: 'uppercase',
+                              color: 'var(--neutral-700)',
+                              letterSpacing: '0.06em',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {metric.label}
+                          </p>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
+                              fontWeight: 'var(--font-weight-bold)',
+                              color: 'var(--neutral-900)',
+                              fontFamily: 'var(--font-mono)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {metric.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -1846,16 +1982,16 @@ export function Home() {
               onClick={(event) => event.stopPropagation()}
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
                 top: 0,
                 zIndex: 61,
-                width: '100%',
+                width: 'auto',
                 maxWidth: 430,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
                 boxShadow: 'var(--shadow-lg)',
                 maxHeight: '78dvh',
                 overflowY: 'auto',
@@ -1887,7 +2023,7 @@ export function Home() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-5) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                 {accountEntries.filter((entry) => VISIBLE_ACCOUNT_PRESET_IDS.has(entry.preset.id)).map((entry) => {
                   const isActive = entry.preset.id === selectedAccountEntry?.preset.id || (entry.preset.id === 'placements' && selectedAccountEntry?.preset.id === 'placements')
                   return (
@@ -1908,13 +2044,13 @@ export function Home() {
                         <img
                           src={entry.preset.iconSrc}
                           alt={entry.preset.label}
-                          width={56}
-                          height={56}
-                          style={{ width: 56, height: 56, objectFit: 'contain', transform: `scale(${entry.preset.iconScale ?? 1})` }}
+                          width={44}
+                          height={44}
+                          style={{ width: 44, height: 44, objectFit: 'contain', transform: `scale(${entry.preset.iconScale ?? 1})` }}
                           loading="lazy"
                           decoding="async"
                         />
-                        <span style={{ fontSize: 'var(--font-size-sm)', lineHeight: 1.35, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
+                        <span style={{ fontSize: 11, lineHeight: 1.25, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
                           {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
                         </span>
                       </button>

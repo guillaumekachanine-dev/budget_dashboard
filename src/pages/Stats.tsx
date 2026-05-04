@@ -13,14 +13,11 @@ import { Annual2026Tab } from '@/features/annual-analysis/components/Annual2026T
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
-import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetBucketsCard'
-import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
 import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
-import { StatsMonthlyEvolutionCard } from '@/features/stats/components/StatsMonthlyEvolutionCard'
 import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 
-type StatsTabId = 'analytics' | 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -28,9 +25,8 @@ type StatsTabConfig = {
 }
 
 const STATS_TABS: StatsTabConfig[] = [
-  { id: 'analytics', label: 'analytics 2026', iconSrc: analyticsIcon },
-  { id: 'analytics_2026', label: 'plan 2026', iconSrc: analyticsIcon },
-  { id: 'analytics_2025', label: 'analytics 2025', iconSrc: analyticsIcon },
+  { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
+  { id: 'analytics_2025', label: 'Analytics\n2025', iconSrc: analyticsIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
@@ -240,40 +236,6 @@ export function Stats() {
         onActionClick={handleToggleTabModal}
       />
 
-      {activeTab.id === 'analytics' ? (
-        <>
-          {snapshot ? (
-            <>
-              <StatsTotalNeedCard
-                totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
-                totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
-                totalMonthlyNeed={snapshot.totalMonthlyNeed}
-              />
-
-              <StatsBudgetBucketsCard budgetSummary={snapshot.budgetSummary} />
-
-              <StatsBudgetVsActualCard
-                budgetSummary={snapshot.budgetSummary}
-                rows={snapshot.budgetBucketVsActual}
-              />
-
-              <StatsSavingsCard
-                savingsSummary={snapshot.savingsSummary}
-                savingsLines={snapshot.savingsLines}
-              />
-
-              <StatsMonthlyEvolutionCard rows={snapshot.monthlyEvolution2026} />
-            </>
-          ) : (
-            <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '0 var(--space-6)' }}>
-              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
-                {loading ? 'Chargement du snapshot de référence…' : 'Aucune donnée de référence disponible pour le moment.'}
-              </div>
-            </motion.section>
-          )}
-        </>
-      ) : null}
-
       {activeTab.id === 'analytics_2025' ? (
         <Annual2025Tab />
       ) : null}
@@ -348,16 +310,16 @@ export function Stats() {
               onClick={(event) => event.stopPropagation()}
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
                 top: 0,
                 zIndex: 61,
-                width: '100%',
+                width: 'auto',
                 maxWidth: 430,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
                 boxShadow: 'var(--shadow-lg)',
                 maxHeight: '78dvh',
                 overflowY: 'auto',
@@ -389,7 +351,7 @@ export function Stats() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 'var(--space-4) var(--space-1)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
@@ -411,13 +373,13 @@ export function Stats() {
                       <img
                         src={tab.iconSrc}
                         alt={tab.label}
-                        width={44}
-                        height={44}
-                        style={{ width: 44, height: 44, objectFit: 'contain' }}
+                        width={34}
+                        height={34}
+                        style={{ width: 34, height: 34, objectFit: 'contain' }}
                         loading="lazy"
                         decoding="async"
                       />
-                      <span style={{ fontSize: 'var(--font-size-sm)', lineHeight: 1.35, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', textTransform: 'capitalize' }}>
+                      <span style={{ fontSize: 10, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', textTransform: 'capitalize', whiteSpace: 'pre-line' }}>
                         {tab.label}
                       </span>
                     </button>
