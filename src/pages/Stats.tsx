@@ -46,7 +46,7 @@ export function Stats() {
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
 
-  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics')
+  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2026')
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
   const hasAppliedDefaultPeriodRef = useRef(false)
@@ -149,7 +149,7 @@ export function Stats() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
       <PageHeader
         title="Analytics"
-        rightSlot={activeTabId === 'analytics_2025' ? (
+        rightSlot={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', transform: 'translateY(4px)' }}>
             <button
               type="button"
@@ -177,7 +177,7 @@ export function Stats() {
               {loading ? 'Chargement' : 'Actualiser'}
             </button>
             <p style={{ margin: 0, fontSize: '9px', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'var(--font-weight-medium)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {lastUpdateHeaderText}
+              {activeTabId === 'analytics_2025' ? lastUpdateHeaderText : lastUpdateText}
             </p>
           </div>
         ) : (
@@ -191,7 +191,7 @@ export function Stats() {
             options={headerPeriodOptions}
           />
         )}
-        headerSubtitle={activeTabId === 'analytics_2025' ? null : (
+        headerSubtitle={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? null : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
             <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-medium)' }}>
               {lastUpdateText}

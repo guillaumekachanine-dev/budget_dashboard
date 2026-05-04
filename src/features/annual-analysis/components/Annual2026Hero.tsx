@@ -1,56 +1,26 @@
-import type { Annual2026Summary } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import type { Annual2026Summary, Budget2026BucketSummary } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 
 type Props = {
   summary: Annual2026Summary
+  buckets: Budget2026BucketSummary[]
 }
 
 const fmt2 = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
 
-export function Annual2026Hero({ summary }: Props) {
+export function Annual2026Hero({ summary, buckets }: Props) {
+  void buckets
   const savingsRatePct = summary.totalMonthlyNeed > 0
     ? ((summary.totalSavingsBudget / summary.totalMonthlyNeed) * 100).toFixed(1)
-    : '0'
-  const expenseRatePct = summary.totalMonthlyNeed > 0
-    ? ((summary.totalMonthlyBudget / summary.totalMonthlyNeed) * 100).toFixed(1)
     : '0'
 
   return (
     <section style={{ padding: '0 var(--space-6)' }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
 
-        {/* ── Tag barre supérieure ── */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 'var(--space-3)',
-        }}>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: 'var(--primary-600)',
-            background: 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)',
-            padding: '3px 10px',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid color-mix(in oklab, var(--primary-600) 25%, transparent)',
-          }}>
-            Plan 2026 · Jan – Mai
-          </span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: 'var(--neutral-400)',
-            letterSpacing: '0.06em',
-          }}>
-            {summary.ytdMonths} mois · Budget annualisé
-          </span>
-        </div>
 
-        {/* ── Hero card ── */}
+        {/* Hero card ── */}
         <div style={{
           background: 'linear-gradient(140deg, #1A1730 0%, #2D2B6B 45%, #3D3AB8 100%)',
           borderRadius: 'var(--radius-2xl)',
@@ -86,11 +56,11 @@ export function Annual2026Hero({ summary }: Props) {
               color: 'rgba(255,255,255,0.5)',
               textTransform: 'uppercase', letterSpacing: '0.1em',
             }}>
-              Budget mensuel · Plan 2026
+              budget mensuel cible
             </p>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <HeroBadge label="Épargne" value={`${savingsRatePct}%`} color="rgba(46,212,122,0.95)" />
-              <HeroBadge label="Dépenses" value={`${expenseRatePct}%`} color="rgba(252,90,90,0.8)" />
+              <HeroBadge label="fixe/discr" value="1,2" color="#2ED47A" />
             </div>
           </div>
 
@@ -117,64 +87,16 @@ export function Annual2026Hero({ summary }: Props) {
 
           {/* 4 KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)' }}>
-            <HeroKpi label="+ Épargne" value={fmt2(summary.totalSavingsBudget)} />
-            <HeroKpi label="Besoin total" value={fmt2(summary.totalMonthlyNeed)} highlight="accent" />
+            <HeroKpi label="discrétionnaire" value="755€" />
+            <HeroKpi label="épargne" value={fmt2(summary.totalSavingsBudget)} />
+            <HeroKpi label="besoin total" value={fmt2(summary.totalMonthlyNeed)} highlight="accent" />
             <HeroKpi label="YTD dépenses" value={fmt(summary.ytdBudgetTotal)} />
-            <HeroKpi label="YTD total" value={fmt(summary.ytdTotalNeed)} />
           </div>
 
-          {/* Barre YTD avancement */}
-          <div style={{ marginTop: 'var(--space-5)' }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              marginBottom: 6,
-            }}>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Avancement YTD
-              </span>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-mono)' }}>
-                {summary.ytdMonths} / 12 mois
-              </span>
-            </div>
-            <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${(summary.ytdMonths / 12) * 100}%`,
-                borderRadius: 3,
-                background: 'linear-gradient(90deg, rgba(46,212,122,0.7), rgba(91,87,245,0.9))',
-                transition: 'width 0.6s ease',
-              }} />
-            </div>
           </div>
         </div>
-
-        {/* ── 3 blocs inline sous le hero ── */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 'var(--space-3)', marginTop: 'var(--space-3)',
-        }}>
-          <SubMetricCard
-            label="Besoin jour"
-            value={fmt2(summary.totalMonthlyNeed / 30)}
-            sub="/ jour calendaire"
-            color="#5B57F5"
-          />
-          <SubMetricCard
-            label="Flex budget"
-            value={fmt2(summary.totalMonthlyBudget * 0.25)}
-            sub="25% piloté actif"
-            color="#FFAB2E"
-          />
-          <SubMetricCard
-            label="YTD épargne"
-            value={fmt2(summary.ytdSavingsTotal)}
-            sub={`${summary.ytdMonths} mois × ${fmt2(summary.totalSavingsBudget)}`}
-            color="#2ED47A"
-          />
-        </div>
-      </div>
-    </section>
-  )
+      </section>
+    )
 }
 
 function HeroBadge({ label, value, color }: { label: string; value: string; color: string }) {
@@ -203,23 +125,6 @@ function HeroKpi({ label, value, highlight }: { label: string; value: string; hi
       }}>
         {value}
       </p>
-    </div>
-  )
-}
-
-function SubMetricCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
-  return (
-    <div style={{
-      background: 'var(--neutral-0)',
-      borderRadius: 'var(--radius-xl)',
-      border: `1px solid color-mix(in oklab, ${color} 18%, var(--neutral-150) 82%)`,
-      borderTopWidth: 3, borderTopColor: color,
-      padding: 'var(--space-3)',
-      boxShadow: 'var(--shadow-card)',
-    }}>
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: color, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</p>
-      <p style={{ margin: '5px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1.2 }}>{value}</p>
-      <p style={{ margin: '2px 0 0', fontSize: 9, color: 'var(--neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</p>
     </div>
   )
 }
