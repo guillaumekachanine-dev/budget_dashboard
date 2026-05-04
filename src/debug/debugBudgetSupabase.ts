@@ -50,7 +50,7 @@ export async function debugBudgetSupabaseConnection(
   for (const table of referenceTables) {
     const { data, error, status: tableStatus, statusText: tableStatusText } = await supabase
       .schema('budget_dashboard')
-      .from(table)
+      .from(table as any)
       .select('id, user_id')
       .limit(5)
     tableChecks.push({
