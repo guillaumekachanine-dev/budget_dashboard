@@ -67,20 +67,41 @@ export interface Budget {
 export interface BudgetRecommendation {
   id: string
   user_id: string
-  category_id: string | null
-  source_month_start: string | null
-  source_period_year: number | null
-  source_period_month: number | null
-  source_amount_total: number | null
-  source_months_count: number | null
-  recommendation_status: string | null
-  decision_status: string | null
-  applied_period_id: string | null
-  budget_bucket: string | null
-  budget_method: string | null
-  final_budget_monthly_eur: number | null
-  manual_budget_monthly_eur: number | null
+  analysis_start_month: string
+  analysis_end_exclusive: string
+  target_period_year: number | null
+  target_period_month: number | null
+  category_id: string
+  category_name: string
+  parent_category_id: string | null
+  parent_category_name: string | null
+  category_path: string
+  category_budget_behavior: string | null
+  months_observed: number
+  active_months_count: number
+  activity_ratio: number | null
+  total_amount: number
+  avg_full_monthly_amount: number | null
+  avg_active_monthly_amount: number | null
+  median_full_monthly_amount: number | null
+  median_active_monthly_amount: number | null
+  min_active_monthly_amount: number | null
+  max_monthly_amount: number | null
+  avg_last_3_full_months: number | null
+  avg_last_3_nonzero_months: number | null
+  budget_method: string
+  budget_bucket: string
+  raw_budget_monthly_eur: number
+  proposed_budget_monthly_eur: number
+  formula_applied: string | null
+  needs_manual_review: boolean
   recommendation_comment: string | null
+  manual_budget_monthly_eur: number | null
+  final_budget_monthly_eur: number | null
+  decision_status: string
+  decision_notes: string | null
+  applied_period_id: string | null
+  applied_to_budgets_at: string | null
   created_at: string
   updated_at: string
 }
@@ -107,6 +128,7 @@ export interface Transaction {
   is_recurring: boolean
   is_verified: boolean
   is_hidden: boolean
+  personal_scope: string | null
   notes: string | null
   meta: Record<string, unknown> | null
   created_at: string
@@ -202,6 +224,69 @@ export interface AnalyticsVariableCategorySummary {
   refreshed_at: string
 }
 
+export interface BudgetBucketTotalsByPeriodRow {
+  user_id: string | null
+  period_id: string | null
+  period_year: number | null
+  period_month: number | null
+  budget_bucket: string | null
+  total_budget_bucket_eur: number | null
+}
+
+export interface BudgetBucketBudgetVsActualByMonthRow {
+  user_id: string | null
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  budget_bucket: string | null
+  target_budget_bucket_eur: number | null
+  actual_budget_bucket_eur: number | null
+  delta_budget_bucket_eur: number | null
+  consumption_ratio: number | null
+}
+
+export interface ExpenseBudgetLineRow {
+  user_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  amount: number | null
+  effective_bucket: string | null
+  method: string | null
+}
+
+export interface SavingsBudgetTotalsByPeriodRow {
+  user_id: string | null
+  period_id: string | null
+  period_year: number | null
+  period_month: number | null
+  total_savings_budget_eur: number | null
+}
+
+export interface SavingsBudgetLinesByPeriodRow {
+  user_id: string | null
+  period_id: string | null
+  period_year: number | null
+  period_month: number | null
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  amount: number | null
+  notes: string | null
+}
+
+export interface SavingsBudgetVsActualByPeriodRow {
+  user_id: string | null
+  period_id: string | null
+  period_year: number | null
+  period_month: number | null
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  target_savings_amount_eur: number | null
+  actual_savings_amount_eur: number | null
+  delta_savings_amount_eur: number | null
+}
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>
   Insert: Insert & Record<string, unknown>
@@ -224,7 +309,14 @@ export type Database = {
       analytics_monthly_category_metrics: TableDef<AnalyticsMonthlyCategoryMetrics, Omit<AnalyticsMonthlyCategoryMetrics, never>, Partial<AnalyticsMonthlyCategoryMetrics>>
       analytics_variable_category_summary: TableDef<AnalyticsVariableCategorySummary, Omit<AnalyticsVariableCategorySummary, never>, Partial<AnalyticsVariableCategorySummary>>
     }
-    Views: Record<string, never>
+    Views: {
+      budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
+      budget_bucket_budget_vs_actual_by_month: { Row: BudgetBucketBudgetVsActualByMonthRow & Record<string, unknown>; Relationships: [] }
+      expense_budget_lines: { Row: ExpenseBudgetLineRow & Record<string, unknown>; Relationships: [] }
+      savings_budget_totals_by_period: { Row: SavingsBudgetTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
+      savings_budget_lines_by_period: { Row: SavingsBudgetLinesByPeriodRow & Record<string, unknown>; Relationships: [] }
+      savings_budget_vs_actual_by_period: { Row: SavingsBudgetVsActualByPeriodRow & Record<string, unknown>; Relationships: [] }
+    }
     Functions: {
       get_budget_page_payload: {
         Args: {

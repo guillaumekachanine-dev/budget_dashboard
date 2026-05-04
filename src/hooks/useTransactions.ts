@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
 import type { FlowType, Transaction } from '@/lib/types'
 
 interface TransactionFilters {
@@ -96,6 +97,7 @@ export function useAddTransaction() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      void hydrateStatsReferenceData({ force: true }).catch(() => {})
     },
   })
 }
@@ -116,6 +118,7 @@ export function useUpdateTransaction() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      void hydrateStatsReferenceData({ force: true }).catch(() => {})
     },
   })
 }
@@ -130,6 +133,7 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      void hydrateStatsReferenceData({ force: true }).catch(() => {})
     },
   })
 }

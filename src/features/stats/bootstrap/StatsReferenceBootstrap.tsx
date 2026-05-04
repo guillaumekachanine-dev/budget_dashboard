@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { isStatsReferenceSnapshotStale } from '@/features/stats/store/statsReferenceStore'
+import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 
 type StatsReferenceBootstrapProps = {
   userId: string | null
@@ -24,9 +25,14 @@ export function StatsReferenceBootstrap({ userId, enabled }: StatsReferenceBoots
 
     attemptedUsersRef.current.add(userId)
 
-    void hydrateStatsReferenceData({ userId }).catch(() => {
-      // silent bootstrap failure, manual refresh still available in Stats page
-    })
+    // Immediate hydration — shows data as fast as possible
+    void hydrateStatsReferenceData({ userId }).catch(() => {})
+
+    // Background analytics refresh — re-hydrates with fresh data when done
+    // Runs concurrently; re-hydration is forced after refresh completes
+    void refreshBudgetAnalytics(userId)
+      .then(() => hydrateStatsReferenceData({ userId, force: true }))
+      .catch(() => {})
   }, [enabled, hydrateStatsReferenceData, loading, snapshot, storeUserId, userId])
 
   useEffect(() => {

@@ -17,6 +17,7 @@ import { StatsBudgetBucketsCard } from '@/features/stats/components/StatsBudgetB
 import { StatsBudgetVsActualCard } from '@/features/stats/components/StatsBudgetVsActualCard'
 import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
 import { StatsMonthlyEvolutionCard } from '@/features/stats/components/StatsMonthlyEvolutionCard'
+import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 
 type StatsTabId = 'analytics' | 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
@@ -66,10 +67,11 @@ export function Stats() {
   }, [])
 
   const handleRefresh = useCallback(() => {
-    void hydrateStatsReferenceData({ force: true }).catch(() => {
-      // l'erreur est exposée dans le store
-    })
-  }, [hydrateStatsReferenceData])
+    void (async () => {
+      if (storeUserId) await refreshBudgetAnalytics(storeUserId).catch(() => {})
+      await hydrateStatsReferenceData({ force: true }).catch(() => {})
+    })()
+  }, [hydrateStatsReferenceData, storeUserId])
 
   const isPeriodOptionActive = useCallback((option: { period_year: number; period_month: number }, selected: StatsSelectedPeriod | null) => {
     if (!selected) return false
