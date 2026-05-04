@@ -4,7 +4,6 @@ import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
 import { Annual2026MonthlyTable } from './Annual2026MonthlyTable'
-import { Annual2026BlockMetrics } from './Annual2026BlockMetrics'
 
 export function Annual2026Tab() {
   const {
@@ -75,33 +74,6 @@ export function Annual2026Tab() {
           ) : null}
         </div>
       ) : null}
-
-      {/* 3ème partie : Métriques 2026 - YTD */}
-      {summary && buckets.length > 0 ? (
-        <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
-          <SectionTitle title="Métriques 2026 - YTD" />
-          
-          <div style={{ padding: '0 var(--space-6)' }}>
-            <div style={{ 
-              maxWidth: 600, margin: '0 auto',
-              background: 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-200) 100%)',
-              borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-5) var(--space-6)',
-              border: '1px solid var(--neutral-200)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)',
-            }}>
-              <SimpleKpi label="Dépenses YTD" value={fmt2(summary.ytdBudgetTotal)} />
-              <SimpleKpi label="Revenus YTD" value="15 420 €" />
-              <SimpleKpi label="Épargne YTD" value={fmt2(summary.ytdSavingsTotal)} color="var(--primary-600)" />
-              <SimpleKpi label="Réel vs Budget" value="98.2 %" color="var(--color-success)" />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <Annual2026BlockMetrics summary={summary} buckets={buckets} />
-
     </motion.div>
   )
 }
@@ -161,28 +133,3 @@ function SectionTitle({ title }: { title: string }) {
     </div>
   )
 }
-
-function SimpleKpi({ label, value, color = 'var(--neutral-900)' }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <p style={{ 
-        margin: 0, fontSize: 8.5, fontWeight: 700, 
-        color: 'var(--neutral-500)', textTransform: 'uppercase', 
-        letterSpacing: '0.04em',
-      }}>
-        {label}
-      </p>
-      <p style={{ 
-        margin: '2px 0 0', fontSize: 14, fontWeight: 800, 
-        color, fontFamily: 'var(--font-mono)',
-        letterSpacing: '-0.02em',
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-      }}>
-        {value}
-      </p>
-    </div>
-  )
-}
-
-const fmt2 = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)

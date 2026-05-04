@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Search, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -15,11 +15,13 @@ import {
   Pie,
   ReferenceLine,
 } from 'recharts'
+import { useQuery } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyRounded } from '@/lib/utils'
 import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { Transaction } from '@/lib/types'
 import type { BudgetLineWithCategory, BudgetPeriodOption } from '@/features/budget/types'
 import { getBudgetPeriods } from '@/features/budget/api/getBudgetPeriods'
@@ -33,6 +35,8 @@ import { BudgetSummaryCards } from '@/features/budget/components/BudgetSummaryCa
 import { BudgetParentGroups } from '@/features/budget/components/BudgetParentGroups'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
+import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import { Annual2026BlockMetrics } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -123,6 +127,14 @@ interface LabelListContentProps {
   payload?: MonthlyBucket
 }
 
+interface HistoryWindowMonth {
+  key: string
+  monthLabel: string
+  monthStart: string
+  periodYear: number
+  periodMonth: number
+}
+
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -155,6 +167,30 @@ function extractPiePayload(slice: unknown): Partial<PieDatum> | null {
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0')
+}
+
+function monthKey(periodYear: number, periodMonth: number): string {
+  return `${periodYear}-${pad2(periodMonth)}`
+}
+
+function buildHistoryWindow(periodYear: number, periodMonth: number, monthsBack: number): HistoryWindowMonth[] {
+  const safeMonthsBack = Math.max(1, monthsBack)
+  const months: HistoryWindowMonth[] = []
+
+  for (let offset = safeMonthsBack - 1; offset >= 0; offset -= 1) {
+    const date = new Date(periodYear, periodMonth - 1 - offset, 1)
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
+    months.push({
+      key: monthKey(year, month),
+      monthLabel: MONTHS_FR_SHORT[month - 1],
+      monthStart: `${year}-${pad2(month)}-01`,
+      periodYear: year,
+      periodMonth: month,
+    })
+  }
+
+  return months
 }
 
 function getPeriodRange(
@@ -234,6 +270,10 @@ function toleranceByBucket(bucket: string | null | undefined): string {
   if (bucket === 'provision') return '±6%'
   if (bucket === 'cagnotte_projet') return '±0%'
   return '±10%'
+}
+
+function formatToleranceDisplay(bucket: string | null | undefined): string {
+  return toleranceByBucket(bucket).replace('±', '+/- ')
 }
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
@@ -367,6 +407,7 @@ function SubCategoryTransactionsModal({
 }
 
 export function Budgets() {
+  const annual2026Metrics = useAnnual2026Analysis()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
@@ -432,6 +473,8 @@ export function Budgets() {
   const topSectionRef = useRef<HTMLElement | null>(null)
   const categoriesSectionRef = useRef<HTMLElement | null>(null)
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const smoothScrollFrameRef = useRef<number | null>(null)
+  const shouldFocusCategoriesSectionRef = useRef(false)
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -498,7 +541,24 @@ export function Budgets() {
     setShowCatSheet(false)
   }, [defaultPeriodMonth, defaultPeriodYear, setSelectedCat])
 
+  const cancelSmoothScroll = useCallback(() => {
+    if (smoothScrollFrameRef.current == null) return
+    window.cancelAnimationFrame(smoothScrollFrameRef.current)
+    smoothScrollFrameRef.current = null
+  }, [])
+
+  const scrollViewportToTop = useCallback(() => {
+    cancelSmoothScroll()
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      })
+    })
+  }, [cancelSmoothScroll])
+
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
+    cancelSmoothScroll()
     const scroller = document.scrollingElement as HTMLElement | null
     const startY = scroller?.scrollTop ?? window.scrollY
     const distance = targetY - startY
@@ -517,11 +577,15 @@ export function Budgets() {
       const nextY = startY + distance * eased
       if (scroller) scroller.scrollTo({ top: nextY, left: 0, behavior: 'auto' })
       else window.scrollTo(0, nextY)
-      if (progress < 1) window.requestAnimationFrame(step)
+      if (progress < 1) {
+        smoothScrollFrameRef.current = window.requestAnimationFrame(step)
+      } else {
+        smoothScrollFrameRef.current = null
+      }
     }
 
-    window.requestAnimationFrame(step)
-  }, [])
+    smoothScrollFrameRef.current = window.requestAnimationFrame(step)
+  }, [cancelSmoothScroll])
 
   const resolveTopOffset = useCallback(() => {
     const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
@@ -546,6 +610,17 @@ export function Budgets() {
     const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
     smoothScrollToY(Math.max(0, y))
   }, [resolveTopOffset, smoothScrollToY])
+
+  const scrollToCategoriesSectionTop = useCallback(() => {
+    const target = categoriesSectionRef.current
+    if (!target) return false
+    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
+    cancelSmoothScroll()
+    window.scrollTo({ top: Math.max(0, y), left: 0, behavior: 'auto' })
+    return true
+  }, [cancelSmoothScroll, resolveTopOffset])
+
+  useEffect(() => () => cancelSmoothScroll(), [cancelSmoothScroll])
 
   useEffect(() => {
     if (import.meta.env.DEV && !debugRanRef.current) {
@@ -577,9 +652,24 @@ export function Budgets() {
 
   useEffect(() => {
     if (selectedCat !== 'all') {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      scrollViewportToTop()
     }
-  }, [selectedCat])
+  }, [selectedCat, scrollViewportToTop])
+
+  useLayoutEffect(() => {
+    if (selectedCat === 'all') return
+    scrollViewportToTop()
+    const timeoutIdA = window.setTimeout(() => {
+      scrollViewportToTop()
+    }, 80)
+    const timeoutIdB = window.setTimeout(() => {
+      scrollViewportToTop()
+    }, 220)
+    return () => {
+      window.clearTimeout(timeoutIdA)
+      window.clearTimeout(timeoutIdB)
+    }
+  }, [selectedCat, scrollViewportToTop])
 
   const configuredBudgetPeriod = useMemo(() => {
     if (!budgetPayload) return null
@@ -594,6 +684,37 @@ export function Budgets() {
       ends_on: '',
     }
   }, [budgetPayload, selectedPeriodMonth, selectedPeriodYear])
+
+  useEffect(() => {
+    if (!shouldFocusCategoriesSectionRef.current) return
+    if (selectedCat !== 'all' || activeSlide !== 0) return
+
+    let cancelled = false
+
+    const tryFocus = (attemptsLeft: number) => {
+      if (cancelled || !shouldFocusCategoriesSectionRef.current) return
+      const scrolledNow = scrollToCategoriesSectionTop()
+      if (scrolledNow) {
+        shouldFocusCategoriesSectionRef.current = false
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            void scrollToCategoriesSectionTop()
+          })
+        })
+        return
+      }
+      if (attemptsLeft <= 0) return
+      window.setTimeout(() => {
+        tryFocus(attemptsLeft - 1)
+      }, 48)
+    }
+
+    tryFocus(14)
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCat, activeSlide, scrollToCategoriesSectionTop])
 
   const configuredBudgetCategoryLines = useMemo<BudgetLineWithCategory[]>(() => {
     if (!budgetPayload) return []
@@ -738,6 +859,14 @@ export function Budgets() {
     })
     return ids
   }, [expenseSubCategories, selectedCat])
+  const historyWindowMonths = useMemo(
+    () => buildHistoryWindow(selectedPeriodYear, selectedPeriodMonth, 6),
+    [selectedPeriodYear, selectedPeriodMonth],
+  )
+  const selectedCategoryHistoryIds = useMemo(
+    () => selectedCategoryIds ?? (selectedCat !== 'all' ? [selectedCat] : []),
+    [selectedCategoryIds, selectedCat],
+  )
 
   const { data: periodTxns } = useTransactions({
     ...range,
@@ -796,6 +925,28 @@ export function Budgets() {
     if (!categoryBudgetLines.length) return 0
     return categoryBudgetLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0)
   }, [categoryBudgetLines, selectedCat, totalMonthlyBudget])
+  const { data: categoryHistoryRaw = [] } = useQuery({
+    queryKey: ['budgets', 'category-history', selectedCat, selectedPeriodYear, selectedPeriodMonth, selectedCategoryHistoryIds],
+    enabled: selectedCat !== 'all' && selectedCategoryHistoryIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      if (!historyWindowMonths.length || selectedCategoryHistoryIds.length === 0) return []
+
+      const startMonth = historyWindowMonths[0].monthStart
+      const endMonth = historyWindowMonths[historyWindowMonths.length - 1].monthStart
+
+      const { data, error } = await budgetDb()
+        .from('analytics_monthly_category_metrics')
+        .select('period_year, period_month, amount_total, category_id')
+        .eq('flow_type', 'expense')
+        .in('category_id', selectedCategoryHistoryIds)
+        .gte('month_start', startMonth)
+        .lte('month_start', endMonth)
+
+      if (error) throw new Error(`category history query failed: ${error.message}`)
+      return (data ?? []) as Array<{ period_year: number; period_month: number; amount_total: number | null }>
+    },
+  })
   const categoryRanking = useMemo(() => {
     if (selectedCat === 'all') return null
     const rootBudgets = new Map<string, number>()
@@ -822,7 +973,7 @@ export function Budgets() {
     [summaries],
   )
 
-  const monthlyHistory = useMemo<MonthlyBucket[]>(() => {
+  const globalMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const base = payloadHistory.map((row) => {
       const monthIndex = Math.max(0, Math.min(11, Number(row.period_month) - 1))
       const amount = Number(row.actual_total ?? 0)
@@ -844,6 +995,35 @@ export function Budgets() {
       return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
     })
   }, [payloadHistory, selectedPeriodYear, selectedPeriodMonth])
+  const categoryMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
+    const actualByMonthKey = new Map<string, number>()
+
+    for (const row of categoryHistoryRaw) {
+      const periodYear = Number(row.period_year)
+      const periodMonth = Number(row.period_month)
+      if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) continue
+      const key = monthKey(periodYear, periodMonth)
+      actualByMonthKey.set(key, (actualByMonthKey.get(key) ?? 0) + Number(row.amount_total ?? 0))
+    }
+
+    const base = historyWindowMonths.map((monthRow) => {
+      const amount = actualByMonthKey.get(monthRow.key) ?? 0
+      return {
+        month: monthRow.monthLabel,
+        amount,
+        budget: categoryMonthlyBudget,
+        isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
+      }
+    })
+
+    return base.map((row, idx) => {
+      if (idx === 0) return { ...row, evolutionPct: null }
+      const prev = base[idx - 1].amount
+      if (prev <= 0) return { ...row, evolutionPct: null }
+      return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
+    })
+  }, [categoryHistoryRaw, historyWindowMonths, categoryMonthlyBudget, selectedPeriodYear, selectedPeriodMonth])
+  const monthlyHistory = selectedCat === 'all' ? globalMonthlyHistory : categoryMonthlyHistory
 
   const realPieData = useMemo<PieDatum[]>(() => {
     if (!budgetPayload) return []
@@ -1266,7 +1446,7 @@ export function Budgets() {
     const total = rows.reduce((sum, row) => sum + ((row.amount - row.budget) / row.budget) * 100, 0)
     return total / rows.length
   }, [monthlyHistory])
-  const historyBudgetTarget = Math.max(0, Number(totalMonthlyBudget))
+  const historyBudgetTarget = Math.max(0, Number(selectedCat === 'all' ? totalMonthlyBudget : categoryMonthlyBudget))
   const historyYAxisTicks = useMemo(() => {
     const maxHistory = monthlyHistory.reduce((max, row) => Math.max(max, Number(row.amount ?? 0)), 0)
     const maxValue = Math.max(maxHistory, historyBudgetTarget)
@@ -1460,57 +1640,65 @@ export function Budgets() {
       {isCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
           <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCat('all')}
-                  aria-label="Retour"
-                  style={{
-                    border: 'none',
-                    background: accentFromLabel(selectedCatInfo?.name),
-                    color: 'var(--neutral-0)',
-                    width: 20,
-                    height: 20,
-                    minWidth: 20,
-                    minHeight: 20,
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    padding: 0,
-                    flexShrink: 0,
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      shouldFocusCategoriesSectionRef.current = true
+                      setActiveSlide(0)
+                      setSelectedCat('all')
+                    }}
+                    aria-label="Retour"
+                    style={{
+                      border: 'none',
+                      background: accentFromLabel(selectedCatInfo?.name),
+                      color: 'var(--neutral-0)',
+                      width: 24,
+                      height: 24,
+                      minWidth: 24,
+                      minHeight: 24,
+                      borderRadius: 'var(--radius-full)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0,
                   }}
                 >
-                  <ArrowLeft size={13} />
+                  <ArrowLeft size={14} />
                 </button>
-                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
-                  <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                    {selectedCatInfo?.name ?? '—'}
-                  </p>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                    - {categoryBlockLabel}
+                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
+                    <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                      {selectedCatInfo?.name ?? '—'}
+                    </p>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
+                      - {categoryBlockLabel}
+                    </span>
+                  </div>
+                </div>
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+                    {formatMoney(categoryMonthlyBudget).replace(/\s+€/, '€')} ({formatToleranceDisplay(dominantCategoryBudgetLine?.budget_bucket)})
                   </span>
                 </div>
-              </div>
-            </div>
-            <div style={{ border: `1px solid ${accentFromLabel(selectedCatInfo?.name)}`, borderRadius: 'var(--radius-lg)', background: 'var(--neutral-0)', padding: 'var(--space-2) var(--space-3)', display: 'grid', gap: 'var(--space-1)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-2) var(--space-3)' }}>
-                <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 2 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Budget</p>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {formatMoney(categoryMonthlyBudget)} <span style={{ color: 'var(--neutral-500)' }}>({toleranceByBucket(dominantCategoryBudgetLine?.budget_bucket)})</span>
-                  </p>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
                 </div>
-                <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 2 }}>
-                  <p style={{ margin: 0, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>Rang</p>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.3 }}>
-                    {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
-                  </p>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
                 </div>
-                <div aria-hidden="true" style={{ minHeight: 30 }} />
-                <div aria-hidden="true" style={{ minHeight: 30 }} />
               </div>
             </div>
           </div>
@@ -1518,17 +1706,14 @@ export function Budgets() {
       ) : null}
 
       {isCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
-          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-            Historique 6 mois
-          </h3>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <ReferenceLine y={totalMonthlyBudget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
                   <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
@@ -1542,22 +1727,6 @@ export function Budgets() {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne dépenses</span>
-              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
-            </div>
-            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
-            </div>
-            <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48 }} />
-          </div>
-
-          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-            Répartition par sous-catégorie
-          </h3>
-
           <div
             style={{
               height: 336,
@@ -1566,63 +1735,68 @@ export function Budgets() {
               background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
               padding: 'var(--space-3)',
               display: 'grid',
-              alignContent: 'start',
+              gridTemplateRows: 'auto 1fr',
               gap: 'var(--space-2)',
             }}
           >
-            {categoryBarRows.length === 0 ? (
-              <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
-                Aucune sous-catégorie active sur cette période
-              </div>
-            ) : (
-              categoryBarRows.map((row) => {
-                const source = subCategoryRowById.get(row.id)
-                if (!source) return null
-                const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
-                const accent = accentFromLabel(row.name)
-                return (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => setSelectedSubCategory(source)}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      padding: '3px 2px',
-                      cursor: 'pointer',
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-sm)', background: accent, flexShrink: 0 }} />
-                      <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {row.name}
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              répartition par sous-catégorie
+            </p>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+              {categoryBarRows.length === 0 ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                  Aucune sous-catégorie active sur cette période
+                </div>
+              ) : (
+                categoryBarRows.map((row) => {
+                  const source = subCategoryRowById.get(row.id)
+                  if (!source) return null
+                  const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
+                  const accent = accentFromLabel(row.name)
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => setSelectedSubCategory(source)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '3px 2px',
+                        cursor: 'pointer',
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-sm)', background: accent, flexShrink: 0 }} />
+                        <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {row.name}
+                        </span>
                       </span>
-                    </span>
-                    <span style={{ display: 'grid', gap: 2 }}>
-                      <span style={{ width: '100%', height: 11, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                        <span
-                          style={{
-                            width: `${row.displayAmount <= 0 ? 0 : Math.max(6, Math.min(barWidth, 100))}%`,
-                            height: '100%',
-                            display: 'block',
-                            borderRadius: 'var(--radius-full)',
-                            background: accent,
-                          }}
-                        />
+                      <span style={{ display: 'grid', gap: 2 }}>
+                        <span style={{ width: '100%', height: 11, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                          <span
+                            style={{
+                              width: `${row.displayAmount <= 0 ? 0 : Math.max(6, Math.min(barWidth, 100))}%`,
+                              height: '100%',
+                              display: 'block',
+                              borderRadius: 'var(--radius-full)',
+                              background: accent,
+                            }}
+                          />
+                        </span>
+                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                          {formatMoney(row.displayAmount)}
+                        </span>
                       </span>
-                      <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                        {formatMoney(row.displayAmount)}
-                      </span>
-                    </span>
-                  </button>
-                )
-              })
-            )}
+                    </button>
+                  )
+                })
+              )}
+            </div>
           </div>
         </motion.section>
       ) : (
@@ -1850,7 +2024,7 @@ export function Budgets() {
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                       <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
                       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                      <ReferenceLine y={totalMonthlyBudget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                      <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
                         <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
                           const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
@@ -2018,6 +2192,7 @@ export function Budgets() {
                 hasActuals={configuredBudgetHasActuals}
                 onLineClick={(line) => {
                   if (!line.category_id) return
+                  scrollViewportToTop()
                   setSelectedCat(line.category_id)
                 }}
               />
@@ -2145,6 +2320,19 @@ export function Budgets() {
             </motion.section>
           ) : null}
         </AnimatePresence>
+      ) : null}
+
+      {selectedCat === 'all' && activeSlide === 2 && annual2026Metrics.summary ? (
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22 }}
+          style={{ display: 'grid', gap: 'var(--space-4)' }}
+        >
+          {annual2026Metrics.buckets.length > 0 ? (
+            <Annual2026BlockMetrics summary={annual2026Metrics.summary} buckets={annual2026Metrics.buckets} />
+          ) : null}
+        </motion.section>
       ) : null}
 
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', padding: 'var(--space-4) var(--space-4) 0', display: 'grid', gap: 'var(--space-4)' }}>
@@ -2419,6 +2607,7 @@ export function Budgets() {
                         key={cat.id}
                         type="button"
                         onClick={() => {
+                          scrollViewportToTop()
                           setSelectedCat(cat.id)
                           setShowCatSheet(false)
                         }}
@@ -2444,6 +2633,7 @@ export function Budgets() {
                     <button
                       type="button"
                       onClick={() => {
+                        scrollViewportToTop()
                         setSelectedCat('all')
                         setShowCatSheet(false)
                       }}
