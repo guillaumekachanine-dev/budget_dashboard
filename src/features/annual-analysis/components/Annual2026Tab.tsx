@@ -4,7 +4,6 @@ import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
 import { Annual2026MonthlyTable } from './Annual2026MonthlyTable'
-import { ConfiguredBudgetPilotagePanel } from '@/features/budget/components/ConfiguredBudgetPilotagePanel'
 
 export function Annual2026Tab() {
   const {
@@ -72,7 +71,6 @@ export function Annual2026Tab() {
         </div>
       ) : null}
 
-      <ConfiguredBudgetPilotagePanel />
     </motion.div>
   )
 }

@@ -51,9 +51,27 @@ interface BudgetRow {
 }
 
 const YEAR_2026 = 2026
+const FULL_MONTH_LABEL_BY_SHORT: Record<string, string> = {
+  Jan: 'Janvier',
+  Fév: 'Février',
+  Mar: 'Mars',
+  Avr: 'Avril',
+  Mai: 'Mai',
+  Juin: 'Juin',
+  Juil: 'Juillet',
+  Aoû: 'Août',
+  Sep: 'Septembre',
+  Oct: 'Octobre',
+  Nov: 'Novembre',
+  Déc: 'Décembre',
+}
+const SHORT_MONTH_LABEL_BY_FULL: Record<string, string> = Object.fromEntries(
+  Object.entries(FULL_MONTH_LABEL_BY_SHORT).map(([shortLabel, fullLabel]) => [fullLabel, shortLabel]),
+) as Record<string, string>
 
 function monthFromPeriod(period: string): number | null {
-  const idx = MONTH_LABELS_SHORT.findIndex((m) => m === period)
+  const shortPeriod = SHORT_MONTH_LABEL_BY_FULL[period] ?? period
+  const idx = MONTH_LABELS_SHORT.findIndex((m) => m === shortPeriod)
   if (idx < 0) return null
   return idx + 1
 }
@@ -167,7 +185,7 @@ export function Annual2026BlockMetrics({
     setSelectedPeriod(period)
   }, [period])
 
-  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, 5)]
+  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, 5).map((label) => FULL_MONTH_LABEL_BY_SHORT[label] ?? label)]
   const selectedMonths = useMemo(() => periodMonths(selectedPeriod), [selectedPeriod])
   const range = useMemo(() => periodDateRange(selectedMonths), [selectedMonths])
 
@@ -398,13 +416,15 @@ export function Annual2026BlockMetrics({
     ? (BUCKET_LABELS[selectedBlock] ?? selectedBlock)
     : (categoryNameById.get(selectedCategoryId) ?? 'Catégorie')
 
+  const periodLabelSuffix = FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod
+
   const metrics = [
-    { label: 'Montant', value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
-    { label: 'Budget', value: fmtCurrencyCompact(metricsState.budgetAmount), color: 'var(--neutral-900)' },
-    { label: 'Réel/budget', value: fmtPercentCompact(metricsState.deltaPct), color: metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)' },
+    { label: `Dépenses ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
+    { label: `Budget ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.budgetAmount), color: 'var(--neutral-900)' },
+    { label: `Ecart réel/budget ${periodLabelSuffix}`, value: fmtPercentCompact(metricsState.deltaPct), color: metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)' },
     { label: 'Mt moyen', value: fmtCurrencyCompact(metricsState.averageAmount), color: 'var(--neutral-900)' },
     { label: 'Médiane', value: fmtCurrencyCompact(metricsState.medianAmount), color: 'var(--neutral-900)' },
-    { label: 'Nbre opérations', value: String(transactionCount), color: 'var(--neutral-900)' },
+    { label: `Nbre d'opérations ${periodLabelSuffix}`, value: String(transactionCount), color: 'var(--neutral-900)' },
     { label: 'Rang', value: metricsState.rank, color: 'var(--neutral-900)' },
   ]
 

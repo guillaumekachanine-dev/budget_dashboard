@@ -38,7 +38,7 @@ import {
   type MetricsDisplayMode,
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
-import { BUCKET_LABELS, BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
+import { BUCKET_LABELS, BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -230,6 +230,7 @@ function getPeriodRange(
 }
 
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
   { id: 'fixe', label: 'Fixe', color: 'var(--primary-500)' },
@@ -574,9 +575,16 @@ export function Budgets() {
 
   const scrollViewportToTop = useCallback(() => {
     cancelSmoothScroll()
+    const scroller = document.scrollingElement as HTMLElement | null
+    if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        document.documentElement.scrollTop = 0
+        document.body.scrollTop = 0
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       })
     })
@@ -639,11 +647,21 @@ export function Budgets() {
   const scrollToCategoriesSectionTop = useCallback(() => {
     const target = categoriesSectionRef.current
     if (!target) return false
-    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
+    const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+    const headerPx = Number.parseFloat(rawHeader || '0')
+    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx : 68
+    const y = target.getBoundingClientRect().top + window.scrollY - effectiveHeaderOffset
     cancelSmoothScroll()
-    window.scrollTo({ top: Math.max(0, y), left: 0, behavior: 'auto' })
+    const targetY = Math.max(0, y)
+    const scroller = document.scrollingElement as HTMLElement | null
+    if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+      window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    })
     return true
-  }, [cancelSmoothScroll, resolveTopOffset])
+  }, [cancelSmoothScroll])
 
   useEffect(() => () => cancelSmoothScroll(), [cancelSmoothScroll])
 
@@ -854,7 +872,7 @@ export function Budgets() {
       : `cat:${slideThreeScopeSelection.id}`),
     [slideThreeScopeSelection],
   )
-  const slideThreePeriods = useMemo(() => ['2026', ...MONTH_LABELS_SHORT.slice(0, 5)], [])
+  const slideThreePeriods = useMemo(() => ['2026', ...MONTHS_FR_FULL.slice(0, 5)], [])
 
   useEffect(() => {
     if (selectedCat === 'all' || !categoriesFetched) return
@@ -1611,7 +1629,7 @@ export function Budgets() {
                         border: 'none',
                         background: 'transparent',
                         color: 'var(--neutral-700)',
-                        fontSize: 'var(--font-size-xs)',
+                        fontSize: 10,
                         fontWeight: 700,
                         fontFamily: 'var(--font-mono)',
                         lineHeight: 1.2,
@@ -1660,7 +1678,7 @@ export function Budgets() {
                         border: 'none',
                         background: 'transparent',
                         color: 'var(--neutral-700)',
-                        fontSize: 'var(--font-size-xs)',
+                        fontSize: 10,
                         fontWeight: 700,
                         fontFamily: 'var(--font-mono)',
                         lineHeight: 1.2,
@@ -2149,6 +2167,11 @@ export function Budgets() {
 
             {showExtendedSlides ? (
               <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-2)' }}>
+                <section style={{ padding: '0 var(--space-5)' }}>
+                  <h3 style={{ margin: '0 0 var(--space-4) 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                    {slideThreeDisplayMode === 'tableau' ? 'Indicateurs clé' : 'Historique 6 mois'}
+                  </h3>
+                </section>
                 <Annual2026BlockMetrics
                   hideParameterRow
                   scopeSelection={slideThreeScopeSelection}

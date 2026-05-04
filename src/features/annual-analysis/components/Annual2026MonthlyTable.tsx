@@ -169,7 +169,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
             <div>
               <h3 style={cardTitleStyle}>Vue mensuelle synthétique</h3>
-              <p style={cardSubStyle}>Analyse des flux mensuels · 2026</p>
+              <p style={cardSubStyle}>Analyse des flux mensuels</p>
             </div>
             
             {/* Carousel Toggle */}
@@ -224,9 +224,9 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.2 }}
-                  style={{ overflowX: 'auto', margin: '0 -4px' }}
+                  style={{ overflowX: 'auto', margin: '0 -2px' }}
                 >
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 320 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 300 }}>
                     <thead>
                       <tr>
                         <th style={{ ...thStyle, ...cardSubStyle, margin: 0 }}>Mois</th>
@@ -250,19 +250,19 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                         const deltaPrefix = row.deltaRealBudgetPct > 0 ? '+' : ''
                         return (
                           <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
-                            <td style={{ ...tdStyle, paddingLeft: 0 }}>
+                            <td style={{ ...tdStyle, paddingLeft: 'var(--space-2)', textAlign: 'center' }}>
                               <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
                             </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
                               {fmt(row.expense)}
                             </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
                               {fmt(row.income)}
                             </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)' }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)' }}>
                               {fmt(row.savings)}
                             </td>
-                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, paddingRight: 'var(--space-4)', fontWeight: 700 }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, paddingRight: 'var(--space-2)', fontWeight: 700 }}>
                               {deltaPrefix}{fmtPct(row.deltaRealBudgetPct)}
                             </td>
                           </tr>
@@ -368,11 +368,6 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  {overflowIncomeRows.length > 0 ? (
-                    <p style={chartNoteStyle}>
-                      Revenus {overflowIncomeRows[0]?.monthLabel}: {fmt(overflowIncomeRows[0]?.income ?? 0)} (hors échelle &gt; {fmt(CHART_MAX_Y)})
-                    </p>
-                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -410,13 +405,6 @@ const cardSubStyle: CSSProperties = {
   letterSpacing: '0.05em', fontWeight: 600,
 }
 
-const chartNoteStyle: CSSProperties = {
-  margin: 'var(--space-2) 0 0',
-  fontSize: 10,
-  color: 'var(--neutral-500)',
-  fontFamily: 'var(--font-sans)',
-  fontWeight: 600,
-}
 
 const thStyle: CSSProperties = {
   padding: '12px 2px', textAlign: 'left',
