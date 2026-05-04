@@ -128,7 +128,7 @@ export interface Transaction {
   is_recurring: boolean
   is_verified: boolean
   is_hidden: boolean
-  personal_scope: string | null
+  personal_scope?: string | null
   notes: string | null
   meta: Record<string, unknown> | null
   created_at: string
@@ -308,6 +308,17 @@ export type Database = {
       analytics_monthly_metrics: TableDef<AnalyticsMonthlyMetrics, Omit<AnalyticsMonthlyMetrics, never>, Partial<AnalyticsMonthlyMetrics>>
       analytics_monthly_category_metrics: TableDef<AnalyticsMonthlyCategoryMetrics, Omit<AnalyticsMonthlyCategoryMetrics, never>, Partial<AnalyticsMonthlyCategoryMetrics>>
       analytics_variable_category_summary: TableDef<AnalyticsVariableCategorySummary, Omit<AnalyticsVariableCategorySummary, never>, Partial<AnalyticsVariableCategorySummary>>
+      analytics_2025_insights: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_monthly_bucket_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_monthly_category_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_monthly_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_spending_periodicity: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_yearly_bucket_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_yearly_category_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      analytics_2025_yearly_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      category_budget_bucket_map: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      import_batches: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
     }
     Views: {
       budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
