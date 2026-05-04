@@ -46,8 +46,9 @@ export function Annual2026Seasonality({ monthlyProfile }: Props) {
   const totals = monthlyProfile.map((p) => p.totalExpenseBudget)
   const maxMonth = monthlyProfile.reduce((m, p) => p.totalExpenseBudget > m.totalExpenseBudget ? p : m, monthlyProfile[0]!)
   const minMonth = monthlyProfile.reduce((m, p) => p.totalExpenseBudget < m.totalExpenseBudget ? p : m, monthlyProfile[0]!)
-  const avgExpense = totals.reduce((s, v) => s + v, 0) / totals.length
-  const spread = maxMonth.totalExpenseBudget - minMonth.totalExpenseBudget
+  void totals
+  void maxMonth
+  void minMonth
 
   return (
     <section style={{ padding: '0 var(--space-6)' }}>
@@ -60,13 +61,6 @@ export function Annual2026Seasonality({ monthlyProfile }: Props) {
           <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
             Décomposition mensuelle · Jan – Mai · Budget planifié
           </p>
-        </div>
-
-        {/* ── Cadence KPIs ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
-          <SeasonKpi label="Mois le plus chargé" value={maxMonth.monthLabel} amount={maxMonth.totalExpenseBudget} color="#FC5A5A" />
-          <SeasonKpi label="Mois le plus calme" value={minMonth.monthLabel} amount={minMonth.totalExpenseBudget} color="#2ED47A" />
-          <SeasonKpi label="Amplitude YTD" value={fmt(spread)} amount={null} color="#FFAB2E" />
         </div>
 
         {/* ── Chart ── */}
@@ -129,80 +123,12 @@ export function Annual2026Seasonality({ monthlyProfile }: Props) {
           </div>
         </div>
 
-        {/* ── Tableau mensuel synthétique ── */}
-        <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>Vue mensuelle synthétique</h3>
-          <p style={cardSubStyle}>Budget dépenses · Épargne · Besoin total</p>
-
-          <div style={{ marginTop: 'var(--space-4)', overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Mois</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Dépenses</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Épargne</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Besoin total</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>vs moy.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyProfile.map((p) => {
-                  const delta = p.totalExpenseBudget - avgExpense
-                  const isAbove = delta > 0
-                  return (
-                    <tr key={p.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
-                      <td style={tdStyle}>
-                        <span style={{ fontWeight: 600, color: 'var(--neutral-700)' }}>{p.monthLabel}</span>
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-900)' }}>
-                        {fmt(p.totalExpenseBudget)}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#2ED47A' }}>
-                        {fmt(500)}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                        {fmt(p.totalNeed)}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-mono)', color: isAbove ? '#FC5A5A' : '#2ED47A', fontWeight: 600 }}>
-                        {isAbove ? '+' : ''}{fmt(delta)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </section>
   )
 }
 
 // ── Season KPI ────────────────────────────────────────────────────────────────
-
-function SeasonKpi({ label, value, amount, color }: { label: string; value: string; amount: number | null; color: string }) {
-  return (
-    <div style={{
-      background: `color-mix(in oklab, ${color} 6%, var(--neutral-0) 94%)`,
-      borderRadius: 'var(--radius-xl)',
-      border: `1px solid color-mix(in oklab, ${color} 20%, transparent 80%)`,
-      borderTopWidth: 3, borderTopColor: color,
-      padding: 'var(--space-3)',
-    }}>
-      <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}
-      </p>
-      <p style={{ margin: '6px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-        {value}
-      </p>
-      {amount != null ? (
-        <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-500)', fontWeight: 600 }}>
-          {fmt(amount)}
-        </p>
-      ) : null}
-    </div>
-  )
-}
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -223,17 +149,4 @@ const cardSubStyle: React.CSSProperties = {
   margin: '3px 0 0', fontSize: 'var(--font-size-xs)',
   color: 'var(--neutral-400)', textTransform: 'uppercase',
   letterSpacing: '0.05em', fontWeight: 600,
-}
-
-const thStyle: React.CSSProperties = {
-  padding: '8px 4px', textAlign: 'left', fontSize: 10,
-  fontWeight: 700, color: 'var(--neutral-500)',
-  textTransform: 'uppercase', letterSpacing: '0.05em',
-  borderBottom: '2px solid var(--neutral-150)',
-  whiteSpace: 'nowrap',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: '9px 4px', fontSize: 12, color: 'var(--neutral-700)',
-  verticalAlign: 'middle',
 }

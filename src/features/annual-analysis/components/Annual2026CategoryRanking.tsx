@@ -21,132 +21,29 @@ type Props = {
 export function Annual2026CategoryRanking({ categories }: Props) {
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
 
-  const top3 = categories.slice(0, 3)
-  const rest = categories.slice(3, 10)
   const maxAmount = categories[0]?.monthlyBudget ?? 1
 
   return (
     <section style={{ padding: '0 var(--space-6)' }}>
       <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
 
-        <div>
-          <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
-            Classement des postes
-          </h2>
-          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-            Familles de dépenses · Budget mensuel · Cliquer pour le détail
-          </p>
-        </div>
-
-        {/* ── Podium top 3 ── */}
         <div style={cardStyle}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
-            {top3.map((cat, idx) => {
-              const heights = [88, 72, 64]
-              const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
-
-              return (
-                <button
-                  key={cat.name}
-                  type="button"
-                  onClick={() => setExpandedCat(expandedCat === cat.name ? null : cat.name)}
-                  style={{
-                    border: 'none', background: 'transparent', padding: 0,
-                    cursor: 'pointer', textAlign: 'left',
-                  }}
-                >
-                  <div style={{
-                    background: `color-mix(in oklab, ${cat.color} 10%, var(--neutral-0) 90%)`,
-                    border: expandedCat === cat.name
-                      ? `2px solid ${cat.color}`
-                      : `1px solid color-mix(in oklab, ${cat.color} 25%, var(--neutral-150) 75%)`,
-                    borderRadius: 'var(--radius-xl)',
-                    padding: 'var(--space-3)',
-                    minHeight: heights[idx],
-                    display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-                    gap: 4,
-                    transition: 'border-color 0.2s',
-                  }}>
-                    {/* Médaille */}
-                    <span style={{
-                      fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)',
-                      color: medalColors[idx],
-                      lineHeight: 1,
-                    }}>
-                      #{idx + 1}
-                    </span>
-
-                    <p style={{
-                      margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {cat.name}
-                    </p>
-                    <p style={{
-                      margin: 0, fontSize: idx === 0 ? 15 : 13, fontWeight: 800,
-                      fontFamily: 'var(--font-mono)', color: cat.color, lineHeight: 1.1,
-                    }}>
-                      {fmt(cat.monthlyBudget)}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                      {fmtPct(cat.pctOfTotal)} · {fmt(cat.monthlyBudget * 12)}/an
-                    </p>
-                  </div>
-
-                  {/* Détail expandable */}
-                  {expandedCat === cat.name ? (
-                    <div style={{
-                      marginTop: 'var(--space-2)',
-                      background: 'var(--neutral-50)',
-                      borderRadius: 'var(--radius-lg)',
-                      border: `1px solid ${cat.color}30`,
-                      padding: 'var(--space-3)',
-                      display: 'grid', gap: 'var(--space-2)',
-                    }}>
-                      {cat.lines.map((line) => (
-                        <div key={line.category_name} style={{
-                          display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'baseline', gap: 8,
-                        }}>
-                          <span style={{ fontSize: 10, color: 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {line.category_name}
-                          </span>
-                          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', fontWeight: 600, flexShrink: 0 }}>
-                            {fmt(line.amount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </button>
-              )
-            })}
+          <h3 style={cardTitleStyle}>allocation par catégorie</h3>
+          <p style={cardSubStyle}>Budget mensuel · Cliquer pour le détail</p>
+          
+          <div style={{ display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-5)' }}>
+            {categories.slice(0, 10).map((cat, i) => (
+              <RankRow
+                key={cat.name}
+                cat={cat}
+                rank={i + 1}
+                maxAmount={maxAmount}
+                isExpanded={expandedCat === cat.name}
+                onToggle={() => setExpandedCat(expandedCat === cat.name ? null : cat.name)}
+              />
+            ))}
           </div>
         </div>
-
-        {/* ── Reste du classement ── */}
-        {rest.length > 0 ? (
-          <div style={cardStyle}>
-            <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              Postes suivants
-            </h3>
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              {rest.map((cat, i) => (
-                <RankRow
-                  key={cat.name}
-                  cat={cat}
-                  rank={i + 4}
-                  maxAmount={maxAmount}
-                  isExpanded={expandedCat === cat.name}
-                  onToggle={() => setExpandedCat(expandedCat === cat.name ? null : cat.name)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* ── Insight coût annuel ── */}
-        <AnnualProjectionCard categories={categories.slice(0, 5)} />
       </div>
     </section>
   )
@@ -218,36 +115,75 @@ function RankRow({
 
 // ── Annual projection card ────────────────────────────────────────────────────
 
-function AnnualProjectionCard({ categories }: { categories: Budget2026CategorySummary[] }) {
+import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, LabelList } from 'recharts'
+
+export function AnnualProjectionCard({ categories }: { categories: Budget2026CategorySummary[] }) {
+  const data = categories.slice(0, 7).map(cat => ({
+    name: cat.name,
+    amount: cat.monthlyBudget * 12,
+    color: cat.color
+  }))
+
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, rgba(91,87,245,0.06) 0%, rgba(76,201,240,0.06) 100%)',
-      borderRadius: 'var(--radius-2xl)',
-      border: '1px solid color-mix(in oklab, var(--primary-600) 15%, var(--neutral-150) 85%)',
-      padding: 'var(--space-5)',
-    }}>
-      <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--primary-600)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-        Projection coût annuel — top postes
-      </h3>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-        {categories.map((cat) => (
-          <div key={cat.name} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {cat.name}
-              </span>
-            </div>
-            <div style={{ flexShrink: 0, textAlign: 'right' }}>
-              <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                {fmt(cat.monthlyBudget * 12)}
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--neutral-400)', marginLeft: 4 }}>/an</span>
-            </div>
+    <section style={{ padding: '0 var(--space-6)' }}>
+      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+        <div style={cardStyle}>
+          <h3 style={cardTitleStyle}>Projection coûts annuels</h3>
+          <p style={cardSubStyle}>top 7 postes</p>
+
+          <div style={{ height: 260, width: '100%', marginTop: 'var(--space-6)' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 30, right: 0, left: 0, bottom: 40 }}>
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  interval={0}
+                  tick={<CustomTick />}
+                />
+                <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={32}>
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
+                  ))}
+                  <LabelList 
+                    dataKey="amount" 
+                    position="top" 
+                    offset={10}
+                    formatter={(val: number) => `${Math.round(val).toLocaleString('fr-FR')}€`}
+                    style={{ fontSize: 10, fontWeight: 700, fill: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        ))}
+        </div>
       </div>
-    </div>
+    </section>
+  )
+}
+
+function CustomTick(props: any) {
+  const { x, y, payload } = props
+  const rawValue = payload.value
+  // Tronquer si trop long pour éviter le chevauchement (approx 9-10 chars par mot)
+  const truncate = (str: string) => str.length > 9 ? str.substring(0, 8) + '…' : str
+  const words = rawValue.split(' ').map(truncate)
+
+  return (
+    <g transform={`translate(${x},${y + 12})`}>
+      {words.map((word: string, i: number) => (
+        <text
+          key={i}
+          x={0}
+          y={i * 11}
+          textAnchor="middle"
+          fill="var(--neutral-500)"
+          style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-sans)' }}
+        >
+          {word}
+        </text>
+      ))}
+    </g>
   )
 }
 
@@ -259,4 +195,20 @@ const cardStyle: React.CSSProperties = {
   boxShadow: 'var(--shadow-card)',
   border: '1px solid var(--neutral-150)',
   padding: 'var(--space-5)',
+}
+
+const cardTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 'var(--font-size-base)',
+  fontWeight: 'var(--font-weight-bold)',
+  color: 'var(--neutral-900)',
+}
+
+const cardSubStyle: React.CSSProperties = {
+  margin: '3px 0 0',
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--neutral-400)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  fontWeight: 600,
 }

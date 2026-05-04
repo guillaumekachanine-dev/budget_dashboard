@@ -24,21 +24,12 @@ type Props = {
 
 export function Annual2026BudgetDNA({ buckets, categories, totalMonthly }: Props) {
   const sortedBuckets = [...buckets].sort((a, b) => b.monthlyBudget - a.monthlyBudget)
-  const top8Cats = categories.slice(0, 9)
+  void categories
 
   return (
     <section style={{ padding: '0 var(--space-6)' }}>
       <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
 
-        {/* Titre section */}
-        <div>
-          <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
-            Anatomie du budget
-          </h2>
-          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-            Structure des dépenses 2026 · {fmt(totalMonthly)} / mois
-          </p>
-        </div>
 
         {/* ── 1. Barre d'allocation ── */}
         <div style={cardStyle}>
@@ -74,25 +65,6 @@ export function Annual2026BudgetDNA({ buckets, categories, totalMonthly }: Props
           </div>
         </div>
 
-        {/* ── 2. Treemap tiles catégories ── */}
-        <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>Carte des familles de dépenses</h3>
-          <p style={cardSubStyle}>Superficie proportionnelle au budget mensuel alloué</p>
-
-          <div style={{
-            marginTop: 'var(--space-4)',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 'var(--space-2)',
-          }}>
-            {top8Cats.map((cat, i) => (
-              <CategoryTile key={cat.name} cat={cat} index={i} />
-            ))}
-          </div>
-        </div>
-
-        {/* ── 3. Rigidité / flexibilité ── */}
-        <FlexibilityMeter buckets={buckets} totalMonthly={totalMonthly} />
       </div>
     </section>
   )
@@ -139,118 +111,6 @@ function BucketLegendRow({ bucket, totalMonthly }: { bucket: Budget2026BucketSum
 }
 
 // ── Category Tile ─────────────────────────────────────────────────────────────
-
-const TILE_OPACITY = [1, 0.92, 0.84, 0.78, 0.72, 0.68, 0.64, 0.60, 0.56]
-
-function CategoryTile({ cat, index }: { cat: Budget2026CategorySummary; index: number }) {
-  const opacity = TILE_OPACITY[index] ?? 0.55
-
-  return (
-    <div style={{
-      background: `color-mix(in oklab, ${cat.color} ${Math.round(opacity * 14)}%, var(--neutral-0) ${100 - Math.round(opacity * 14)}%)`,
-      border: `1px solid color-mix(in oklab, ${cat.color} ${Math.round(opacity * 30)}%, transparent)`,
-      borderRadius: 'var(--radius-lg)',
-      padding: 'var(--space-3)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 4,
-      minWidth: 0,
-      // La taille est uniforme dans la grid, mais on utilise une typo plus grande
-      // pour les tops pour créer une hiérarchie visuelle
-    }}>
-      <p style={{
-        margin: 0,
-        fontSize: index < 3 ? 13 : 11,
-        fontWeight: 700,
-        color: 'var(--neutral-800)',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        lineHeight: 1.2,
-      }}>
-        {cat.name}
-      </p>
-      <p style={{
-        margin: 0,
-        fontSize: index < 3 ? 14 : 12,
-        fontWeight: 800,
-        fontFamily: 'var(--font-mono)',
-        color: cat.color,
-        lineHeight: 1,
-      }}>
-        {fmt(cat.monthlyBudget)}
-      </p>
-      <p style={{
-        margin: 0,
-        fontSize: 9,
-        color: 'var(--neutral-500)',
-        fontFamily: 'var(--font-mono)',
-      }}>
-        {fmtPct(cat.pctOfTotal)}
-      </p>
-    </div>
-  )
-}
-
-// ── Flexibility Meter ─────────────────────────────────────────────────────────
-// Angle original : on mesure la "rigidité structurelle" du budget
-
-function FlexibilityMeter({ buckets, totalMonthly }: { buckets: Budget2026BucketSummary[]; totalMonthly: number }) {
-  const rigidKeys = ['socle_fixe', 'variable_essentielle']
-  const flexKeys = ['discretionnaire', 'cagnotte_projet', 'provision']
-
-  const rigidTotal = buckets.filter((b) => rigidKeys.includes(b.key)).reduce((s, b) => s + b.monthlyBudget, 0)
-  const flexTotal = buckets.filter((b) => flexKeys.includes((b.key))).reduce((s, b) => s + b.monthlyBudget, 0)
-  const rigidPct = totalMonthly > 0 ? (rigidTotal / totalMonthly) * 100 : 0
-  const flexPct = totalMonthly > 0 ? (flexTotal / totalMonthly) * 100 : 0
-
-  const rigidityScore = Math.round(rigidPct)
-  const scoreLabel = rigidityScore >= 55 ? 'Budget rigide' : rigidityScore >= 40 ? 'Équilibré' : 'Budget flexible'
-  const scoreColor = rigidityScore >= 55 ? '#FFAB2E' : rigidityScore >= 40 ? '#5B57F5' : '#2ED47A'
-
-  return (
-    <div style={cardStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-        <div>
-          <h3 style={cardTitleStyle}>Indice de rigidité budgétaire</h3>
-          <p style={cardSubStyle}>Charges non pilotables vs dépenses activement maîtrisables</p>
-        </div>
-        <div style={{
-          flexShrink: 0,
-          background: `color-mix(in oklab, ${scoreColor} 12%, var(--neutral-0) 88%)`,
-          border: `1px solid color-mix(in oklab, ${scoreColor} 30%, transparent)`,
-          borderRadius: 'var(--radius-lg)',
-          padding: '6px 12px',
-          textAlign: 'center',
-        }}>
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: scoreColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            {scoreLabel}
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-mono)', color: scoreColor, lineHeight: 1 }}>
-            {rigidityScore}%
-          </p>
-        </div>
-      </div>
-
-      {/* Barre bicolore */}
-      <div style={{ marginTop: 'var(--space-4)', height: 12, borderRadius: 6, overflow: 'hidden', display: 'flex', gap: 2 }}>
-        <div style={{ flex: rigidPct, background: '#FFAB2E', borderRadius: '6px 0 0 6px', minWidth: 0 }} />
-        <div style={{ flex: flexPct, background: '#2ED47A', borderRadius: '0 6px 6px 0', minWidth: 0 }} />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: '#FFAB2E', display: 'block' }} />
-          <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontWeight: 500 }}>Rigide · {fmt(rigidTotal)}/mois</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontWeight: 500 }}>Piloté · {fmt(flexTotal)}/mois</span>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: '#2ED47A', display: 'block' }} />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── Styles partagés ───────────────────────────────────────────────────────────
 
