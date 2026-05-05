@@ -21,6 +21,7 @@ import {
   getCurrentPeriod,
   getDaysRemainingInMonth,
   getMonthLabel,
+  getCategoryColor,
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -264,12 +265,14 @@ function DriftCategoryTransactionsModal({
   open,
   onClose,
   categoryName,
+  categoryColor,
   categoryTransactions,
   loading,
 }: {
   open: boolean
   onClose: () => void
   categoryName: string | null
+  categoryColor: string
   categoryTransactions: Array<{ id: string; transaction_date: string; merchant_name: string | null; normalized_label: string | null; raw_label: string | null; amount: number }> | null
   loading: boolean
 }) {
@@ -310,10 +313,10 @@ function DriftCategoryTransactionsModal({
                 pointerEvents: 'auto',
               }}
             >
-              <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-900)' }}>{categoryName}</p>
-                <button type="button" onClick={onClose} style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
-                  <X size={15} />
+              <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{categoryName ?? 'Catégorie'}</p>
+                <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+                  <X size={20} />
                 </button>
               </div>
               <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
@@ -1152,10 +1155,14 @@ export function Home() {
       })
   }, [trajectoryCutoffIso, trajectoryMonthExpenseTxns, trajectorySummaries])
 
-  const selectedDriftCategoryName = useMemo(() => {
+  const selectedDriftCategoryMeta = useMemo(() => {
     if (!selectedDriftCategoryId) return null
-    return driftRows.find((r) => r.id === selectedDriftCategoryId)?.name ?? null
+    return driftRows.find((r) => r.id === selectedDriftCategoryId) ?? null
   }, [selectedDriftCategoryId, driftRows])
+  const selectedDriftCategoryColor = useMemo(
+    () => getCategoryColor(selectedDriftCategoryMeta?.colorToken ?? null, 0),
+    [selectedDriftCategoryMeta?.colorToken],
+  )
 
   const selectedDriftCategoryTransactions = useMemo(() => {
     if (!selectedDriftCategoryId) return null
@@ -2726,7 +2733,8 @@ export function Home() {
           setShowDriftCategoryModal(false)
           setSelectedDriftCategoryId(null)
         }}
-        categoryName={selectedDriftCategoryName}
+        categoryName={selectedDriftCategoryMeta?.name ?? null}
+        categoryColor={selectedDriftCategoryColor}
         categoryTransactions={selectedDriftCategoryTransactions}
         loading={loadingSummaries}
       />
