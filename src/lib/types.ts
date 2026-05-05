@@ -349,6 +349,14 @@ export type Database = {
         }
         Returns: Record<string, unknown>
       }
+      get_home_daily_budget_payload: {
+        Args: {
+          p_user_id: string
+          p_period_year: number
+          p_period_month: number
+        }
+        Returns: Record<string, unknown>
+      }
       refresh_budget_analytics: {
         Args: { p_user_id: string }
         Returns: null

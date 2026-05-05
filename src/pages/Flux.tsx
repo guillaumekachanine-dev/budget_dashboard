@@ -1768,14 +1768,14 @@ export function Flux() {
                   <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
                     <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {['all', 'variable', 'fixed'].map(val => {
+                      {(['all', 'variable', 'fixed'] as const).map(val => {
                         const label = val === 'all' ? 'Tout' : (val === 'fixed' ? 'Fixe' : 'Variable');
                         const isSelected = draftBudgetFilter === val;
                         return (
                           <button
                             key={val}
                             type="button"
-                            onClick={() => setDraftBudgetFilter(val as any)}
+                            onClick={() => setDraftBudgetFilter(val)}
                             style={{
                               padding: '6px 0',
                               fontSize: 11,
@@ -1797,14 +1797,14 @@ export function Flux() {
                   <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
                     <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {['all', 'perso', 'joint'].map(val => {
+                      {(['all', 'perso', 'joint'] as const).map(val => {
                         const label = val === 'all' ? 'Tout' : (val === 'joint' ? 'Joint' : 'Perso');
                         const isSelected = draftAccountFilter === val;
                         return (
                           <button
                             key={val}
                             type="button"
-                            onClick={() => setDraftAccountFilter(val as any)}
+                            onClick={() => setDraftAccountFilter(val)}
                             style={{
                               padding: '6px 0',
                               fontSize: 11,
