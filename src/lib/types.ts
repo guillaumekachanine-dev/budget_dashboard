@@ -175,6 +175,15 @@ export interface AccountWithBalance extends Account {
   current_balance: number
 }
 
+export interface AccountBalanceRow {
+  id: string
+  account_id: string
+  balance_amount: number
+  currency: string
+  created_at: string
+  updated_at: string
+}
+
 export interface CategoryBudgetSummary {
   category: Category
   budget_amount: number
@@ -317,6 +326,7 @@ export type Database = {
       analytics_2025_yearly_bucket_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       analytics_2025_yearly_category_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       analytics_2025_yearly_summary: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      accounts_balance: TableDef<AccountBalanceRow, Omit<AccountBalanceRow, 'id' | 'created_at' | 'updated_at'>, Partial<AccountBalanceRow>>
       category_budget_bucket_map: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       import_batches: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
