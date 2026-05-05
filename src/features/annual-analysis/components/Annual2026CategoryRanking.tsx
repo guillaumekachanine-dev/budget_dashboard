@@ -10,13 +10,11 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { CalendarDays, LayoutGrid } from 'lucide-react'
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, LabelList } from 'recharts'
 import type { Budget2026CategorySummary } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { VIZ_PALETTE } from './_constants'
+import { VIZ_PALETTE, MONTH_LABELS_SHORT } from './_constants'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
 const fmtPct = (r: number) => `${(r * 100).toFixed(1)}%`
-
-const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 type Props = {
   categories: Budget2026CategorySummary[]
@@ -174,7 +172,7 @@ export function AnnualProjectionCard({ categories }: { categories: Budget2026Cat
     const monthlyTotal = categories.reduce((total, cat) => total + Number(cat.monthlyBudget ?? 0), 0)
     const currentMonthIndex = Math.max(0, Math.min(11, new Date().getMonth()))
 
-    return MONTH_LABELS
+    return MONTH_LABELS_SHORT
       .slice(currentMonthIndex)
       .map((label, idx) => ({
         name: label,

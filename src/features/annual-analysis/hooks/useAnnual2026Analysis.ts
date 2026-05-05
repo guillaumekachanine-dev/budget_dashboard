@@ -6,6 +6,7 @@ import {
   BUCKET_LABELS,
   BUCKET_COLORS,
   VIZ_PALETTE,
+  MONTH_LABELS_SHORT,
 } from '@/features/annual-analysis/components/_constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,7 +87,6 @@ export interface Annual2026Analysis {
 const SAVINGS_MONTHLY = 500
 const YTD_MONTHS = 5
 
-const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2
 
     return {
       month,
-      monthLabel: MONTH_LABELS[month - 1] ?? `M${month}`,
+      monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
       totalExpenseBudget: total,
       totalNeed: total + SAVINGS_MONTHLY,
       buckets: bucketValues,

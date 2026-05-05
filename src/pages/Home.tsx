@@ -29,10 +29,10 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
-import { supabase } from '@/lib/supabase'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
-import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
+import { budgetDb } from '@/lib/supabaseBudget'
+import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
@@ -157,7 +157,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 
 const PROJECTION_SAVINGS_RATE = 0.015
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
-const MONTHS_2026_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 function DriftCategoryTransactionsModal({
   open,
@@ -314,20 +313,10 @@ export function Home() {
   const { data: recurringOperationsRows } = useQuery<RecurringOperationRow[]>({
     queryKey: ['home', 'recurring-operations', trajectoryYear, selectedTrajectoryMonth],
     queryFn: async () => {
-      const recurringTableQuery = supabase
-        .schema('budget_dashboard')
-        .from('recurring_operations' as any)
-        .select('*')
-
-      const { data: recurringData, error: recurringError } = await recurringTableQuery
-      if (!recurringError && Array.isArray(recurringData)) return recurringData as unknown as RecurringOperationRow[]
-
-      const fallbackQuery = supabase
-        .schema('budget_dashboard')
+      const { data } = await budgetDb()
         .from('recurring_obligations')
         .select('id, due_day, starts_on, ends_on, is_active, recurrence_frequency')
-      const { data: fallbackData } = await fallbackQuery
-      return (fallbackData ?? []) as RecurringOperationRow[]
+      return (data ?? []) as RecurringOperationRow[]
     },
     staleTime: 60_000,
   })
@@ -996,7 +985,7 @@ export function Home() {
     let modeledBalance = Math.max(0, Number(selectedAccount?.opening_balance ?? (selectedBalance - 3000)))
     const contributionByMonth = new Set([6, 10, 12])
 
-    return MONTHS_2026_LABELS.map((label, index) => {
+    return MONTH_LABELS_SHORT.map((label, index) => {
       const monthNumber = index + 1
       if (contributionByMonth.has(monthNumber)) {
         modeledBalance += 1000

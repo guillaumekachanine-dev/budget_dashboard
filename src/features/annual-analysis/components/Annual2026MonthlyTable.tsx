@@ -23,6 +23,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { MonthlyBudget2026Point } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import { MONTH_LABELS_SHORT } from './_constants'
 import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 
@@ -64,7 +65,6 @@ const fmtPct = (r: number) => {
   return `${val}%`
 }
 
-const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 function getCurrentMonthCutoff2026(): number {
   const now = new Date()
@@ -266,7 +266,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
           const expense = expenseByMonth.get(month) ?? 0
           return {
             month,
-            monthLabel: MONTH_LABELS[month - 1] ?? `M${month}`,
+            monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
             openingBalance: openingBalanceByMonth.get(month) ?? 0,
             budget,
             expense,

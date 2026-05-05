@@ -7,10 +7,9 @@ import {
 import { useTransactions } from '@/hooks/useTransactions'
 import { getCurrentPeriod, getMonthLabel, formatCurrency, getCategoryColor } from '@/lib/utils'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 
 type Period = 'month' | 'quarter' | 'year'
-
-const MONTHS_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 function getDateRange(period: Period) {
   const now = new Date()
@@ -60,7 +59,7 @@ export function Charts() {
   const pieData = Object.values(byCat).sort((a, b) => b.value - a.value)
 
   // Monthly income vs expenses
-  const monthlyData = MONTHS_FR.map((label, i) => {
+  const monthlyData = MONTH_LABELS_SHORT.map((label, i) => {
     const monthTxns = (allTxns ?? []).filter((t) => {
       const d = new Date(t.transaction_date)
       return d.getMonth() === i && d.getFullYear() === year

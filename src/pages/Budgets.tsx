@@ -38,7 +38,7 @@ import {
   type MetricsDisplayMode,
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
-import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
+import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
 import blockVariableIcon from '@/assets/icons/blocks/variable.png'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
@@ -201,7 +201,7 @@ function buildHistoryWindow(periodYear: number, periodMonth: number, monthsBack:
     const month = date.getMonth() + 1
     months.push({
       key: monthKey(year, month),
-      monthLabel: MONTHS_FR_SHORT[month - 1],
+      monthLabel: MONTH_LABELS_SHORT[month - 1],
       monthStart: `${year}-${pad2(month)}-01`,
       periodYear: year,
       periodMonth: month,
@@ -234,7 +234,6 @@ function getPeriodRange(
   return { startDate, endDate }
 }
 
-const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
@@ -504,14 +503,11 @@ export function Budgets() {
     }, {})
   }, [budgetPayload])
 
-  // Diagnostic logs requested by user
   useEffect(() => {
-    if (budgetPayload) {
-      console.log('DEBUG [Budget Mapping Check]')
-      console.log('payload by_bucket keys', Object.keys(payloadByBucket));
-      console.log('epargne payload', payloadByBucket.epargne);
-      console.log('provision payload', payloadByBucket.provision);
-    }
+    if (!import.meta.env.DEV || !budgetPayload) return
+    console.log('[Budget Mapping Check] by_bucket keys', Object.keys(payloadByBucket))
+    console.log('[Budget Mapping Check] epargne', payloadByBucket.epargne)
+    console.log('[Budget Mapping Check] provision', payloadByBucket.provision)
   }, [budgetPayload])
 
   const visibleBudgetBuckets = useMemo(
@@ -1084,7 +1080,7 @@ export function Budgets() {
       const isCurrent = Number(row.period_year) === selectedPeriodYear && Number(row.period_month) === selectedPeriodMonth
 
       return {
-        month: MONTHS_FR_SHORT[monthIndex],
+        month: MONTH_LABELS_SHORT[monthIndex],
         amount,
         budget,
         isCurrent,

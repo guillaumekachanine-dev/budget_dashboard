@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
 import type { FlowType, Transaction } from '@/lib/types'
 
@@ -37,7 +37,7 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
   }
 
   const PAGE_SIZE = 1000
-  let query = supabase.from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
+  let query = budgetDb().from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
 
   if (filters.accountId) query = query.eq('account_id', filters.accountId)
   if (filters.categoryIds && filters.categoryIds.length > 0) query = query.in('category_id', filters.categoryIds)
@@ -90,7 +90,7 @@ export function useAddTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (txn: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'category' | 'account'>) => {
-      const { data, error } = await supabase.from('transactions').insert(txn).select().single()
+      const { data, error } = await budgetDb().from('transactions').insert(txn).select().single()
       if (error) throw error
       return data
     },
@@ -106,7 +106,7 @@ export function useUpdateTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Transaction> }) => {
-      const { data, error } = await supabase
+      const { data, error } = await budgetDb()
         .from('transactions')
         .update(updates)
         .eq('id', id)
@@ -127,7 +127,7 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('transactions').delete().eq('id', id)
+      const { error } = await budgetDb().from('transactions').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
