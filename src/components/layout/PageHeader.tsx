@@ -36,7 +36,12 @@ export function PageHeader({
     <>
       <header
         style={{
-          padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--page-gutter) var(--space-4)',
+          paddingTop: 'calc(var(--safe-top) + var(--space-2))',
+          paddingRight: 'var(--page-gutter)',
+          paddingBottom: 'var(--space-4)',
+          paddingLeft: 'var(--page-gutter)',
+          minHeight: 'calc(64px + var(--safe-top))',
+          boxSizing: 'border-box',
           background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
           borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
           position: 'relative',

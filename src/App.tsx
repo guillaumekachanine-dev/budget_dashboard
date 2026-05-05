@@ -73,19 +73,21 @@ export default function App() {
     <div className="app-shell">
       <StatsReferenceBootstrap userId={user.id} enabled />
 
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/"         element={<Home />} />
-          <Route path="/flux"     element={<Flux />} />
-          <Route path="/activite" element={<Navigate to="/flux" replace />} />
-          <Route path="/budgets"  element={<Budgets />} />
-          <Route path="/stats"    element={<Stats />} />
-          {/* Redirections des anciens chemins */}
-          <Route path="/charts"   element={<Navigate to="/stats" replace />} />
-          <Route path="/epargne"  element={<Navigate to="/stats" replace />} />
-          <Route path="*"         element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <main className="app-main">
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/"         element={<Home />} />
+            <Route path="/flux"     element={<Flux />} />
+            <Route path="/activite" element={<Navigate to="/flux" replace />} />
+            <Route path="/budgets"  element={<Budgets />} />
+            <Route path="/stats"    element={<Stats />} />
+            {/* Redirections des anciens chemins */}
+            <Route path="/charts"   element={<Navigate to="/stats" replace />} />
+            <Route path="/epargne"  element={<Navigate to="/stats" replace />} />
+            <Route path="*"         element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </main>
 
       <BottomNav onAddClick={() => setModalOpen(true)} />
       <AddTransactionModal open={modalOpen} onClose={() => setModalOpen(false)} />

@@ -1593,7 +1593,7 @@ export function Budgets() {
   }, [dataDisplayMode, selectedBlockPage])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : 'var(--space-5)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : 'var(--space-5)' }}>
       <PageHeader
         title="Budgets"
         titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"

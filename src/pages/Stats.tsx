@@ -144,7 +144,7 @@ export function Stats() {
   const monthButtonLabel = selectedPeriod?.label ?? 'Mois'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <PageHeader
         title="Analytics"
         rightSlot={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? (

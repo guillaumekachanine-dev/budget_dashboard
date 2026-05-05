@@ -1298,11 +1298,9 @@ export function Home() {
   return (
     <div
       style={{
-        minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-4)',
-        paddingBottom: 'calc(var(--nav-height) + var(--safe-bottom-offset))',
       }}
     >
       <PageHeader

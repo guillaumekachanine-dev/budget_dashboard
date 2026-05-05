@@ -23,7 +23,7 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
+    <div className="bg-neutral-50 flex items-center justify-center p-6" style={{ minHeight: 'var(--app-height)' }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

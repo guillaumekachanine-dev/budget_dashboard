@@ -85,7 +85,7 @@ const rootStyle: CSSProperties = {
   position: 'fixed',
   left: 0,
   right: 0,
-  bottom: 'calc(var(--safe-bottom-compensation) * -1)',
+  bottom: 0,
   zIndex: 50,
   maxWidth: 'var(--page-max-width)',
   margin: '0 auto',
@@ -94,8 +94,10 @@ const rootStyle: CSSProperties = {
 const navStyle: CSSProperties = {
   position: 'relative',
   boxSizing: 'border-box',
-  height: 'calc(var(--nav-base-height) + var(--safe-bottom-offset))',
-  paddingBottom: 'var(--safe-bottom-offset)',
+  minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom))',
+  paddingBottom: 'var(--safe-bottom)',
+  paddingLeft: 'var(--safe-left)',
+  paddingRight: 'var(--safe-right)',
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
   borderTop: 'none',
   borderTopLeftRadius: 'var(--radius-md)',
@@ -104,7 +106,8 @@ const navStyle: CSSProperties = {
 }
 
 const navRowStyle: CSSProperties = {
-  height: 'var(--nav-base-height)',
+  minHeight: 'var(--bottom-nav-height)',
+  height: 'var(--bottom-nav-height)',
   display: 'grid',
   gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
   alignItems: 'center',
@@ -114,7 +117,7 @@ const navRowStyle: CSSProperties = {
 const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: 'calc(var(--nav-base-height) / 2)',
+  top: 'calc(var(--bottom-nav-height) / 2)',
   width: 44,
   height: 44,
   transform: 'translate(-50%, calc(-50% - 5px))',

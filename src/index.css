@@ -127,25 +127,37 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top-offset: env(safe-area-inset-top, 0px);
-  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
-  --safe-bottom-compensation: 0px;
-  --nav-base-height: 72px;
-  --nav-height: var(--nav-base-height);
+  --safe-top-offset: var(--safe-top);
+  --safe-bottom-offset: var(--safe-bottom);
+  --app-height: 100dvh;
+  --bottom-nav-height: 72px;
+  --nav-base-height: var(--bottom-nav-height);
+  --nav-height: calc(var(--bottom-nav-height) + var(--safe-bottom));
   --page-gutter: clamp(16px, 4.5vw, 24px);
   --page-max-width: 430px;
 }
 
+@supports not (height: 100dvh) {
+  :root {
+    --app-height: 100vh;
+  }
+}
+
 /* ─── BASE STYLES ─────────────────────────────────────────────────── */
 @layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: 100%;
+  }
+
   html {
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
-    min-height: 100%;
     height: 100%;
-    width: 100%;
     overflow-x: hidden;
   }
 
@@ -159,17 +171,11 @@
     font-size: 16px;
     line-height: 1.5;
     margin: 0;
-    min-height: 100svh;
-    min-height: 100dvh;
-    height: 100%;
-    width: 100%;
     overflow-x: hidden;
   }
 
   #root {
-    min-height: 100%;
     height: 100%;
-    width: 100%;
     overflow-x: hidden;
   }
 
@@ -280,19 +286,27 @@
   }
 
   .app-shell {
-    min-height: 100svh;
-    min-height: 100dvh;
-    height: 100%;
+    min-height: var(--app-height);
     width: 100%;
     max-width: var(--page-max-width);
     margin: 0 auto;
     background: var(--neutral-50);
     padding-top: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
     overflow-x: clip;
   }
 
+  .app-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    padding-bottom: var(--nav-height);
+  }
+
   .pb-nav {
-    padding-bottom: calc(var(--nav-height) + var(--safe-bottom-offset));
+    padding-bottom: var(--nav-height);
   }
 
   .tap-target {
@@ -342,12 +356,6 @@
     --space-8: 28px;
     --space-16: 60px;
   }
-}
-
-html[data-standalone='true'] {
-  --safe-top-offset: env(safe-area-inset-top, 0px);
-  --safe-bottom-offset: env(safe-area-inset-bottom, 0px);
-  --safe-bottom-compensation: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-reduced-motion: reduce) {
