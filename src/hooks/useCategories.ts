@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { Category } from '@/lib/types'
 
 async function fetchCategories(): Promise<Category[]> {
-  const { data, error } = await supabase
+  const { data, error } = await budgetDb()
     .from('categories')
     .select('*')
     .eq('is_active', true)

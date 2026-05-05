@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import { getCurrentPeriod } from '@/lib/utils'
 import type { HomeDailyBudgetPayload } from '../types'
 
@@ -14,8 +15,8 @@ export function useHomeDailyBudgetPayload(periodYear?: number, periodMonth?: num
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) return null
 
-      // RPC not yet in generated types — cast the schema client to any
-      const db = supabase.schema('budget_dashboard') as any
+      // RPC not yet in generated types
+      const db = budgetDb() as any
       const { data, error } = await db.rpc('get_home_daily_budget_payload', {
         p_user_id: user.id,
         p_period_year: targetYear,

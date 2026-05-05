@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { AccountWithBalance } from '@/lib/types'
 
 async function fetchAccountsWithBalances(): Promise<AccountWithBalance[]> {
   const PAGE_SIZE = 1000
-  const { data: accounts, error } = await supabase
+  const { data: accounts, error } = await budgetDb()
     .from('accounts')
     .select('*')
     .eq('include_in_dashboard', true)
@@ -18,7 +18,7 @@ async function fetchAccountsWithBalances(): Promise<AccountWithBalance[]> {
   let from = 0
 
   while (true) {
-    const { data: txns, error: txErr } = await supabase
+    const { data: txns, error: txErr } = await budgetDb()
       .from('transactions')
       .select('account_id, amount, direction')
       .in('account_id', accountIds)

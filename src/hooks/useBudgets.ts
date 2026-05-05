@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { budgetDb } from '@/lib/supabaseBudget'
 import type { Budget, BudgetPeriod, CategoryBudgetSummary } from '@/lib/types'
 
 async function fetchCurrentPeriod(year: number, month: number): Promise<BudgetPeriod | null> {
-  const { data, error } = await supabase
-    .schema('budget_dashboard')
+  const { data, error } = await budgetDb()
     .from('budget_periods')
     .select('*')
     .eq('period_year', year)
@@ -18,7 +17,7 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
   const period = await fetchCurrentPeriod(year, month)
   if (!period) return []
 
-  const { data: budgets, error: bErr } = await supabase
+  const { data: budgets, error: bErr } = await budgetDb()
     .from('budgets')
     .select('*, category:categories(*)')
     .eq('period_id', period.id)
@@ -34,7 +33,7 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
   const spentByCategory = new Map<string, number>()
 
   if (categoryIds.length > 0) {
-    const { data: txns, error: txErr } = await supabase
+    const { data: txns, error: txErr } = await budgetDb()
       .from('transactions')
       .select('category_id, amount')
       .eq('flow_type', 'expense')
