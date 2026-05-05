@@ -422,8 +422,8 @@ export function Annual2026BlockMetrics({
     { label: `Dépenses ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
     { label: `Budget ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.budgetAmount), color: 'var(--neutral-900)' },
     { label: `Ecart réel/budget ${periodLabelSuffix}`, value: fmtPercentCompact(metricsState.deltaPct), color: metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)' },
-    { label: 'Mt moyen', value: fmtCurrencyCompact(metricsState.averageAmount), color: 'var(--neutral-900)' },
-    { label: 'Médiane', value: fmtCurrencyCompact(metricsState.medianAmount), color: 'var(--neutral-900)' },
+    { label: 'Montant moyen (12 mois)', value: fmtCurrencyCompact(metricsState.averageAmount), color: 'var(--neutral-900)' },
+    { label: 'Médiane (12 mois)', value: fmtCurrencyCompact(metricsState.medianAmount), color: 'var(--neutral-900)' },
     { label: `Nbre d'opérations ${periodLabelSuffix}`, value: String(transactionCount), color: 'var(--neutral-900)' },
     { label: 'Rang', value: metricsState.rank, color: 'var(--neutral-900)' },
   ]

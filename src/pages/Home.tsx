@@ -30,6 +30,7 @@ import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsM
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { supabase } from '@/lib/supabase'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
@@ -427,18 +428,47 @@ export function Home() {
 
   const driftCategories = useMemo(() => {
     const rows = trajectorySummaries ?? []
-    return [...rows]
+    const txns = trajectoryMonthExpenseTxns ?? []
+
+    return rows
       .filter((r) => r.budget_amount > 0)
-      .map((r) => ({
-        id: r.category.id,
-        name: r.category.name,
-        spent: r.spent_amount,
-        driftPct: (r.spent_amount / r.budget_amount) * 100 - 100,
-      }))
+      .map((r) => {
+        const budget = Number(r.budget_amount)
+        const spent = Number(r.spent_amount)
+        const driftPct = (spent / budget) * 100 - 100
+
+        // Calculer la date de dépassement
+        let exceedDateStr = null
+        if (driftPct >= 0) {
+          const categoryTxns = txns
+            .filter(t => t.category_id === r.category.id && t.transaction_date <= trajectoryCutoffIso)
+            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+          
+          let cumul = 0
+          for (const t of categoryTxns) {
+            cumul += Number(t.amount)
+            if (cumul > budget) {
+              const d = t.transaction_date
+              exceedDateStr = `${d.slice(8, 10)}/${d.slice(5, 7)}`
+              break
+            }
+          }
+        }
+
+        return {
+          id: r.category.id,
+          name: r.category.name,
+          iconKey: r.category.icon_key,
+          colorToken: r.category.color_token,
+          spent: r.spent_amount,
+          driftPct,
+          exceedDate: exceedDateStr
+        }
+      })
       .filter((r) => r.driftPct >= 0)
       .sort((a, b) => b.driftPct - a.driftPct)
       .slice(0, 6)
-  }, [trajectorySummaries])
+  }, [trajectorySummaries, trajectoryMonthExpenseTxns, trajectoryCutoffIso])
 
   const accountEntries = useMemo<HomeAccountEntry[]>(() => {
     const source = accounts ?? []
@@ -550,7 +580,7 @@ export function Home() {
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1>(0)
+  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1 | 2>(0)
 
   const mainAccountResteUtile = useMemo(() => (
     selectedBalance
@@ -979,6 +1009,9 @@ export function Home() {
         name: c.name,
         spent: c.spent,
         driftPct: c.driftPct,
+        iconKey: c.iconKey,
+        colorToken: c.colorToken,
+        exceedDate: c.exceedDate,
       })),
     [driftCategories],
   )
@@ -1530,13 +1563,13 @@ export function Home() {
                     <div
                       style={{
                         display: 'flex',
-                        width: '200%',
+                        width: '300%',
                         height: '100%',
-                        transform: `translateX(-${homeInsightsSlide * (100 / 2)}%)`,
+                        transform: `translateX(-${homeInsightsSlide * (100 / 3)}%)`,
                         transition: 'transform 420ms ease',
                       }}
                     >
-                      <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2)' }}>
+                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
                           <div />
                           {!isSavingsBooklet && !isPER && !isPEA ? (
@@ -1652,7 +1685,7 @@ export function Home() {
                           </div>
                         ) : null}
                       </div>
-                      <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
                         {loadingSummaries ? (
                           <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
                             Chargement…
@@ -1700,7 +1733,8 @@ export function Home() {
                           <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                             {driftRows.map((row) => {
                               const drift = Number(row.driftPct ?? 0)
-                              const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                              const color = row.colorToken || 'var(--neutral-400)'
+                              
                               return (
                                 <button
                                   key={row.id}
@@ -1710,14 +1744,12 @@ export function Home() {
                                     setShowDriftCategoryModal(true)
                                   }}
                                   style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '1fr auto',
+                                    display: 'flex',
                                     alignItems: 'center',
                                     gap: 'var(--space-2)',
-                                    minHeight: 40,
-                                    padding: '8px 0',
+                                    minHeight: 36,
+                                    padding: '6px 0',
                                     borderBottom: '1px solid var(--neutral-100)',
-                                    lineHeight: 1.4,
                                     width: '100%',
                                     border: 'none',
                                     background: 'transparent',
@@ -1732,16 +1764,57 @@ export function Home() {
                                     e.currentTarget.style.backgroundColor = 'transparent'
                                   }}
                                 >
-                                  <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center', minWidth: 0 }}>
-                                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
-                                      {row.name}
-                                    </span>
-                                    <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: drift === 0 ? 'var(--color-warning)' : driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                      {drift === 0 ? '=' : `${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                                    </span>
+                                  {/* Date de dépassement */}
+                                  <span style={{ 
+                                    fontSize: 10, 
+                                    color: 'var(--neutral-400)', 
+                                    fontFamily: 'var(--font-mono)', 
+                                    flexShrink: 0,
+                                    width: 32,
+                                    textAlign: 'left'
+                                  }}>
+                                    {row.exceedDate || '--/--'}
+                                  </span>
+
+                                  {/* Icône de catégorie */}
+                                  <div style={{ 
+                                    width: 24, 
+                                    height: 24, 
+                                    borderRadius: 'var(--radius-sm)', 
+                                    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`, 
+                                    color: color, 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    flexShrink: 0 
+                                  }}>
+                                    <CategoryIcon iconKey={row.iconKey} size={14} label={row.name} />
                                   </div>
-                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                                    {formatMoneyInteger(Number(row.spent ?? 0))}
+
+                                  {/* Nom de catégorie */}
+                                  <span style={{ 
+                                    flex: 1, 
+                                    minWidth: 0, 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis', 
+                                    whiteSpace: 'nowrap', 
+                                    fontSize: 12, 
+                                    fontWeight: 'var(--font-weight-regular)', 
+                                    color: 'var(--neutral-800)' 
+                                  }}>
+                                    {row.name}
+                                  </span>
+
+                                  {/* Drift Percentage */}
+                                  <span style={{ 
+                                    fontSize: 12, 
+                                    fontWeight: 'var(--font-weight-semibold)', 
+                                    color: 'var(--color-error)', 
+                                    fontFamily: 'var(--font-mono)', 
+                                    whiteSpace: 'nowrap', 
+                                    flexShrink: 0 
+                                  }}>
+                                    +{drift.toFixed(0)}%
                                   </span>
                                 </button>
                               )
@@ -1749,15 +1822,50 @@ export function Home() {
                           </div>
                         )}
                       </div>
+
+                      {/* Slide 3: Opérations planifiées */}
+                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                        <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+                            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)' }}>Opérations planifiées</h4>
+                            <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontWeight: 500 }}>Ce mois</span>
+                          </div>
+
+                          <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+                            {/* Placeholder items for UI */}
+                            {[
+                              { label: 'Loyer / Crédit', date: '05/05', amount: 1200, status: 'pending' },
+                              { label: 'EDF', date: '12/05', amount: 85, status: 'pending' },
+                              { label: 'Internet', date: '15/05', amount: 39.99, status: 'pending' },
+                              { label: 'Assurance', date: '20/05', amount: 45, status: 'pending' },
+                            ].map((op, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 'var(--space-2)',
+                                  padding: '8px 0',
+                                  borderBottom: '1px solid var(--neutral-100)',
+                                }}
+                              >
+                                <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', width: 32 }}>{op.date}</span>
+                                <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{op.label}</span>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>{formatMoneyInteger(op.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-1)' }}>
-                    {[0, 1].map((idx) => (
+                    {[0, 1, 2].map((idx) => (
                       <button
                         key={idx}
                         type="button"
-                        aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
-                        onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
+                        aria-label={idx === 0 ? 'Afficher la trajectoire' : idx === 1 ? 'Afficher les catégories en dérive' : 'Afficher les opérations planifiées'}
+                        onClick={() => setHomeInsightsSlide(idx as 0 | 1 | 2)}
                         style={{
                           padding: '16px 12px',
                           border: 'none',

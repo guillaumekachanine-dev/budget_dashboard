@@ -64,7 +64,7 @@ interface PieDatum {
   color: string
 }
 
-type BudgetBlockId = 'fixe' | 'variable_essentiel' | 'discretionnaire' | 'epargne' | 'provision' | 'cagnotte'
+type BudgetBlockId = 'socle_fixe' | 'variable_essentielle' | 'discretionnaire' | 'epargne' | 'provision' | 'cagnotte'
 
 interface BudgetBlockLineItem {
   id: string
@@ -238,17 +238,16 @@ const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
-  { id: 'fixe', label: 'Fixe', color: 'var(--primary-500)' },
-  { id: 'variable_essentiel', label: 'Variable essentiel', color: 'var(--color-success)' },
+  { id: 'socle_fixe', label: 'Fixe', color: 'var(--primary-500)' },
+  { id: 'variable_essentielle', label: 'Variable essentielle', color: 'var(--color-success)' },
   { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
   { id: 'epargne', label: 'Épargne', color: 'var(--color-warning)' },
   { id: 'provision', label: 'Provision', color: 'var(--viz-d)' },
-  { id: 'cagnotte', label: 'Cagnotte', color: 'var(--viz-e)' },
 ]
 
 const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
-  fixe: '#5B57F5',
-  variable_essentiel: '#2ED47A',
+  socle_fixe: '#5B57F5',
+  variable_essentielle: '#2ED47A',
   epargne: '#FFAB2E',
   provision: '#6C63FF',
   discretionnaire: '#FC5A5A',
@@ -256,8 +255,8 @@ const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
 }
 
 const BLOCK_ICON_SRC: Record<BudgetBlockId, string> = {
-  fixe: blockFixeIcon,
-  variable_essentiel: blockVariableIcon,
+  socle_fixe: blockFixeIcon,
+  variable_essentielle: blockVariableIcon,
   discretionnaire: blockDiscretionnaireIcon,
   epargne: blockEpargneIcon,
   provision: blockProvisionsIcon,
@@ -284,18 +283,15 @@ function accentFromLabel(label: string | null | undefined): string {
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
   switch (bucket) {
     case 'socle_fixe':
-      return 'fixe'
+      return 'socle_fixe'
     case 'variable_essentielle':
-      return 'variable_essentiel'
+      return 'variable_essentielle'
     case 'discretionnaire':
       return 'discretionnaire'
     case 'provision':
       return 'provision'
     case 'epargne':
       return 'epargne'
-    case 'revenu':
-    case 'hors_pilotage':
-      return null
     default:
       return null
   }
@@ -307,7 +303,8 @@ function formatBudgetBucketLabel(bucket: string | null | undefined): string {
   if (bucket === 'variable_essentielle') return 'Variable essentielle'
   if (bucket === 'discretionnaire') return 'Discrétionnaire'
   if (bucket === 'cagnotte_projet') return 'Cagnotte projet'
-  if (bucket === 'provision') return 'Épargne'
+  if (bucket === 'provision') return 'Provision'
+  if (bucket === 'epargne') return 'Épargne'
   if (bucket === 'hors_pilotage') return 'Hors pilotage'
   return bucket
 }
@@ -506,6 +503,17 @@ export function Budgets() {
       return acc
     }, {})
   }, [budgetPayload])
+
+  // Diagnostic logs requested by user
+  useEffect(() => {
+    if (budgetPayload) {
+      console.log('DEBUG [Budget Mapping Check]')
+      console.log('payload by_bucket keys', Object.keys(payloadByBucket));
+      console.log('epargne payload', payloadByBucket.epargne);
+      console.log('provision payload', payloadByBucket.provision);
+    }
+  }, [budgetPayload])
+
   const visibleBudgetBuckets = useMemo(
     () => PILOTAGE_BUCKET_ORDER.map((bucket) => ({
       bucket,
@@ -1301,33 +1309,25 @@ export function Budgets() {
     })
 
 	    if (selectedCat === 'all' && budgetPayload) {
-        const hasExplicitEpargneBucket = visibleBudgetBuckets.some((entry) => entry.bucket === 'epargne' && Boolean(entry.data))
 	      for (const bucketEntry of visibleBudgetBuckets) {
           const bucketRow = bucketEntry.data
           if (!bucketRow) continue
 	        const primaryBlockId = mapBudgetBucketToBlock(bucketRow.budget_bucket)
 	        if (!primaryBlockId) continue
-          const targetBlockIds: BudgetBlockId[] = primaryBlockId === 'provision' && !hasExplicitEpargneBucket
-            ? ['epargne', 'provision']
-            : [primaryBlockId]
-
-          const bucketLines = payloadByCategory
-            .filter((row) => row.budget_bucket === bucketRow.budget_bucket)
-            .map((row) => ({
-              id: row.category_id,
-              categoryName: row.category_name,
-              parentCategoryName: row.parent_category_name,
-              budgetAmount: Number(row.budget_amount ?? 0),
-              actualAmount: Number(row.actual_amount ?? 0),
-            }))
-
-          for (const blockId of targetBlockIds) {
-	          const target = initial.get(blockId)
-	          if (!target) continue
-
-	          target.budgetAmount += Number(bucketRow.budget_amount ?? 0)
-	          target.actualAmount += Number(bucketRow.actual_amount ?? 0)
-	          target.lines = bucketLines
+          
+          const target = initial.get(primaryBlockId)
+          if (target) {
+            target.budgetAmount = Number(bucketRow.budget_amount ?? 0)
+            target.actualAmount = Number(bucketRow.actual_amount ?? 0)
+            target.lines = payloadByCategory
+              .filter((row) => row.budget_bucket === bucketRow.budget_bucket)
+              .map((row) => ({
+                id: row.category_id,
+                categoryName: row.category_name,
+                parentCategoryName: row.parent_category_name,
+                budgetAmount: Number(row.budget_amount ?? 0),
+                actualAmount: Number(row.actual_amount ?? 0),
+              }))
           }
 	      }
 	    }
@@ -1338,32 +1338,26 @@ export function Budgets() {
       return categoryId === selectedCat || parentCategoryId === selectedCat
     }
 
-      const hasExplicitEpargneLine = configuredBudgetCategoryLines.some((line) => line.budget_bucket === 'epargne')
 	    for (const line of selectedCat === 'all' ? [] : configuredBudgetCategoryLines) {
 	      if (!isVisibleLine(line.category_id, line.parent_category_id)) continue
 	      const primaryBlockId = mapBudgetBucketToBlock(line.budget_bucket)
 	      if (!primaryBlockId) continue
-        const targetBlockIds: BudgetBlockId[] = primaryBlockId === 'provision' && !hasExplicitEpargneLine
-          ? ['epargne', 'provision']
-          : [primaryBlockId]
+        
+        const target = initial.get(primaryBlockId)
+        if (!target) continue
 
-	      const budgetAmount = Number(line.amount ?? 0)
-	      const actualAmount = line.category_id ? (periodSpentByCategory.get(line.category_id) ?? 0) : 0
+        const budgetAmount = Number(line.amount ?? 0)
+        const actualAmount = line.category_id ? (periodSpentByCategory.get(line.category_id) ?? 0) : 0
 
-        for (const blockId of targetBlockIds) {
-	        const target = initial.get(blockId)
-	        if (!target) continue
-
-	        target.budgetAmount += budgetAmount
-	        target.actualAmount += actualAmount
-	        target.lines.push({
-	          id: line.id,
-	          categoryName: line.category_name ?? 'Catégorie',
-	          parentCategoryName: line.parent_category_name,
-	          budgetAmount,
-	          actualAmount,
-	        })
-        }
+        target.budgetAmount += budgetAmount
+        target.actualAmount += actualAmount
+        target.lines.push({
+          id: line.id,
+          categoryName: line.category_name ?? 'Catégorie',
+          parentCategoryName: line.parent_category_name,
+          budgetAmount,
+          actualAmount,
+        })
 	    }
 
     return BUDGET_BLOCKS
@@ -1376,7 +1370,6 @@ export function Budgets() {
           return amountB - amountA
         }),
       }))
-      .filter((row) => row.budgetAmount > 0 || row.actualAmount > 0)
   }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
 
   const blockPieData = useMemo<PieDatum[]>(
@@ -2125,7 +2118,7 @@ export function Budgets() {
                             onClick={(slice: unknown) => {
                               const payload = extractPiePayload(slice)
                               const blockId = String(payload?.id ?? '')
-                              if (blockId === 'fixe' || blockId === 'variable_essentiel' || blockId === 'discretionnaire' || blockId === 'epargne' || blockId === 'provision' || blockId === 'cagnotte') {
+                              if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'epargne' || blockId === 'provision') {
                                 setSelectedBlockId(blockId)
                               }
                             }}
