@@ -9,8 +9,10 @@ import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
+import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
 import type { FlowType, Transaction } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
+import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
@@ -32,8 +34,6 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'year', label: 'Annee' },
   { value: 'all', label: 'Tout' },
 ]
-
-const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -156,13 +156,6 @@ function formatDateLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00')
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-}
-
-function accentFromCategory(name: string): string {
-  const key = name.trim().toLowerCase()
-  let hash = 0
-  for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
-  return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
 }
 
 function formatMoneyInteger(amount: number): string {
@@ -636,6 +629,7 @@ export function Flux() {
   const [showTypeMenu, setShowTypeMenu] = useState(false)
   const [showPeriodMiniModal, setShowPeriodMiniModal] = useState(false)
   const [quickParamPicker, setQuickParamPicker] = useState<QuickParamPicker>(null)
+  const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(max-width: 768px)').matches
@@ -863,6 +857,39 @@ export function Flux() {
             <span style={{ position: 'absolute', right: -8, top: -12, fontSize: 88, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.06)', lineHeight: 1, userSelect: 'none', pointerEvents: 'none', letterSpacing: '-0.04em' }}>
               FLUX
             </span>
+
+            <button
+              type="button"
+              aria-label="Planifier une opération"
+              title="Planifier une opération"
+              onClick={() => setShowPlannedOperationModal(true)}
+              style={{
+                position: 'absolute',
+                top: 'var(--space-2)',
+                right: 'var(--space-2)',
+                border: 'none',
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                padding: 0,
+                width: 68,
+                height: 68,
+                zIndex: 2,
+              }}
+            >
+              <img
+                src={planifierOperationIcon}
+                alt=""
+                width={64}
+                height={64}
+                loading="lazy"
+                decoding="async"
+                style={{ display: 'block', objectFit: 'contain' }}
+                aria-hidden="true"
+              />
+            </button>
 
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
@@ -1153,7 +1180,6 @@ export function Flux() {
               const label = displayTxnLabel(t)
               const category = displayTxnCategoryName(t)
               const amount = signedAmount(t)
-              const accent = accentFromCategory(category)
 
               return (
                 <button
@@ -1179,27 +1205,13 @@ export function Flux() {
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent'
-                  }}
-                >
+                    }}
+                  >
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
                     {formatDateLabel(t.transaction_date)}
                   </span>
-                  <span
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 7,
-                      background: accent,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--neutral-0)',
-                      fontSize: 8,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {category.slice(0, 1)}
+                  <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CategoryIcon iconKey={t.category?.icon_key ?? null} label={category} size={24} />
                   </span>
                   <span
                     style={{
@@ -1944,6 +1956,11 @@ export function Flux() {
         onNavigate={setDetailsTxn}
         onClose={() => setDetailsTxn(null)}
         showEditControls={true}
+      />
+
+      <AddPlannedOperationModal
+        open={showPlannedOperationModal}
+        onClose={() => setShowPlannedOperationModal(false)}
       />
     </div>
   )

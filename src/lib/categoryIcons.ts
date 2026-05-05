@@ -69,6 +69,18 @@ const ICON_ALIASES: Record<string, string> = {
   voyages_logement: "voyages_logement_voyage",
   voyages_repas: "voyages_repas_voyage",
   voyages_trajet: "voyages_trajet_voyage",
+
+  revenus_chomage: "revenus_indemnites_chomage",
+  revenus_autre: "revenus_autres",
+
+  transferts_virement: "transferts_virement_interne",
+  transferts_provisions: "transferts_virement_provisions",
+
+  virement_epargne: "epargne_virement",
+  epargne_virement_epargne: "epargne_virement",
+  virement_investissement: "epargne_investissement",
+  epargne_virement_investissement: "epargne_investissement",
+  epargne_projet: "epargne_projet",
 };
 
 function getFallbackIconUrl(): string {

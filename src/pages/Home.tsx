@@ -486,6 +486,7 @@ export function Home() {
   const [trajectoryLinkError, setTrajectoryLinkError] = useState<string | null>(null)
   const [showTop5ExpensesInDrift, setShowTop5ExpensesInDrift] = useState(false)
   const [selectedPlannedDay, setSelectedPlannedDay] = useState<number | null>(null)
+  const [showResteUtileModal, setShowResteUtileModal] = useState(false)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -510,9 +511,18 @@ export function Home() {
   }, [selectedAccountPresetId])
 
   useEffect(() => {
-    if (!showAccountsModal && !showDriftCategoryModal) return
+    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal) return
     return lockDocumentScroll()
-  }, [showAccountsModal, showDriftCategoryModal])
+  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal])
+
+  useEffect(() => {
+    if (!showResteUtileModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowResteUtileModal(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showResteUtileModal])
 
   useEffect(() => {
     if (!trajectoryLinkError) return
@@ -610,6 +620,16 @@ export function Home() {
   )
   const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
   const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
+  const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
+  const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
+  const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
+  const savingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
+  const variableEssentialConsumedDisplay = Number(
+    dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'variable_essentielle')?.actual_amount ?? 0,
+  )
+  const discretionaryConsumedDisplay = Number(
+    dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'discretionnaire')?.actual_amount ?? 0,
+  )
 
   useEffect(() => {
     if (!import.meta.env.DEV || !dailyPayload) return
@@ -1356,14 +1376,24 @@ export function Home() {
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>consommé</p>
                       <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableSpentToDate).replace(/\s+€/, '€')}</p>
                     </div>
-                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowResteUtileModal(true)}
+                      aria-label="Voir le détail du calcul du reste utile"
+                      style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                    >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>reste utile</p>
                       <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(resteUtileDisplay).replace(/\s+€/, '€')}</p>
-                    </div>
-                    <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResteUtileModal(true)}
+                      aria-label="Voir le détail du calcul du budget par jour"
+                      style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                    >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>budget/jour</p>
                       <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
-                    </div>
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -1729,7 +1759,6 @@ export function Home() {
                           <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                             {driftRows.map((row) => {
                               const drift = Number(row.driftPct ?? 0)
-                              const color = row.colorToken || 'var(--neutral-400)'
                               
                               return (
                                 <button
@@ -1773,19 +1802,9 @@ export function Home() {
                                   </span>
 
                                   {/* Icône de catégorie */}
-                                  <div style={{ 
-                                    width: 24, 
-                                    height: 24, 
-                                    borderRadius: 'var(--radius-sm)', 
-                                    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`, 
-                                    color: color, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center', 
-                                    flexShrink: 0 
-                                  }}>
-                                    <CategoryIcon iconKey={row.iconKey} size={14} label={row.name} />
-                                  </div>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
+                                  </span>
 
                                   {/* Nom de catégorie */}
                                   <span style={{ 
@@ -1798,7 +1817,7 @@ export function Home() {
                                     fontWeight: 'var(--font-weight-regular)', 
                                     color: 'var(--neutral-800)' 
                                   }}>
-                                    {row.name}
+                                    {`${row.name} - ${formatMoneyInteger(row.spent)}`}
                                   </span>
 
                                   {/* Drift Percentage */}
@@ -2220,6 +2239,127 @@ export function Home() {
           </div>
         </motion.section>
       ) : null}
+
+      <AnimatePresence>
+        {showResteUtileModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowResteUtileModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Détail du calcul du reste utile"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-4)',
+                right: 'var(--space-4)',
+                top: '17%',
+                zIndex: 71,
+                maxWidth: 390,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                border: '1px solid var(--neutral-200)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: 'var(--space-4)',
+                display: 'grid',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                  Méthode et détails du calcul
+                </p>
+                <button
+                  type="button"
+                  aria-label="Fermer"
+                  onClick={() => setShowResteUtileModal(false)}
+                  style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--neutral-700)' }}>
+                Le reste utile est l’argent encore réellement disponible jusqu’à la fin du mois, après avoir sécurisé les dépenses fixes,
+                les provisions, l’épargne prévue et les dépenses variables déjà consommées.
+              </p>
+              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenus encaissés</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(revenueAmountDisplay)}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Montants protégés
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(fixedBudgetAmountDisplay)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(provisionBudgetAmountDisplay)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(savingsBudgetAmountDisplay)}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Déjà consommé
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(variableEssentialConsumedDisplay)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(discretionaryConsumedDisplay)}</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 'var(--radius-lg)',
+                  padding: 'var(--space-3)',
+                  background: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-500) 88%, #000 12%) 0%, color-mix(in oklab, var(--primary-700) 78%, #000 22%) 100%)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  gap: 'var(--space-1)',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Reste utile
+                </p>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
+                  {formatMoneyInteger(resteUtileDisplay)}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.92)', fontWeight: 700 }}>
+                  {`${formatMoneyInteger(budgetPerDayDisplay)} / jour`}
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gap: '1px' }}>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', lineHeight: 1.15 }}>
+                  • "Hors pilotage" et "virements internes" exclus.
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', lineHeight: 1.15 }}>
+                  • Les dépenses planifiéesnon déjà budgétisées seront retirées à leur intégration.
+                </p>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+
+      </AnimatePresence>
 
       <AnimatePresence>
         {showAccountsModal ? (

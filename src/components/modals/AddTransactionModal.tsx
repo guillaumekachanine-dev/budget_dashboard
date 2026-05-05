@@ -53,6 +53,7 @@ export type CategoryPickerModalProps = {
   items: Category[]
   selectedId: string
   closing: boolean
+  showAllOption?: boolean
   flipId?: string | null
   onSelect: (id: string) => void
   onClose: () => void
@@ -73,6 +74,17 @@ type SettingsListProps = {
 }
 
 export const ALL_CATEGORY_TOKEN = '__all__'
+const TRANSFER_SUBCATEGORY_NAMES = ['Virement épargne', 'Virement investissement', 'Épargne projet'] as const
+
+function normalizeText(value?: string | null): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
 const TRANSACTION_ORDER: TransactionType[] = ['expense', 'income', 'transfer']
 const TRANSACTION_LABEL: Record<TransactionType, string> = {
   expense: 'Dépense',
@@ -291,6 +303,7 @@ export function CategoryPickerModal({
   items,
   selectedId,
   closing,
+  showAllOption = true,
   flipId,
   onSelect,
   onClose,
@@ -298,10 +311,10 @@ export function CategoryPickerModal({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const displayItems = useMemo(
     () =>
-      mode === 'category'
+      mode === 'category' && showAllOption
         ? ([{ id: ALL_CATEGORY_TOKEN, name: 'Toutes catégories', icon_key: 'toutes_categories' } as Category, ...items])
         : items,
-    [items, mode],
+    [items, mode, showAllOption],
   )
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -456,6 +469,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const values = watch()
 
   const { data: categories } = useCategories(values.transactionType)
+  const { data: allCategories } = useCategories()
 
   const hasHierarchy = useMemo(
     () => (categories ?? []).some((category) => category.parent_id !== null),
@@ -468,12 +482,53 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return list.filter((category) => category.parent_id === null)
   }, [categories, hasHierarchy])
 
+  const directSubcategoryRoot = useMemo(() => {
+    if (values.transactionType !== 'income' && values.transactionType !== 'transfer') return null
+    if (!hasHierarchy || rootCategories.length !== 1) return null
+    return rootCategories[0] ?? null
+  }, [hasHierarchy, rootCategories, values.transactionType])
+
   const subCategories = useMemo(() => {
+    if (values.transactionType === 'transfer') {
+      const preferred = (allCategories ?? []).filter((category) => {
+        const normalizedName = normalizeText(category.name)
+        const normalizedIconKey = normalizeText(category.icon_key)
+        const isVirementEpargne = normalizedName.includes('virement') && normalizedName.includes('epargne')
+        const isVirementInvestissement = normalizedName.includes('virement') && normalizedName.includes('investissement')
+        const isEpargneProjet = normalizedName.includes('epargne') && normalizedName.includes('projet')
+        const byIconAlias = ['epargne virement', 'epargne investissement', 'epargne projet'].some((token) =>
+          normalizedIconKey.includes(token),
+        )
+
+        return isVirementEpargne || isVirementInvestissement || isEpargneProjet || byIconAlias
+      })
+
+      const transferList = categories ?? []
+      const transferChildren = transferList.filter((category) => category.parent_id !== null)
+      const transferFlowList = transferChildren.length > 0 ? transferChildren : transferList
+      const mergedById = new Map<string, Category>()
+      ;[...transferFlowList, ...preferred].forEach((category) => mergedById.set(category.id, category))
+
+      const preferredOrder = TRANSFER_SUBCATEGORY_NAMES.map((label) => normalizeText(label))
+      const merged = Array.from(mergedById.values()).sort((a, b) => {
+        const aNorm = normalizeText(a.name)
+        const bNorm = normalizeText(b.name)
+        const aIndex = preferredOrder.findIndex((token) => aNorm.includes(token))
+        const bIndex = preferredOrder.findIndex((token) => bNorm.includes(token))
+        if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name, 'fr')
+        if (aIndex === -1) return 1
+        if (bIndex === -1) return -1
+        return aIndex - bIndex
+      })
+
+      if (merged.length > 0) return merged
+    }
+
     if (!values.categoryId) return []
     const list = categories ?? []
     if (!hasHierarchy) return list.filter((category) => category.id === values.categoryId)
     return list.filter((category) => category.parent_id === values.categoryId)
-  }, [categories, hasHierarchy, values.categoryId])
+  }, [allCategories, categories, hasHierarchy, values.categoryId, values.transactionType])
 
   const categoryById = useMemo(
     () => new Map((categories ?? []).map((category) => [category.id, category])),
@@ -506,8 +561,8 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const canUseJoint = Boolean(jointAccount)
 
   const canSubmit = useMemo(() => {
-    return Boolean(parseMoney(values.amount) && values.categoryId && values.accountId && isValidDate(values.date))
-  }, [values.amount, values.categoryId, values.accountId, values.date])
+    return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
+  }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
 
   const closeAndReset = useCallback(() => {
     reset(createDefaultFormValues())
@@ -591,7 +646,11 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     setPickerClosing('subcategory')
 
     window.setTimeout(() => {
+      const subCategory = categoryById.get(id) ?? null
       setValue('subCategoryId', id)
+      if (!values.categoryId) {
+        setValue('categoryId', subCategory?.parent_id ?? id)
+      }
       setPickerMode('none')
       setPickerClosing('none')
       setFlipSubId(null)
@@ -641,7 +700,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
       return
     }
 
-    if (!formValues.categoryId) {
+    if (!formValues.categoryId && !formValues.subCategoryId) {
       setError('categoryId', { message: 'Sélectionnez une catégorie.' })
       return
     }
@@ -840,6 +899,21 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     canUseJoint={canUseJoint}
                     imputability={imputabilityLabel(values.personalShareRatio)}
                     onCategoryClick={() => {
+                      if (values.transactionType === 'transfer') {
+                        setPickerMode('subcategory')
+                        setPickerClosing('none')
+                        return
+                      }
+
+                      if (directSubcategoryRoot) {
+                        setValue('categoryId', directSubcategoryRoot.id)
+                        setValue('subCategoryId', '')
+                        clearErrors('categoryId')
+                        setPickerMode('subcategory')
+                        setPickerClosing('none')
+                        return
+                      }
+
                       setPickerMode('category')
                       setPickerClosing('none')
                     }}
@@ -883,6 +957,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             items={rootCategories}
             selectedId={values.categoryId}
             closing={pickerClosing === 'category'}
+            showAllOption={values.transactionType !== 'expense'}
             onClose={() => {
               setPickerMode('none')
               setPickerClosing('none')

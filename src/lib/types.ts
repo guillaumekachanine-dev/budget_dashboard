@@ -5,6 +5,8 @@ export type BudgetBehavior = 'fixed' | 'variable' | 'excluded'
 export type BudgetKind = 'global_variable' | 'category'
 export type IncomeType = 'salary' | 'freelance' | 'benefit' | 'refund' | 'bonus' | 'other'
 export type RecurrenceFrequency = 'monthly' | 'quarterly' | 'yearly'
+export type PlannedOperationFlowType = 'expense' | 'income' | 'transfer'
+export type PlannedOperationBudgetImpact = 'already_budgeted' | 'additional_commitment' | 'informational'
 
 export interface Account {
   id: string
@@ -171,6 +173,40 @@ export interface RecurringObligation {
   updated_at: string
 }
 
+export interface PlannedOperation {
+  id: string
+  user_id: string
+  account_id: string | null
+  category_id: string | null
+  label: string
+  planned_date: string
+  planned_amount: number
+  currency: 'EUR'
+  flow_type: PlannedOperationFlowType
+  status: 'planned' | 'matched' | 'cancelled'
+  budget_impact: PlannedOperationBudgetImpact
+  personal_share_ratio: number
+  notes: string | null
+  matched_transaction_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PlannedOperationInsert = {
+  user_id: string
+  account_id?: string | null
+  category_id?: string | null
+  label: string
+  planned_date: string
+  planned_amount: number
+  currency: 'EUR'
+  flow_type: PlannedOperationFlowType
+  status: 'planned'
+  budget_impact: PlannedOperationBudgetImpact
+  personal_share_ratio: number
+  notes?: string | null
+}
+
 export interface AccountWithBalance extends Account {
   current_balance: number
 }
@@ -313,6 +349,7 @@ export type Database = {
       budgets: TableDef<Budget, Omit<Budget, 'id' | 'created_at' | 'updated_at'>, Partial<Budget>>
       budget_recommendations: TableDef<BudgetRecommendation, Omit<BudgetRecommendation, 'id' | 'created_at' | 'updated_at'>, Partial<BudgetRecommendation>>
       transactions: TableDef<Transaction, Omit<Transaction, 'id' | 'created_at' | 'updated_at'>, Partial<Transaction>>
+      planned_operations: TableDef<PlannedOperation, PlannedOperationInsert, Partial<PlannedOperation>>
       income_sources: TableDef<IncomeSource, Omit<IncomeSource, 'id' | 'created_at' | 'updated_at'>, Partial<IncomeSource>>
       recurring_obligations: TableDef<RecurringObligation, Omit<RecurringObligation, 'id' | 'created_at' | 'updated_at'>, Partial<RecurringObligation>>
       analytics_monthly_metrics: TableDef<AnalyticsMonthlyMetrics, Omit<AnalyticsMonthlyMetrics, never>, Partial<AnalyticsMonthlyMetrics>>
