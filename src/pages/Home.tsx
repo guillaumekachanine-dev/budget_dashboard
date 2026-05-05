@@ -22,15 +22,15 @@ import {
   getDaysRemainingInMonth,
   getMonthLabel,
 } from '@/lib/utils'
-import type { AccountWithBalance, Transaction } from '@/lib/types'
+import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
+import type { PlannedOperationItem } from '@/features/home/types'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
@@ -53,6 +53,112 @@ function formatMoneyInteger(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.floor(amount))
+}
+
+function formatMoneyWithDecimals(amount: number): string {
+  if (!Number.isFinite(amount)) return '–'
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
+function formatPlannedDateShort(isoDate?: string | null): string {
+  if (!isoDate) return '--/--'
+  const date = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return '--/--'
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
+
+function formatPlannedDateLong(isoDate?: string | null): string {
+  if (!isoDate) return '--/--'
+  const date = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return '--/--'
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function plannedFlowTypeLabel(flowType?: PlannedOperationItem['flow_type']): string {
+  if (flowType === 'expense') return 'Dépense planifiée'
+  if (flowType === 'income') return 'Revenu planifié'
+  if (flowType === 'savings') return 'Épargne planifiée'
+  if (flowType === 'transfer') return 'Transfert planifié'
+  return '—'
+}
+
+function plannedBudgetBucketLabel(bucket?: string | null): string {
+  if (bucket === 'socle_fixe') return 'Socle fixe'
+  if (bucket === 'variable_essentielle') return 'Variable essentielle'
+  if (bucket === 'discretionnaire') return 'Discrétionnaire'
+  if (bucket === 'provision') return 'Provision'
+  if (bucket === 'epargne') return 'Épargne'
+  if (bucket === 'revenu') return 'Revenus'
+  if (bucket === 'hors_pilotage') return 'Hors pilotage'
+  return '—'
+}
+
+function plannedOperationIconKey(item: PlannedOperationItem): string | null {
+  if (item.parent_category_name && item.category_name) {
+    return `${item.parent_category_name}_${item.category_name}`
+  }
+  return item.category_name ?? item.parent_category_name ?? null
+}
+
+type PlannedImpactDetail = {
+  title: string
+  text: string
+  showMarker: boolean
+  amount: number | null
+}
+
+function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDetail {
+  const isAdditionalCommitmentExpense = item.flow_type === 'expense' && item.budget_impact === 'additional_commitment'
+  const impactsRemainingUseful = isAdditionalCommitmentExpense
+    && (item.impacts_remaining_useful === true || Number(item.remaining_useful_impact_amount ?? 0) > 0)
+
+  if (impactsRemainingUseful) {
+    return {
+      title: 'Impacte le reste utile',
+      text: 'Cette opération est un engagement additionnel : elle n’est pas déjà couverte par le budget du mois.',
+      showMarker: true,
+      amount: Number(item.remaining_useful_impact_amount ?? 0),
+    }
+  }
+
+  if (item.flow_type === 'savings') {
+    return {
+      title: 'N’impacte pas une deuxième fois le reste utile',
+      text: 'Cette opération est une allocation d’épargne déjà prise en compte dans l’épargne prévue du mois.',
+      showMarker: false,
+      amount: null,
+    }
+  }
+
+  if (item.flow_type === 'transfer') {
+    return {
+      title: 'Hors pilotage',
+      text: 'Ce transfert interne est exclu du calcul du reste utile.',
+      showMarker: false,
+      amount: null,
+    }
+  }
+
+  if (item.budget_impact === 'already_budgeted') {
+    return {
+      title: 'Déjà budgétisée',
+      text: 'Cette opération est déjà couverte par le budget du mois. Elle est affichée pour le suivi, mais elle n’est pas retirée une deuxième fois du reste utile.',
+      showMarker: false,
+      amount: null,
+    }
+  }
+
+  return {
+    title: 'Information uniquement',
+    text: 'Cette opération est affichée à titre informatif et n’impacte pas le reste utile.',
+    showMarker: false,
+    amount: null,
+  }
 }
 
 type HomeAccountPreset = {
@@ -117,10 +223,6 @@ function formatDateShort(isoDate: string): string {
   const date = new Date(`${isoDate}T00:00:00`)
   if (Number.isNaN(date.getTime())) return isoDate
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function toIsoDate(year: number, month: number, day: number): string {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 const SAVINGS_BOOKLET_IDS = ['livret_a', 'ldds'] as const
@@ -320,15 +422,6 @@ export function Home() {
     },
     staleTime: 60_000,
   })
-  const trajectoryPreviousMonthYear = selectedTrajectoryMonth === 1 ? trajectoryYear - 1 : trajectoryYear
-  const trajectoryPreviousMonth = selectedTrajectoryMonth === 1 ? 12 : selectedTrajectoryMonth - 1
-  const trajectoryPreviousMonthStart = new Date(trajectoryPreviousMonthYear, trajectoryPreviousMonth - 1, 1).toISOString().slice(0, 10)
-  const trajectoryPreviousMonthEnd = new Date(trajectoryPreviousMonthYear, trajectoryPreviousMonth, 0).toISOString().slice(0, 10)
-  const { data: previousMonthExpenseTxns } = useTransactions({
-    startDate: trajectoryPreviousMonthStart,
-    endDate: trajectoryPreviousMonthEnd,
-    flowType: 'expense',
-  })
   const { data: homeBudgetLines } = useQuery<{
     categoryLines: BudgetLineWithCategory[]
     globalVariableAmount: number
@@ -482,11 +575,11 @@ export function Home() {
   const [showAccountsModal, setShowAccountsModal] = useState(false)
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
-  const [trajectorySelectedTxn, setTrajectorySelectedTxn] = useState<Transaction | null>(null)
   const [trajectoryLinkError, setTrajectoryLinkError] = useState<string | null>(null)
   const [showTop5ExpensesInDrift, setShowTop5ExpensesInDrift] = useState(false)
   const [selectedPlannedDay, setSelectedPlannedDay] = useState<number | null>(null)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
+  const [selectedPlannedOperation, setSelectedPlannedOperation] = useState<PlannedOperationItem | null>(null)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -511,9 +604,9 @@ export function Home() {
   }, [selectedAccountPresetId])
 
   useEffect(() => {
-    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal) return
+    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal && !selectedPlannedOperation) return
     return lockDocumentScroll()
-  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal])
+  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal, selectedPlannedOperation])
 
   useEffect(() => {
     if (!showResteUtileModal) return
@@ -523,6 +616,15 @@ export function Home() {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [showResteUtileModal])
+
+  useEffect(() => {
+    if (!selectedPlannedOperation) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedPlannedOperation(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selectedPlannedOperation])
 
   useEffect(() => {
     if (!trajectoryLinkError) return
@@ -636,6 +738,7 @@ export function Home() {
     console.log('[HomeDailyBudgetPayload]', dailyPayload)
     console.log('[Home by_bucket]', dailyPayload.by_bucket)
     console.log('[Home by_category sample]', dailyPayload.by_category?.slice(0, 5))
+    console.log('[Home planned operations items]', dailyPayload?.planned_operations?.items)
   }, [dailyPayload])
 
   const handleOpenAccountsModal = useCallback(() => {
@@ -851,101 +954,86 @@ export function Home() {
   )
   const plannedMarkerDaySet = useMemo(() => new Set(plannedMarkerDays), [plannedMarkerDays])
 
-  const plannedItemsByDay = useMemo(() => {
-    const map = new Map<number, typeof plannedTrajectoryItems>()
-    plannedTrajectoryItems.forEach((item) => {
-      const current = map.get(item.day) ?? []
-      current.push(item)
-      map.set(item.day, current)
-    })
-    return map
-  }, [plannedTrajectoryItems])
-
-  const previousMonthTxnsByKey = useMemo(() => {
-    const map = new Map<string, Transaction>()
-      ; (previousMonthExpenseTxns ?? []).forEach((txn) => {
-        const key = `${txn.normalized_label ?? txn.raw_label ?? ''}|${Math.round(Number(txn.amount) * 100)}|${txn.category_id ?? ''}`
-        map.set(key, txn)
+  const plannedOperationItemsByDay = useMemo(() => {
+    const map = new Map<number, PlannedOperationItem[]>()
+      ; (dailyPayload?.planned_operations?.items ?? []).forEach((item) => {
+        const date = item.occurrence_date ?? item.planned_date
+        if (!date) return
+        const day = Number(date.slice(8, 10))
+        if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
+        const current = map.get(day) ?? []
+        current.push(item)
+        map.set(day, current)
       })
     return map
-  }, [previousMonthExpenseTxns])
+  }, [dailyPayload?.planned_operations?.items, trajectoryDaysInMonth])
 
-  const plannedTxnsByDay = useMemo(() => {
-    const map = new Map<number, Transaction[]>()
-      ; (trajectoryMonthExpenseTxns ?? [])
-        .filter((txn) => txn.is_recurring)
-        .forEach((txn) => {
-          const day = Number(txn.transaction_date.slice(8, 10))
-          if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
-          const current = map.get(day) ?? []
-          current.push(txn)
-          map.set(day, current)
-        })
-    return map
-  }, [trajectoryDaysInMonth, trajectoryMonthExpenseTxns])
+  const getPlannedOperationFromDay = useCallback((day: number) => {
+    const directMatch = plannedOperationItemsByDay.get(day)?.[0] ?? null
+    if (directMatch) return directMatch
+    return (dailyPayload?.planned_operations?.items ?? []).find((item) => Number(item.recurrence_day_of_month ?? NaN) === day) ?? null
+  }, [dailyPayload?.planned_operations?.items, plannedOperationItemsByDay])
 
-  const openPreviousMonthTxnFromPlannedDay = useCallback((day: number) => {
-    const plannedItems = plannedTxnsByDay.get(day) ?? []
-    if (!plannedItems.length) {
-      setTrajectoryLinkError('Opération planifiée introuvable pour cette date.')
+  const openPlannedOperationDetailsFromDay = useCallback((day: number) => {
+    const plannedOperation = getPlannedOperationFromDay(day)
+    if (!plannedOperation) {
+      setTrajectoryLinkError('Détail indisponible pour cette opération planifiée.')
       return
     }
+    setSelectedPlannedOperation(plannedOperation)
+  }, [getPlannedOperationFromDay])
 
-    const plannedTxn = plannedItems[0]
-    const key = `${plannedTxn.normalized_label ?? plannedTxn.raw_label ?? ''}|${Math.round(Number(plannedTxn.amount) * 100)}|${plannedTxn.category_id ?? ''}`
-    const previousMonthMatch = previousMonthTxnsByKey.get(key)
-
-    if (!previousMonthMatch) {
-      setTrajectoryLinkError('Modale M-1 indisponible pour cette opération.')
-      return
-    }
-
-    const previousMonthDay = Number(previousMonthMatch.transaction_date.slice(8, 10))
-    const remappedDate = toIsoDate(trajectoryYear, selectedTrajectoryMonth, Number.isFinite(previousMonthDay) ? previousMonthDay : day)
-    const mirroredTxn = {
-      ...previousMonthMatch,
-      transaction_date: remappedDate,
-    }
-
-    setTrajectorySelectedTxn(mirroredTxn)
-  }, [plannedTxnsByDay, previousMonthTxnsByKey, selectedTrajectoryMonth, trajectoryYear])
+  const plannedAmountLabelForDay = useCallback((day: number) => {
+    const plannedOperation = getPlannedOperationFromDay(day)
+    const plannedAmount = plannedOperation
+      ? Number(plannedOperation.planned_personal_amount ?? plannedOperation.planned_amount)
+      : null
+    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatMoneyWithDecimals(plannedAmount) : '–'
+  }, [getPlannedOperationFromDay])
 
   const trajectoryTooltipContent = useCallback((payload: any) => {
     if (!payload.active || !payload.payload?.length) return null
     const day = Number(payload.label)
     const actualValue = payload.payload.find((entry: any) => entry.dataKey === 'actual')?.value
-    const plannedValue = payload.payload.find((entry: any) => entry.dataKey === 'planned')?.value
-    const plannedCount = plannedItemsByDay.get(day)?.length ?? 0
-
+    const hasPlannedOperation = getPlannedOperationFromDay(day) != null
     return (
-      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4, minWidth: 154 }}>
+      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3, minWidth: 146 }}>
         <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${day}`}</p>
         <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${actualValue == null ? '—' : formatMoneyInteger(Number(actualValue))}`}</p>
-        {plannedCount > 0 ? (
-          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedValue == null ? '—' : formatMoneyInteger(Number(plannedValue))}`}</p>
-        ) : null}
-        {plannedCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => openPreviousMonthTxnFromPlannedDay(day)}
-            style={{
-              border: '1px solid var(--neutral-200)',
-              background: 'var(--neutral-0)',
-              color: 'var(--neutral-700)',
-              borderRadius: 'var(--radius-full)',
-              minHeight: 26,
-              padding: '0 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            ↗ Détail M-1
-          </button>
+        {hasPlannedOperation ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(day)}`}</p>
+            <button
+              type="button"
+              aria-label="Voir le détail de l’opération planifiée"
+              onClick={() => openPlannedOperationDetailsFromDay(day)}
+              style={{
+                border: '1px solid var(--neutral-200)',
+                background: 'var(--neutral-0)',
+                color: 'var(--neutral-700)',
+                borderRadius: 'var(--radius-sm)',
+                width: 30,
+                height: 24,
+                minWidth: 30,
+                minHeight: 24,
+                borderColor: 'var(--neutral-400)',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 800,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              ↗
+            </button>
+          </div>
         ) : null}
       </div>
     )
-  }, [openPreviousMonthTxnFromPlannedDay, plannedItemsByDay])
+  }, [getPlannedOperationFromDay, openPlannedOperationDetailsFromDay, plannedAmountLabelForDay])
 
   const trajectoryData = useMemo(() => {
     const txns = trajectoryMonthExpenseTxns ?? []
@@ -1515,7 +1603,9 @@ export function Home() {
                     ? (
                       homeInsightsSlide === 0
                         ? 'Consommé vs réel'
-                        : 'Catégories en dérive'
+                        : homeInsightsSlide === 1
+                          ? 'Catégories en dérive'
+                          : 'Opérations planifiées'
                     )
                     : isPEA
                       ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
@@ -1685,29 +1775,39 @@ export function Home() {
                             <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
                           </AreaChart>
                         </ResponsiveContainer>
-                        {selectedPlannedDay != null && plannedItemsByDay.get(selectedPlannedDay)?.length ? (
-                          <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4 }}>
+                        {selectedPlannedDay != null && getPlannedOperationFromDay(selectedPlannedDay) ? (
+                          <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3 }}>
                             <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
                             <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
-                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.planned ?? 0))}`}</p>
-                            <button
-                              type="button"
-                              onClick={() => openPreviousMonthTxnFromPlannedDay(selectedPlannedDay)}
-                              style={{
-                                border: '1px solid var(--neutral-200)',
-                                background: 'var(--neutral-0)',
-                                color: 'var(--neutral-700)',
-                                borderRadius: 'var(--radius-full)',
-                                minHeight: 26,
-                                padding: '0 10px',
-                                cursor: 'pointer',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                justifySelf: 'start',
-                              }}
-                            >
-                              ↗ Détail M-1
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                              <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(selectedPlannedDay)}`}</p>
+                              <button
+                                type="button"
+                                aria-label="Voir le détail de l’opération planifiée"
+                                onClick={() => openPlannedOperationDetailsFromDay(selectedPlannedDay)}
+                                style={{
+                                  border: '1px solid var(--neutral-200)',
+                                  background: 'var(--neutral-0)',
+                                  color: 'var(--neutral-700)',
+                                  borderRadius: 'var(--radius-sm)',
+                                  width: 30,
+                                  height: 24,
+                                  minWidth: 30,
+                                  minHeight: 24,
+                                  borderColor: 'var(--neutral-400)',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ↗
+                              </button>
+                            </div>
                           </div>
                         ) : null}
                       </div>
@@ -1841,11 +1941,6 @@ export function Home() {
                       {/* Slide 3: Opérations planifiées */}
                       <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
                         <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)' }}>Opérations planifiées</h4>
-                            <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontWeight: 500 }}>Ce mois</span>
-                          </div>
-
                           {(dailyPayload?.planned_operations?.count ?? 0) === 0 ? (
                             <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
                               Aucune opération planifiée pour le moment
@@ -1853,23 +1948,53 @@ export function Home() {
                           ) : (
                             <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
                               {(dailyPayload?.planned_operations.items ?? []).map((op, idx) => {
-                                const d = op.scheduled_date
-                                const dateStr = d ? `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}` : '--/--'
+                                const displayDate = op.occurrence_date ?? op.planned_date
+                                const dateStr = formatPlannedDateShort(displayDate)
+                                const rawAmount = op.planned_personal_amount ?? op.planned_amount
+                                const hasAmount = Number.isFinite(Number(rawAmount))
+                                const amountStr = hasAmount ? formatMoneyWithDecimals(Number(rawAmount)) : '–'
+                                const isAdditionalCommitmentExpense = op.flow_type === 'expense' && op.budget_impact === 'additional_commitment'
+                                const impactsRemainingUseful = isAdditionalCommitmentExpense
+                                  && (op.impacts_remaining_useful === true || Number(op.remaining_useful_impact_amount ?? 0) > 0)
                                 return (
-                                  <div
+                                  <button
+                                    type="button"
                                     key={op.id ?? idx}
+                                    aria-label={`Voir le détail de ${String(op.label ?? 'cette opération planifiée')}`}
+                                    onClick={() => setSelectedPlannedOperation(op)}
                                     style={{
                                       display: 'flex',
                                       alignItems: 'center',
                                       gap: 'var(--space-2)',
                                       padding: '8px 0',
                                       borderBottom: '1px solid var(--neutral-100)',
+                                      borderTop: 'none',
+                                      borderLeft: 'none',
+                                      borderRight: 'none',
+                                      background: 'transparent',
+                                      width: '100%',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
                                     }}
                                   >
                                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', width: 32 }}>{dateStr}</span>
+                                    <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                      <CategoryIcon iconKey={plannedOperationIconKey(op)} label={op.category_name ?? op.label} size={18} />
+                                    </span>
                                     <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(op.label ?? '—')}</span>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>{op.amount != null ? formatMoneyInteger(Number(op.amount)) : '—'}</span>
-                                  </div>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>
+                                      {impactsRemainingUseful ? (
+                                        <span
+                                          title="Impacte le reste utile"
+                                          aria-label="Impacte le reste utile"
+                                          style={{ fontSize: 10, fontWeight: 700, color: '#FFD550', letterSpacing: '0.02em' }}
+                                        >
+                                          + €
+                                        </span>
+                                      ) : null}
+                                      <span>{amountStr}</span>
+                                    </span>
+                                  </button>
                                 )
                               })}
                             </div>
@@ -2241,6 +2366,142 @@ export function Home() {
       ) : null}
 
       <AnimatePresence>
+        {selectedPlannedOperation ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedPlannedOperation(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Détail de l’opération planifiée"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-4)',
+                right: 'var(--space-4)',
+                top: '15%',
+                zIndex: 73,
+                maxWidth: 420,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                border: '1px solid var(--neutral-200)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: 'var(--space-4)',
+                display: 'grid',
+                gap: 'var(--space-3)',
+              }}
+            >
+              {(() => {
+                const displayDate = selectedPlannedOperation.occurrence_date ?? selectedPlannedOperation.planned_date
+                const displayAmount = selectedPlannedOperation.planned_personal_amount ?? selectedPlannedOperation.planned_amount
+                const amountText = Number.isFinite(Number(displayAmount)) ? formatMoneyWithDecimals(Number(displayAmount)) : '–'
+                const categoryLabel = selectedPlannedOperation.parent_category_name && selectedPlannedOperation.category_name
+                  ? `${selectedPlannedOperation.parent_category_name} > ${selectedPlannedOperation.category_name}`
+                  : (selectedPlannedOperation.category_name ?? 'Non catégorisé')
+                const recurrenceLabel = selectedPlannedOperation.is_recurring
+                  ? (
+                    selectedPlannedOperation.recurrence_frequency === 'monthly' && selectedPlannedOperation.recurrence_day_of_month
+                      ? `Tous les mois, le ${selectedPlannedOperation.recurrence_day_of_month}`
+                      : 'Récurrent'
+                  )
+                  : 'Ponctuelle'
+                const impactDetail = buildPlannedImpactDetail(selectedPlannedOperation)
+
+                return (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                      <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedPlannedOperation.label}
+                        </p>
+                        {selectedPlannedOperation.merchant_name && selectedPlannedOperation.merchant_name !== selectedPlannedOperation.label ? (
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>
+                            {selectedPlannedOperation.merchant_name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Fermer le détail de l’opération planifiée"
+                        onClick={() => setSelectedPlannedOperation(null)}
+                        style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Informations principales</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Date prévue</span>
+                        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatPlannedDateLong(displayDate)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Montant</span>
+                        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{amountText}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Type</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedFlowTypeLabel(selectedPlannedOperation.flow_type)}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catégorie</p>
+                      <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-800)' }}>
+                        {categoryLabel}
+                      </p>
+                    </div>
+
+                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pilotage</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Bloc de pilotage</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedBudgetBucketLabel(selectedPlannedOperation.budget_bucket)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Récurrence</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700, textAlign: 'right' }}>{recurrenceLabel}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ border: impactDetail.showMarker ? '1px solid color-mix(in oklab, #FFD550 70%, var(--neutral-200) 30%)' : '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: impactDetail.showMarker ? 'color-mix(in oklab, #FFD550 14%, var(--neutral-0) 86%)' : 'var(--neutral-50)' }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{impactDetail.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.4 }}>{impactDetail.text}</p>
+                      {impactDetail.showMarker ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <span
+                            title="Impacte le reste utile"
+                            aria-label="Impacte le reste utile"
+                            style={{ fontSize: 11, fontWeight: 800, color: '#C49200', letterSpacing: '0.02em' }}
+                          >
+                            + €
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                            {formatMoneyWithDecimals(Math.max(0, Number(impactDetail.amount ?? 0)))}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                )
+              })()}
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showResteUtileModal ? (
           <>
             <motion.div
@@ -2265,15 +2526,15 @@ export function Home() {
                 right: 'var(--space-4)',
                 top: '17%',
                 zIndex: 71,
-                maxWidth: 390,
+                maxWidth: 376,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 border: '1px solid var(--neutral-200)',
                 borderRadius: 'var(--radius-xl)',
                 boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-4)',
+                padding: 'var(--space-3)',
                 display: 'grid',
-                gap: 'var(--space-3)',
+                gap: 'var(--space-2)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
@@ -2289,10 +2550,6 @@ export function Home() {
                   <X size={14} />
                 </button>
               </div>
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--neutral-700)' }}>
-                Le reste utile est l’argent encore réellement disponible jusqu’à la fin du mois, après avoir sécurisé les dépenses fixes,
-                les provisions, l’épargne prévue et les dépenses variables déjà consommées.
-              </p>
               <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenus encaissés</span>
@@ -2462,12 +2719,6 @@ export function Home() {
           </>
         ) : null}
       </AnimatePresence>
-
-      <TransactionDetailsModal
-        transaction={trajectorySelectedTxn}
-        transactionList={trajectorySelectedTxn ? [trajectorySelectedTxn] : []}
-        onClose={() => setTrajectorySelectedTxn(null)}
-      />
 
       <DriftCategoryTransactionsModal
         open={showDriftCategoryModal}

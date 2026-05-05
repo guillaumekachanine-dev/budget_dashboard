@@ -4,17 +4,26 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
+import { useAuth } from '@/hooks/useAuth'
+import { usePlannedOperations } from '@/hooks/usePlannedOperations'
 import { formatCurrency } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
-import type { FlowType, Transaction } from '@/lib/types'
+import type {
+  FlowType,
+  PlannedOperation,
+  PlannedOperationBudgetImpact,
+  PlannedOperationFlowType,
+  Transaction,
+} from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
+type PlannedFlowFilter = 'all' | PlannedOperationFlowType
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 type PeriodMode = 'current' | 'rolling' | 'future'
 type QuickParamPicker = 'type' | 'period' | 'modalite' | 'fixed' | 'account' | null
@@ -34,6 +43,27 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'year', label: 'Annee' },
   { value: 'all', label: 'Tout' },
 ]
+
+const PLANNED_FLOW_OPTIONS: Array<{ value: PlannedFlowFilter; label: string }> = [
+  { value: 'all', label: 'Toutes' },
+  { value: 'expense', label: 'Dépenses' },
+  { value: 'income', label: 'Revenus' },
+  { value: 'savings', label: 'Épargne' },
+  { value: 'transfer', label: 'Transferts' },
+]
+
+const PLANNED_FLOW_LABELS: Record<PlannedOperationFlowType, string> = {
+  expense: 'Dépense planifiée',
+  income: 'Revenu planifié',
+  savings: 'Épargne planifiée',
+  transfer: 'Transfert planifié',
+}
+
+const PLANNED_BUDGET_IMPACT_LABELS: Record<PlannedOperationBudgetImpact, string> = {
+  already_budgeted: 'Déjà budgétisée',
+  additional_commitment: 'Engagement additionnel',
+  informational: 'Informatif uniquement',
+}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -190,6 +220,13 @@ function resultNoun(flow: FlowFilter): string {
   if (flow === 'income') return 'revenus'
   if (flow === 'transfer') return 'transferts internes'
   return 'opérations'
+}
+
+function recurringLineLabel(operation: PlannedOperation): string {
+  if (!operation.is_recurring || operation.recurrence_frequency !== 'monthly') return 'Non'
+  const day = operation.recurrence_day_of_month
+    ?? new Date(`${operation.planned_date}T00:00:00`).getDate()
+  return `Tous les mois, le ${day}`
 }
 
 function Sheet({
@@ -598,6 +635,7 @@ function FilterDropdown({
 }
 
 export function Flux() {
+  const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('expense')
@@ -630,6 +668,7 @@ export function Flux() {
   const [showPeriodMiniModal, setShowPeriodMiniModal] = useState(false)
   const [quickParamPicker, setQuickParamPicker] = useState<QuickParamPicker>(null)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
+  const [plannedFlowFilter, setPlannedFlowFilter] = useState<PlannedFlowFilter>('all')
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(max-width: 768px)').matches
@@ -658,6 +697,7 @@ export function Flux() {
     flowType: flowTypeFilter,
     categoryIds: categoryIdsFilter,
   })
+  const { data: plannedOperations = [], isLoading: isPlannedLoading } = usePlannedOperations(user?.id)
 
   const filtered = useMemo(() => {
     let list = (txns ?? []) as Transaction[]
@@ -676,7 +716,17 @@ export function Flux() {
     return list
   }, [txns, excludeRecurring, budgetFilter, accountFilter, search])
 
+  const filteredPlannedOperations = useMemo(() => {
+    if (plannedFlowFilter === 'all') return plannedOperations
+    return plannedOperations.filter((operation) => operation.flow_type === plannedFlowFilter)
+  }, [plannedFlowFilter, plannedOperations])
+
   const totalAmount = useMemo(() => filtered.reduce((sum, t) => sum + signedAmount(t), 0), [filtered])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.log('[planned_operations]', plannedOperations)
+  }, [plannedOperations])
 
   useEffect(() => {
     if (detailsTxn) {
@@ -769,7 +819,7 @@ export function Flux() {
       return Number.isFinite(year) ? String(year) : String(new Date().getFullYear())
     }
     return periodLabel === 'Annee' ? String(new Date().getFullYear()) : periodLabel
-  }, [period, periodLabel])
+  }, [period, periodLabel, range.endDate])
   const cardBudgetValue = budgetFilter === 'all' ? 'Tout' : (budgetFilter === 'fixed' ? 'Fixe' : 'Variable')
   const cardAccountValue = accountFilter === 'all' ? 'Tout' : (accountFilter === 'joint' ? 'Joint' : 'Perso')
   const isTransferType = flow === 'transfer'
@@ -1238,6 +1288,131 @@ export function Flux() {
                     {formatCurrency(amount)}
                   </span>
                 </button>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div style={{ padding: '0 var(--space-6)' }}>
+          <div
+            style={{
+              borderBottom: '1px solid var(--neutral-200)',
+              paddingBottom: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)' }}>
+              Opérations planifiées
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>
+              {filteredPlannedOperations.length}
+            </span>
+          </div>
+
+          <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+            {PLANNED_FLOW_OPTIONS.map((option) => {
+              const selected = plannedFlowFilter === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setPlannedFlowFilter(option.value)}
+                  style={{
+                    border: selected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
+                    borderRadius: 'var(--radius-full)',
+                    background: selected ? 'var(--primary-50)' : 'var(--neutral-0)',
+                    color: selected ? 'var(--primary-700)' : 'var(--neutral-700)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '6px 10px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {isPlannedLoading ? (
+          <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>Chargement…</div>
+        ) : filteredPlannedOperations.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>
+            Aucune opération planifiée
+          </motion.div>
+        ) : (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            {filteredPlannedOperations.map((operation) => {
+              const amount = Math.abs(Number(operation.planned_amount ?? 0))
+              const flowLabel = PLANNED_FLOW_LABELS[operation.flow_type]
+              const impactLabel = PLANNED_BUDGET_IMPACT_LABELS[operation.budget_impact]
+              const recurringLabel = recurringLineLabel(operation)
+              const recurringMonthly = operation.is_recurring && operation.recurrence_frequency === 'monthly'
+              const flowColor = operation.flow_type === 'income'
+                ? 'var(--color-success)'
+                : operation.flow_type === 'expense'
+                  ? 'var(--color-error)'
+                  : operation.flow_type === 'savings'
+                    ? 'var(--viz-a)'
+                    : 'var(--neutral-600)'
+
+              return (
+                <div
+                  key={operation.id}
+                  style={{
+                    borderBottom: '1px solid var(--neutral-200)',
+                    padding: 'var(--space-3) var(--space-6)',
+                    display: 'grid',
+                    gap: 'var(--space-2)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)' }}>
+                      {formatDateLabel(operation.planned_date)}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: flowColor }}>
+                      {formatCurrency(amount)}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 13, color: 'var(--neutral-800)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {operation.label}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: flowColor, border: `1px solid ${flowColor}`, borderRadius: 'var(--radius-full)', padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                      {flowLabel}
+                    </span>
+                  </div>
+
+                  {operation.merchant_name ? (
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-600)' }}>
+                      {`Marchand: ${operation.merchant_name}`}
+                    </p>
+                  ) : null}
+
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
+                      {`Impact budget: ${impactLabel}`}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
+                      {`Récurrent mensuel: ${recurringMonthly ? 'Oui' : 'Non'}`}
+                    </p>
+                    {recurringMonthly ? (
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700 }}>
+                        {recurringLabel}
+                      </p>
+                    ) : null}
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
+                      {`Catégorie: ${operation.category?.name ?? '—'}`}
+                    </p>
+                  </div>
+                </div>
               )
             })}
           </div>

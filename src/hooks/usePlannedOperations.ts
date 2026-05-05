@@ -1,7 +1,25 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
-import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
-import type { PlannedOperationInsert } from '@/lib/types'
+import type { PlannedOperation, PlannedOperationInsert } from '@/lib/types'
+
+export function usePlannedOperations(userId?: string) {
+  return useQuery({
+    queryKey: ['planned-operations', userId],
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<PlannedOperation[]> => {
+      const { data, error } = await budgetDb()
+        .from('planned_operations')
+        .select('*, category:categories(id,name,icon_key)')
+        .eq('user_id', userId as string)
+        .eq('status', 'planned')
+        .order('planned_date', { ascending: true })
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data ?? []
+    },
+  })
+}
 
 export function useAddPlannedOperation() {
   const queryClient = useQueryClient()
@@ -18,10 +36,7 @@ export function useAddPlannedOperation() {
       return data
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['home', 'daily-budget-payload'] })
-      void queryClient.invalidateQueries({ queryKey: ['home'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void queryClient.invalidateQueries({ queryKey: ['planned-operations'] })
     },
   })
 }

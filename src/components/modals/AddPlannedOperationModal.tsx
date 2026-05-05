@@ -30,12 +30,14 @@ type FormValues = {
   flowType: PlannedOperationFlowType
   amount: string
   label: string
+  merchantName: string
   categoryId: string
   subCategoryId: string
   accountId: string
   accountMode: AccountMode
   personalShareRatio: number
   budgetImpact: PlannedOperationBudgetImpact
+  isRecurringMonthly: boolean
   notes: string
 }
 
@@ -44,6 +46,7 @@ type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'pe
 const FLOW_OPTIONS: Array<{ value: PlannedOperationFlowType; label: string }> = [
   { value: 'expense', label: 'Dépense planifiée' },
   { value: 'income', label: 'Revenu planifié' },
+  { value: 'savings', label: 'Épargne planifiée' },
   { value: 'transfer', label: 'Transfert planifié' },
 ]
 const TRANSFER_SUBCATEGORY_NAMES = ['Virement épargne', 'Virement investissement', 'Épargne projet'] as const
@@ -74,12 +77,14 @@ function createDefaultFormValues(): FormValues {
     flowType: 'expense',
     amount: '',
     label: '',
+    merchantName: '',
     categoryId: '',
     subCategoryId: '',
     accountId: '',
     accountMode: 'personal',
     personalShareRatio: 1,
     budgetImpact: 'already_budgeted',
+    isRecurringMonthly: false,
     notes: '',
   }
 }
@@ -379,6 +384,25 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       setValues((current) => ({
         ...current,
         budgetImpact: 'already_budgeted',
+        personalShareRatio: 1,
+      }))
+      return
+    }
+
+    if (values.flowType === 'savings') {
+      setValues((current) => ({
+        ...current,
+        budgetImpact: 'already_budgeted',
+        personalShareRatio: 1,
+      }))
+      return
+    }
+
+    if (values.flowType === 'transfer') {
+      setValues((current) => ({
+        ...current,
+        budgetImpact: 'informational',
+        personalShareRatio: 0,
       }))
       return
     }
@@ -386,6 +410,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     setValues((current) => ({
       ...current,
       budgetImpact: 'informational',
+      personalShareRatio: 1,
     }))
   }, [values.flowType])
 
@@ -526,21 +551,39 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     const parsedAmount = parseMoney(values.amount)
     if (parsedAmount == null) return
 
+    const recurringDayRaw = values.isRecurringMonthly
+      ? new Date(`${values.date}T00:00:00`).getDate()
+      : null
+    const recurringDay = recurringDayRaw != null && Number.isFinite(recurringDayRaw) ? recurringDayRaw : null
+    const recurrenceStartDate = values.isRecurringMonthly ? values.date : null
+    const recurrenceEndDate = values.isRecurringMonthly
+      ? `${values.date.slice(0, 4)}-12-31`
+      : null
+
     const payload: PlannedOperationInsert = {
       user_id: user.id,
       account_id: values.accountId || null,
       category_id: values.flowType === 'transfer'
         ? null
         : (values.subCategoryId || values.categoryId || null),
+      merchant_name: values.merchantName.trim() || null,
       label: values.label.trim(),
       planned_date: values.date,
       planned_amount: parsedAmount,
       currency: 'EUR',
       flow_type: values.flowType,
       status: 'planned',
-      budget_impact: values.flowType === 'expense' ? values.budgetImpact : 'informational',
+      budget_impact: values.flowType === 'expense' || values.flowType === 'savings'
+        ? values.budgetImpact
+        : 'informational',
       personal_share_ratio: values.personalShareRatio,
+      matched_transaction_id: null,
       notes: values.notes.trim() ? values.notes.trim() : null,
+      is_recurring: values.isRecurringMonthly,
+      recurrence_frequency: values.isRecurringMonthly ? 'monthly' : 'none',
+      recurrence_day_of_month: recurringDay,
+      recurrence_start_date: recurrenceStartDate,
+      recurrence_end_date: recurrenceEndDate,
     }
 
     try {
@@ -715,6 +758,20 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 </div>
 
                 <div className="mt-[var(--space-3)] px-[var(--space-6)]">
+                  <Input
+                    id="planned-operation-merchant"
+                    type="text"
+                    value={values.merchantName}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, merchantName: event.target.value }))
+                    }}
+                    placeholder="marchand (optionnel)"
+                    aria-label="Marchand"
+                    className="rounded-[var(--radius-md)] border-[var(--neutral-200)] px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-md)] font-[var(--font-weight-medium)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100"
+                  />
+                </div>
+
+                <div className="mt-[var(--space-3)] px-[var(--space-6)]">
                   <textarea
                     id="planned-operation-notes"
                     value={values.notes}
@@ -772,7 +829,14 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         value={shareRatioLabel(values.personalShareRatio)}
                         onClick={handleShareRatioToggle}
                       />
-                      {values.flowType === 'expense' ? (
+                      <SettingsRow
+                        label="Récurrent mensuel"
+                        value={values.isRecurringMonthly ? 'Oui' : 'Non'}
+                        onClick={() => {
+                          setValues((current) => ({ ...current, isRecurringMonthly: !current.isRecurringMonthly }))
+                        }}
+                      />
+                      {values.flowType === 'expense' || values.flowType === 'savings' ? (
                         <SettingsRow
                           label="Impact budget"
                           value={BUDGET_IMPACT_LABELS[values.budgetImpact]}

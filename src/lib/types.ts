@@ -5,8 +5,10 @@ export type BudgetBehavior = 'fixed' | 'variable' | 'excluded'
 export type BudgetKind = 'global_variable' | 'category'
 export type IncomeType = 'salary' | 'freelance' | 'benefit' | 'refund' | 'bonus' | 'other'
 export type RecurrenceFrequency = 'monthly' | 'quarterly' | 'yearly'
-export type PlannedOperationFlowType = 'expense' | 'income' | 'transfer'
+export type PlannedOperationFlowType = 'expense' | 'income' | 'savings' | 'transfer'
 export type PlannedOperationBudgetImpact = 'already_budgeted' | 'additional_commitment' | 'informational'
+export type PlannedOperationStatus = 'planned' | 'paid' | 'cancelled' | 'skipped' | 'matched'
+export type PlannedOperationRecurrenceFrequency = 'none' | 'monthly' | 'quarterly' | 'yearly'
 
 export interface Account {
   id: string
@@ -178,16 +180,24 @@ export interface PlannedOperation {
   user_id: string
   account_id: string | null
   category_id: string | null
+  merchant_name: string | null
   label: string
   planned_date: string
   planned_amount: number
   currency: 'EUR'
   flow_type: PlannedOperationFlowType
-  status: 'planned' | 'matched' | 'cancelled'
+  status: PlannedOperationStatus
   budget_impact: PlannedOperationBudgetImpact
   personal_share_ratio: number
   notes: string | null
-  matched_transaction_id?: string | null
+  matched_transaction_id: string | null
+  is_recurring: boolean
+  recurrence_frequency: PlannedOperationRecurrenceFrequency
+  recurrence_day_of_month: number | null
+  recurrence_start_date: string | null
+  recurrence_end_date: string | null
+  source_key: string | null
+  category?: Pick<Category, 'id' | 'name' | 'icon_key'> | null
   created_at: string
   updated_at: string
 }
@@ -196,6 +206,7 @@ export type PlannedOperationInsert = {
   user_id: string
   account_id?: string | null
   category_id?: string | null
+  merchant_name?: string | null
   label: string
   planned_date: string
   planned_amount: number
@@ -204,7 +215,13 @@ export type PlannedOperationInsert = {
   status: 'planned'
   budget_impact: PlannedOperationBudgetImpact
   personal_share_ratio: number
+  matched_transaction_id: null
   notes?: string | null
+  is_recurring: boolean
+  recurrence_frequency: PlannedOperationRecurrenceFrequency
+  recurrence_day_of_month: number | null
+  recurrence_start_date: string | null
+  recurrence_end_date: string | null
 }
 
 export interface AccountWithBalance extends Account {

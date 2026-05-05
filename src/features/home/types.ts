@@ -29,10 +29,24 @@ export interface HomeBudgetCategory {
 }
 
 export interface PlannedOperationItem {
-  id?: string
-  label?: string
-  amount?: number
-  scheduled_date?: string
+  id: string
+  label: string
+  merchant_name: string | null
+  occurrence_date: string
+  planned_date: string
+  planned_amount: number
+  planned_personal_amount: number
+  flow_type: 'expense' | 'income' | 'savings' | 'transfer'
+  budget_impact: 'already_budgeted' | 'additional_commitment' | 'informational'
+  budget_bucket: string | null
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  is_recurring: boolean
+  recurrence_frequency: 'monthly' | 'none' | string
+  recurrence_day_of_month: number | null
+  impacts_remaining_useful: boolean
+  remaining_useful_impact_amount: number
   [key: string]: unknown
 }
 
