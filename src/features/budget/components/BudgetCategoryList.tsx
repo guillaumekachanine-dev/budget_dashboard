@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { BudgetActualCategoryMetric, BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { useCategories } from '@/hooks/useCategories'
 import {
   computeBudgetConsumptionRatio,
   formatCurrency,
@@ -16,6 +17,8 @@ interface BudgetCategoryListProps {
 
 export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, onLineClick }: BudgetCategoryListProps) {
   const sorted = sortBudgetLinesForDisplay(lines)
+  const { data: categories = [] } = useCategories('expense')
+  const categoryIconKeyById = useMemo(() => new Map(categories.map((category) => [category.id, category.icon_key])), [categories])
   const actualByCategoryId = useMemo(() => {
     const map = new Map<string, number>()
     for (const metric of actualCategoryMetrics) {
@@ -43,6 +46,7 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
             const actualPct = Math.round(consumptionRatio * 100)
             const variance = budgetAmount - actualAmount
             const isOverBudget = variance < 0
+            const resolvedIconKey = line.category_icon_key ?? (line.category_id ? (categoryIconKeyById.get(line.category_id) ?? null) : null)
 
             return (
               <div
@@ -56,7 +60,7 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
                 onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.opacity = '1' } : undefined}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                  <CategoryIcon categoryName={line.category_name ?? ''} size={56} />
+                  <CategoryIcon iconKey={resolvedIconKey} label={line.category_name ?? ''} size={56} />
                 </div>
 
                 <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>

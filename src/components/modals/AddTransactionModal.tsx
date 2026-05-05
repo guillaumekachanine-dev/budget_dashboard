@@ -296,19 +296,26 @@ export function CategoryPickerModal({
   onClose,
 }: CategoryPickerModalProps) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const displayItems = useMemo(
+    () =>
+      mode === 'category'
+        ? ([{ id: ALL_CATEGORY_TOKEN, name: 'Toutes catégories', icon_key: 'toutes_categories' } as Category, ...items])
+        : items,
+    [items, mode],
+  )
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (!items.length) return
+    if (!displayItems.length) return
 
     let nextIndex = index
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      nextIndex = Math.min(index + 1, items.length - 1)
+      nextIndex = Math.min(index + 1, displayItems.length - 1)
     } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
       nextIndex = Math.max(index - 1, 0)
     } else if (event.key === 'Home') {
       nextIndex = 0
     } else if (event.key === 'End') {
-      nextIndex = items.length - 1
+      nextIndex = displayItems.length - 1
     } else {
       return
     }
@@ -350,9 +357,9 @@ export function CategoryPickerModal({
           >
             <div className="modal-picker-scroll" style={{ overflowY: 'auto' }}>
               <div style={{ display: 'grid', gap: 'var(--space-4)' }} role="listbox" aria-label={title}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
-                {items.map((item, index) => {
-                  const selected = item.id === selectedId
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gridTemplateRows: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+                {displayItems.map((item, index) => {
+                  const selected = item.id === selectedId || (item.id === ALL_CATEGORY_TOKEN && selectedId === '')
                   const flipping = mode === 'subcategory' && item.id === flipId
                   return (
                     <motion.button
@@ -391,36 +398,24 @@ export function CategoryPickerModal({
                         transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
                       }}
                     >
-                      <CategoryIcon categoryName={item.name} size={30} />
+                      <CategoryIcon iconKey={item.icon_key} label={item.name} size={30} />
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: 'var(--neutral-700)',
+                          lineHeight: 1.15,
+                          textAlign: 'center',
+                          maxWidth: '100%',
+                          whiteSpace: 'normal',
+                        }}
+                      >
+                        {item.name}
+                      </span>
                     </motion.button>
                   )
                 })}
                 </div>
-
-                {mode === 'category' ? (
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(ALL_CATEGORY_TOKEN)}
-                      style={{
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-0)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: '10px 8px',
-                        minWidth: 88,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 6,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                        <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
-                      </div>
-                    </button>
-                  </div>
-                ) : null}
               </div>
             </div>
           </motion.aside>

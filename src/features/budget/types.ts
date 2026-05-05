@@ -23,8 +23,10 @@ export interface BudgetLineWithCategory {
   currency: string
   notes: string | null
   category_name: string | null
+  category_icon_key?: string | null
   parent_category_id: string | null
   parent_category_name: string | null
+  parent_category_icon_key?: string | null
   budget_bucket: string | null
   budget_method: string | null
   decision_status: string | null

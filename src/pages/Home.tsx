@@ -30,11 +30,11 @@ import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsM
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { supabase } from '@/lib/supabase'
-import comptePrincipalIcon from '@/assets/bank_account_icons/Compte_principal_banque_populaire.png'
-import compteJointIcon from '@/assets/bank_account_icons/banque_postale_compte_joint.png'
-import peaIcon from '@/assets/bank_account_icons/Boursorama_PEA .png'
-import percolIcon from '@/assets/bank_account_icons/Amundi_Epargne.png'
-import cryptoIcon from '@/assets/bank_account_icons/bitcoin.png'
+import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
+import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
+import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
+import percolIcon from "@/assets/icons/accounts/amundi_epargne.png";
+import cryptoIcon from "@/assets/icons/accounts/bitcoin.png";
 
 function formatMoneyInteger(amount: number): string {
   if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
@@ -715,23 +715,23 @@ export function Home() {
     ? projectionSavingsHeroMetrics
     : isPER
       ? [
-          { key: 'per-versement', label: 'Dernier versement', value: 'Décembre 2025' },
-          { key: 'per-liquidite', label: 'Liquidité', value: 'Sous conditions' },
-          { key: 'per-plus-value-2025', label: 'Plus-value 2025', value: '+265€' },
-          { key: 'per-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
-        ]
+        { key: 'per-versement', label: 'Dernier versement', value: 'Décembre 2025' },
+        { key: 'per-liquidite', label: 'Liquidité', value: 'Sous conditions' },
+        { key: 'per-plus-value-2025', label: 'Plus-value 2025', value: '+265€' },
+        { key: 'per-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
+      ]
       : isPEA
         ? [
-            { key: 'pea-indice', label: 'Evolution indice', value: '+8,7%' },
-            { key: 'pea-plus-value', label: 'Plus-value', value: '1305€' },
-            { key: 'pea-liquidite', label: 'Liquidité', value: 'Sous conditions' },
-            { key: 'pea-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
-          ]
-    : isMainCheckingAccount
-      ? mainCheckingHeroMetrics
-    : isSavingsBooklet
-      ? savingsHeroMetrics
-      : heroMetrics
+          { key: 'pea-indice', label: 'Evolution indice', value: '+8,7%' },
+          { key: 'pea-plus-value', label: 'Plus-value', value: '1305€' },
+          { key: 'pea-liquidite', label: 'Liquidité', value: 'Sous conditions' },
+          { key: 'pea-objectif-2026', label: 'Objectif épargne 2026', value: '+3k€' },
+        ]
+        : isMainCheckingAccount
+          ? mainCheckingHeroMetrics
+          : isSavingsBooklet
+            ? savingsHeroMetrics
+            : heroMetrics
 
   const savingsInterestCurveData = useMemo(() => {
     if (!isSavingsBooklet) return []
@@ -817,24 +817,24 @@ export function Home() {
 
   const previousMonthTxnsByKey = useMemo(() => {
     const map = new Map<string, Transaction>()
-    ;(previousMonthExpenseTxns ?? []).forEach((txn) => {
-      const key = `${txn.normalized_label ?? txn.raw_label ?? ''}|${Math.round(Number(txn.amount) * 100)}|${txn.category_id ?? ''}`
-      map.set(key, txn)
-    })
+      ; (previousMonthExpenseTxns ?? []).forEach((txn) => {
+        const key = `${txn.normalized_label ?? txn.raw_label ?? ''}|${Math.round(Number(txn.amount) * 100)}|${txn.category_id ?? ''}`
+        map.set(key, txn)
+      })
     return map
   }, [previousMonthExpenseTxns])
 
   const plannedTxnsByDay = useMemo(() => {
     const map = new Map<number, Transaction[]>()
-    ;(trajectoryMonthExpenseTxns ?? [])
-      .filter((txn) => txn.is_recurring)
-      .forEach((txn) => {
-        const day = Number(txn.transaction_date.slice(8, 10))
-        if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
-        const current = map.get(day) ?? []
-        current.push(txn)
-        map.set(day, current)
-      })
+      ; (trajectoryMonthExpenseTxns ?? [])
+        .filter((txn) => txn.is_recurring)
+        .forEach((txn) => {
+          const day = Number(txn.transaction_date.slice(8, 10))
+          if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
+          const current = map.get(day) ?? []
+          current.push(txn)
+          map.set(day, current)
+        })
     return map
   }, [trajectoryDaysInMonth, trajectoryMonthExpenseTxns])
 
@@ -986,9 +986,9 @@ export function Home() {
   const top5ExpenseRows = useMemo(() => {
     const rows = trajectoryMonthExpenseTxns ?? []
     const categoryNameById = new Map<string, string>()
-    ;(trajectorySummaries ?? []).forEach((summary) => {
-      categoryNameById.set(summary.category.id, summary.category.name)
-    })
+      ; (trajectorySummaries ?? []).forEach((summary) => {
+        categoryNameById.set(summary.category.id, summary.category.name)
+      })
     const spentByCategory = new Map<string, { id: string; name: string; spent: number }>()
     rows.forEach((txn) => {
       if (txn.transaction_date > trajectoryCutoffIso || !txn.category_id) return
@@ -1001,9 +1001,9 @@ export function Home() {
     })
 
     const budgetsByCategory = new Map<string, number>()
-    ;(trajectorySummaries ?? []).forEach((summary) => {
-      budgetsByCategory.set(summary.category.id, Number(summary.budget_amount))
-    })
+      ; (trajectorySummaries ?? []).forEach((summary) => {
+        budgetsByCategory.set(summary.category.id, Number(summary.budget_amount))
+      })
 
     return Array.from(spentByCategory.values())
       .sort((a, b) => b.spent - a.spent)
@@ -1439,525 +1439,525 @@ export function Home() {
           transition={{ duration: 0.35, delay: 0.12 }}
           style={{ padding: '0 var(--space-6)' }}
         >
-        <div
-          style={{
-            maxWidth: 600,
-            margin: '0 auto',
-            padding: 'var(--space-1) 0',
-            borderBottom: '1px solid var(--neutral-200)',
-            display: 'grid',
-            gap: 'var(--space-2)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {isMainCheckingAccount
-                  ? (
-                    homeInsightsSlide === 0
-                      ? 'Consommé vs réel'
-                      : 'Catégories en dérive'
-                  )
-                  : isPEA
-                    ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
-                    : isPER
-                      ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
-                      : isProjectionSavingsAccount
-                        ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
-                        : isSavingsBooklet
-                          ? 'Évolution des intérêts · Courbe sur 10 ans'
-                          : 'Trajectoire · Prévisions VS Réel'}
-              </p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', position: 'relative' }}>
-              {isMainCheckingAccount ? (
-                <>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    {getMonthLabel(trajectoryYear, selectedTrajectoryMonth)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowTrajectoryMonthMenu((current) => !current)}
-                    aria-label="Choisir le mois de trajectoire"
-                    style={{ border: 'none', background: 'transparent', color: 'var(--neutral-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, minWidth: 20, minHeight: 20, cursor: 'pointer' }}
-                  >
-                    <ChevronDown size={14} style={{ transform: showTrajectoryMonthMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform var(--transition-base)' }} />
-                  </button>
-                </>
-              ) : null}
-              {isMainCheckingAccount && showTrajectoryMonthMenu ? (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20, background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '6px', display: 'grid', gap: 2, minWidth: 160 }}>
-                  {Array.from({ length: maxTrajectoryMonth }, (_, idx) => idx + 1).map((m) => (
-                    <button
-                      key={`trajectory-month-${m}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTrajectoryMonth(m)
-                        setShowTrajectoryMonthMenu(false)
-                      }}
-                      style={{
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        background: selectedTrajectoryMonth === m ? 'var(--primary-50)' : 'transparent',
-                        color: selectedTrajectoryMonth === m ? 'var(--primary-700)' : 'var(--neutral-700)',
-                        textAlign: 'left',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        padding: '6px 8px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {getMonthLabel(trajectoryYear, m)}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div style={{ height: 300 }}>
-            {isMainCheckingAccount ? (
-              <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
-                <div
-                  style={{
-                    minHeight: 0,
-                    overflow: 'hidden',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      width: '200%',
-                      height: '100%',
-                      transform: `translateX(-${homeInsightsSlide * (100 / 2)}%)`,
-                      transition: 'transform 420ms ease',
-                    }}
-                  >
-                    <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-                        <div />
-                        {!isSavingsBooklet && !isPER && !isPEA ? (
-                          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
-                            {trajectoryDeltaPct == null ? '—' : `${trajectoryDeltaPct > 0 ? '+' : ''}${trajectoryDeltaPct.toFixed(1)}%`}
-                          </p>
-                        ) : null}
-                      </div>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart
-                          data={trajectoryData}
-                          onClick={(state: any) => {
-                            const day = Number(state?.activeLabel)
-                            if (plannedMarkerDays.includes(day)) {
-                              setSelectedPlannedDay(day)
-                            } else {
-                              setSelectedPlannedDay(null)
-                            }
-                          }}
-                        >
-                          <defs>
-                            <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
-                              <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                          <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                          <YAxis
-                            tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                            axisLine={false}
-                            tickLine={false}
-                            width={54}
-                            tickFormatter={(value) => formatMoneyInteger(Number(value))}
-                          />
-                          <Tooltip content={trajectoryTooltipContent} />
-                          <ReferenceLine
-                            y={monthlyBudgetCap}
-                            stroke="var(--neutral-400)"
-                            strokeDasharray="3 4"
-                            strokeOpacity={0.55}
-                            ifOverflow="extendDomain"
-                            label={{
-                              value: monthlyBudgetCapLabel,
-                              position: 'left',
-                              fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
-                              fontSize: 11,
-                              textAnchor: 'end',
-                              dx: -2,
-                            }}
-                          />
-                          <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-                          <Area
-                            type="monotone"
-                            dataKey="overBudget"
-                            baseValue={monthlyBudgetCap}
-                            stroke="none"
-                            fill="var(--color-error)"
-                            fillOpacity={0.14}
-                            connectNulls={false}
-                            isAnimationActive={false}
-                          />
-                          {plannedMarkerDays.map((day) => (
-                            <ReferenceDot
-                              key={`planned-segment-${day}`}
-                              x={day}
-                              y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
-                              r={0}
-                              ifOverflow="visible"
-                              shape={(props: any) => {
-                                const { cx, cy } = props
-                                return (
-                                  <line
-                                    x1={cx}
-                                    y1={cy - 7}
-                                    x2={cx}
-                                    y2={cy + 7}
-                                    stroke="var(--neutral-700)"
-                                    strokeWidth={1.9}
-                                    strokeLinecap="round"
-                                    opacity={0.92}
-                                  />
-                                )
-                              }}
-                            />
-                          ))}
-                          <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                      {selectedPlannedDay != null && plannedItemsByDay.get(selectedPlannedDay)?.length ? (
-                        <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4 }}>
-                          <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
-                          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
-                          <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.planned ?? 0))}`}</p>
-                          <button
-                            type="button"
-                            onClick={() => openPreviousMonthTxnFromPlannedDay(selectedPlannedDay)}
-                            style={{
-                              border: '1px solid var(--neutral-200)',
-                              background: 'var(--neutral-0)',
-                              color: 'var(--neutral-700)',
-                              borderRadius: 'var(--radius-full)',
-                              minHeight: 26,
-                              padding: '0 10px',
-                              cursor: 'pointer',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              justifySelf: 'start',
-                            }}
-                          >
-                            ↗ Détail M-1
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
-                      {loadingSummaries ? (
-                        <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
-                          Chargement…
-                        </p>
-                      ) : driftRows.length === 0 ? (
-                        <div style={{ height: '100%', display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-                          <p style={{ margin: 0, textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-500)', lineHeight: 1.5 }}>
-                            Rien à afficher le budget est sous contrôle. Pour le moment...
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
-                            style={{
-                              border: '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-full)',
-                              minHeight: 30,
-                              padding: '0 12px',
-                              background: 'var(--neutral-0)',
-                              color: 'var(--neutral-700)',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            voir le top 5 catégories (dépenses)
-                          </button>
-                          {showTop5ExpensesInDrift ? (
-                            <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
-                              {top5ExpenseRows.map((row, idx) => {
-                                const drift = Number(row.driftPct ?? 0)
-                                const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                                return (
-                                  <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                                    {`#${idx + 1}. ${row.name} - ${formatMoneyInteger(row.spent)} - `}
-                                    <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                                      {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                                    </span>
-                                  </p>
-                                )
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                          {driftRows.map((row) => {
-                            const drift = Number(row.driftPct ?? 0)
-                            const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                            return (
-                              <button
-                                key={row.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedDriftCategoryId(row.id)
-                                  setShowDriftCategoryModal(true)
-                                }}
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: '1fr auto',
-                                  alignItems: 'center',
-                                  gap: 'var(--space-2)',
-                                  minHeight: 40,
-                                  padding: '8px 0',
-                                  borderBottom: '1px solid var(--neutral-100)',
-                                  lineHeight: 1.4,
-                                  width: '100%',
-                                  border: 'none',
-                                  background: 'transparent',
-                                  cursor: 'pointer',
-                                  textAlign: 'left',
-                                  transition: 'background-color var(--transition-fast)',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent'
-                                }}
-                              >
-                                <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center', minWidth: 0 }}>
-                                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
-                                    {row.name}
-                                  </span>
-                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: drift === 0 ? 'var(--color-warning)' : driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                    {drift === 0 ? '=' : `${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                                  </span>
-                                </div>
-                                <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                                  {formatMoneyInteger(Number(row.spent ?? 0))}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-1)' }}>
-                  {[0, 1].map((idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
-                      onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
-                      style={{
-                        padding: '16px 12px',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: homeInsightsSlide === idx ? 22 : 10,
-                          height: 10,
-                          borderRadius: 'var(--radius-full)',
-                          background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
-                          transition: 'width var(--transition-base), background-color var(--transition-fast)',
-                        }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : isPEA ? (
-              <div
-                style={{
-                  height: '100%',
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px dashed var(--neutral-300)',
-                  background: 'color-mix(in oklab, var(--color-warning) 8%, var(--neutral-0) 92%)',
-                  color: 'var(--neutral-700)',
-                  textAlign: 'center',
-                  padding: 'var(--space-5)',
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-                  Évolution de l'indice ETF sur 1 an: à faire plus tard
+          <div
+            style={{
+              maxWidth: 600,
+              margin: '0 auto',
+              padding: 'var(--space-1) 0',
+              borderBottom: '1px solid var(--neutral-200)',
+              display: 'grid',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {isMainCheckingAccount
+                    ? (
+                      homeInsightsSlide === 0
+                        ? 'Consommé vs réel'
+                        : 'Catégories en dérive'
+                    )
+                    : isPEA
+                      ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
+                      : isPER
+                        ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
+                        : isProjectionSavingsAccount
+                          ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
+                          : isSavingsBooklet
+                            ? 'Évolution des intérêts · Courbe sur 10 ans'
+                            : 'Trajectoire · Prévisions VS Réel'}
                 </p>
               </div>
-            ) : isPER ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={perProjection2026Data}>
-                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={54}
-                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--neutral-0)',
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', position: 'relative' }}>
+                {isMainCheckingAccount ? (
+                  <>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      {getMonthLabel(trajectoryYear, selectedTrajectoryMonth)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowTrajectoryMonthMenu((current) => !current)}
+                      aria-label="Choisir le mois de trajectoire"
+                      style={{ border: 'none', background: 'transparent', color: 'var(--neutral-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, minWidth: 20, minHeight: 20, cursor: 'pointer' }}
+                    >
+                      <ChevronDown size={14} style={{ transform: showTrajectoryMonthMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform var(--transition-base)' }} />
+                    </button>
+                  </>
+                ) : null}
+                {isMainCheckingAccount && showTrajectoryMonthMenu ? (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20, background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '6px', display: 'grid', gap: 2, minWidth: 160 }}>
+                    {Array.from({ length: maxTrajectoryMonth }, (_, idx) => idx + 1).map((m) => (
+                      <button
+                        key={`trajectory-month-${m}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTrajectoryMonth(m)
+                          setShowTrajectoryMonthMenu(false)
+                        }}
+                        style={{
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm)',
+                          background: selectedTrajectoryMonth === m ? 'var(--primary-50)' : 'transparent',
+                          color: selectedTrajectoryMonth === m ? 'var(--primary-700)' : 'var(--neutral-700)',
+                          textAlign: 'left',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: '6px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {getMonthLabel(trajectoryYear, m)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={{ height: 300 }}>
+              {isMainCheckingAccount ? (
+                <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
+                  <div
+                    style={{
+                      minHeight: 0,
+                      overflow: 'hidden',
+                      borderRadius: 'var(--radius-lg)',
                       border: '1px solid var(--neutral-200)',
-                      borderRadius: 12,
-                      boxShadow: 'var(--shadow-sm)',
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Solde modélisé']}
-                    labelFormatter={(label) => `2026 · ${label}`}
-                  />
-                  <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : isProjectionSavingsAccount ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={projectionSavingsData}>
-                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={54}
-                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
-                  />
-                  <Tooltip
-                    contentStyle={{
                       background: 'var(--neutral-0)',
-                      border: '1px solid var(--neutral-200)',
-                      borderRadius: 12,
-                      boxShadow: 'var(--shadow-sm)',
-                      fontSize: 12,
                     }}
-                    formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Fonds projetés']}
-                    labelFormatter={(label) => `Année ${label}`}
-                  />
-                  <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : isSavingsBooklet ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={savingsInterestCurveData}>
-                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={54}
-                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--neutral-0)',
-                      border: '1px solid var(--neutral-200)',
-                      borderRadius: 12,
-                      boxShadow: 'var(--shadow-sm)',
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number, name: string) => [formatMoneyInteger(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
-                    labelFormatter={(label) => `Année ${label}`}
-                  />
-                  <Line type="monotone" dataKey="yearlyInterest" name="Intérêts annuels" stroke="var(--primary-500)" strokeWidth={2.5} dot={false} />
-                  <Line type="monotone" dataKey="cumulativeInterest" name="Intérêts cumulés" stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trajectoryData}>
-                  <defs>
-                    <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
-                      <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={54}
-                    tickFormatter={(value) => formatMoneyInteger(Number(value))}
-                  />
-                  <Tooltip content={trajectoryTooltipContent} />
-                  <ReferenceLine
-                    y={monthlyBudgetCap}
-                    stroke="var(--neutral-400)"
-                    strokeDasharray="3 4"
-                    strokeOpacity={0.55}
-                    ifOverflow="extendDomain"
-                    label={{
-                      value: monthlyBudgetCapLabel,
-                      position: 'left',
-                      fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
-                      fontSize: 11,
-                      textAnchor: 'end',
-                      dx: -2,
-                    }}
-                  />
-                  <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-                  <Area
-                    type="monotone"
-                    dataKey="overBudget"
-                    baseValue={monthlyBudgetCap}
-                    stroke="none"
-                    fill="var(--color-error)"
-                    fillOpacity={0.14}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                  {plannedMarkerDays.map((day) => (
-                    <ReferenceDot
-                      key={`planned-segment-secondary-${day}`}
-                      x={day}
-                      y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
-                      r={0}
-                      ifOverflow="visible"
-                      shape={(props: any) => {
-                        const { cx, cy } = props
-                        return (
-                          <line
-                            x1={cx}
-                            y1={cy - 7}
-                            x2={cx}
-                            y2={cy + 7}
-                            stroke="var(--neutral-700)"
-                            strokeWidth={1.9}
-                            strokeLinecap="round"
-                            opacity={0.92}
-                          />
-                        )
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        width: '200%',
+                        height: '100%',
+                        transform: `translateX(-${homeInsightsSlide * (100 / 2)}%)`,
+                        transition: 'transform 420ms ease',
+                      }}
+                    >
+                      <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
+                          <div />
+                          {!isSavingsBooklet && !isPER && !isPEA ? (
+                            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
+                              {trajectoryDeltaPct == null ? '—' : `${trajectoryDeltaPct > 0 ? '+' : ''}${trajectoryDeltaPct.toFixed(1)}%`}
+                            </p>
+                          ) : null}
+                        </div>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart
+                            data={trajectoryData}
+                            onClick={(state: any) => {
+                              const day = Number(state?.activeLabel)
+                              if (plannedMarkerDays.includes(day)) {
+                                setSelectedPlannedDay(day)
+                              } else {
+                                setSelectedPlannedDay(null)
+                              }
+                            }}
+                          >
+                            <defs>
+                              <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
+                                <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                              axisLine={false}
+                              tickLine={false}
+                              width={54}
+                              tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                            />
+                            <Tooltip content={trajectoryTooltipContent} />
+                            <ReferenceLine
+                              y={monthlyBudgetCap}
+                              stroke="var(--neutral-400)"
+                              strokeDasharray="3 4"
+                              strokeOpacity={0.55}
+                              ifOverflow="extendDomain"
+                              label={{
+                                value: monthlyBudgetCapLabel,
+                                position: 'left',
+                                fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
+                                fontSize: 11,
+                                textAnchor: 'end',
+                                dx: -2,
+                              }}
+                            />
+                            <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                            <Area
+                              type="monotone"
+                              dataKey="overBudget"
+                              baseValue={monthlyBudgetCap}
+                              stroke="none"
+                              fill="var(--color-error)"
+                              fillOpacity={0.14}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                            {plannedMarkerDays.map((day) => (
+                              <ReferenceDot
+                                key={`planned-segment-${day}`}
+                                x={day}
+                                y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
+                                r={0}
+                                ifOverflow="visible"
+                                shape={(props: any) => {
+                                  const { cx, cy } = props
+                                  return (
+                                    <line
+                                      x1={cx}
+                                      y1={cy - 7}
+                                      x2={cx}
+                                      y2={cy + 7}
+                                      stroke="var(--neutral-700)"
+                                      strokeWidth={1.9}
+                                      strokeLinecap="round"
+                                      opacity={0.92}
+                                    />
+                                  )
+                                }}
+                              />
+                            ))}
+                            <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                        {selectedPlannedDay != null && plannedItemsByDay.get(selectedPlannedDay)?.length ? (
+                          <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '8px 10px', display: 'grid', gap: 4 }}>
+                            <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
+                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
+                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.planned ?? 0))}`}</p>
+                            <button
+                              type="button"
+                              onClick={() => openPreviousMonthTxnFromPlannedDay(selectedPlannedDay)}
+                              style={{
+                                border: '1px solid var(--neutral-200)',
+                                background: 'var(--neutral-0)',
+                                color: 'var(--neutral-700)',
+                                borderRadius: 'var(--radius-full)',
+                                minHeight: 26,
+                                padding: '0 10px',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                justifySelf: 'start',
+                              }}
+                            >
+                              ↗ Détail M-1
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div style={{ flex: '0 0 calc(100% / 2)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
+                        {loadingSummaries ? (
+                          <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
+                            Chargement…
+                          </p>
+                        ) : driftRows.length === 0 ? (
+                          <div style={{ height: '100%', display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+                            <p style={{ margin: 0, textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+                              Rien à afficher le budget est sous contrôle. Pour le moment...
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
+                              style={{
+                                border: '1px solid var(--neutral-200)',
+                                borderRadius: 'var(--radius-full)',
+                                minHeight: 30,
+                                padding: '0 12px',
+                                background: 'var(--neutral-0)',
+                                color: 'var(--neutral-700)',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              voir le top 5 catégories (dépenses)
+                            </button>
+                            {showTop5ExpensesInDrift ? (
+                              <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                                {top5ExpenseRows.map((row, idx) => {
+                                  const drift = Number(row.driftPct ?? 0)
+                                  const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                                  return (
+                                    <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                                      {`#${idx + 1}. ${row.name} - ${formatMoneyInteger(row.spent)} - `}
+                                      <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                        {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                      </span>
+                                    </p>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                            {driftRows.map((row) => {
+                              const drift = Number(row.driftPct ?? 0)
+                              const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                              return (
+                                <button
+                                  key={row.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDriftCategoryId(row.id)
+                                    setShowDriftCategoryModal(true)
+                                  }}
+                                  style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr auto',
+                                    alignItems: 'center',
+                                    gap: 'var(--space-2)',
+                                    minHeight: 40,
+                                    padding: '8px 0',
+                                    borderBottom: '1px solid var(--neutral-100)',
+                                    lineHeight: 1.4,
+                                    width: '100%',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'background-color var(--transition-fast)',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center', minWidth: 0 }}>
+                                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-800)' }}>
+                                      {row.name}
+                                    </span>
+                                    <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-semibold)', color: drift === 0 ? 'var(--color-warning)' : driftColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                      {drift === 0 ? '=' : `${drift > 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                    {formatMoneyInteger(Number(row.spent ?? 0))}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-1)' }}>
+                    {[0, 1].map((idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        aria-label={idx === 0 ? 'Afficher la trajectoire' : 'Afficher les catégories en dérive'}
+                        onClick={() => setHomeInsightsSlide(idx as 0 | 1)}
+                        style={{
+                          padding: '16px 12px',
+                          border: 'none',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: homeInsightsSlide === idx ? 22 : 10,
+                            height: 10,
+                            borderRadius: 'var(--radius-full)',
+                            background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
+                            transition: 'width var(--transition-base), background-color var(--transition-fast)',
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : isPEA ? (
+                <div
+                  style={{
+                    height: '100%',
+                    display: 'grid',
+                    placeItems: 'center',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px dashed var(--neutral-300)',
+                    background: 'color-mix(in oklab, var(--color-warning) 8%, var(--neutral-0) 92%)',
+                    color: 'var(--neutral-700)',
+                    textAlign: 'center',
+                    padding: 'var(--space-5)',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
+                    Évolution de l'indice ETF sur 1 an: à faire plus tard
+                  </p>
+                </div>
+              ) : isPER ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={perProjection2026Data}>
+                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--neutral-0)',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 12,
+                        boxShadow: 'var(--shadow-sm)',
+                        fontSize: 12,
+                      }}
+                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Solde modélisé']}
+                      labelFormatter={(label) => `2026 · ${label}`}
+                    />
+                    <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : isProjectionSavingsAccount ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={projectionSavingsData}>
+                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--neutral-0)',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 12,
+                        boxShadow: 'var(--shadow-sm)',
+                        fontSize: 12,
+                      }}
+                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Fonds projetés']}
+                      labelFormatter={(label) => `Année ${label}`}
+                    />
+                    <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : isSavingsBooklet ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={savingsInterestCurveData}>
+                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--neutral-0)',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 12,
+                        boxShadow: 'var(--shadow-sm)',
+                        fontSize: 12,
+                      }}
+                      formatter={(value: number, name: string) => [formatMoneyInteger(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
+                      labelFormatter={(label) => `Année ${label}`}
+                    />
+                    <Line type="monotone" dataKey="yearlyInterest" name="Intérêts annuels" stroke="var(--primary-500)" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="cumulativeInterest" name="Intérêts cumulés" stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trajectoryData}>
+                    <defs>
+                      <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
+                        <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                    />
+                    <Tooltip content={trajectoryTooltipContent} />
+                    <ReferenceLine
+                      y={monthlyBudgetCap}
+                      stroke="var(--neutral-400)"
+                      strokeDasharray="3 4"
+                      strokeOpacity={0.55}
+                      ifOverflow="extendDomain"
+                      label={{
+                        value: monthlyBudgetCapLabel,
+                        position: 'left',
+                        fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
+                        fontSize: 11,
+                        textAnchor: 'end',
+                        dx: -2,
                       }}
                     />
-                  ))}
-                  <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+                    <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                    <Area
+                      type="monotone"
+                      dataKey="overBudget"
+                      baseValue={monthlyBudgetCap}
+                      stroke="none"
+                      fill="var(--color-error)"
+                      fillOpacity={0.14}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                    {plannedMarkerDays.map((day) => (
+                      <ReferenceDot
+                        key={`planned-segment-secondary-${day}`}
+                        x={day}
+                        y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
+                        r={0}
+                        ifOverflow="visible"
+                        shape={(props: any) => {
+                          const { cx, cy } = props
+                          return (
+                            <line
+                              x1={cx}
+                              y1={cy - 7}
+                              x2={cx}
+                              y2={cy + 7}
+                              stroke="var(--neutral-700)"
+                              strokeWidth={1.9}
+                              strokeLinecap="round"
+                              opacity={0.92}
+                            />
+                          )
+                        }}
+                      />
+                    ))}
+                    <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            {trajectoryLinkError ? (
+              <p style={{ margin: 0, marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--color-error)', textAlign: 'center' }}>
+                {trajectoryLinkError}
+              </p>
+            ) : null}
           </div>
-          {trajectoryLinkError ? (
-            <p style={{ margin: 0, marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--color-error)', textAlign: 'center' }}>
-              {trajectoryLinkError}
-            </p>
-          ) : null}
-        </div>
         </motion.section>
       ) : null}
 

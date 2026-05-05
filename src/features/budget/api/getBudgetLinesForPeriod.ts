@@ -25,10 +25,11 @@ interface CategoryRow {
   id: string
   name: string
   parent_id: string | null
+  icon_key: string | null
 }
 
 const BUDGET_COLUMNS = ['id', 'period_id', 'category_id', 'budget_kind', 'amount', 'currency', 'notes'].join(', ')
-const CATEGORY_COLUMNS = ['id', 'name', 'parent_id'].join(', ')
+const CATEGORY_COLUMNS = ['id', 'name', 'parent_id', 'icon_key'].join(', ')
 
 async function resolvePeriodId(params: GetBudgetLinesParams): Promise<string> {
   if ('periodId' in params && params.periodId) return params.periodId
@@ -133,6 +134,7 @@ export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Pro
         id: category.id,
         name: category.name,
         parent_id: category.parent_id,
+        icon_key: category.icon_key,
       })
     }
 
@@ -155,6 +157,7 @@ export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Pro
           id: parentCategory.id,
           name: parentCategory.name,
           parent_id: parentCategory.parent_id,
+          icon_key: parentCategory.icon_key,
         })
       }
     }
@@ -173,8 +176,10 @@ export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Pro
       currency: row.currency,
       notes: row.notes,
       category_name: category?.name ?? null,
+      category_icon_key: category?.icon_key ?? null,
       parent_category_id: category?.parent_id ?? null,
       parent_category_name: parentCategory?.name ?? null,
+      parent_category_icon_key: parentCategory?.icon_key ?? null,
       budget_bucket: null,
       budget_method: null,
       decision_status: null,

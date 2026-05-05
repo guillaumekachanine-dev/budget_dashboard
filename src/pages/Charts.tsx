@@ -43,11 +43,16 @@ export function Charts() {
 
   // Expenses by category (pie)
   const expenses = (txns ?? []).filter((t) => t.flow_type === 'expense')
-  const byCat = expenses.reduce<Record<string, { name: string; value: number; color: string }>>((acc, t) => {
+  const byCat = expenses.reduce<Record<string, { name: string; iconKey: string | null; value: number; color: string }>>((acc, t) => {
     const catId = t.category_id ?? 'other'
     const catName = t.category?.name ?? 'Autre'
     if (!acc[catId]) {
-      acc[catId] = { name: catName, value: 0, color: getCategoryColor(t.category?.color_token ?? null, Object.keys(acc).length) }
+      acc[catId] = {
+        name: catName,
+        iconKey: t.category?.icon_key ?? null,
+        value: 0,
+        color: getCategoryColor(t.category?.color_token ?? null, Object.keys(acc).length),
+      }
     }
     acc[catId].value += Number(t.amount)
     return acc
@@ -151,7 +156,7 @@ export function Charts() {
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <CategoryIcon categoryName={d.name} size={14} fallback="💰" />
+                    <CategoryIcon iconKey={d.iconKey} label={d.name} size={14} />
                     <span className="text-xs text-neutral-600 truncate">{d.name}</span>
                   </div>
                   <span className="font-amount text-xs font-semibold text-neutral-800 flex-shrink-0">

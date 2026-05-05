@@ -30,7 +30,8 @@ export interface Category {
   budget_behavior: BudgetBehavior
   is_active: boolean
   sort_order: number
-  icon_name: string | null
+  icon_key: string | null
+  icon_name?: string | null
   color_token: string | null
   notes: string | null
   created_at: string

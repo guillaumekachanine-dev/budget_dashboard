@@ -696,13 +696,11 @@ export function Flux() {
   const typeLabel = FLOW_OPTIONS.find((o) => o.value === flow)?.label ?? 'Depenses'
   const periodLabel = PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? 'Mois'
 
-  const selectedParent = selectedParentCategoryId ? parentById.get(selectedParentCategoryId) ?? null : null
   const selectedChildren = useMemo(
     () => (selectedParentCategoryId ? subCategories.filter((c) => c.parent_id === selectedParentCategoryId) : []),
     [selectedParentCategoryId, subCategories],
   )
 
-  const draftSelectedParent = draftSelectedParentCategoryId ? parentById.get(draftSelectedParentCategoryId) ?? null : null
   const draftSelectedChildren = useMemo(
     () => (draftSelectedParentCategoryId ? subCategories.filter((c) => c.parent_id === draftSelectedParentCategoryId) : []),
     [draftSelectedParentCategoryId, subCategories],
@@ -756,6 +754,11 @@ export function Flux() {
     if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.name ?? 'Catégorie'
     return 'Toutes catégories'
   }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
+  const selectedCategoryIconKey = useMemo(() => {
+    if (selectedCategoryId) return categoryById.get(selectedCategoryId)?.icon_key ?? null
+    if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.icon_key ?? null
+    return null
+  }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
 
   const operationsSummaryLabel = useMemo(() => `${filtered.length} ${resultNoun(flow)}`, [filtered.length, flow])
   const cardTypeValue = useMemo(() => {
@@ -792,11 +795,15 @@ export function Flux() {
   const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
   const categorySheetInParameters = showAdvancedSheet
   const activeSelectedChildren = categorySheetInParameters ? draftSelectedChildren : selectedChildren
-  const activeSelectedParent = categorySheetInParameters ? draftSelectedParent : selectedParent
   const draftCategoryLabel = useMemo(() => {
     if (draftSelectedCategoryId) return categoryById.get(draftSelectedCategoryId)?.name ?? 'Categorie'
     if (draftSelectedParentCategoryId) return parentById.get(draftSelectedParentCategoryId)?.name ?? 'Categorie'
     return 'Toutes categories'
+  }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
+  const draftCategoryIconKey = useMemo(() => {
+    if (draftSelectedCategoryId) return categoryById.get(draftSelectedCategoryId)?.icon_key ?? null
+    if (draftSelectedParentCategoryId) return parentById.get(draftSelectedParentCategoryId)?.icon_key ?? null
+    return null
   }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
 
   const closeQuickPicker = () => {
@@ -829,7 +836,7 @@ export function Flux() {
         rightLabel={selectedCategoryLabel.toLowerCase()}
         actionIcon={
           selectedCategoryId || selectedParentCategoryId
-            ? <CategoryIcon categoryName={selectedCategoryLabel} size={30} fallback="💰" />
+            ? <CategoryIcon iconKey={selectedCategoryIconKey} label={selectedCategoryLabel} size={30} />
             : <Search size={24} />
         }
         actionAriaLabel="Choisir une catégorie"
@@ -1361,7 +1368,7 @@ export function Flux() {
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon categoryName={cat.name} size={34} fallback={null} />
+                      <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={34} />
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
                     </button>
                   ))}
@@ -1387,7 +1394,7 @@ export function Flux() {
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon categoryName="Toutes catégories" size={34} fallback="💰" />
+                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                     </button>
                   </div>
@@ -1485,7 +1492,7 @@ export function Flux() {
                             cursor: 'pointer',
                           }}
                         >
-                          <CategoryIcon categoryName={cat.name} size={30} fallback={null} />
+                          <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={30} />
                           <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
                         </button>
                       ))}
@@ -1518,7 +1525,7 @@ export function Flux() {
                         }}
                       >
                         <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                          <CategoryIcon categoryName="Toutes catégories" size={24} fallback="💰" />
+                          <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={24} />
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
                       </button>
@@ -1548,7 +1555,7 @@ export function Flux() {
                             cursor: 'pointer',
                           }}
                         >
-                          <CategoryIcon categoryName={activeSelectedParent?.name ?? sub.name} size={30} fallback={null} />
+                          <CategoryIcon iconKey={sub.icon_key} label={sub.name} size={30} />
                           <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub.name}</span>
                         </button>
                       ))}
@@ -1646,8 +1653,8 @@ export function Flux() {
                     }}
                   >
                     {draftCategoryLabel === 'Toutes categories'
-                      ? <CategoryIcon categoryName="Toutes catégories" size={50} fallback="💰" />
-                      : <CategoryIcon categoryName={draftCategoryLabel} size={50} fallback="💰" />}
+                      ? <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={50} />
+                      : <CategoryIcon iconKey={draftCategoryIconKey} label={draftCategoryLabel} size={50} />}
                   </button>
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     {draftCategoryLabel}
