@@ -31,6 +31,8 @@ import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesFor
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { supabase } from '@/lib/supabase'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
+import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
@@ -276,6 +278,7 @@ export function Home() {
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: trajectorySummaries } = useBudgetSummaries(trajectoryYear, selectedTrajectoryMonth)
+  const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
   const trajectoryTotalBudget = trajectorySummaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
@@ -616,11 +619,15 @@ export function Home() {
     () => `${Math.round(consumedVariablePct)}%`,
     [consumedVariablePct],
   )
-  const fakeResteUtile = 950
-  const fakeBudgetPerDay = useMemo(() => {
-    if (daysRemaining <= 0) return fakeResteUtile
-    return fakeResteUtile / daysRemaining
-  }, [daysRemaining, fakeResteUtile])
+  const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
+  const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !dailyPayload) return
+    console.log('[HomeDailyBudgetPayload]', dailyPayload)
+    console.log('[Home by_bucket]', dailyPayload.by_bucket)
+    console.log('[Home by_category sample]', dailyPayload.by_category?.slice(0, 5))
+  }, [dailyPayload])
 
   const handleOpenAccountsModal = useCallback(() => {
     setShowAccountsModal((current) => !current)
@@ -1362,11 +1369,11 @@ export function Home() {
                     </div>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>reste utile</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(fakeResteUtile).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(resteUtileDisplay).replace(/\s+€/, '€')}</p>
                     </div>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>budget/jour</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(fakeBudgetPerDay).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
                     </div>
                   </div>
                 </div>
@@ -1831,30 +1838,34 @@ export function Home() {
                             <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontWeight: 500 }}>Ce mois</span>
                           </div>
 
-                          <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-                            {/* Placeholder items for UI */}
-                            {[
-                              { label: 'Loyer / Crédit', date: '05/05', amount: 1200, status: 'pending' },
-                              { label: 'EDF', date: '12/05', amount: 85, status: 'pending' },
-                              { label: 'Internet', date: '15/05', amount: 39.99, status: 'pending' },
-                              { label: 'Assurance', date: '20/05', amount: 45, status: 'pending' },
-                            ].map((op, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 'var(--space-2)',
-                                  padding: '8px 0',
-                                  borderBottom: '1px solid var(--neutral-100)',
-                                }}
-                              >
-                                <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', width: 32 }}>{op.date}</span>
-                                <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{op.label}</span>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>{formatMoneyInteger(op.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
+                          {(dailyPayload?.planned_operations?.count ?? 0) === 0 ? (
+                            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
+                              Aucune opération planifiée pour le moment
+                            </p>
+                          ) : (
+                            <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+                              {(dailyPayload?.planned_operations.items ?? []).map((op, idx) => {
+                                const d = op.scheduled_date
+                                const dateStr = d ? `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}` : '--/--'
+                                return (
+                                  <div
+                                    key={op.id ?? idx}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 'var(--space-2)',
+                                      padding: '8px 0',
+                                      borderBottom: '1px solid var(--neutral-100)',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', width: 32 }}>{dateStr}</span>
+                                    <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(op.label ?? '—')}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>{op.amount != null ? formatMoneyInteger(Number(op.amount)) : '—'}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2065,6 +2076,158 @@ export function Home() {
                 {trajectoryLinkError}
               </p>
             ) : null}
+          </div>
+        </motion.section>
+      ) : null}
+
+      {/* ── Pilotage par bucket ─────────────────────────────────────────── */}
+      {isMainCheckingAccount && dailyPayload && dailyPayload.by_bucket.length > 0 ? (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.18 }}
+          style={{ padding: '0 var(--space-6)' }}
+        >
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <p style={{ margin: '0 0 var(--space-3)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Pilotage par bucket
+            </p>
+            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              {PILOTAGE_BUCKET_ORDER.map((bucketId) => {
+                const row = dailyPayload.by_bucket.find((b) => b.budget_bucket === bucketId)
+                if (!row) return null
+                const pct = row.budget_amount > 0 ? Math.min(100, (row.actual_amount / row.budget_amount) * 100) : 0
+                const isOver = row.variance_amount > 0
+                const barColor = isOver ? 'var(--color-error)' : BUCKET_COLORS[bucketId] ?? 'var(--primary-500)'
+                const label = BUCKET_LABELS[bucketId] ?? bucketId
+                return (
+                  <div
+                    key={bucketId}
+                    style={{
+                      background: 'var(--neutral-0)',
+                      border: '1px solid var(--neutral-200)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 'var(--space-3)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>{label}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                          {formatMoneyInteger(row.actual_amount)} / {formatMoneyInteger(row.budget_amount)}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: isOver ? 'var(--color-error)' : 'var(--color-success)' }}>
+                          {row.variance_pct != null ? `${isOver ? '+' : ''}${(row.variance_pct * 100).toFixed(0)}%` : '—'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 'var(--radius-full)', background: barColor, transition: 'width 400ms ease' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
+                        Reste : {row.remaining_amount >= 0 ? '' : '−'}{formatMoneyInteger(Math.abs(row.remaining_amount))}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>
+                        {row.transaction_count} opération{row.transaction_count > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </motion.section>
+      ) : null}
+
+      {/* ── Écarts par catégorie ────────────────────────────────────────── */}
+      {isMainCheckingAccount && dailyPayload && dailyPayload.by_category.length > 0 ? (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.22 }}
+          style={{ padding: '0 var(--space-6)' }}
+        >
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <p style={{ margin: '0 0 var(--space-3)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Écarts par catégorie
+            </p>
+            <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              {[...dailyPayload.by_category]
+                .filter((c) => c.actual_amount > 0 || c.budget_amount > 0)
+                .sort((a, b) => {
+                  if (a.variance_amount > 0 && b.variance_amount <= 0) return -1
+                  if (b.variance_amount > 0 && a.variance_amount <= 0) return 1
+                  if (a.remaining_amount < 0 && b.remaining_amount >= 0) return -1
+                  if (b.remaining_amount < 0 && a.remaining_amount >= 0) return 1
+                  return b.actual_amount - a.actual_amount
+                })
+                .slice(0, 12)
+                .map((cat, idx, arr) => {
+                  const isOver = cat.variance_amount > 0
+                  const bucketLabel = BUCKET_LABELS[cat.budget_bucket] ?? cat.budget_bucket
+                  return (
+                    <div
+                      key={cat.category_id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto',
+                        gap: 'var(--space-2)',
+                        padding: 'var(--space-3)',
+                        borderBottom: idx < arr.length - 1 ? '1px solid var(--neutral-100)' : 'none',
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginBottom: 2 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cat.category_name}
+                          </span>
+                          {cat.parent_category_name ? (
+                            <span style={{ fontSize: 10, color: 'var(--neutral-400)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              · {cat.parent_category_name}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span style={{
+                          display: 'inline-block',
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: BUCKET_COLORS[cat.budget_bucket] ?? 'var(--primary-500)',
+                          background: `color-mix(in srgb, ${BUCKET_COLORS[cat.budget_bucket] ?? '#5B57F5'} 10%, transparent)`,
+                          borderRadius: 4,
+                          padding: '1px 5px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                        }}>
+                          {bucketLabel}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(48px, auto))', gap: 'var(--space-2)', alignItems: 'center', justifyItems: 'end' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Budget</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', fontWeight: 600 }}>{cat.budget_amount > 0 ? formatMoneyInteger(cat.budget_amount) : '—'}</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Consommé</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', fontWeight: 700 }}>{formatMoneyInteger(cat.actual_amount)}</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Reste</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: cat.remaining_amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)', fontWeight: 600 }}>
+                            {cat.budget_amount > 0 ? formatMoneyInteger(cat.remaining_amount) : '—'}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Écart</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: isOver ? 'var(--color-error)' : cat.variance_amount < 0 ? 'var(--color-success)' : 'var(--neutral-500)' }}>
+                            {cat.variance_pct != null ? `${isOver ? '+' : ''}${(cat.variance_pct * 100).toFixed(0)}%` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
           </div>
         </motion.section>
       ) : null}
