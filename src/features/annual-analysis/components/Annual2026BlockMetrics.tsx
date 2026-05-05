@@ -165,7 +165,7 @@ export function Annual2026BlockMetrics({
   compactMobile = false,
 }: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
-  const [selectedBlock, setSelectedBlock] = useState(BUCKET_ORDER[0])
+  const [selectedBlock, setSelectedBlock] = useState<string>(BUCKET_ORDER[0] as string)
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState('2026')
 
@@ -455,7 +455,7 @@ export function Annual2026BlockMetrics({
                   options={analysisType === 'bloc'
                     ? BUCKET_ORDER.map((bucketKey) => ({ id: bucketKey, label: BUCKET_LABELS[bucketKey] ?? bucketKey }))
                     : rootCategories.map((category) => ({ id: category.id, label: category.name }))}
-                  onSelect={analysisType === 'bloc' ? setSelectedBlock : setSelectedCategoryId}
+                  onSelect={analysisType === 'bloc' ? (id) => setSelectedBlock(id) : setSelectedCategoryId}
                 />
               </div>
               <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-100)', padding: 'var(--space-3) var(--space-2)', minHeight: 66, display: 'grid', placeItems: 'center' }}>

@@ -16,9 +16,10 @@ type Props = {
 }
 
 export function AnnualSpendingStructureSection({ buckets, parentCategories }: Props) {
+  const orderedBuckets = BUCKET_ORDER as readonly string[]
   const sortedBuckets = [...buckets].sort((a, b) => {
-    const ia = BUCKET_ORDER.indexOf(a.budget_bucket)
-    const ib = BUCKET_ORDER.indexOf(b.budget_bucket)
+    const ia = orderedBuckets.indexOf(a.budget_bucket)
+    const ib = orderedBuckets.indexOf(b.budget_bucket)
     if (ia === -1 && ib === -1) return b.amount_total_year - a.amount_total_year
     if (ia === -1) return 1
     if (ib === -1) return -1
