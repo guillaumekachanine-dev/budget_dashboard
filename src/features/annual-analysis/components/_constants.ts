@@ -11,21 +11,31 @@ export const BUCKET_COLORS: Record<string, string> = {
 
 export const BUCKET_LABELS: Record<string, string> = {
   socle_fixe:           'Socle fixe',
-  variable_essentielle: 'Variable ess.',
-  provision:            'Provision',
+  variable_essentielle: 'Variable essentielle',
+  provision:            'Provisions',
   discretionnaire:      'Discrétionnaire',
-  cagnotte_projet:      'Cagnotte projet',
+  epargne:              'Épargne',
+  revenu:               'Revenus',
   hors_pilotage:        'Hors pilotage',
 }
 
-export const BUCKET_ORDER = [
+export const PILOTAGE_BUCKET_ORDER = [
   'socle_fixe',
   'variable_essentielle',
-  'provision',
   'discretionnaire',
-  'cagnotte_projet',
+  'provision',
+  'epargne',
+] as const
+
+export const TECHNICAL_BUCKETS = [
+  'revenu',
   'hors_pilotage',
-]
+] as const
+
+export const BUCKET_ORDER = [
+  ...PILOTAGE_BUCKET_ORDER,
+  ...TECHNICAL_BUCKETS,
+] as const
 
 // ─── Palette data-viz ─────────────────────────────────────────────────────────
 

@@ -38,7 +38,7 @@ import {
   type MetricsDisplayMode,
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
-import { BUCKET_LABELS, BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
+import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
 import blockVariableIcon from '@/assets/icons/blocks/variable.png'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
@@ -282,14 +282,23 @@ function accentFromLabel(label: string | null | undefined): string {
 }
 
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
-  if (!bucket) return null
-  if (bucket === 'socle_fixe') return 'fixe'
-  if (bucket === 'variable_essentielle') return 'variable_essentiel'
-  if (bucket === 'discretionnaire') return 'discretionnaire'
-  if (bucket === 'epargne') return 'epargne'
-  if (bucket === 'provision') return 'provision'
-  if (bucket === 'cagnotte_projet') return 'cagnotte'
-  return null
+  switch (bucket) {
+    case 'socle_fixe':
+      return 'fixe'
+    case 'variable_essentielle':
+      return 'variable_essentiel'
+    case 'discretionnaire':
+      return 'discretionnaire'
+    case 'provision':
+      return 'provision'
+    case 'epargne':
+      return 'epargne'
+    case 'revenu':
+    case 'hors_pilotage':
+      return null
+    default:
+      return null
+  }
 }
 
 function formatBudgetBucketLabel(bucket: string | null | undefined): string {
@@ -488,9 +497,22 @@ export function Budgets() {
     periodMonth: selectedPeriodMonth,
     monthsBack: 6,
   })
-  const payloadByBucket = useMemo(
-    () => (Array.isArray(budgetPayload?.by_bucket) ? budgetPayload.by_bucket : []),
-    [budgetPayload],
+  const payloadByBucket = useMemo(() => {
+    const rows = Array.isArray(budgetPayload?.by_bucket) ? budgetPayload.by_bucket : []
+    return rows.reduce<Record<string, (typeof rows)[number]>>((acc, row) => {
+      const key = String(row?.budget_bucket ?? '')
+      if (!key) return acc
+      acc[key] = row
+      return acc
+    }, {})
+  }, [budgetPayload])
+  const visibleBudgetBuckets = useMemo(
+    () => PILOTAGE_BUCKET_ORDER.map((bucket) => ({
+      bucket,
+      label: BUCKET_LABELS[bucket],
+      data: payloadByBucket[bucket],
+    })),
+    [payloadByBucket],
   )
   const payloadByParentCategory = useMemo(
     () => (Array.isArray(budgetPayload?.by_parent_category) ? budgetPayload.by_parent_category : []),
@@ -1279,8 +1301,10 @@ export function Budgets() {
     })
 
 	    if (selectedCat === 'all' && budgetPayload) {
-        const hasExplicitEpargneBucket = payloadByBucket.some((row) => row.budget_bucket === 'epargne')
-	      for (const bucketRow of payloadByBucket) {
+        const hasExplicitEpargneBucket = visibleBudgetBuckets.some((entry) => entry.bucket === 'epargne' && Boolean(entry.data))
+	      for (const bucketEntry of visibleBudgetBuckets) {
+          const bucketRow = bucketEntry.data
+          if (!bucketRow) continue
 	        const primaryBlockId = mapBudgetBucketToBlock(bucketRow.budget_bucket)
 	        if (!primaryBlockId) continue
           const targetBlockIds: BudgetBlockId[] = primaryBlockId === 'provision' && !hasExplicitEpargneBucket
@@ -1353,7 +1377,7 @@ export function Budgets() {
         }),
       }))
       .filter((row) => row.budgetAmount > 0 || row.actualAmount > 0)
-  }, [budgetPayload, payloadByBucket, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
+  }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
 
   const blockPieData = useMemo<PieDatum[]>(
     () =>
