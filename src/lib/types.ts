@@ -491,6 +491,10 @@ export type Database = {
         Args: { p_year: number }
         Returns: Record<string, unknown>
       }
+      get_investment_performance_payload: {
+        Args: { p_year: number }
+        Returns: Record<string, unknown>
+      }
       refresh_budget_analytics: {
         Args: { p_user_id: string }
         Returns: null

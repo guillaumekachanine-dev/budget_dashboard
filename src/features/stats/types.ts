@@ -173,3 +173,81 @@ export type OptimizationCapacityPayload = {
   optimization_levers: OptimizationLever[]
   scenarios: OptimizationScenario[]
 }
+
+export type InvestmentGlobalSummary = {
+  total_invested_value: number | null
+  total_investment_cash: number | null
+  estimated_gain_vs_known_cash_in: number | null
+  estimated_gain_vs_known_cash_in_pct: number | null
+  avg_quality_score: number | null
+  global_investment_insight: string | null
+}
+
+export type InvestmentAccountPerformanceSummary = {
+  account_name: string | null
+  provider_name: string | null
+  product_name: string | null
+  envelope_type: string | null
+  current_value: number | null
+  current_value_source: string | null
+  estimated_gain_vs_total_cash_in: number | null
+  estimated_gain_vs_total_cash_in_pct: number | null
+  global_quality_score: number | null
+  quality_status: string | null
+  recommended_action: string | null
+}
+
+export type InvestmentMonthlyPerformance = {
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  total_value: number | null
+  total_cash_in: number | null
+  total_cash_out: number | null
+  net_gain: number | null
+  net_gain_pct: number | null
+  monthly_return: number | null
+  monthly_return_pct: number | null
+  quality_score: number | null
+}
+
+export type InvestmentCashflow = {
+  flow_date: string | null
+  account_name: string | null
+  flow_type: string | null
+  amount: number | null
+  description: string | null
+}
+
+export type InvestmentActionItem = {
+  action_title: string | null
+  account_name: string | null
+  action_description: string | null
+  priority: number | null
+  expected_impact_label: string | null
+  expected_annual_saving: number | null
+  expected_performance_improvement_label: string | null
+  status: string | null
+}
+
+export type InvestmentPositionSnapshot = {
+  asset_name: string | null
+  snapshot_date: string | null
+  units: number | null
+  unit_price: number | null
+  market_value: number | null
+  cash_value: number | null
+  total_value: number | null
+  source_document: string | null
+}
+
+export type InvestmentPerformancePayload = {
+  generated_at: string | null
+  year: number | null
+  global_summary: InvestmentGlobalSummary | null
+  accounts: InvestmentAccountPerformanceSummary[]
+  monthly_performance: InvestmentMonthlyPerformance[]
+  cashflows: InvestmentCashflow[]
+  actions: InvestmentActionItem[]
+  latest_positions: InvestmentPositionSnapshot[]
+}

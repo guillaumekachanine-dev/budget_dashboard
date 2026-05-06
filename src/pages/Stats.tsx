@@ -18,10 +18,12 @@ import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
 import { SavingsInsightsSection } from '@/features/savings/components/SavingsInsightsSection'
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
+import { InvestmentPerformanceSection } from '@/features/stats/components/InvestmentPerformanceSection'
 import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
+import { EmptyState, StatsSection, YearToggle } from '@/features/stats/components/ui'
 
-type StatsTabId = 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics_2026' | 'analytics_2025' | 'performance' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -32,6 +34,7 @@ type SavingsAnalyticsYear = 2026 | 2025
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
   { id: 'analytics_2025', label: 'Analytics\n2025', iconSrc: analyticsIcon },
+  { id: 'performance', label: 'Performance', iconSrc: analyticsIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
@@ -251,6 +254,12 @@ export function Stats() {
         <Annual2026Tab />
       ) : null}
 
+      {activeTab.id === 'performance' ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+          <InvestmentPerformanceSection />
+        </motion.section>
+      ) : null}
+
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
           <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
@@ -263,11 +272,9 @@ export function Stats() {
                 totalSavings={annual2026.summary.totalSavingsBudget}
               />
             ) : (
-              <section style={{ padding: '0 var(--space-6)' }}>
-                <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
-                  Aucun scénario d’optimisation disponible.
-                </div>
-              </section>
+              <StatsSection>
+                <EmptyState message="Aucun scénario d’optimisation disponible." />
+              </StatsSection>
             )}
           </div>
         </motion.div>
@@ -276,38 +283,15 @@ export function Stats() {
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
           <SavingsHeroCard />
-          <section style={{ padding: '0 var(--space-6)' }}>
-            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-end' }}>
-              <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', borderRadius: 'var(--radius-full)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)' }}>
-                {SAVINGS_ANALYTICS_YEARS.map((year) => {
-                  const isActive = selectedSavingsYear === year
-                  return (
-                    <button
-                      key={year}
-                      type="button"
-                      onClick={() => setSelectedSavingsYear(year)}
-                      aria-pressed={isActive}
-                      style={{
-                        border: 'none',
-                        borderRadius: 'var(--radius-full)',
-                        minHeight: 30,
-                        padding: '0 12px',
-                        background: isActive ? 'var(--primary-500)' : 'transparent',
-                        color: isActive ? 'var(--neutral-0)' : 'var(--neutral-700)',
-                        fontSize: 'var(--font-size-xs)',
-                        fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)',
-                        fontFamily: 'var(--font-mono)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-base)',
-                      }}
-                    >
-                      {year}
-                    </button>
-                  )
-                })}
-              </div>
+          <StatsSection>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <YearToggle
+                years={SAVINGS_ANALYTICS_YEARS}
+                value={selectedSavingsYear}
+                onChange={(year) => setSelectedSavingsYear(year as SavingsAnalyticsYear)}
+              />
             </div>
-          </section>
+          </StatsSection>
 
           <SavingsInsightsSection year={selectedSavingsYear} />
           <FinancialSecurityCard />
@@ -326,13 +310,9 @@ export function Stats() {
               />
             </>
           ) : (
-            <div style={{ padding: '0 var(--space-6)' }}>
-              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 220, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'color-mix(in oklab, var(--color-success) 6%, var(--neutral-0) 94%)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-600)', padding: 'var(--space-6)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-semibold)' }}>
-                  Données d’épargne en cours de chargement
-                </p>
-              </div>
-            </div>
+            <StatsSection>
+              <EmptyState message="Données d’épargne en cours de chargement" />
+            </StatsSection>
           )}
         </motion.section>
       ) : null}

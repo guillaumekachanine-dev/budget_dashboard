@@ -1,51 +1,38 @@
 import { useState } from 'react'
-import { Skeleton } from '@/components/ui/Skeleton'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
 import type { OptimizationLever, OptimizationMonthlyForecast } from '@/features/stats/types'
+import {
+  DataQualityNotice,
+  EmptyState,
+  HeroMetricCard,
+  MonthlyTimeline,
+  SectionHeader,
+  SkeletonCard,
+  StatsSection,
+  StatusBadge,
+  SurfaceCard,
+  YearToggle,
+  asFiniteNumber,
+  formatEuro,
+  formatEuroPerMonth,
+  formatInteger,
+  formatMonthLabel,
+  type Tone,
+} from '@/features/stats/components/ui'
 
 type OptimizationYear = 2026 | 2025
 
 const OPTIMIZATION_YEARS: OptimizationYear[] = [2026, 2025]
-const MONTH_SHORT_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'] as const
 
-function asFiniteNumber(value: number | null | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
+function formatMonthLabelFromRow(row: OptimizationMonthlyForecast): string {
+  const monthLabel = formatMonthLabel(row.period_month, row.period_year)
+  if (monthLabel !== '—') return monthLabel
 
-function formatEuro(value: number | null | undefined): string {
-  const numeric = asFiniteNumber(value)
-  if (numeric == null) return '—'
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(numeric)
-}
+  if (!row.month_start) return '—'
+  const date = new Date(row.month_start)
+  if (Number.isNaN(date.getTime())) return '—'
 
-function formatEuroPerMonth(value: number | null | undefined): string {
-  const amount = formatEuro(value)
-  if (amount === '—') return amount
-  return `${amount} / mois`
-}
-
-function formatMonthLabel(row: OptimizationMonthlyForecast): string {
-  const month = asFiniteNumber(row.period_month)
-  if (month != null && month >= 1 && month <= 12) {
-    const label = MONTH_SHORT_FR[month - 1] ?? '—'
-    const year = asFiniteNumber(row.period_year)
-    return year == null ? label : `${label} ${year}`
-  }
-
-  if (row.month_start) {
-    const date = new Date(row.month_start)
-    if (!Number.isNaN(date.getTime())) {
-      const label = MONTH_SHORT_FR[date.getMonth()] ?? '—'
-      return `${label} ${date.getFullYear()}`
-    }
-  }
-
-  return '—'
+  return formatMonthLabel(date.getMonth() + 1, date.getFullYear())
 }
 
 function resolveRiskInsight(riskMonthsCount: number | null): string {
@@ -57,66 +44,41 @@ function resolveRiskInsight(riskMonthsCount: number | null): string {
 
 function resolveForecastStatus(statusRaw: string | null | undefined): {
   label: string
-  color: string
-  background: string
-  border: string
+  tone: Tone
 } {
   const normalized = (statusRaw ?? '').toLowerCase()
 
   if (normalized === 'ok') {
-    return {
-      label: 'OK',
-      color: 'var(--color-positive)',
-      background: 'color-mix(in oklab, var(--color-positive) 12%, var(--neutral-0) 88%)',
-      border: 'color-mix(in oklab, var(--color-positive) 24%, var(--neutral-0) 76%)',
-    }
+    return { label: 'OK', tone: 'positive' }
   }
+
   if (normalized === 'watch') {
-    return {
-      label: 'À surveiller',
-      color: 'var(--primary-700)',
-      background: 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)',
-      border: 'color-mix(in oklab, var(--primary-500) 24%, var(--neutral-0) 76%)',
-    }
+    return { label: 'À surveiller', tone: 'info' }
   }
+
   if (normalized === 'tense') {
-    return {
-      label: 'Tendu',
-      color: 'var(--color-warning)',
-      background: 'color-mix(in oklab, var(--color-warning) 12%, var(--neutral-0) 88%)',
-      border: 'color-mix(in oklab, var(--color-warning) 24%, var(--neutral-0) 76%)',
-    }
+    return { label: 'Tendu', tone: 'warning' }
   }
-  if (normalized === 'risk' || normalized === 'capacity_negative') {
-    return {
-      label: normalized === 'capacity_negative' ? 'Capacité négative' : 'Risque',
-      color: 'var(--color-negative)',
-      background: 'color-mix(in oklab, var(--color-negative) 12%, var(--neutral-0) 88%)',
-      border: 'color-mix(in oklab, var(--color-negative) 24%, var(--neutral-0) 76%)',
-    }
+
+  if (normalized === 'risk') {
+    return { label: 'Risque', tone: 'danger' }
   }
+
+  if (normalized === 'capacity_negative') {
+    return { label: 'Capacité négative', tone: 'danger' }
+  }
+
   if (normalized === 'missing_income') {
-    return {
-      label: 'Revenus manquants',
-      color: 'var(--color-negative)',
-      background: 'color-mix(in oklab, var(--color-negative) 12%, var(--neutral-0) 88%)',
-      border: 'color-mix(in oklab, var(--color-negative) 24%, var(--neutral-0) 76%)',
-    }
+    return { label: 'Revenus manquants', tone: 'danger' }
   }
+
   if (normalized === 'completed') {
-    return {
-      label: 'Réalisé',
-      color: 'var(--neutral-600)',
-      background: 'var(--neutral-100)',
-      border: 'var(--neutral-200)',
-    }
+    return { label: 'Réalisé', tone: 'neutral' }
   }
 
   return {
     label: statusRaw && statusRaw.trim().length > 0 ? statusRaw : '—',
-    color: 'var(--neutral-600)',
-    background: 'var(--neutral-100)',
-    border: 'var(--neutral-200)',
+    tone: 'neutral',
   }
 }
 
@@ -154,174 +116,137 @@ export function StatsOptimizationsTab() {
   const displayedLevers = optimizationLevers.slice(0, 8)
   const top3Levers = getTop3Levers(optimizationLevers)
 
-  const top3MonthlyGain = top3Levers.reduce((sum, lever) => sum + (asFiniteNumber(lever.realistic_monthly_gain) ?? 0), 0)
-  const top3AnnualGain = top3Levers.reduce((sum, lever) => sum + (asFiniteNumber(lever.realistic_annual_gain) ?? 0), 0)
+  const top3MonthlyGainValues = top3Levers
+    .map((lever) => asFiniteNumber(lever.realistic_monthly_gain))
+    .filter((value): value is number => value != null)
+  const top3AnnualGainValues = top3Levers
+    .map((lever) => asFiniteNumber(lever.realistic_annual_gain))
+    .filter((value): value is number => value != null)
+
+  const top3MonthlyGain = top3MonthlyGainValues.length > 0
+    ? top3MonthlyGainValues.reduce((sum, value) => sum + value, 0)
+    : null
+  const top3AnnualGain = top3AnnualGainValues.length > 0
+    ? top3AnnualGainValues.reduce((sum, value) => sum + value, 0)
+    : null
 
   const top3Labels = top3Levers
     .map((lever) => lever.category_name)
     .filter((name): name is string => Boolean(name && name.trim().length > 0))
 
   return (
-    <section style={{ padding: '0 var(--space-6)' }}>
-      <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', borderRadius: 'var(--radius-full)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)' }}>
-            {OPTIMIZATION_YEARS.map((year) => {
-              const isActive = selectedYear === year
-              return (
-                <button
-                  key={year}
-                  type="button"
-                  onClick={() => setSelectedYear(year)}
-                  aria-pressed={isActive}
-                  style={{
-                    border: 'none',
-                    borderRadius: 'var(--radius-full)',
-                    minHeight: 30,
-                    padding: '0 12px',
-                    background: isActive ? 'var(--primary-500)' : 'transparent',
-                    color: isActive ? 'var(--neutral-0)' : 'var(--neutral-700)',
-                    fontSize: 'var(--font-size-xs)',
-                    fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)',
-                    fontFamily: 'var(--font-mono)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-base)',
-                  }}
-                >
-                  {year}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+    <>
+      <StatsSection>
+        <SectionHeader
+          title="Optimisations"
+          subtitle={`Capacité d’épargne prévisionnelle ${selectedYear}`}
+          rightSlot={<YearToggle years={OPTIMIZATION_YEARS} value={selectedYear} onChange={(year) => setSelectedYear(year as OptimizationYear)} />}
+        />
+      </StatsSection>
 
-        {isLoading ? (
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-            <Skeleton className="h-44 w-full" />
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-52 w-full" />
-            <Skeleton className="h-40 w-full" />
-          </div>
-        ) : null}
+      {isLoading ? (
+        <StatsSection style={{ gap: 'var(--space-3)' }}>
+          <SkeletonCard heightClass="h-28" lines={2} />
+          <SkeletonCard heightClass="h-52" lines={0} />
+          <SkeletonCard heightClass="h-44" lines={0} />
+          <SkeletonCard heightClass="h-36" lines={0} />
+        </StatsSection>
+      ) : null}
 
-        {!isLoading && error ? (
-          <div style={{ borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', color: 'var(--neutral-600)', padding: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
-            Impossible de charger les données d’optimisation.
-          </div>
-        ) : null}
+      {!isLoading && error ? (
+        <StatsSection>
+          <EmptyState message="Impossible de charger les données d’optimisation." />
+        </StatsSection>
+      ) : null}
 
-        {!isLoading && !error && !data ? (
-          <div style={{ borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', color: 'var(--neutral-600)', padding: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
-            Aucune donnée d’optimisation disponible.
-          </div>
-        ) : null}
+      {!isLoading && !error && !data ? (
+        <StatsSection>
+          <EmptyState message="Aucune donnée d’optimisation disponible." />
+        </StatsSection>
+      ) : null}
 
-        {!isLoading && !error && data ? (
-          <>
-            <section style={{ borderRadius: 'var(--radius-2xl)', border: '1px solid color-mix(in oklab, var(--primary-500) 24%, var(--neutral-0) 76%)', background: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-700) 85%, var(--neutral-900) 15%) 0%, color-mix(in oklab, var(--primary-500) 78%, var(--neutral-900) 22%) 100%)', color: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-5)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9, fontWeight: 'var(--font-weight-bold)' }}>
-                Capacité prévisionnelle
-              </p>
-              <p style={{ margin: '6px 0 0', fontSize: '32px', lineHeight: 1.1, fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-extrabold)' }}>
-                {formatEuro(annualSummary?.gross_savings_capacity_total)}
-              </p>
-
-              <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginTop: 'var(--space-4)' }}>
-                <div style={{ background: 'color-mix(in oklab, var(--neutral-0) 12%, transparent)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', opacity: 0.8 }}>Moyenne mensuelle</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {formatEuroPerMonth(annualSummary?.avg_monthly_gross_savings_capacity)}
-                  </p>
-                </div>
-                <div style={{ background: 'color-mix(in oklab, var(--neutral-0) 12%, transparent)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', opacity: 0.8 }}>Épargne déjà planifiée</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {formatEuro(annualSummary?.planned_savings_total)}
-                  </p>
-                </div>
-                <div style={{ background: 'color-mix(in oklab, var(--neutral-0) 12%, transparent)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', opacity: 0.8 }}>Capacité additionnelle</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {formatEuro(annualSummary?.additional_capacity_after_planned_savings_total)}
-                  </p>
-                </div>
-                <div style={{ background: 'color-mix(in oklab, var(--neutral-0) 12%, transparent)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', opacity: 0.8 }}>Mois à risque</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {asFiniteNumber(annualSummary?.risk_months_count) == null ? '—' : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(annualSummary?.risk_months_count ?? 0)}`}
-                  </p>
-                </div>
-              </div>
-
-              <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-sm)', opacity: 0.92 }}>
-                {resolveRiskInsight(asFiniteNumber(annualSummary?.risk_months_count))}
-              </p>
-            </section>
-
-            <section style={{ borderRadius: 'var(--radius-2xl)', border: '1px solid var(--neutral-150)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Planning annuel
-              </p>
-
-              {monthlyForecast.length === 0 ? (
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
-              ) : (
-                monthlyForecast.map((row, index) => {
-                  const status = resolveForecastStatus(row.forecast_status)
-                  return (
-                    <article key={`${row.month_start ?? ''}-${row.period_year ?? ''}-${row.period_month ?? ''}-${index}`} style={{ border: '1px solid var(--neutral-150)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
-                          {formatMonthLabel(row)}
-                        </p>
-                        <span style={{ fontSize: '11px', fontWeight: 'var(--font-weight-semibold)', color: status.color, background: status.background, border: `1px solid ${status.border}`, borderRadius: 'var(--radius-full)', padding: '2px 8px' }}>
-                          {status.label}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'grid', gap: 'var(--space-1)', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Revenus projetés</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.projected_income)}</p>
-
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Dépenses hors épargne</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.projected_non_savings_expenses)}</p>
-
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Épargne planifiée</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.planned_savings_budget)}</p>
-
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité brute</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.gross_savings_capacity)}</p>
-
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Capacité après épargne planifiée</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.additional_capacity_after_planned_savings)}</p>
-
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Solde compte courant estimé</p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>{formatEuro(row.estimated_current_account_end_balance)}</p>
-                      </div>
-                    </article>
+      {!isLoading && !error && data ? (
+        <StatsSection style={{ gap: 'var(--space-4)' }}>
+          <HeroMetricCard
+            title="Capacité prévisionnelle"
+            value={formatEuro(annualSummary?.gross_savings_capacity_total)}
+            caption="Capacité d’épargne restante estimée"
+            tone="info"
+            detail={resolveRiskInsight(asFiniteNumber(annualSummary?.risk_months_count))}
+            metrics={[
+              {
+                label: 'Moyenne mensuelle',
+                value: formatEuroPerMonth(annualSummary?.avg_monthly_gross_savings_capacity),
+              },
+              {
+                label: 'Épargne planifiée',
+                value: formatEuro(annualSummary?.planned_savings_total),
+              },
+              {
+                label: 'Capacité additionnelle',
+                value: formatEuro(annualSummary?.additional_capacity_after_planned_savings_total),
+              },
+              {
+                label: 'Mois à risque',
+                value: formatInteger(annualSummary?.risk_months_count),
+              },
+            ]}
+            notice={
+              asFiniteNumber(annualSummary?.risk_months_count) != null && (annualSummary?.risk_months_count ?? 0) > 0
+                ? (
+                    <DataQualityNotice
+                      tone="warning"
+                      title="Vigilance"
+                      detail={resolveRiskInsight(asFiniteNumber(annualSummary?.risk_months_count))}
+                    />
                   )
-                })
-              )}
-            </section>
+                : undefined
+            }
+          />
 
-            <section style={{ borderRadius: 'var(--radius-2xl)', border: '1px solid var(--neutral-150)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Postes optimisables
-              </p>
+          <SurfaceCard tone="neutral" padding="var(--space-4)">
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <SectionHeader title="Planning annuel" subtitle="Projection mois par mois" />
+              <MonthlyTimeline
+                items={monthlyForecast.map((row, index) => {
+                  const status = resolveForecastStatus(row.forecast_status)
+                  return {
+                    key: `${row.month_start ?? ''}-${row.period_year ?? ''}-${row.period_month ?? ''}-${index}`,
+                    title: formatMonthLabelFromRow(row),
+                    badge: <StatusBadge label={status.label} tone={status.tone} />,
+                    metrics: [
+                      { label: 'Revenus projetés', value: formatEuro(row.projected_income) },
+                      { label: 'Dépenses hors épargne', value: formatEuro(row.projected_non_savings_expenses) },
+                      { label: 'Épargne planifiée', value: formatEuro(row.planned_savings_budget) },
+                      { label: 'Capacité brute', value: formatEuro(row.gross_savings_capacity), tone: 'info' },
+                      { label: 'Capacité après planifié', value: formatEuro(row.additional_capacity_after_planned_savings), tone: 'positive' },
+                      { label: 'Solde courant estimé', value: formatEuro(row.estimated_current_account_end_balance) },
+                    ],
+                  }
+                })}
+              />
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard tone="neutral" padding="var(--space-4)">
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <SectionHeader title="Postes optimisables" subtitle="6 à 8 leviers prioritaires" />
 
               {displayedLevers.length === 0 ? (
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                <EmptyState message="Aucun levier d’optimisation disponible." />
               ) : (
                 displayedLevers.map((lever, index) => (
                   <article key={`${lever.category_name ?? ''}-${index}`} style={{ border: '1px solid var(--neutral-150)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-                    <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                         {lever.category_name ?? '—'}
                       </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
-                        {[lever.parent_category_name, lever.budget_bucket].filter(Boolean).join(' · ') || '—'}
-                      </p>
+                      <StatusBadge label={lever.budget_bucket ?? '—'} tone="neutral" />
                     </div>
+
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
+                      {lever.parent_category_name ?? '—'}
+                    </p>
 
                     <div style={{ display: 'grid', gap: 'var(--space-1)', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                       <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Dépense moyenne 6 mois</p>
@@ -340,14 +265,14 @@ export function StatsOptimizationsTab() {
                   </article>
                 ))
               )}
-            </section>
+            </div>
+          </SurfaceCard>
 
-            <section style={{ borderRadius: 'var(--radius-2xl)', border: '1px solid var(--neutral-150)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Scénarios
-              </p>
+          <SurfaceCard tone="neutral" padding="var(--space-4)">
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <SectionHeader title="Scénarios" subtitle="Prudent, réaliste, ambitieux" />
 
-              <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
                 {[
                   { key: 'prudent', label: 'Prudent' },
                   { key: 'realiste', label: 'Réaliste' },
@@ -366,7 +291,7 @@ export function StatsOptimizationsTab() {
                       style={{
                         borderRadius: 'var(--radius-md)',
                         border: isHighlighted
-                          ? '1px solid color-mix(in oklab, var(--primary-500) 32%, var(--neutral-0) 68%)'
+                          ? '1px solid color-mix(in oklab, var(--primary-500) 30%, var(--neutral-0) 70%)'
                           : '1px solid var(--neutral-150)',
                         background: isHighlighted
                           ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)'
@@ -379,28 +304,32 @@ export function StatsOptimizationsTab() {
                       <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isHighlighted ? 'var(--primary-700)' : 'var(--neutral-600)', fontWeight: 'var(--font-weight-bold)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         {expected.label}
                       </p>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatEuroPerMonth(scenario?.monthly_gain ?? null)}</p>
-                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatEuro(scenario?.projected_gain_on_scope ?? null)}</p>
-                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatEuro(scenario?.projected_capacity_total ?? null)}</p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                        {formatEuroPerMonth(scenario?.monthly_gain ?? null)}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                        Scope: {formatEuro(scenario?.projected_gain_on_scope ?? null)}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                        Total: {formatEuro(scenario?.projected_capacity_total ?? null)}
+                      </p>
                     </article>
                   )
                 })}
               </div>
-            </section>
+            </div>
+          </SurfaceCard>
 
-            <section style={{ borderRadius: 'var(--radius-2xl)', border: '1px solid var(--neutral-150)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-2)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Plan d’action recommandé
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)' }}>
-                {top3Labels.length > 0
-                  ? `En optimisant ${top3Labels.join(', ')}, tu pourrais libérer environ ${formatEuroPerMonth(top3MonthlyGain)}, soit ${formatEuro(top3AnnualGain)} sur la période restante.`
-                  : '—'}
-              </p>
-            </section>
-          </>
-        ) : null}
-      </div>
-    </section>
+          <SurfaceCard tone="neutral" padding="var(--space-4)">
+            <SectionHeader title="Plan d’action recommandé" />
+            <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+              {top3Labels.length > 0 && top3MonthlyGain != null && top3AnnualGain != null
+                ? `En optimisant ${top3Labels.join(', ')}, tu pourrais libérer environ ${formatEuroPerMonth(top3MonthlyGain)}, soit ${formatEuro(top3AnnualGain)} sur la période restante.`
+                : '—'}
+            </p>
+          </SurfaceCard>
+        </StatsSection>
+      ) : null}
+    </>
   )
 }
