@@ -53,7 +53,7 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
             style={{
               display: 'inline-flex',
               color: 'var(--neutral-0)',
-              transform: isActive ? 'translateY(-4px) scale(1.08)' : 'translateY(0) scale(1)',
+              transform: isActive ? 'translateY(-2px) scale(1.08)' : 'translateY(1px) scale(1)',
               transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
@@ -62,7 +62,7 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
           <span
             style={{
               position: 'absolute',
-              bottom: 0,
+              bottom: 2,
               display: 'block',
               width: isActive ? 20 : 4,
               height: 3,
@@ -94,8 +94,8 @@ const rootStyle: CSSProperties = {
 const navStyle: CSSProperties = {
   position: 'relative',
   boxSizing: 'border-box',
-  minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom))',
-  paddingBottom: 'var(--safe-bottom)',
+  minHeight: 'var(--bottom-nav-total-height)',
+  paddingBottom: 'var(--bottom-nav-safe-bottom)',
   paddingLeft: 'var(--safe-left)',
   paddingRight: 'var(--safe-right)',
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
@@ -106,8 +106,8 @@ const navStyle: CSSProperties = {
 }
 
 const navRowStyle: CSSProperties = {
-  minHeight: 'var(--bottom-nav-height)',
-  height: 'var(--bottom-nav-height)',
+  minHeight: 'var(--bottom-nav-visual-height)',
+  height: 'var(--bottom-nav-visual-height)',
   display: 'grid',
   gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
   alignItems: 'center',
@@ -117,10 +117,10 @@ const navRowStyle: CSSProperties = {
 const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: 'calc(var(--bottom-nav-height) / 2)',
+  top: 'calc(var(--bottom-nav-visual-height) / 2)',
   width: 44,
   height: 44,
-  transform: 'translate(-50%, calc(-50% - 5px))',
+  transform: 'translate(-50%, calc(-50% - 3px))',
   borderRadius: 'var(--radius-full)',
   border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
   background: 'var(--neutral-0)',
@@ -161,8 +161,8 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         style={{
           ...fabBaseStyle,
           transform: fabHovered
-            ? 'translate(-50%, calc(-50% - 5px)) scale(1.07)'
-            : 'translate(-50%, calc(-50% - 5px)) scale(1)',
+            ? 'translate(-50%, calc(-50% - 3px)) scale(1.07)'
+            : 'translate(-50%, calc(-50% - 3px)) scale(1)',
         }}
       >
         <Plus size={20} strokeWidth={2.4} />

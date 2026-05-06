@@ -127,12 +127,20 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-header-top-padding: max(var(--safe-top), 12px);
+  --mobile-header-content-height: 72px;
+  --mobile-header-row-min-height: 40px;
+  --mobile-header-bottom-padding: 10px;
+  --mobile-header-floating-gap: 16px;
+  --bottom-nav-visual-height: 56px;
+  --bottom-nav-safe-bottom: var(--safe-bottom);
+  --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom));
   --safe-top-offset: var(--safe-top);
   --safe-bottom-offset: var(--safe-bottom);
   --app-height: 100dvh;
-  --bottom-nav-height: 72px;
+  --bottom-nav-height: var(--bottom-nav-visual-height);
   --nav-base-height: var(--bottom-nav-height);
-  --nav-height: calc(var(--bottom-nav-height) + var(--safe-bottom));
+  --nav-height: var(--bottom-nav-total-height);
   --page-gutter: clamp(16px, 4.5vw, 24px);
   --page-max-width: 430px;
 }

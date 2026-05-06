@@ -36,11 +36,11 @@ export function PageHeader({
     <>
       <header
         style={{
-          paddingTop: 'calc(var(--safe-top) + var(--space-2))',
+          paddingTop: 'var(--mobile-header-top-padding)',
           paddingRight: 'var(--page-gutter)',
-          paddingBottom: 'var(--space-4)',
+          paddingBottom: 'var(--mobile-header-bottom-padding)',
           paddingLeft: 'var(--page-gutter)',
-          minHeight: 'calc(64px + var(--safe-top))',
+          minHeight: 'calc(var(--mobile-header-content-height) + var(--mobile-header-top-padding))',
           boxSizing: 'border-box',
           background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
           borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
@@ -48,7 +48,7 @@ export function PageHeader({
           zIndex: 120,
           isolation: 'isolate',
           overflow: 'visible',
-          marginBottom: headerSubtitle ? 0 : 'var(--space-6)',
+          marginBottom: headerSubtitle ? 0 : 'var(--mobile-header-floating-gap)',
         }}
       >
         <div
@@ -59,7 +59,7 @@ export function PageHeader({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'flex-start',
-            minHeight: 44,
+            minHeight: 'var(--mobile-header-row-min-height)',
           }}
         >
           <h1
@@ -152,7 +152,7 @@ export function PageHeader({
             position: 'absolute',
             left: '50%',
             bottom: 0,
-            transform: 'translate(-50%, 50%)',
+            transform: 'translate(-50%, 44%)',
             zIndex: 121,
             pointerEvents: 'auto',
           }}
