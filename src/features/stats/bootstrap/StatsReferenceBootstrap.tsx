@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { isStatsReferenceSnapshotStale } from '@/features/stats/store/statsReferenceStore'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 
 type StatsReferenceBootstrapProps = {
   userId: string | null
@@ -25,18 +24,7 @@ export function StatsReferenceBootstrap({ userId, enabled }: StatsReferenceBoots
 
     attemptedUsersRef.current.add(userId)
 
-    // Étape 1 : hydratation immédiate depuis le cache IndexedDB ou la DB
     void hydrateStatsReferenceData({ userId }).catch(() => {})
-
-    // Étape 2 : refresh analytics différé pour libérer la fenêtre initiale
-    // La page Home a ~3s pour charger ses données avant que le RPC lourd parte
-    const timer = setTimeout(() => {
-      void refreshBudgetAnalytics(userId)
-        .then(() => hydrateStatsReferenceData({ userId, force: true }))
-        .catch(() => {})
-    }, 3000)
-
-    return () => clearTimeout(timer)
   }, [enabled, hydrateStatsReferenceData, loading, snapshot, storeUserId, userId])
 
   useEffect(() => {

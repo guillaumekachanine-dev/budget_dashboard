@@ -209,8 +209,8 @@ async function fetchMonthlyReference(period: UsableStatsPeriod): Promise<StatsMo
     savingsBudgetVsActual,
   ] = await Promise.all([
     getBudgetBucketTotalsByPeriod(periodYear, periodMonth),
-    getBudgetGlobalVariableForPeriod(periodYear, periodMonth),
-    getExpenseBudgetTotalForPeriod(periodYear, periodMonth),
+    getBudgetGlobalVariableForPeriod(period.id),
+    getExpenseBudgetTotalForPeriod(period.id),
     getBudgetBucketVsActualByMonth(periodYear, periodMonth),
     getSavingsBudgetTotalsByPeriod(periodYear, periodMonth),
     getSavingsBudgetLinesByPeriod(periodYear, periodMonth),
@@ -357,8 +357,6 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
       }
 
       const usablePeriods = await getUsableStatsMonthlyPeriods(resolvedUserId, STATS_REFERENCE_YEAR)
-      console.info('[stats hydrate][temporary] getUsableStatsMonthlyPeriods result=', usablePeriods)
-
       if (usablePeriods.length === 0) {
         const latestPeriod = await getLatestUsableStatsPeriod(resolvedUserId)
         const selectedPeriod: StatsSelectedPeriod = latestPeriod
@@ -420,8 +418,6 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
       })
 
       const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
-      console.info('[stats hydrate][temporary] selectedPeriod final=', selectedPeriod)
-      console.info('[stats hydrate][temporary] monthlyReferences.length=', monthlyReferences.length)
       const monthlyEvolution2026 = await getMonthlyEvolution2026()
       const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
@@ -437,7 +433,6 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
         totalMonthlyNeed: displayData.totalMonthlyNeed,
         monthlyEvolution2026: buildMonthlyEvolution2026(monthlyEvolution2026),
       }
-      console.info('[stats hydrate][temporary] snapshot final=', snapshot)
 
       setState({
         snapshot,

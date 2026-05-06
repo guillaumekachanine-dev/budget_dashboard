@@ -1,7 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
+import { supabase } from '@/lib/supabase'
 import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
+import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { FlowType, Transaction } from '@/lib/types'
+
+async function refreshAndHydrate() {
+  const { data } = await supabase.auth.getSession()
+  const userId = data.session?.user?.id
+  if (userId) await refreshBudgetAnalytics(userId).catch(() => {})
+  await hydrateStatsReferenceData({ force: true }).catch(() => {})
+}
 
 interface TransactionFilters {
   accountId?: string | null
@@ -131,7 +140,7 @@ export function useAddTransaction() {
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void refreshAndHydrate()
     },
   })
 }
@@ -156,7 +165,7 @@ export function useUpdateTransaction() {
         void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       }
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void refreshAndHydrate()
     },
   })
 }
@@ -172,7 +181,7 @@ export function useDeleteTransaction() {
       // account_id inconnu après delete — invalidation large inévitable
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void refreshAndHydrate()
     },
   })
 }

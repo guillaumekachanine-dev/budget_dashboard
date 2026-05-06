@@ -54,8 +54,6 @@ export async function getUsableStatsMonthlyPeriods(userId: string, year = STATS_
     throw new Error(`getUsableStatsMonthlyPeriods failed: ${error.message}`)
   }
 
-  console.info('[stats periods][temporary] getUsableStatsMonthlyPeriods raw data=', data ?? [])
-
   const normalized = normalizePeriodRows((data ?? []) as BudgetBucketPeriodRow[])
   const periods = await Promise.all(normalized.map(async (period) => {
     const resolvedPeriod = await getBudgetPeriodByYearMonth(period.period_year, period.period_month)

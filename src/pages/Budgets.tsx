@@ -19,7 +19,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyRounded } from '@/lib/utils'
-import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
 import { supabase } from '@/lib/supabase'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { Transaction } from '@/lib/types'
@@ -655,7 +654,6 @@ export function Budgets() {
     () => (Array.isArray(budgetPayload?.history_last_6m) ? budgetPayload.history_last_6m : []),
     [budgetPayload],
   )
-  const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const categoryDonutRef = useRef<HTMLDivElement | null>(null)
   const blockDonutRef = useRef<HTMLDivElement | null>(null)
@@ -858,13 +856,6 @@ export function Budgets() {
   }, [cancelSmoothScroll])
 
   useEffect(() => () => cancelSmoothScroll(), [cancelSmoothScroll])
-
-  useEffect(() => {
-    if (import.meta.env.DEV && !debugRanRef.current) {
-      debugRanRef.current = true
-      void debugBudgetSupabaseConnection(supabase)
-    }
-  }, [])
 
   useEffect(() => {
     const categoryElement = categoryDonutRef.current
