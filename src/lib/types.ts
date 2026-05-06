@@ -417,6 +417,7 @@ export type Database = {
       savings_budget_vs_actual_by_period: { Row: SavingsBudgetVsActualByPeriodRow & Record<string, unknown>; Relationships: [] }
       v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
+      account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {

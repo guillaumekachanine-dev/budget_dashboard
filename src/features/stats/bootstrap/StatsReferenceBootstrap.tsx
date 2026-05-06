@@ -25,14 +25,18 @@ export function StatsReferenceBootstrap({ userId, enabled }: StatsReferenceBoots
 
     attemptedUsersRef.current.add(userId)
 
-    // Immediate hydration — shows data as fast as possible
+    // Étape 1 : hydratation immédiate depuis le cache IndexedDB ou la DB
     void hydrateStatsReferenceData({ userId }).catch(() => {})
 
-    // Background analytics refresh — re-hydrates with fresh data when done
-    // Runs concurrently; re-hydration is forced after refresh completes
-    void refreshBudgetAnalytics(userId)
-      .then(() => hydrateStatsReferenceData({ userId, force: true }))
-      .catch(() => {})
+    // Étape 2 : refresh analytics différé pour libérer la fenêtre initiale
+    // La page Home a ~3s pour charger ses données avant que le RPC lourd parte
+    const timer = setTimeout(() => {
+      void refreshBudgetAnalytics(userId)
+        .then(() => hydrateStatsReferenceData({ userId, force: true }))
+        .catch(() => {})
+    }, 3000)
+
+    return () => clearTimeout(timer)
   }, [enabled, hydrateStatsReferenceData, loading, snapshot, storeUserId, userId])
 
   useEffect(() => {

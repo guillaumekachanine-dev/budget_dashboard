@@ -19,9 +19,29 @@ interface UseTransactionsOptions {
   enabled?: boolean
 }
 
+// debugSource est exclu de la queryKey pour éviter des clés non-partageables
+function buildQueryKey(filters: TransactionFilters) {
+  return [
+    'transactions',
+    {
+      accountId: filters.accountId,
+      categoryId: filters.categoryId,
+      categoryIds: filters.categoryIds,
+      flowType: filters.flowType,
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      year: filters.year,
+      month: filters.month,
+    },
+  ] as const
+}
+
 function isValidUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
+
+const PAGE_SIZE = 1000
+const MAX_ROWS = 3000
 
 async function fetchTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
   if (filters.accountId === null) {
@@ -36,7 +56,6 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
     return []
   }
 
-  const PAGE_SIZE = 1000
   let query = budgetDb().from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
 
   if (filters.accountId) query = query.eq('account_id', filters.accountId)
@@ -65,7 +84,7 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
     const page = (data ?? []) as Transaction[]
     allRows.push(...page)
 
-    if (page.length < PAGE_SIZE) break
+    if (allRows.length >= MAX_ROWS || page.length < PAGE_SIZE) break
     from += PAGE_SIZE
   }
 
@@ -75,15 +94,30 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
 export function useTransactions(filters: TransactionFilters = {}, options: UseTransactionsOptions = {}) {
   const { enabled = true } = options
   return useQuery({
-    queryKey: ['transactions', filters],
+    queryKey: buildQueryKey(filters),
     queryFn: () => fetchTransactions(filters),
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
     enabled,
   })
 }
 
 export function useCurrentMonthTransactions(year: number, month: number) {
   return useTransactions({ year, month })
+}
+
+// Invalide uniquement les queries transactions concernées par le compte touché.
+// Les queries d'un autre compte (ex: Livret A après mutation sur compte courant)
+// ne sont pas re-fetchées inutilement.
+function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQueryClient>, accountId: string) {
+  void queryClient.invalidateQueries({
+    queryKey: ['transactions'],
+    predicate: (query) => {
+      const filters = query.queryKey[1] as Record<string, unknown> | undefined
+      if (!filters || typeof filters !== 'object') return true
+      if (typeof filters.accountId === 'string' && filters.accountId !== accountId) return false
+      return true
+    },
+  })
 }
 
 export function useAddTransaction() {
@@ -94,8 +128,8 @@ export function useAddTransaction() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    onSuccess: (_, txn) => {
+      invalidateTransactionsForAccount(queryClient, txn.account_id)
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void hydrateStatsReferenceData({ force: true }).catch(() => {})
     },
@@ -115,8 +149,12 @@ export function useUpdateTransaction() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    onSuccess: (updated) => {
+      if (updated?.account_id) {
+        invalidateTransactionsForAccount(queryClient, updated.account_id)
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      }
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void hydrateStatsReferenceData({ force: true }).catch(() => {})
     },
@@ -131,6 +169,7 @@ export function useDeleteTransaction() {
       if (error) throw error
     },
     onSuccess: () => {
+      // account_id inconnu après delete — invalidation large inévitable
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void hydrateStatsReferenceData({ force: true }).catch(() => {})

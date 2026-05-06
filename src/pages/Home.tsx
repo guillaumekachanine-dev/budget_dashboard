@@ -701,10 +701,10 @@ export function Home() {
   const selectedAccount = selectedAccountEntry?.account ?? null
   const { data: selectedAccountTxns } = useTransactions({
     accountId: selectedAccount?.id ?? null,
-    debugSource: 'Home:selectedAccountTxns',
+    startDate: '2024-01-01',
   })
-  const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null })
-  const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null })
+  const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
+  const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
   const isLivretA = selectedPresetId === 'livret_a'
   const isLDDS = selectedPresetId === 'ldds'

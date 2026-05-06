@@ -282,7 +282,6 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
   const { force = false } = options
   const task = (async () => {
     const resolvedUserId = await resolveCurrentUserId(options.userId)
-    console.info('[stats hydrate][temporary] resolvedUserId=', resolvedUserId)
 
     if (!resolvedUserId) {
       setState({
