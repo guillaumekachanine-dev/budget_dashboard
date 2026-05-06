@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { Budget2026Line } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
 import { getAnnual2026BudgetLines } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
 import {
@@ -294,112 +294,72 @@ function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2
   })
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Fetch function ───────────────────────────────────────────────────────────
 
-const INITIAL_STATE: Annual2026Analysis = {
-  loading: true,
-  error: null,
-  summary: null,
-  buckets: [],
-  categories: [],
-  insights: [],
-  optimizations: [],
-  monthlyProfile: [],
-  rawLines: [],
+type Annual2026QueryData = Omit<Annual2026Analysis, 'loading'> & { error: string | null }
+
+async function fetchAnnual2026Analysis(): Promise<Annual2026QueryData> {
+  let effectiveLines: Budget2026Line[]
+  let queryError: string | null = null
+
+  try {
+    const lines = await getAnnual2026BudgetLines()
+    // Si pas de lignes en DB, on utilise les données statiques comme fallback
+    effectiveLines = lines.length > 0 ? lines : STATIC_BUDGET_LINES
+  } catch (err) {
+    effectiveLines = STATIC_BUDGET_LINES
+    queryError = err instanceof Error ? `${err.message} (données statiques affichées)` : null
+  }
+
+  const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
+  const totalMonthlyNeed = totalMonthlyBudget + SAVINGS_MONTHLY
+
+  const summary: Annual2026Summary = {
+    totalMonthlyBudget,
+    totalSavingsBudget: SAVINGS_MONTHLY,
+    totalMonthlyNeed,
+    ytdMonths: YTD_MONTHS,
+    ytdBudgetTotal: totalMonthlyBudget * YTD_MONTHS,
+    ytdSavingsTotal: SAVINGS_MONTHLY * YTD_MONTHS,
+    ytdTotalNeed: totalMonthlyNeed * YTD_MONTHS,
+    coverageScore: Math.round(Math.min(100, (SAVINGS_MONTHLY / totalMonthlyNeed) * 100 * 7)),
+  }
+
+  const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
+  const categories = buildCategories(effectiveLines, totalMonthlyBudget)
+
+  return {
+    error: queryError,
+    summary,
+    buckets,
+    categories,
+    insights: buildInsights(effectiveLines, buckets, categories, summary),
+    optimizations: buildOptimizations(buckets, categories),
+    monthlyProfile: buildMonthlyProfile(buckets),
+    rawLines: effectiveLines,
+  }
 }
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useAnnual2026Analysis(): Annual2026Analysis {
-  const [state, setState] = useState<Annual2026Analysis>(INITIAL_STATE)
+  const query = useQuery({
+    queryKey: ['annual-2026-analysis'],
+    queryFn: fetchAnnual2026Analysis,
+    staleTime: 15 * 60_000,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setState((prev) => ({ ...prev, loading: true, error: null }))
-
-      try {
-        const lines = await getAnnual2026BudgetLines()
-
-        if (cancelled) return
-
-        // Si pas de lignes en DB (table inexistante), on utilise les données
-        // statiques issues du JSON source comme fallback de démonstration
-        const effectiveLines: Budget2026Line[] = lines.length > 0 ? lines : STATIC_BUDGET_LINES
-
-        const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
-        const totalMonthlyNeed = totalMonthlyBudget + SAVINGS_MONTHLY
-
-        const summary: Annual2026Summary = {
-          totalMonthlyBudget,
-          totalSavingsBudget: SAVINGS_MONTHLY,
-          totalMonthlyNeed,
-          ytdMonths: YTD_MONTHS,
-          ytdBudgetTotal: totalMonthlyBudget * YTD_MONTHS,
-          ytdSavingsTotal: SAVINGS_MONTHLY * YTD_MONTHS,
-          ytdTotalNeed: totalMonthlyNeed * YTD_MONTHS,
-          coverageScore: Math.round(Math.min(100, (SAVINGS_MONTHLY / totalMonthlyNeed) * 100 * 7)),
-        }
-
-        const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
-        const categories = buildCategories(effectiveLines, totalMonthlyBudget)
-        const insights = buildInsights(effectiveLines, buckets, categories, summary)
-        const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(buckets)
-
-        setState({
-          loading: false,
-          error: null,
-          summary,
-          buckets,
-          categories,
-          insights,
-          optimizations,
-          monthlyProfile,
-          rawLines: effectiveLines,
-        })
-      } catch (err) {
-        if (cancelled) return
-        // Fallback sur données statiques en cas d'erreur Supabase
-        const effectiveLines = STATIC_BUDGET_LINES
-        const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
-        const totalMonthlyNeed = totalMonthlyBudget + SAVINGS_MONTHLY
-
-        const summary: Annual2026Summary = {
-          totalMonthlyBudget,
-          totalSavingsBudget: SAVINGS_MONTHLY,
-          totalMonthlyNeed,
-          ytdMonths: YTD_MONTHS,
-          ytdBudgetTotal: totalMonthlyBudget * YTD_MONTHS,
-          ytdSavingsTotal: SAVINGS_MONTHLY * YTD_MONTHS,
-          ytdTotalNeed: totalMonthlyNeed * YTD_MONTHS,
-          coverageScore: Math.round(Math.min(100, (SAVINGS_MONTHLY / totalMonthlyNeed) * 100 * 7)),
-        }
-
-        const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
-        const categories = buildCategories(effectiveLines, totalMonthlyBudget)
-        const insights = buildInsights(effectiveLines, buckets, categories, summary)
-        const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(buckets)
-
-        setState({
-          loading: false,
-          error: err instanceof Error ? `${err.message} (données statiques affichées)` : null,
-          summary,
-          buckets,
-          categories,
-          insights,
-          optimizations,
-          monthlyProfile,
-          rawLines: effectiveLines,
-        })
-      }
-    }
-
-    void load()
-    return () => { cancelled = true }
-  }, [])
-
-  return state
+  return {
+    loading: query.isPending,
+    error: query.data?.error ?? null,
+    summary: query.data?.summary ?? null,
+    buckets: query.data?.buckets ?? [],
+    categories: query.data?.categories ?? [],
+    insights: query.data?.insights ?? [],
+    optimizations: query.data?.optimizations ?? [],
+    monthlyProfile: query.data?.monthlyProfile ?? [],
+    rawLines: query.data?.rawLines ?? [],
+  }
 }
 
 // ─── Données statiques fallback (source: JSON export) ─────────────────────────
