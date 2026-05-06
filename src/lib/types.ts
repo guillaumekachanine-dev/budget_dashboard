@@ -350,6 +350,49 @@ export interface SavingsBudgetVsActualByPeriodRow {
   delta_savings_amount_eur: number | null
 }
 
+export interface SavingsCurrentSummaryRow {
+  user_id: string | null
+  total_savings: number | null
+  livrets_total: number | null
+  placements_total: number | null
+  liquid_savings_total: number | null
+  locked_savings_total: number | null
+  accounts_count: number | null
+  livrets_share_pct: number | null
+  placements_share_pct: number | null
+  liquid_share_pct: number | null
+  locked_share_pct: number | null
+}
+
+export interface SavingsMonthlyMetricsRow {
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  saved_amount: number | null
+  transfer_count: number | null
+  destination_count: number | null
+  income_total: number | null
+  savings_rate_on_income_pct: number | null
+  savings_budget_total: number | null
+  global_budget_total: number | null
+  savings_share_of_budget_pct: number | null
+  savings_rolling_avg_3m: number | null
+  savings_rolling_avg_6m: number | null
+  annualized_savings_speed_3m: number | null
+  ytd_saved_amount: number | null
+}
+
+export interface SavingsDestinationBreakdownViewRow {
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  destination_family: string | null
+  destination_label: string | null
+  saved_amount: number | null
+  transfer_count: number | null
+  avg_transfer_amount: number | null
+}
+
 export interface MonthlyBucketActualsCleanRow {
   user_id: string | null
   month_start: string | null
@@ -415,6 +458,9 @@ export type Database = {
       savings_budget_totals_by_period: { Row: SavingsBudgetTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_lines_by_period: { Row: SavingsBudgetLinesByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_vs_actual_by_period: { Row: SavingsBudgetVsActualByPeriodRow & Record<string, unknown>; Relationships: [] }
+      v_savings_current_summary: { Row: SavingsCurrentSummaryRow & Record<string, unknown>; Relationships: [] }
+      v_savings_monthly_metrics: { Row: SavingsMonthlyMetricsRow & Record<string, unknown>; Relationships: [] }
+      v_savings_destination_breakdown: { Row: SavingsDestinationBreakdownViewRow & Record<string, unknown>; Relationships: [] }
       v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
@@ -435,6 +481,14 @@ export type Database = {
           p_period_year: number
           p_period_month: number
         }
+        Returns: Record<string, unknown>
+      }
+      get_financial_security_payload: {
+        Args: Record<string, never>
+        Returns: Record<string, unknown>
+      }
+      get_optimization_capacity_payload: {
+        Args: { p_year: number }
         Returns: Record<string, unknown>
       }
       refresh_budget_analytics: {

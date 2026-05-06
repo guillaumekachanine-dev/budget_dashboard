@@ -14,6 +14,10 @@ import { Annual2026Optimization } from '@/features/annual-analysis/components/An
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
+import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
+import { SavingsInsightsSection } from '@/features/savings/components/SavingsInsightsSection'
+import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
+import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 
@@ -23,6 +27,7 @@ type StatsTabConfig = {
   label: string
   iconSrc: string
 }
+type SavingsAnalyticsYear = 2026 | 2025
 
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
@@ -30,6 +35,7 @@ const STATS_TABS: StatsTabConfig[] = [
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
+const SAVINGS_ANALYTICS_YEARS: SavingsAnalyticsYear[] = [2026, 2025]
 
 export function Stats() {
   const {
@@ -44,6 +50,7 @@ export function Stats() {
   const annual2026 = useAnnual2026Analysis()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2026')
+  const [selectedSavingsYear, setSelectedSavingsYear] = useState<SavingsAnalyticsYear>(2026)
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
   const hasAppliedDefaultPeriodRef = useRef(false)
@@ -246,24 +253,65 @@ export function Stats() {
 
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-          {annual2026.optimizations.length > 0 && annual2026.summary ? (
-            <Annual2026Optimization
-              scenarios={annual2026.optimizations}
-              totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
-              totalSavings={annual2026.summary.totalSavingsBudget}
-            />
-          ) : (
-            <section style={{ padding: '0 var(--space-6)' }}>
-              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
-                Aucun scénario d’optimisation disponible.
-              </div>
-            </section>
-          )}
+          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+            <StatsOptimizationsTab />
+
+            {annual2026.optimizations.length > 0 && annual2026.summary ? (
+              <Annual2026Optimization
+                scenarios={annual2026.optimizations}
+                totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
+                totalSavings={annual2026.summary.totalSavingsBudget}
+              />
+            ) : (
+              <section style={{ padding: '0 var(--space-6)' }}>
+                <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
+                  Aucun scénario d’optimisation disponible.
+                </div>
+              </section>
+            )}
+          </div>
         </motion.div>
       ) : null}
 
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <SavingsHeroCard />
+          <section style={{ padding: '0 var(--space-6)' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', borderRadius: 'var(--radius-full)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)' }}>
+                {SAVINGS_ANALYTICS_YEARS.map((year) => {
+                  const isActive = selectedSavingsYear === year
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => setSelectedSavingsYear(year)}
+                      aria-pressed={isActive}
+                      style={{
+                        border: 'none',
+                        borderRadius: 'var(--radius-full)',
+                        minHeight: 30,
+                        padding: '0 12px',
+                        background: isActive ? 'var(--primary-500)' : 'transparent',
+                        color: isActive ? 'var(--neutral-0)' : 'var(--neutral-700)',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)',
+                        fontFamily: 'var(--font-mono)',
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-base)',
+                      }}
+                    >
+                      {year}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+
+          <SavingsInsightsSection year={selectedSavingsYear} />
+          <FinancialSecurityCard />
+
           {snapshot ? (
             <>
               <StatsSavingsCard

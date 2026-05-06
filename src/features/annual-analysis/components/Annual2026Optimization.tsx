@@ -8,6 +8,7 @@
  *  - Barre de progression "horizon annuel"
  */
 import type { Budget2026OptimizationScenario } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import { useState } from 'react'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
@@ -19,6 +20,7 @@ type Props = {
 }
 
 export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSavings }: Props) {
+  const [showDetailedScenarios, setShowDetailedScenarios] = useState(false)
   if (scenarios.length === 0) return null
 
   const totalOptimizableSavings = scenarios.reduce((s, sc) => s + sc.monthlySaving, 0)
@@ -44,24 +46,58 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
           currentSavings={totalSavings}
         />
 
-        {/* ── Scénarios individuels ── */}
+        {/* ── Section repliable (en bas, fermée par défaut) ── */}
         <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>Scénarios par bucket</h3>
-          <p style={cardSubStyle}>Simulation réduction sur buckets pilotables</p>
+          <button
+            type="button"
+            onClick={() => setShowDetailedScenarios((current) => !current)}
+            aria-expanded={showDetailedScenarios}
+            style={{
+              width: '100%',
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-3)',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <div>
+              <h3 style={cardTitleStyle}>Détails des leviers</h3>
+              <p style={cardSubStyle}>Scénarios par bucket · Vision horizon annuel</p>
+            </div>
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--primary-600)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)' }}>
+              {showDetailedScenarios ? 'Masquer' : 'Afficher'}
+            </span>
+          </button>
 
-          <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-4)' }}>
-            {scenarios.map((sc, i) => (
-              <OptimizationScenarioRow key={sc.bucket} scenario={sc} index={i} totalMonthly={totalMonthlyBudget} />
-            ))}
-          </div>
+          {showDetailedScenarios ? (
+            <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-4)' }}>
+              <div style={{ borderTop: '1px solid var(--neutral-150)', paddingTop: 'var(--space-4)' }}>
+                <h3 style={cardTitleStyle}>Scénarios par bucket</h3>
+                <p style={cardSubStyle}>Simulation réduction sur buckets pilotables</p>
+
+                <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-4)' }}>
+                  {scenarios.map((sc, i) => (
+                    <OptimizationScenarioRow key={sc.bucket} scenario={sc} index={i} totalMonthly={totalMonthlyBudget} />
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--neutral-150)', paddingTop: 'var(--space-4)' }}>
+                <AnnualVisionCard
+                  currentSavings={totalSavings * 12}
+                  potentialExtra={totalAnnualPotential}
+                  scenarios={scenarios}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
-
-        {/* ── Vision annuelle ── */}
-        <AnnualVisionCard
-          currentSavings={totalSavings * 12}
-          potentialExtra={totalAnnualPotential}
-          scenarios={scenarios}
-        />
       </div>
     </section>
   )
