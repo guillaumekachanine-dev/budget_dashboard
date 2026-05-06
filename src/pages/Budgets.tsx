@@ -44,6 +44,7 @@ import blockVariableIcon from '@/assets/icons/blocks/variable.png'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
+import blockRevenusIcon from '@/assets/icons/blocks/revenus.png'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -245,6 +246,14 @@ const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> 
   { id: 'provision', label: 'Provision', color: 'var(--viz-d)' },
 ]
 
+const BLOCK_LIST_ORDER: BudgetBlockId[] = [
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+  'epargne',
+]
+
 const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
   socle_fixe: '#5B57F5',
   variable_essentielle: '#2ED47A',
@@ -268,8 +277,9 @@ const BUCKET_SCOPE_ICON_SRC: Record<string, string> = {
   variable_essentielle: blockVariableIcon,
   provision: blockProvisionsIcon,
   discretionnaire: blockDiscretionnaireIcon,
+  epargne: blockEpargneIcon,
+  revenu: blockRevenusIcon,
   cagnotte_projet: blockEpargneIcon,
-  hors_pilotage: blockProvisionsIcon,
 }
 
 function accentFromLabel(label: string | null | undefined): string {
@@ -921,11 +931,13 @@ export function Budgets() {
   const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const slideThreeBlockOptions = useMemo(
-    () => BUCKET_ORDER.map((bucketKey) => ({
-      id: bucketKey,
-      label: BUCKET_LABELS[bucketKey] ?? bucketKey,
-      iconSrc: BUCKET_SCOPE_ICON_SRC[bucketKey] ?? blockProvisionsIcon,
-    })),
+    () => BUCKET_ORDER
+      .filter((bucketKey) => bucketKey !== 'hors_pilotage')
+      .map((bucketKey) => ({
+        id: bucketKey,
+        label: BUCKET_LABELS[bucketKey] ?? bucketKey,
+        iconSrc: BUCKET_SCOPE_ICON_SRC[bucketKey] ?? blockProvisionsIcon,
+      })),
     [],
   )
   const slideThreeSelectedScopeMeta = useMemo(() => {
@@ -1394,6 +1406,20 @@ export function Budgets() {
     () => blockPieData.reduce((sum, row) => sum + row.value, 0),
     [blockPieData],
   )
+  const blockRowsForList = useMemo(() => {
+    const rank = new Map<BudgetBlockId, number>(BLOCK_LIST_ORDER.map((id, index) => [id, index]))
+    return [...blockRows].sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99))
+  }, [blockRows])
+  const revenueListAmount = useMemo(() => {
+    const revenueRows = payloadByCategory.filter((row) => row.budget_bucket === 'revenu')
+    const budgetRevenue = revenueRows.reduce((sum, row) => sum + Number(row.budget_amount ?? 0), 0)
+    const payloadActualRevenue = revenueRows.reduce((sum, row) => sum + Number(row.actual_amount ?? 0), 0)
+    const txActualRevenue = (periodTxns ?? [])
+      .filter((tx) => tx.flow_type === 'income')
+      .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0)
+    const actualRevenue = payloadActualRevenue > 0 ? payloadActualRevenue : txActualRevenue
+    return dataDisplayMode === 'budget' ? budgetRevenue : actualRevenue
+  }, [dataDisplayMode, payloadByCategory, periodTxns])
   const selectedBlock = useMemo(
     () => (selectedBlockId ? blockRows.find((row) => row.id === selectedBlockId) ?? null : null),
     [selectedBlockId, blockRows],
@@ -1445,6 +1471,7 @@ export function Budgets() {
   const showExtendedSlides = isRootMode
   const slideCount = showExtendedSlides ? 3 : 2
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
+  const isSlideThreeMetricsMode = showExtendedSlides && activeSlide === 2
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
   const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
@@ -1599,7 +1626,23 @@ export function Budgets() {
         titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
         onTitleClick={handleHeaderTitleReset}
         actionIcon={
-          isBlockMode && selectedBlockPage
+          isSlideThreeMetricsMode
+            ? (
+              slideThreeSelectedScopeMeta.iconType === 'block'
+                ? (
+                  <img
+                    src={slideThreeSelectedScopeMeta.iconSrc ?? blockProvisionsIcon}
+                    alt={`Icône ${slideThreeSelectedScopeMeta.label}`}
+                    width={28}
+                    height={28}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ display: 'block', objectFit: 'contain' }}
+                  />
+                  )
+                : <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={28} />
+            )
+            : isBlockMode && selectedBlockPage
             ? (
               <img
                 src={BLOCK_ICON_SRC[selectedBlockPage.id]}
@@ -1615,9 +1658,15 @@ export function Budgets() {
               ? <Search size={24} />
               : <CategoryIcon iconKey={selectedCatInfo?.icon_key} label={selectedCatInfo?.name} size={28} />
         }
-        actionAriaLabel="Choisir une catégorie"
+        actionAriaLabel={isSlideThreeMetricsMode ? 'Choisir un bloc ou une catégorie' : 'Choisir une catégorie'}
         onActionClick={() => {
           setShowHeaderPeriodMenu(false)
+          if (isSlideThreeMetricsMode) {
+            setShowCatSheet(false)
+            setShowSlideThreeScopeSheet((current) => !current)
+            return
+          }
+          setShowSlideThreeScopeSheet(false)
           setShowCatSheet((current) => !current)
         }}
         rightSlot={(
@@ -1723,10 +1772,7 @@ export function Budgets() {
             ) : activeSlide === 2 ? (
               <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSlideThreeScopeSheet(true)}
-                    aria-label="Choisir un bloc ou une catégorie"
+                  <label
                     style={{
                       border: '1px solid var(--neutral-200)',
                       background: 'var(--neutral-0)',
@@ -1746,14 +1792,41 @@ export function Budgets() {
                       position: 'relative',
                     }}
                   >
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1, color: 'var(--neutral-600)' }}>bloc/catégorie</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.2, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {slideThreeSelectedScopeMeta.label}
-                    </span>
+                    <select
+                      aria-label="Choisir une période"
+                      value={slideThreePeriod}
+                      onChange={(event) => setSlideThreePeriod(event.target.value)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--neutral-700)',
+                        fontSize: 'var(--font-size-sm)',
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        lineHeight: 1.1,
+                        width: '100%',
+                        textAlign: 'center',
+                        textAlignLast: 'center',
+                        outline: 'none',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        cursor: 'pointer',
+                        paddingRight: 12,
+                        paddingLeft: 8,
+                      }}
+                    >
+                      {slideThreePeriods.map((periodOption) => (
+                        <option key={periodOption} value={periodOption}>{periodOption}</option>
+                      ))}
+                    </select>
                     <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
-                  </button>
-
-                  <label
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSlideThreeDisplayMode((current) => (current === 'tableau' ? 'graphique' : 'tableau'))}
+                    aria-label="Basculer le mode d'affichage"
+                    aria-pressed={slideThreeDisplayMode === 'graphique'}
                     style={{
                       border: '1px solid var(--neutral-200)',
                       background: 'var(--neutral-0)',
@@ -1770,73 +1843,13 @@ export function Budgets() {
                       width: slideThreeParamCardWidth,
                       minHeight: 48,
                       cursor: 'pointer',
+                      position: 'relative',
                     }}
                   >
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1, color: 'var(--neutral-600)' }}>période</span>
-                    <select
-                      aria-label="Choisir une période"
-                      value={slideThreePeriod}
-                      onChange={(event) => setSlideThreePeriod(event.target.value)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--neutral-700)',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        fontFamily: 'var(--font-mono)',
-                        lineHeight: 1.2,
-                        width: '100%',
-                        textAlign: 'center',
-                        textAlignLast: 'center',
-                        outline: 'none',
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none',
-                        cursor: 'pointer',
-                        paddingRight: 12,
-                      }}
-                    >
-                      {slideThreePeriods.map((periodOption) => (
-                        <option key={periodOption} value={periodOption}>{periodOption}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', padding: 2, background: 'var(--neutral-0)' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSlideThreeDisplayMode('tableau')}
-                    aria-pressed={slideThreeDisplayMode === 'tableau'}
-                    style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '6px 10px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: slideThreeDisplayMode === 'tableau' ? 'var(--primary-500)' : 'transparent',
-                      color: slideThreeDisplayMode === 'tableau' ? 'var(--neutral-0)' : 'var(--neutral-600)',
-                    }}
-                  >
-                    tableau
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSlideThreeDisplayMode('graphique')}
-                    aria-pressed={slideThreeDisplayMode === 'graphique'}
-                    style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '6px 10px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: slideThreeDisplayMode === 'graphique' ? 'var(--primary-500)' : 'transparent',
-                      color: slideThreeDisplayMode === 'graphique' ? 'var(--neutral-0)' : 'var(--neutral-600)',
-                    }}
-                  >
-                    graphique
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
+                      {slideThreeDisplayMode}
+                    </span>
+                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
                   </button>
                 </div>
               </div>
@@ -2588,7 +2601,7 @@ export function Budgets() {
                 Répartition par blocs
               </h3>
               <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
-		              {blockRows.map((row) => {
+		              {blockRowsForList.map((row) => {
 		                const budgetAmount = Number(row.budgetAmount ?? 0)
 		                const actualAmount = Number(row.actualAmount ?? 0)
 		                const consumptionRatio = budgetAmount > 0 ? actualAmount / budgetAmount : 0
@@ -2655,6 +2668,49 @@ export function Budgets() {
 		                  </button>
 		                )
 		              })}
+                <div
+                  style={{
+                    marginTop: 'var(--space-2)',
+                    paddingTop: 'var(--space-5)',
+                    borderTop: '1px solid var(--neutral-300)',
+                    display: 'grid',
+                    gridTemplateColumns: '56px 1fr',
+                    gap: 'var(--space-5)',
+                    minWidth: 0,
+                    width: '100%',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 56,
+                        height: 56,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)',
+                        color: 'var(--primary-600)',
+                      }}
+                    >
+                      <ArrowUp size={22} />
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        Revenus
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                        {formatMoney(revenueListAmount)}
+                      </p>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                      Hors blocs de pilotage budget
+                    </p>
+                  </div>
+                </div>
               </div>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
@@ -2859,12 +2915,12 @@ export function Budgets() {
                 top: 0,
                 zIndex: 69,
                 width: 'auto',
-                maxWidth: 420,
+                maxWidth: 400,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
-                maxHeight: '78dvh',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-4)',
+                maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
@@ -3007,6 +3063,30 @@ export function Budgets() {
               <div style={{ overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        scrollViewportToTop()
+                        setSelectedCat('all')
+                        setShowCatSheet(false)
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '6px 4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 5,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>
+                        Toutes
+                      </span>
+                    </button>
+
                     {rootExpenseCategories.map((cat) => (
                       <button
                         key={cat.id}
@@ -3031,31 +3111,6 @@ export function Budgets() {
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
                       </button>
                     ))}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        scrollViewportToTop()
-                        setSelectedCat('all')
-                        setShowCatSheet(false)
-                      }}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '6px 4px',
-                        minWidth: 88,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 5,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                    </button>
                   </div>
                 </div>
               </div>

@@ -99,11 +99,43 @@ function plannedBudgetBucketLabel(bucket?: string | null): string {
   return '—'
 }
 
+function normalizePlannedIconKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’]/g, '_')
+    .replace(/&/g, 'et')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .toLowerCase()
+}
+
 function plannedOperationIconKey(item: PlannedOperationItem): string | null {
+  const candidates: string[] = []
   if (item.parent_category_name && item.category_name) {
-    return `${item.parent_category_name}_${item.category_name}`
+    candidates.push(`${item.parent_category_name}_${item.category_name}`)
   }
-  return item.category_name ?? item.parent_category_name ?? null
+  if (item.category_name) candidates.push(item.category_name)
+  if (item.parent_category_name) candidates.push(item.parent_category_name)
+  if (item.label) candidates.push(item.label)
+
+  if (!candidates.length) return null
+
+  const iconAliases: Record<string, string> = {
+    frais_bancaires_impots_frais_bancaires: 'taxes_frais_frais_bancaires',
+    frais_bancaires: 'taxes_frais_frais_bancaires',
+    cotisations_bancaires: 'taxes_frais_frais_bancaires',
+    loyer_credit: 'logement_loyer_credit',
+    virement_loyer: 'logement_loyer_credit',
+  }
+
+  for (const candidate of candidates) {
+    const normalized = normalizePlannedIconKey(candidate)
+    if (iconAliases[normalized]) return iconAliases[normalized]
+  }
+
+  return candidates[0]
 }
 
 type PlannedImpactDetail = {
