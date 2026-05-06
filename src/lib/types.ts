@@ -350,6 +350,29 @@ export interface SavingsBudgetVsActualByPeriodRow {
   delta_savings_amount_eur: number | null
 }
 
+export interface MonthlyBucketActualsCleanRow {
+  user_id: string | null
+  month_start: string | null
+  budget_bucket: string | null
+  transaction_count: number | null
+  revenue_amount: number | null
+  net_amount: number | null
+}
+
+export interface BudgetTransactionsEnrichedRow {
+  id: string | null
+  user_id: string | null
+  account_id: string | null
+  transaction_date: string | null
+  amount: number | null
+  pilotage_amount: number | null
+  normalized_label: string | null
+  raw_label: string | null
+  mapped_category_name: string | null
+  mapped_parent_category_name: string | null
+  mapped_budget_bucket: string | null
+}
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>
   Insert: Insert & Record<string, unknown>
@@ -392,6 +415,8 @@ export type Database = {
       savings_budget_totals_by_period: { Row: SavingsBudgetTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_lines_by_period: { Row: SavingsBudgetLinesByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_vs_actual_by_period: { Row: SavingsBudgetVsActualByPeriodRow & Record<string, unknown>; Relationships: [] }
+      v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
+      v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {

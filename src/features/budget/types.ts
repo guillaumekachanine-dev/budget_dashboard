@@ -168,3 +168,40 @@ export interface BudgetPagePayload {
   by_category: BudgetPageCategoryRow[]
   history_last_6m: BudgetPageHistoryRow[]
 }
+
+export interface BudgetRevenueMonthlyPoint {
+  month_start: string
+  revenue_amount: number
+  transaction_count: number
+}
+
+export interface BudgetRevenueSource {
+  source_name: string
+  parent_source_name: string | null
+  total_amount: number
+  transaction_count: number
+  avg_amount: number
+  last_transaction_date: string | null
+}
+
+export interface BudgetRevenueTransaction {
+  id: string
+  transaction_date: string
+  label: string
+  category_name: string | null
+  parent_category_name: string | null
+  amount: number
+  pilotage_amount: number
+}
+
+export interface BudgetRevenueAnalytics {
+  selectedMonthRevenue: number
+  selectedMonthTransactionCount: number
+  avgMonthlyRevenue2025_2026: number
+  avgMonthlyRevenueLast6M: number
+  maxMonthlyRevenue: number
+  minMonthlyRevenue: number
+  monthlySeries: BudgetRevenueMonthlyPoint[]
+  bySource: BudgetRevenueSource[]
+  lastTransactions: BudgetRevenueTransaction[]
+}

@@ -31,6 +31,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
 import {
@@ -66,6 +67,8 @@ interface PieDatum {
 }
 
 type BudgetBlockId = 'socle_fixe' | 'variable_essentielle' | 'discretionnaire' | 'epargne' | 'provision' | 'cagnotte'
+const REVENUE_BLOCK_PAGE_ID = 'revenu' as const
+type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 
 interface BudgetBlockLineItem {
   id: string
@@ -104,18 +107,13 @@ interface CategoryBarRow {
   displayAmount: number
 }
 
-interface DonutCallout {
+interface PieSegmentCallout {
   id: string
-  name: string
-  x0: number
-  y0: number
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-  labelX: number
-  labelY: number
-  textAnchor: 'start' | 'end'
+  text: string
+  color: string
+  pillX: number
+  pillY: number
+  pillWidth: number
 }
 
 type PieInteractionPayload = Partial<PieDatum> & { payload?: Partial<PieDatum> }
@@ -161,6 +159,22 @@ function formatTxDateDayMonth(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '--/--'
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
+
+function formatTxDateFrench(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+function formatMonthYearFrench(monthStart: string | null | undefined): string {
+  if (!monthStart) return '—'
+  const d = new Date(`${monthStart.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d
+    .toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+    .replace('.', '')
 }
 
 function formatCategoryModalLabel(name: string): string {
@@ -319,6 +333,101 @@ function formatBudgetBucketLabel(bucket: string | null | undefined): string {
   return bucket
 }
 
+function truncateCalloutLabel(value: string, maxLength = 14): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, Math.max(1, maxLength - 1)).trim()}…`
+}
+
+function formatCalloutLabel(value: string): string {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (normalized === 'variable essentielle') return 'Variable'
+  if (normalized === 'discretionnaire') return 'Discret.'
+  return value
+}
+
+function buildSegmentCallouts(
+  items: PieDatum[],
+  total: number,
+  size: { width: number; height: number },
+  options: { maxVisible?: number; cyRatio?: number; outerRadius?: number } = {},
+): PieSegmentCallout[] {
+  if (total <= 0 || !items.length || size.width <= 0 || size.height <= 0) return []
+
+  const maxVisible = options.maxVisible ?? 5
+  const cyRatio = options.cyRatio ?? 0.46
+  const outerRadius = options.outerRadius ?? 124
+  const entries = items.filter((item) => (item.value / total) > 0.10).slice(0, maxVisible)
+  const cx = size.width * 0.5
+  const cy = size.height * cyRatio
+  const anchorRadius = outerRadius - 4
+  const outsideOffset = Math.max(6, Math.min(10, size.width * 0.025))
+  const margin = 8
+  const radian = Math.PI / 180
+  const pillHeight = 20
+  const verticalGap = 4
+
+  let cumulativeRatio = 0
+
+  const raw = entries.map((entry) => {
+    const ratio = entry.value / total
+    const pct = Math.max(1, Math.round(ratio * 100))
+    const rawLabel = `${truncateCalloutLabel(formatCalloutLabel(entry.name))} ${pct}%`
+    const textWidth = Math.max(48, rawLabel.length * 6.1)
+    const pillWidth = textWidth + 16
+
+    const midAngle = 90 - (cumulativeRatio + ratio / 2) * 360
+    cumulativeRatio += ratio
+
+    const cos = Math.cos(-midAngle * radian)
+    const sin = Math.sin(-midAngle * radian)
+    const anchorX = cx + anchorRadius * cos
+    const anchorY = cy + anchorRadius * sin
+    const isRightSide = anchorX >= cx
+    const pillXRaw = isRightSide
+      ? anchorX + outsideOffset
+      : anchorX - pillWidth - outsideOffset
+    const pillX = Math.max(margin, Math.min(pillXRaw, size.width - pillWidth - margin))
+    const pillY = Math.max(margin, Math.min(anchorY - pillHeight / 2, size.height - pillHeight - margin))
+
+    return {
+      id: entry.id,
+      text: rawLabel,
+      color: entry.color,
+      pillX,
+      pillY,
+      pillWidth,
+      side: isRightSide ? 'right' : 'left' as const,
+    }
+  })
+
+  const adjustStack = (itemsToAdjust: Array<(typeof raw)[number]>) => {
+    const ordered = [...itemsToAdjust].sort((a, b) => a.pillY - b.pillY)
+    for (let i = 1; i < ordered.length; i += 1) {
+      const prev = ordered[i - 1]
+      const current = ordered[i]
+      const minY = prev.pillY + pillHeight + verticalGap
+      if (current.pillY < minY) current.pillY = minY
+    }
+    for (let i = ordered.length - 2; i >= 0; i -= 1) {
+      const next = ordered[i + 1]
+      const current = ordered[i]
+      const maxY = next.pillY - pillHeight - verticalGap
+      if (current.pillY > maxY) current.pillY = maxY
+    }
+    for (const item of ordered) {
+      item.pillY = Math.max(margin, Math.min(item.pillY, size.height - pillHeight - margin))
+    }
+  }
+
+  adjustStack(raw.filter((item) => item.side === 'left'))
+  adjustStack(raw.filter((item) => item.side === 'right'))
+
+  return raw.map(({ side: _side, ...item }) => item)
+}
+
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
   if (!active || !payload?.length) return null
   const amount = Number(payload[0]?.value ?? 0)
@@ -467,8 +576,9 @@ export function Budgets() {
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
   const selectedBlockQuery = searchParams.get('block')
-  const selectedBlockPageId = useMemo<BudgetBlockId | null>(() => {
+  const selectedBlockPageId = useMemo<BlockPageId | null>(() => {
     if (!selectedBlockQuery) return null
+    if (selectedBlockQuery === REVENUE_BLOCK_PAGE_ID) return REVENUE_BLOCK_PAGE_ID
     return BUDGET_BLOCKS.some((block) => block.id === selectedBlockQuery)
       ? (selectedBlockQuery as BudgetBlockId)
       : null
@@ -498,6 +608,11 @@ export function Budgets() {
     periodMonth: selectedPeriodMonth,
     monthsBack: 6,
   })
+  const {
+    loading: revenueAnalyticsLoading,
+    error: revenueAnalyticsError,
+    data: revenueAnalytics,
+  } = useBudgetRevenueAnalytics(selectedPeriodYear, selectedPeriodMonth)
   const payloadByBucket = useMemo(() => {
     const rows = Array.isArray(budgetPayload?.by_bucket) ? budgetPayload.by_bucket : []
     return rows.reduce<Record<string, (typeof rows)[number]>>((acc, row) => {
@@ -513,7 +628,12 @@ export function Budgets() {
     console.log('[Budget Mapping Check] by_bucket keys', Object.keys(payloadByBucket))
     console.log('[Budget Mapping Check] epargne', payloadByBucket.epargne)
     console.log('[Budget Mapping Check] provision', payloadByBucket.provision)
-  }, [budgetPayload])
+  }, [budgetPayload, payloadByBucket])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.log('[BudgetRevenueAnalytics]', revenueAnalytics)
+  }, [revenueAnalytics])
 
   const visibleBudgetBuckets = useMemo(
     () => PILOTAGE_BUCKET_ORDER.map((bucket) => ({
@@ -537,8 +657,10 @@ export function Budgets() {
   )
   const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
-  const donutAreaRef = useRef<HTMLDivElement | null>(null)
-  const [donutAreaSize, setDonutAreaSize] = useState({ width: 0, height: 0 })
+  const categoryDonutRef = useRef<HTMLDivElement | null>(null)
+  const blockDonutRef = useRef<HTMLDivElement | null>(null)
+  const [categoryDonutSize, setCategoryDonutSize] = useState({ width: 0, height: 0 })
+  const [blockDonutSize, setBlockDonutSize] = useState({ width: 0, height: 0 })
   const dragStartXRef = useRef<number | null>(null)
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -568,7 +690,7 @@ export function Budgets() {
     setSearchParams(nextParams, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const setSelectedBlockPage = useCallback((nextBlockId: BudgetBlockId | null) => {
+  const setSelectedBlockPage = useCallback((nextBlockId: BlockPageId | null) => {
     const nextParams = new URLSearchParams(searchParams)
     if (nextBlockId) {
       nextParams.set('block', nextBlockId)
@@ -745,25 +867,41 @@ export function Budgets() {
   }, [])
 
   useEffect(() => {
-    const element = donutAreaRef.current
-    if (!element) return
+    const categoryElement = categoryDonutRef.current
+    const blockElement = blockDonutRef.current
+    if (!categoryElement && !blockElement) return
 
-    const updateSize = () => {
-      const rect = element.getBoundingClientRect()
-      setDonutAreaSize({ width: rect.width, height: rect.height })
+    const updateCategorySize = () => {
+      if (!categoryElement) return
+      const rect = categoryElement.getBoundingClientRect()
+      setCategoryDonutSize({ width: rect.width, height: rect.height })
+    }
+    const updateBlockSize = () => {
+      if (!blockElement) return
+      const rect = blockElement.getBoundingClientRect()
+      setBlockDonutSize({ width: rect.width, height: rect.height })
     }
 
-    updateSize()
+    updateCategorySize()
+    updateBlockSize()
 
     if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateSize)
-      return () => window.removeEventListener('resize', updateSize)
+      window.addEventListener('resize', updateCategorySize)
+      window.addEventListener('resize', updateBlockSize)
+      return () => {
+        window.removeEventListener('resize', updateCategorySize)
+        window.removeEventListener('resize', updateBlockSize)
+      }
     }
 
-    const resizeObserver = new ResizeObserver(() => updateSize())
-    resizeObserver.observe(element)
+    const resizeObserver = new ResizeObserver(() => {
+      updateCategorySize()
+      updateBlockSize()
+    })
+    if (categoryElement) resizeObserver.observe(categoryElement)
+    if (blockElement) resizeObserver.observe(blockElement)
     return () => resizeObserver.disconnect()
-  }, [])
+  }, [activeSlide])
 
   useEffect(() => {
     if (selectedCat !== 'all') {
@@ -1200,57 +1338,11 @@ export function Budgets() {
   }, [payloadByCategory, payloadByParentCategory, selectedCat])
   const pieData = dataDisplayMode === 'budget' ? budgetPieData : realPieData
 
-  const topFiveCategories = useMemo(() => pieData.slice(0, 5), [pieData])
   const pieTotal = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData])
-  const donutTopFiveCallouts = useMemo<DonutCallout[]>(() => {
-    if (selectedCat !== 'all' || pieTotal <= 0 || donutAreaSize.width <= 0 || donutAreaSize.height <= 0) return []
-
-    const topIds = new Set(topFiveCategories.map((entry) => entry.id))
-    const cx = donutAreaSize.width * 0.5
-    const cy = donutAreaSize.height * 0.54
-    const outerRadius = 136
-    const lineStartRadius = outerRadius + 2
-    const lineBendRadius = outerRadius + 16
-    const labelOffset = 36
-    const radian = Math.PI / 180
-
-    let cumulativeRatio = 0
-    const callouts: DonutCallout[] = []
-
-    pieData.forEach((entry) => {
-      const ratio = entry.value / pieTotal
-      const midAngle = 90 - (cumulativeRatio + ratio / 2) * 360
-      cumulativeRatio += ratio
-
-      if (!topIds.has(entry.id)) return
-
-      const cos = Math.cos(-midAngle * radian)
-      const sin = Math.sin(-midAngle * radian)
-      const x0 = cx + lineStartRadius * cos
-      const y0 = cy + lineStartRadius * sin
-      const x1 = cx + lineBendRadius * cos
-      const y1 = cy + lineBendRadius * sin
-      const isRightSide = x1 >= cx
-      const x2 = x1 + (isRightSide ? labelOffset : -labelOffset)
-      const y2 = y1
-
-      callouts.push({
-        id: entry.id,
-        name: entry.name,
-        x0,
-        y0,
-        x1,
-        y1,
-        x2,
-        y2,
-        labelX: x2 + (isRightSide ? 4 : -4),
-        labelY: y2,
-        textAnchor: isRightSide ? 'start' : 'end',
-      })
-    })
-
-    return callouts
-  }, [selectedCat, pieTotal, donutAreaSize, topFiveCategories, pieData])
+  const categorySegmentCallouts = useMemo<PieSegmentCallout[]>(
+    () => buildSegmentCallouts(pieData, pieTotal, categoryDonutSize, { maxVisible: 5, cyRatio: 0.46, outerRadius: 124 }),
+    [pieData, pieTotal, categoryDonutSize],
+  )
   const listSubCategoryRows = useMemo<SubCategoryTrendItem[]>(() => {
     if (selectedCat === 'all') return []
     const txs = periodTxns ?? []
@@ -1406,20 +1498,31 @@ export function Budgets() {
     () => blockPieData.reduce((sum, row) => sum + row.value, 0),
     [blockPieData],
   )
+  const blockSegmentCallouts = useMemo<PieSegmentCallout[]>(
+    () => buildSegmentCallouts(blockPieData, blockDonutTotal, blockDonutSize, { maxVisible: 5, cyRatio: 0.46, outerRadius: 120 }),
+    [blockPieData, blockDonutTotal, blockDonutSize],
+  )
   const blockRowsForList = useMemo(() => {
     const rank = new Map<BudgetBlockId, number>(BLOCK_LIST_ORDER.map((id, index) => [id, index]))
     return [...blockRows].sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99))
   }, [blockRows])
-  const revenueListAmount = useMemo(() => {
-    const revenueRows = payloadByCategory.filter((row) => row.budget_bucket === 'revenu')
-    const budgetRevenue = revenueRows.reduce((sum, row) => sum + Number(row.budget_amount ?? 0), 0)
-    const payloadActualRevenue = revenueRows.reduce((sum, row) => sum + Number(row.actual_amount ?? 0), 0)
-    const txActualRevenue = (periodTxns ?? [])
-      .filter((tx) => tx.flow_type === 'income')
-      .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0)
-    const actualRevenue = payloadActualRevenue > 0 ? payloadActualRevenue : txActualRevenue
-    return dataDisplayMode === 'budget' ? budgetRevenue : actualRevenue
-  }, [dataDisplayMode, payloadByCategory, periodTxns])
+  const revenueHistoryRows = useMemo(
+    () => [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => b.month_start.localeCompare(a.month_start)),
+    [revenueAnalytics],
+  )
+  const monthlyCommitmentsTarget = useMemo(
+    () => visibleBudgetBuckets.reduce((sum, bucket) => sum + Number(bucket.data?.budget_amount ?? 0), 0),
+    [visibleBudgetBuckets],
+  )
+  const selectedMonthRevenueAmount = Number(revenueAnalytics?.selectedMonthRevenue ?? 0)
+  const revenueCoverageRatio = monthlyCommitmentsTarget > 0 ? selectedMonthRevenueAmount / monthlyCommitmentsTarget : 0
+  const revenueCoveragePctRounded = Math.round(revenueCoverageRatio * 100)
+  const revenueProgressPct = Math.min(100, Math.max(0, revenueCoveragePctRounded))
+  const revenueSurplusPct = monthlyCommitmentsTarget > 0
+    ? ((selectedMonthRevenueAmount - monthlyCommitmentsTarget) / monthlyCommitmentsTarget) * 100
+    : null
+  const revenueSurplusAmount = selectedMonthRevenueAmount - monthlyCommitmentsTarget
+  const isRevenueAboveTarget = selectedMonthRevenueAmount > monthlyCommitmentsTarget && monthlyCommitmentsTarget > 0
   const selectedBlock = useMemo(
     () => (selectedBlockId ? blockRows.find((row) => row.id === selectedBlockId) ?? null : null),
     [selectedBlockId, blockRows],
@@ -1427,6 +1530,33 @@ export function Budgets() {
   const selectedBlockPage = useMemo(
     () => (selectedBlockPageId ? blockRows.find((row) => row.id === selectedBlockPageId) ?? null : null),
     [selectedBlockPageId, blockRows],
+  )
+  const isRevenueBlockPage = selectedBlockPageId === REVENUE_BLOCK_PAGE_ID
+  const revenuePageColor = 'var(--color-success)'
+  const revenueMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
+    const series = [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => a.month_start.localeCompare(b.month_start))
+    const base = series.map((row) => {
+      const date = new Date(`${row.month_start}T00:00:00`)
+      const periodYear = Number.isNaN(date.getTime()) ? selectedPeriodYear : date.getFullYear()
+      const periodMonth = Number.isNaN(date.getTime()) ? selectedPeriodMonth : date.getMonth() + 1
+      return {
+        month: MONTH_LABELS_SHORT[Math.max(0, Math.min(11, periodMonth - 1))] ?? '--',
+        amount: Number(row.revenue_amount ?? 0),
+        budget: 0,
+        isCurrent: periodYear === selectedPeriodYear && periodMonth === selectedPeriodMonth,
+      }
+    })
+
+    return base.map((row, idx) => {
+      if (idx === 0) return { ...row, evolutionPct: null }
+      const prev = base[idx - 1].amount
+      if (prev <= 0) return { ...row, evolutionPct: null }
+      return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
+    })
+  }, [revenueAnalytics, selectedPeriodMonth, selectedPeriodYear])
+  const revenueSourceMaxAmount = useMemo(
+    () => (revenueAnalytics?.bySource ?? []).reduce((max, row) => Math.max(max, Number(row.total_amount ?? 0)), 0),
+    [revenueAnalytics],
   )
 
   const headerPeriodLabel = periodKey === 'annee'
@@ -1465,7 +1595,8 @@ export function Budgets() {
     return [...monthOptions, yearOption]
   }, [availableBudgetPeriods, periodKey, selectedPeriodMonth, selectedPeriodYear])
 
-  const isBlockMode = selectedBlockPage != null
+  const isExpenseBlockPage = selectedBlockPage != null
+  const isBlockMode = isExpenseBlockPage || isRevenueBlockPage
   const isCategoryMode = selectedCat !== 'all' && !isBlockMode
   const isRootMode = selectedCat === 'all' && !isBlockMode
   const showExtendedSlides = isRootMode
@@ -1642,7 +1773,19 @@ export function Budgets() {
                   )
                 : <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={28} />
             )
-            : isBlockMode && selectedBlockPage
+            : isRevenueBlockPage
+            ? (
+              <img
+                src={blockRevenusIcon}
+                alt="Icône bloc Revenus"
+                width={28}
+                height={28}
+                loading="lazy"
+                decoding="async"
+                style={{ display: 'block', objectFit: 'contain' }}
+              />
+              )
+            : isExpenseBlockPage && selectedBlockPage
             ? (
               <img
                 src={BLOCK_ICON_SRC[selectedBlockPage.id]}
@@ -1800,9 +1943,9 @@ export function Budgets() {
                         border: 'none',
                         background: 'transparent',
                         color: 'var(--neutral-700)',
-                        fontSize: 'var(--font-size-sm)',
+                        fontSize: '13px',
                         fontWeight: 700,
-                        fontFamily: 'var(--font-mono)',
+                        fontFamily: 'inherit',
                         lineHeight: 1.1,
                         width: '100%',
                         textAlign: 'center',
@@ -1814,6 +1957,7 @@ export function Budgets() {
                         cursor: 'pointer',
                         paddingRight: 12,
                         paddingLeft: 8,
+                        WebkitTextSizeAdjust: '100%',
                       }}
                     >
                       {slideThreePeriods.map((periodOption) => (
@@ -1846,7 +1990,7 @@ export function Budgets() {
                       position: 'relative',
                     }}
                   >
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
                       {slideThreeDisplayMode}
                     </span>
                     <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
@@ -1860,7 +2004,7 @@ export function Budgets() {
         </motion.section>
       ) : null}
 
-      {isBlockMode && selectedBlockPage ? (
+      {isExpenseBlockPage && selectedBlockPage ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
           <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
@@ -1928,7 +2072,7 @@ export function Budgets() {
         </motion.section>
       ) : null}
 
-      {isBlockMode && selectedBlockPage ? (
+      {isExpenseBlockPage && selectedBlockPage ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -2028,6 +2172,241 @@ export function Budgets() {
                   )
                 })
               )}
+            </div>
+          </div>
+        </motion.section>
+      ) : null}
+
+      {isRevenueBlockPage ? (
+        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBlockPage(null)
+                      setActiveSlide(1)
+                      scrollViewportToTop()
+                    }}
+                    aria-label="Retour"
+                    style={{
+                      border: 'none',
+                      background: revenuePageColor,
+                      color: 'var(--neutral-0)',
+                      width: 24,
+                      height: 24,
+                      minWidth: 24,
+                      minHeight: 24,
+                      borderRadius: 'var(--radius-full)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
+                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
+                    <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                      Revenus
+                    </p>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
+                      - Socle revenus
+                    </span>
+                  </div>
+                </div>
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {`${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois sélectionné</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+                    {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
+                  </span>
+                </div>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 2025-2026</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
+                    {formatMoney(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
+                  </span>
+                </div>
+                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
+                    {formatMoney(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.section>
+      ) : null}
+
+      {isRevenueBlockPage ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                    const item = payload
+                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                  }} />
+                  {revenueMonthlyHistory.map((entry, i) => <Cell key={`revenue-history-${i}`} fill={revenuePageColor} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div
+            style={{
+              height: 336,
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-xl)',
+              background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
+              padding: 'var(--space-3)',
+              display: 'grid',
+              gridTemplateRows: 'auto 1fr',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              Sources de revenus
+            </p>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+              {revenueAnalyticsLoading ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                  Chargement des revenus…
+                </div>
+              ) : revenueAnalyticsError ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
+                  {revenueAnalyticsError.message}
+                </div>
+              ) : !(revenueAnalytics?.bySource.length) ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                  Aucune source de revenus active sur cette période
+                </div>
+              ) : (
+                revenueAnalytics.bySource.map((source) => {
+                  const displayedAmount = Number(source.total_amount ?? 0)
+                  const barWidth = revenueSourceMaxAmount > 0 ? (displayedAmount / revenueSourceMaxAmount) * 100 : 0
+                  return (
+                    <div
+                      key={`${source.source_name}-${source.parent_source_name ?? 'none'}`}
+                      style={{
+                        padding: '3px 2px',
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0,132px) minmax(0,1fr)',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                        <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
+                          {source.source_name}
+                        </span>
+                        <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {source.parent_source_name ?? '—'}
+                        </span>
+                      </span>
+                      <span style={{ display: 'grid', gap: 2 }}>
+                        <span style={{ width: '100%', height: 11, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                          <span
+                            style={{
+                              width: `${displayedAmount <= 0 ? 0 : Math.max(6, Math.min(barWidth, 100))}%`,
+                              height: '100%',
+                              display: 'block',
+                              borderRadius: 'var(--radius-full)',
+                              background: revenuePageColor,
+                            }}
+                          />
+                        </span>
+                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                          {`${formatMoney(displayedAmount)} · ${source.transaction_count} op · moy ${formatMoney(source.avg_amount)}`}
+                        </span>
+                      </span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              Historique mensuel 2025-2026
+            </p>
+            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
+                <span>Mois</span>
+                <span>Montant</span>
+                <span>Entrées</span>
+              </div>
+              <div style={{ maxHeight: 184, overflowY: 'auto' }}>
+                {revenueHistoryRows.length ? revenueHistoryRows.map((row) => (
+                  <div key={row.month_start} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
+                      {formatMonthYearFrench(row.month_start)}
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      {formatMoney(row.revenue_amount)}
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                      {row.transaction_count.toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                )) : (
+                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              Dernières entrées
+            </p>
+            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
+                <span>Date</span>
+                <span>Libellé / catégorie</span>
+                <span>Montant</span>
+              </div>
+              <div style={{ maxHeight: 208, overflowY: 'auto' }}>
+                {revenueAnalytics?.lastTransactions.length ? revenueAnalytics.lastTransactions.map((tx) => (
+                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                      {formatTxDateFrench(tx.transaction_date)}
+                    </span>
+                    <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.label || '—'}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.category_name ?? '—'}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      {formatMoney(tx.pilotage_amount)}
+                    </span>
+                  </div>
+                )) : (
+                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                )}
+              </div>
             </div>
           </div>
         </motion.section>
@@ -2201,22 +2580,10 @@ export function Budgets() {
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
             <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
               {selectedCat === 'all' ? (
-                <div ref={donutAreaRef} style={{ position: 'relative', height: 336 }}>
-                  {donutTopFiveCallouts.length > 0 ? (
-                    <svg width="100%" height="100%" viewBox={`0 0 ${Math.max(donutAreaSize.width, 1)} ${Math.max(donutAreaSize.height, 1)}`} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
-                      {donutTopFiveCallouts.map((callout) => (
-                        <g key={callout.id}>
-                          <polyline points={`${callout.x0},${callout.y0} ${callout.x1},${callout.y1} ${callout.x2},${callout.y2}`} fill="none" stroke="var(--neutral-500)" strokeWidth={1.25} strokeDasharray="2.5 2.5" />
-                          <text x={callout.labelX} y={callout.labelY} textAnchor={callout.textAnchor} dominantBaseline="central" fill="var(--neutral-700)" fontSize={11} fontWeight={700}>
-                            {callout.name}
-                          </text>
-                        </g>
-                      ))}
-                    </svg>
-                  ) : null}
+                <div ref={categoryDonutRef} style={{ position: 'relative', height: 336 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="54%" innerRadius={86} outerRadius={136} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: unknown) => {
+                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="46%" innerRadius={80} outerRadius={124} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: unknown) => {
                         const payload = extractPiePayload(slice)
                         const id = String(payload?.id ?? '')
                         const name = String(payload?.name ?? 'Catégorie')
@@ -2256,7 +2623,7 @@ export function Budgets() {
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ position: 'absolute', top: '54%', left: '50%', transform: 'translate(-50%, -50%)', width: 160, height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                       <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
                         {formatMoney(donutCenterAmount)}
@@ -2266,6 +2633,38 @@ export function Budgets() {
                       </span>
                     </div>
                   </div>
+                  {categorySegmentCallouts.length > 0 ? (
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox={`0 0 ${Math.max(categoryDonutSize.width, 1)} ${Math.max(categoryDonutSize.height, 1)}`}
+                      style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none' }}
+                    >
+                      {categorySegmentCallouts.map((callout) => (
+                        <g key={`cat-callout-${callout.id}`}>
+                          <rect
+                            x={callout.pillX}
+                            y={callout.pillY}
+                            width={callout.pillWidth}
+                            height={20}
+                            rx={10}
+                            ry={10}
+                            fill="color-mix(in oklab, var(--neutral-0) 88%, var(--neutral-200) 12%)"
+                            stroke="var(--neutral-200)"
+                          />
+                          <text
+                            x={callout.pillX + 6}
+                            y={callout.pillY + 13}
+                            fill="var(--neutral-700)"
+                            fontSize={10}
+                            fontWeight={700}
+                          >
+                            {callout.text}
+                          </text>
+                        </g>
+                      ))}
+                    </svg>
+                  ) : null}
                 </div>
               ) : (
                 <div
@@ -2339,7 +2738,7 @@ export function Budgets() {
 
             {showExtendedSlides ? (
               <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-                <div style={{ position: 'relative', height: 336 }}>
+                <div ref={blockDonutRef} style={{ position: 'relative', height: 336 }}>
                   {blockPieData.length === 0 ? (
                     <div style={{ height: '100%', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-50)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', fontSize: 'var(--font-size-sm)', padding: 'var(--space-6)' }}>
                       Aucune répartition disponible pour cette période.
@@ -2353,9 +2752,9 @@ export function Budgets() {
                             dataKey="value"
                             nameKey="name"
                             cx="50%"
-                            cy="54%"
-                            innerRadius={82}
-                            outerRadius={132}
+                            cy="46%"
+                            innerRadius={76}
+                            outerRadius={120}
                             startAngle={90}
                             endAngle={-270}
                             paddingAngle={2}
@@ -2399,7 +2798,7 @@ export function Budgets() {
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
-                      <div style={{ position: 'absolute', top: '54%', left: '50%', transform: 'translate(-50%, -50%)', width: 160, height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                      <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                           <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
                             {formatMoney(blockDonutTotal)}
@@ -2409,6 +2808,38 @@ export function Budgets() {
                           </span>
                         </div>
                       </div>
+                      {blockSegmentCallouts.length > 0 ? (
+                        <svg
+                          width="100%"
+                          height="100%"
+                          viewBox={`0 0 ${Math.max(blockDonutSize.width, 1)} ${Math.max(blockDonutSize.height, 1)}`}
+                          style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none' }}
+                        >
+                          {blockSegmentCallouts.map((callout) => (
+                            <g key={`block-callout-${callout.id}`}>
+                              <rect
+                                x={callout.pillX}
+                                y={callout.pillY}
+                                width={callout.pillWidth}
+                                height={20}
+                                rx={10}
+                                ry={10}
+                                fill="color-mix(in oklab, var(--neutral-0) 88%, var(--neutral-200) 12%)"
+                                stroke="var(--neutral-200)"
+                              />
+                              <text
+                                x={callout.pillX + 6}
+                                y={callout.pillY + 13}
+                                fill="var(--neutral-700)"
+                                fontSize={10}
+                                fontWeight={700}
+                              >
+                                {callout.text}
+                              </text>
+                            </g>
+                          ))}
+                        </svg>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -2665,53 +3096,103 @@ export function Budgets() {
 		                        </p>
 		                      </div>
 		                    </div>
-		                  </button>
-		                )
-		              })}
-                <div
-                  style={{
-                    marginTop: 'var(--space-2)',
-                    paddingTop: 'var(--space-5)',
-                    borderTop: '1px solid var(--neutral-300)',
-                    display: 'grid',
-                    gridTemplateColumns: '56px 1fr',
-                    gap: 'var(--space-5)',
-                    minWidth: 0,
-                    width: '100%',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 56,
-                        height: 56,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)',
-                        color: 'var(--primary-600)',
-                      }}
-                    >
-                      <ArrowUp size={22} />
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        Revenus
-                      </p>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                        {formatMoney(revenueListAmount)}
+			                  </button>
+				                )
+				              })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBlockId(null)
+                      setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
+                      scrollViewportToTop()
+                    }}
+                    style={{
+                      marginTop: 'var(--space-3)',
+                      paddingTop: 'var(--space-6)',
+                      borderTop: '1px solid var(--neutral-300)',
+                      display: 'grid',
+                      gridTemplateColumns: '56px 1fr',
+                      gap: 'var(--space-5)',
+                      minWidth: 0,
+                      width: '100%',
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      borderBottom: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      paddingLeft: 0,
+                      paddingRight: 0,
+                      paddingBottom: 0,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                      <span aria-hidden="true" style={{ width: 56, height: 56, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img
+                          src={blockRevenusIcon}
+                          alt="Icône bloc Revenus"
+                          width={42}
+                          height={42}
+                          loading="lazy"
+                          decoding="async"
+                          style={{ display: 'block', objectFit: 'contain' }}
+                        />
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <p style={{ margin: 0, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Socle revenus</span>
+                          <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            Hors enveloppe dépenses
+                          </span>
+                        </p>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                          {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0)}
+                        </p>
+                      </div>
+
+                      <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${revenueProgressPct}%`,
+                            height: '100%',
+                            borderRadius: 'var(--radius-pill)',
+                            background: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--primary-500)',
+                            transition: 'width var(--transition-base)',
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                          {formatMoney(selectedMonthRevenueAmount)} <span style={{ color: 'var(--neutral-500)' }}>({revenueCoveragePctRounded}%)</span>
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--font-size-xs)',
+                            color: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--neutral-500)',
+                            fontFamily: 'var(--font-mono)',
+                            fontWeight: isRevenueAboveTarget ? 700 : 400,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {isRevenueAboveTarget
+                            ? `Dépassement +${Math.round(revenueSurplusPct ?? 0)}%`
+                            : `Cible ${formatMoney(monthlyCommitmentsTarget)}`}
+                        </p>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                        {isRevenueAboveTarget
+                          ? `+${formatMoney(Math.max(0, revenueSurplusAmount))} vs cible`
+                          : `${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
                       </p>
                     </div>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      Hors blocs de pilotage budget
-                    </p>
-                  </div>
-                </div>
-              </div>
+                  </button>
+		              </div>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"

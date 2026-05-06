@@ -26,6 +26,7 @@ import type { MonthlyBudget2026Point } from '@/features/annual-analysis/hooks/us
 import { MONTH_LABELS_SHORT } from './_constants'
 import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
+import { getMonthlyPersonalAccountBalances } from '@/features/annual-analysis/api/getMonthlyPersonalAccountBalances'
 
 type Props = {
   monthlyProfile: MonthlyBudget2026Point[]
@@ -34,25 +35,12 @@ type Props = {
 type MonthlySynthRow = {
   month: number
   monthLabel: string
-  openingBalance: number
+  openingBalance: number | null
   budget: number
   expense: number
   income: number
   savings: number
   deltaRealBudgetPct: number
-}
-
-type TransactionRow = {
-  account_id: string | null
-  amount: number | null
-  flow_type: string | null
-  direction: string | null
-  transaction_date: string | null
-}
-
-type AccountRow = {
-  id: string
-  opening_balance: number | null
 }
 
 const fmt = (n: number) => {
@@ -80,13 +68,8 @@ function getLastCompletedMonthCutoff2026(): number {
   return Math.max(0, Math.min(12, now.getMonth()))
 }
 
-function signedAmountFromTransaction(tx: TransactionRow): number {
-  const amount = Number(tx.amount ?? 0)
-  if (tx.flow_type === 'income') return amount
-  if (tx.flow_type === 'expense') return -amount
-  if (tx.direction === 'transfer_in') return amount
-  if (tx.direction === 'transfer_out') return -amount
-  return 0
+function monthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`
 }
 
 const CHART_SERIES = [
@@ -106,7 +89,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   const fallbackRows: MonthlySynthRow[] = monthlyProfile.map((point) => ({
     month: point.month,
     monthLabel: point.monthLabel,
-    openingBalance: 0,
+    openingBalance: null,
     budget: Number(point.totalExpenseBudget ?? 0),
     expense: Number(point.totalExpenseBudget ?? 0),
     income: 0,
@@ -122,7 +105,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
       const userId = user?.id
       if (!userId) return []
 
-      const [metricsRes, bucketTotalsRes, savingsTotalsRes, accountsRes] = await Promise.all([
+      const [metricsRes, bucketTotalsRes, savingsTotalsRes, personalBalancesByMonth] = await Promise.all([
         budgetDb()
           .from('analytics_monthly_metrics')
           .select('period_month, expense_total, income_total')
@@ -136,46 +119,18 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
           .from('savings_budget_totals_by_period')
           .select('period_month, total_savings_budget_eur')
           .eq('period_year', 2026),
-        budgetDb()
-          .from('accounts')
-          .select('id, opening_balance'),
+        getMonthlyPersonalAccountBalances(2026),
       ])
 
       if (metricsRes.error) throw new Error(`monthly metrics query failed: ${metricsRes.error.message}`)
       if (bucketTotalsRes.error) throw new Error(`budget bucket totals query failed: ${bucketTotalsRes.error.message}`)
       if (savingsTotalsRes.error) throw new Error(`savings totals query failed: ${savingsTotalsRes.error.message}`)
-      if (accountsRes.error) throw new Error(`accounts query failed: ${accountsRes.error.message}`)
-
-      const accounts = (accountsRes.data ?? []) as AccountRow[]
-      const accountIds = accounts.map((row) => row.id).filter((id): id is string => Boolean(id))
-
-      const balancesRes = accountIds.length > 0
-        ? await budgetDb()
-            .from('accounts_balance')
-            .select('account_id, balance_amount, created_at')
-            .in('account_id', accountIds)
-            .lte('created_at', '2026-12-31T23:59:59.999Z')
-            .order('created_at', { ascending: true })
-        : { data: [], error: null }
-
-      if (balancesRes.error) throw new Error(`accounts_balance query failed: ${balancesRes.error.message}`)
-
-      const transactionsRes = accountIds.length > 0
-        ? await budgetDb()
-            .from('transactions')
-            .select('account_id, amount, flow_type, direction, transaction_date')
-            .in('account_id', accountIds)
-            .lt('transaction_date', '2027-01-01')
-            .order('transaction_date', { ascending: true })
-        : { data: [], error: null }
-
-      if (transactionsRes.error) throw new Error(`transactions query failed: ${transactionsRes.error.message}`)
 
       const expenseByMonth = new Map<number, number>()
       const incomeByMonth = new Map<number, number>()
       const budgetByMonth = new Map<number, number>()
       const savingsByMonth = new Map<number, number>()
-      const openingBalanceByMonth = new Map<number, number>()
+      const openingBalanceByMonth = new Map<number, number | null>()
       const monthSet = new Set<number>()
 
       for (const row of metricsRes.data ?? []) {
@@ -200,62 +155,9 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
         savingsByMonth.set(month, Number(row.total_savings_budget_eur ?? 0))
       }
 
-      type BalanceRow = { account_id: string | null; balance_amount: number | null; created_at: string | null }
-      const balanceRows = (balancesRes.data ?? []) as BalanceRow[]
-      const balancesByAccount = new Map<string, Array<{ createdAtMs: number; amount: number }>>()
-
-      for (const row of balanceRows) {
-        const accountId = row.account_id ?? ''
-        if (!accountId) continue
-        const createdAtMs = row.created_at ? new Date(row.created_at).getTime() : Number.NaN
-        if (!Number.isFinite(createdAtMs)) continue
-        const amount = Number(row.balance_amount ?? 0)
-        const list = balancesByAccount.get(accountId) ?? []
-        list.push({ createdAtMs, amount })
-        balancesByAccount.set(accountId, list)
-      }
-
-      const transactionsByAccount = new Map<string, Array<{ timestampMs: number; signedAmount: number }>>()
-      const txRows = (transactionsRes.data ?? []) as TransactionRow[]
-
-      for (const row of txRows) {
-        const accountId = row.account_id ?? ''
-        const transactionDate = row.transaction_date ?? ''
-        if (!accountId || !transactionDate) continue
-        const timestampMs = new Date(`${transactionDate}T00:00:00Z`).getTime()
-        if (!Number.isFinite(timestampMs)) continue
-        const signedAmount = signedAmountFromTransaction(row)
-        const list = transactionsByAccount.get(accountId) ?? []
-        list.push({ timestampMs, signedAmount })
-        transactionsByAccount.set(accountId, list)
-      }
-
       for (let month = 1; month <= tableMonthCutoff; month += 1) {
-        const monthStartMs = new Date(Date.UTC(2026, month - 1, 1, 0, 0, 0, 0)).getTime()
-        let totalOpeningBalance = 0
-        let totalFallbackOpeningBalance = 0
-
-        for (const account of accounts) {
-          const accountId = account.id
-          const accountBalances = balancesByAccount.get(accountId) ?? []
-          let latestAmount: number | null = null
-          for (const entry of accountBalances) {
-            if (entry.createdAtMs <= monthStartMs) latestAmount = entry.amount
-            else break
-          }
-          totalOpeningBalance += latestAmount ?? 0
-
-          const txList = transactionsByAccount.get(accountId) ?? []
-          let cumulative = 0
-          for (const tx of txList) {
-            if (tx.timestampMs < monthStartMs) cumulative += tx.signedAmount
-            else break
-          }
-          totalFallbackOpeningBalance += Number(account.opening_balance ?? 0) + cumulative
-        }
-
-        const hasSnapshotForMonth = totalOpeningBalance !== 0
-        openingBalanceByMonth.set(month, hasSnapshotForMonth ? totalOpeningBalance : totalFallbackOpeningBalance)
+        const key = monthKey(2026, month)
+        openingBalanceByMonth.set(month, personalBalancesByMonth.get(key) ?? null)
       }
 
       return [...monthSet]
@@ -267,7 +169,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
           return {
             month,
             monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
-            openingBalance: openingBalanceByMonth.get(month) ?? 0,
+            openingBalance: openingBalanceByMonth.get(month) ?? null,
             budget,
             expense,
             income: incomeByMonth.get(month) ?? 0,
@@ -395,7 +297,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                               <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
                             </td>
                             <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)' }}>
-                              {fmt(row.openingBalance)}
+                              {row.openingBalance == null ? '—' : fmt(row.openingBalance)}
                             </td>
                             <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
                               {fmt(row.expense)}
