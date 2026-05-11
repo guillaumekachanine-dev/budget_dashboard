@@ -237,9 +237,9 @@ const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> 
 ]
 
 const BLOCK_LIST_ORDER: BudgetBlockId[] = [
+  'discretionnaire',
   'socle_fixe',
   'variable_essentielle',
-  'discretionnaire',
   'provision',
   'epargne',
 ]

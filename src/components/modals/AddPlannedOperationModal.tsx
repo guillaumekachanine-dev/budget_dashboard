@@ -517,9 +517,11 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     setValues((current) => ({
       ...current,
       accountMode: nextMode,
+      personalShareRatio: nextMode === 'joint' ? 0.5 : 1,
       accountId: nextAccount?.id ?? current.accountId,
     }))
     clearFieldError('accountId')
+    clearFieldError('personalShareRatio')
   }
 
   const handleShareRatioToggle = () => {

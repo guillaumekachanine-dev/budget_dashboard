@@ -15,8 +15,45 @@ interface BudgetCategoryListProps {
   onLineClick?: (line: BudgetLineWithCategory) => void
 }
 
+const CATEGORY_DISPLAY_ORDER = [
+  'logement',
+  'alimentation',
+  'achats divers',
+  'sorties',
+  'voyages',
+  'transport',
+  'famille enfant',
+  'business',
+  'abonnements',
+  'sante',
+  'taxes frais',
+  'epargne',
+] as const
+
+function normalizeCategoryLabel(value?: string | null): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, onLineClick }: BudgetCategoryListProps) {
-  const sorted = sortBudgetLinesForDisplay(lines)
+  const sorted = useMemo(() => {
+    const fallbackSorted = sortBudgetLinesForDisplay(lines)
+    const rank = new Map<string, number>(CATEGORY_DISPLAY_ORDER.map((key, index) => [key, index]))
+
+    return [...fallbackSorted].sort((a, b) => {
+      const nameA = normalizeCategoryLabel(a.parent_category_name ?? a.category_name)
+      const nameB = normalizeCategoryLabel(b.parent_category_name ?? b.category_name)
+      const rankA = rank.get(nameA) ?? 999
+      const rankB = rank.get(nameB) ?? 999
+      if (rankA !== rankB) return rankA - rankB
+      return nameA.localeCompare(nameB, 'fr')
+    })
+  }, [lines])
   const { data: categories = [] } = useCategories('expense')
   const categoryIconKeyById = useMemo(() => new Map(categories.map((category) => [category.id, category.icon_key])), [categories])
   const actualByCategoryId = useMemo(() => {
@@ -47,6 +84,8 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
             const variance = budgetAmount - actualAmount
             const isOverBudget = variance < 0
             const resolvedIconKey = line.category_icon_key ?? (line.category_id ? (categoryIconKeyById.get(line.category_id) ?? null) : null)
+            const normalizedCategoryName = normalizeCategoryLabel(line.parent_category_name ?? line.category_name)
+            const displayIconKey = normalizedCategoryName === 'epargne' ? 'epargne' : resolvedIconKey
 
             return (
               <div
@@ -60,7 +99,7 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
                 onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.opacity = '1' } : undefined}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                  <CategoryIcon iconKey={resolvedIconKey} label={line.category_name ?? ''} size={56} />
+                  <CategoryIcon iconKey={displayIconKey} label={line.category_name ?? ''} size={56} />
                 </div>
 
                 <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>

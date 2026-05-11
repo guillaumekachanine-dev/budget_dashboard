@@ -21,7 +21,7 @@ import type {
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
 
-type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'planned'
+type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 type PeriodMode = 'current' | 'rolling' | 'future'
 type QuickParamPicker = 'type' | 'period' | 'modalite' | 'fixed' | 'account' | null
@@ -83,12 +83,13 @@ function capitalizeFirst(value: string): string {
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`
 }
 
-const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
+const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string; hasSeparator?: boolean }> = [
   { value: 'all', label: 'Toutes' },
-  { value: 'expense', label: 'Depenses' },
+  { value: 'planned', label: 'Planifiées', hasSeparator: true },
+  { value: 'expense', label: 'Dépenses' },
   { value: 'income', label: 'Revenus' },
   { value: 'transfer', label: 'Transferts' },
-  { value: 'planned', label: 'Planifiées' },
+  { value: 'savings', label: 'Épargne' },
 ]
 
 const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
@@ -723,7 +724,7 @@ export function Flux() {
   const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
   const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
 
-  const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
+  const [draftFlow, setDraftFlow] = useState<FlowFilter>('all')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
   const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
   const [draftBudgetFilter, setDraftBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
@@ -740,7 +741,12 @@ export function Flux() {
     return window.matchMedia('(max-width: 768px)').matches
   })
 
-  const categoryFlowType = (showAdvancedSheet ? draftFlow : flow) === 'income' ? 'income' : 'expense'
+  const activeFlowTypeForCategory = showAdvancedSheet ? draftFlow : flow
+  const categoryFlowType = activeFlowTypeForCategory === 'income'
+    ? 'income'
+    : activeFlowTypeForCategory === 'savings'
+      ? 'savings'
+      : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
@@ -759,6 +765,7 @@ export function Flux() {
   }, [rootCategories])
 
   const isPlannedMode = flow === 'planned'
+  const isSavingsMode = flow === 'savings'
   const todayDateKey = getTodayDateKey()
   const range = useMemo(() => periodToRange(period, periodMode), [period, periodMode])
   const flowTypeFilter: FlowType | undefined = flow === 'all' || flow === 'planned' ? undefined : (flow as FlowType)
@@ -791,8 +798,9 @@ export function Flux() {
   const generalModePlannedEndDate = useMemo(() => {
     const now = new Date()
     const monthEnd = endOfIsoMonth(now)
+    if (isSavingsMode) return monthEnd
     return monthEnd < todayDateKey ? monthEnd : todayDateKey
-  }, [todayDateKey])
+  }, [isSavingsMode, todayDateKey])
 
   const isGeneralMonthView = !isPlannedMode && period === 'month' && periodMode === 'current'
 
@@ -805,8 +813,8 @@ export function Flux() {
     startDate: generalModePlannedStartDate,
     endDate: generalModePlannedEndDate,
     includePast: true,
-    includeFuture: false,
-    flowType: 'all',
+    includeFuture: isSavingsMode,
+    flowType: isSavingsMode ? 'savings' : 'all',
     categoryIds: categoryIdsFilter,
     enabled: isGeneralMonthView,
     mode: 'general',
@@ -1292,7 +1300,7 @@ export function Flux() {
                   options={FLOW_OPTIONS.map((opt) => ({
                     value: opt.value,
                     label: opt.label,
-                    hasSeparator: opt.value === 'all',
+                    hasSeparator: opt.hasSeparator || opt.value === 'all',
                     selected: flow === opt.value,
                     onSelect: () => {
                       setFlow(opt.value)

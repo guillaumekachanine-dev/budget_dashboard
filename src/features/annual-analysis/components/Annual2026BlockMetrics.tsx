@@ -50,6 +50,33 @@ interface BudgetRow {
   amount: number | null
 }
 
+type BudgetBucketId =
+  | 'revenu'
+  | 'socle_fixe'
+  | 'variable_essentielle'
+  | 'discretionnaire'
+  | 'provision'
+  | 'epargne'
+  | 'hors_pilotage'
+
+type MonthlyBucketMetric = {
+  month_start: string
+  period_year: number
+  period_month: number
+  budget_bucket: BudgetBucketId
+  actual_amount: number
+  budget_amount: number
+  variance_amount: number
+  variance_pct: number | null
+}
+
+interface BucketBudgetVsActualRow {
+  period_month: number | null
+  budget_bucket: string | null
+  target_budget_bucket_eur: number | null
+  actual_budget_bucket_eur: number | null
+}
+
 const YEAR_2026 = 2026
 const ALL_CATEGORIES_ID = 'all_categories'
 const FULL_MONTH_LABEL_BY_SHORT: Record<string, string> = {
@@ -119,12 +146,93 @@ function getActiveYearMonth(): number {
   return Math.max(1, Math.min(12, now.getMonth() + 1))
 }
 
-async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows: AnalyticsRow[]; periodRows: BudgetPeriodRow[]; budgetRows: BudgetRow[] }> {
-  const [analyticsRes, periodsRes] = await Promise.all([
+const ALLOWED_BUCKETS: BudgetBucketId[] = [
+  'revenu',
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+  'epargne',
+  'hors_pilotage',
+]
+
+function isBudgetBucketId(value: string | null | undefined): value is BudgetBucketId {
+  if (!value) return false
+  return (ALLOWED_BUCKETS as string[]).includes(value)
+}
+
+function normalizeBucketAmount(bucket: BudgetBucketId, value: number): number {
+  if (bucket === 'revenu' || bucket === 'epargne') return Math.abs(value)
+  return value
+}
+
+function buildBudgetYtdBucketMetrics(rows: BucketBudgetVsActualRow[], months: number[]): {
+  byBucket: Map<BudgetBucketId, { actualAmount: number; budgetAmount: number; varianceAmount: number; variancePct: number | null }>
+  byBucketMonth: Map<string, MonthlyBucketMetric>
+} {
+  const byBucket = new Map<BudgetBucketId, { actualAmount: number; budgetAmount: number; varianceAmount: number; variancePct: number | null }>()
+  const byBucketMonth = new Map<string, MonthlyBucketMetric>()
+
+  for (const bucket of ALLOWED_BUCKETS) {
+    byBucket.set(bucket, { actualAmount: 0, budgetAmount: 0, varianceAmount: 0, variancePct: null })
+    for (const month of months) {
+      byBucketMonth.set(`${bucket}:${month}`, {
+        month_start: `${YEAR_2026}-${String(month).padStart(2, '0')}-01`,
+        period_year: YEAR_2026,
+        period_month: month,
+        budget_bucket: bucket,
+        actual_amount: 0,
+        budget_amount: 0,
+        variance_amount: 0,
+        variance_pct: null,
+      })
+    }
+  }
+
+  for (const row of rows) {
+    const month = Number(row.period_month)
+    const bucketRaw = row.budget_bucket
+    if (!Number.isFinite(month) || !months.includes(month)) continue
+    if (!isBudgetBucketId(bucketRaw)) continue
+
+    const actual = normalizeBucketAmount(bucketRaw, Number(row.actual_budget_bucket_eur ?? 0))
+    const budget = normalizeBucketAmount(bucketRaw, Number(row.target_budget_bucket_eur ?? 0))
+    const metricKey = `${bucketRaw}:${month}`
+    const metric = byBucketMonth.get(metricKey)
+    if (!metric) continue
+
+    metric.actual_amount += actual
+    metric.budget_amount += budget
+    metric.variance_amount = metric.actual_amount - metric.budget_amount
+    metric.variance_pct = metric.budget_amount > 0 ? metric.variance_amount / metric.budget_amount : null
+  }
+
+  for (const bucket of ALLOWED_BUCKETS) {
+    let actualAmount = 0
+    let budgetAmount = 0
+    for (const month of months) {
+      const metric = byBucketMonth.get(`${bucket}:${month}`)
+      if (!metric) continue
+      actualAmount += metric.actual_amount
+      budgetAmount += metric.budget_amount
+    }
+    const varianceAmount = actualAmount - budgetAmount
+    byBucket.set(bucket, {
+      actualAmount,
+      budgetAmount,
+      varianceAmount,
+      variancePct: budgetAmount > 0 ? varianceAmount / budgetAmount : null,
+    })
+  }
+
+  return { byBucket, byBucketMonth }
+}
+
+async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows: AnalyticsRow[]; periodRows: BudgetPeriodRow[]; budgetRows: BudgetRow[]; bucketRows: BucketBudgetVsActualRow[] }> {
+  const [analyticsRes, periodsRes, bucketVsActualRes] = await Promise.all([
     budgetDb
       .from('analytics_monthly_category_metrics')
       .select('period_month, category_id, amount_total')
-      .eq('flow_type', 'expense')
       .eq('period_year', YEAR_2026)
       .in('period_month', months),
     budgetDb
@@ -132,10 +240,16 @@ async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows:
       .select('id, period_month')
       .eq('period_year', YEAR_2026)
       .in('period_month', months),
+    budgetDb
+      .from('budget_bucket_budget_vs_actual_by_month')
+      .select('period_month,budget_bucket,target_budget_bucket_eur,actual_budget_bucket_eur')
+      .eq('period_year', YEAR_2026)
+      .in('period_month', months),
   ])
 
   if (analyticsRes.error) throw new Error(`analytics query failed: ${analyticsRes.error.message}`)
   if (periodsRes.error) throw new Error(`periods query failed: ${periodsRes.error.message}`)
+  if (bucketVsActualRes.error) throw new Error(`bucket budget-vs-actual query failed: ${bucketVsActualRes.error.message}`)
 
   const periodRows = (periodsRes.data ?? []) as BudgetPeriodRow[]
   const periodIds = periodRows.map((row) => row.id)
@@ -155,6 +269,7 @@ async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows:
     analyticsRows: (analyticsRes.data ?? []) as AnalyticsRow[],
     periodRows,
     budgetRows,
+    bucketRows: (bucketVsActualRes.data ?? []) as BucketBudgetVsActualRow[],
   }
 }
 
@@ -202,7 +317,6 @@ export function Annual2026BlockMetrics({
       const { data, error } = await budgetDb
         .from('categories')
         .select('id, name, parent_id')
-        .eq('flow_type', 'expense')
         .eq('is_active', true)
       if (error) throw new Error(`categories query failed: ${error.message}`)
       return (data ?? []) as CategoryRow[]
@@ -255,6 +369,16 @@ export function Annual2026BlockMetrics({
     queryFn: () => fetchDatasetForMonths(yearMonths),
   })
 
+  const periodBucketMetrics = useMemo(
+    () => buildBudgetYtdBucketMetrics(periodDataset?.bucketRows ?? [], selectedMonths),
+    [periodDataset?.bucketRows, selectedMonths],
+  )
+
+  const yearBucketMetrics = useMemo(
+    () => buildBudgetYtdBucketMetrics(yearDataset?.bucketRows ?? [], yearMonths),
+    [yearDataset?.bucketRows, yearMonths],
+  )
+
   const scopeCategoryIds = useMemo(() => {
     if (analysisType === 'bloc') {
       return bucketMapRows.filter((row) => row.budget_bucket === selectedBlock).map((row) => row.category_id)
@@ -275,7 +399,6 @@ export function Annual2026BlockMetrics({
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .eq('is_hidden', false)
-        .eq('flow_type', 'expense')
         .gte('transaction_date', range.startDate)
         .lte('transaction_date', range.endDate)
         .in('category_id', scopeCategoryIds)
@@ -286,6 +409,32 @@ export function Annual2026BlockMetrics({
   })
 
   const metricsState = useMemo(() => {
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
+      const selectedTotals = periodBucketMetrics.byBucket.get(selectedBlock) ?? {
+        actualAmount: 0,
+        budgetAmount: 0,
+        varianceAmount: 0,
+        variancePct: null,
+      }
+      const monthValues = selectedMonths.map((month) => periodBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)?.actual_amount ?? 0)
+      const averageAmount = monthValues.length ? monthValues.reduce((sum, value) => sum + value, 0) / monthValues.length : 0
+      const medianAmount = median(monthValues)
+      const rankedBuckets = ALLOWED_BUCKETS
+        .map((bucket) => ({ bucket, amount: periodBucketMetrics.byBucket.get(bucket)?.actualAmount ?? 0 }))
+        .sort((a, b) => b.amount - a.amount)
+      const rankIndex = rankedBuckets.findIndex((entry) => entry.bucket === selectedBlock)
+
+      return {
+        actualAmount: selectedTotals.actualAmount,
+        budgetAmount: selectedTotals.budgetAmount,
+        deltaPct: selectedTotals.variancePct == null ? 0 : selectedTotals.variancePct * 100,
+        deltaPctRaw: selectedTotals.variancePct,
+        averageAmount,
+        medianAmount,
+        rank: rankIndex >= 0 ? `#${rankIndex + 1}` : '—',
+      }
+    }
+
     const analyticsRows = periodDataset?.analyticsRows ?? []
     const budgetRows = periodDataset?.budgetRows ?? []
     const periodRows = periodDataset?.periodRows ?? []
@@ -363,11 +512,13 @@ export function Annual2026BlockMetrics({
       actualAmount,
       budgetAmount,
       deltaPct,
+      deltaPctRaw: budgetAmount > 0 ? deltaPct / 100 : null,
       averageAmount,
       medianAmount,
       rank: rank > 0 ? `#${rank}` : '—',
     }
   }, [
+    periodBucketMetrics,
     periodDataset,
     scopeCategoryIds,
     selectedMonths,
@@ -380,6 +531,21 @@ export function Annual2026BlockMetrics({
   ])
 
   const yearlySeries = useMemo(() => {
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
+      const rows = yearMonths.map((month) => {
+        const metric = yearBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)
+        return {
+          month,
+          monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
+          amount: metric?.actual_amount ?? 0,
+          budget: metric?.budget_amount ?? 0,
+        }
+      })
+
+      const budgetTarget = rows.length ? rows.reduce((sum, row) => sum + row.budget, 0) / rows.length : 0
+      return { rows, budgetTarget }
+    }
+
     const analyticsRows = yearDataset?.analyticsRows ?? []
     const budgetRows = yearDataset?.budgetRows ?? []
     const periodRows = yearDataset?.periodRows ?? []
@@ -414,7 +580,7 @@ export function Annual2026BlockMetrics({
 
     const budgetTarget = rows.length ? rows.reduce((sum, row) => sum + row.budget, 0) / rows.length : 0
     return { rows, budgetTarget }
-  }, [yearDataset, scopeCategoryIds, yearMonths])
+  }, [analysisType, selectedBlock, yearBucketMetrics.byBucketMonth, yearDataset, scopeCategoryIds, yearMonths])
 
   const currentItemLabel = analysisType === 'bloc'
     ? (BUCKET_LABELS[selectedBlock] ?? selectedBlock)
@@ -423,9 +589,13 @@ export function Annual2026BlockMetrics({
   const periodLabelSuffix = FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod
 
   const metrics = [
-    { label: `Dépenses ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
+    { label: `Réel ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
     { label: `Budget ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.budgetAmount), color: 'var(--neutral-900)' },
-    { label: `Ecart réel/budget ${periodLabelSuffix}`, value: fmtPercentCompact(metricsState.deltaPct), color: metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)' },
+    {
+      label: `Ecart réel/budget ${periodLabelSuffix}`,
+      value: metricsState.deltaPctRaw == null ? '—' : fmtPercentCompact(metricsState.deltaPct),
+      color: metricsState.deltaPctRaw == null ? 'var(--neutral-500)' : metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)',
+    },
     { label: 'Montant moyen (12 mois)', value: fmtCurrencyCompact(metricsState.averageAmount), color: 'var(--neutral-900)' },
     { label: 'Médiane (12 mois)', value: fmtCurrencyCompact(metricsState.medianAmount), color: 'var(--neutral-900)' },
     { label: `Nbre d'opérations ${periodLabelSuffix}`, value: String(transactionCount), color: 'var(--neutral-900)' },
