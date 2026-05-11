@@ -14,7 +14,7 @@ const MONTHLY_VARIABLE_CATEGORIES_COLUMNS = [
 ].join(', ')
 
 export async function getMonthlyVariableCategories(year?: number): Promise<AnalyticsMonthlyCategoryMetrics[]> {
-  let query = budgetDb()
+  let query = budgetDb
     .from('analytics_monthly_category_metrics')
     .select(MONTHLY_VARIABLE_CATEGORIES_COLUMNS)
     .eq('flow_type', 'expense')

@@ -15,7 +15,7 @@ export function useHomeDailyBudgetPayload(periodYear?: number, periodMonth?: num
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) return null
 
-      const { data, error } = await budgetDb().rpc('get_home_daily_budget_payload', {
+      const { data, error } = await budgetDb.rpc('get_home_daily_budget_payload', {
         p_user_id: user.id,
         p_period_year: targetYear,
         p_period_month: targetMonth,

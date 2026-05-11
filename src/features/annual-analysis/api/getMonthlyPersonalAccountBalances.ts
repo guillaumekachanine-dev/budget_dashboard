@@ -15,7 +15,7 @@ function monthKeyFromDate(value: string): string {
 }
 
 export async function getMonthlyPersonalAccountBalances(year: number): Promise<Map<string, number>> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('accounts_balance')
     .select('balance_month,balance_amount,observed_date,currency,source')
     .eq('account_id', PERSONAL_MAIN_ACCOUNT_ID)

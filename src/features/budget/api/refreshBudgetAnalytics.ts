@@ -1,7 +1,7 @@
 import { budgetDb } from '@/lib/supabaseBudget'
 
 export async function refreshBudgetAnalytics(userId: string): Promise<void> {
-  const { error } = await budgetDb().rpc('refresh_budget_analytics', {
+  const { error } = await budgetDb.rpc('refresh_budget_analytics', {
     p_user_id: userId,
   })
 

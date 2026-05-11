@@ -120,13 +120,13 @@ function getActiveYearMonth(): number {
 
 async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows: AnalyticsRow[]; periodRows: BudgetPeriodRow[]; budgetRows: BudgetRow[] }> {
   const [analyticsRes, periodsRes] = await Promise.all([
-    budgetDb()
+    budgetDb
       .from('analytics_monthly_category_metrics')
       .select('period_month, category_id, amount_total')
       .eq('flow_type', 'expense')
       .eq('period_year', YEAR_2026)
       .in('period_month', months),
-    budgetDb()
+    budgetDb
       .from('budget_periods')
       .select('id, period_month')
       .eq('period_year', YEAR_2026)
@@ -141,7 +141,7 @@ async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows:
 
   let budgetRows: BudgetRow[] = []
   if (periodIds.length > 0) {
-    const budgetsRes = await budgetDb()
+    const budgetsRes = await budgetDb
       .from('budgets')
       .select('period_id, category_id, amount')
       .eq('budget_kind', 'category')
@@ -198,7 +198,7 @@ export function Annual2026BlockMetrics({
     queryKey: ['budget-metrics-categories'],
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('categories')
         .select('id, name, parent_id')
         .eq('flow_type', 'expense')
@@ -234,7 +234,7 @@ export function Annual2026BlockMetrics({
     queryKey: ['budget-metrics-bucket-map'],
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('category_budget_bucket_map')
         .select('category_id, budget_bucket')
       if (error) throw new Error(`bucket map query failed: ${error.message}`)
@@ -267,7 +267,7 @@ export function Annual2026BlockMetrics({
     enabled: scopeCategoryIds.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
-      const { count, error } = await budgetDb()
+      const { count, error } = await budgetDb
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .eq('is_hidden', false)

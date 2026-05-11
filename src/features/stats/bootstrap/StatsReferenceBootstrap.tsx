@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { isStatsReferenceSnapshotStale } from '@/features/stats/store/statsReferenceStore'
 
-type StatsReferenceBootstrapProps = {
+type StatsReferenceBootstrapOptions = {
   userId: string | null
   enabled: boolean
 }
 
-export function StatsReferenceBootstrap({ userId, enabled }: StatsReferenceBootstrapProps) {
+export function useStatsReferenceBootstrap({ userId, enabled }: StatsReferenceBootstrapOptions) {
   const { snapshot, loading, hydrateStatsReferenceData, storeUserId } = useStatsReferenceData()
   const attemptedUsersRef = useRef<Set<string>>(new Set())
 
@@ -31,6 +31,4 @@ export function StatsReferenceBootstrap({ userId, enabled }: StatsReferenceBoots
     if (userId) return
     attemptedUsersRef.current.clear()
   }, [userId])
-
-  return null
 }

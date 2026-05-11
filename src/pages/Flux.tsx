@@ -6,7 +6,8 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlannedOperations } from '@/hooks/usePlannedOperations'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatCategoryModalLabel, getTxLabel, todayIso } from '@/lib/utils'
+import { PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -52,21 +53,10 @@ const PLANNED_FLOW_OPTIONS: Array<{ value: PlannedFlowFilter; label: string }> =
   { value: 'transfer', label: 'Transferts' },
 ]
 
-const PLANNED_FLOW_LABELS: Record<PlannedOperationFlowType, string> = {
-  expense: 'Dépense planifiée',
-  income: 'Revenu planifié',
-  savings: 'Épargne planifiée',
-  transfer: 'Transfert planifié',
-}
-
 const PLANNED_BUDGET_IMPACT_LABELS: Record<PlannedOperationBudgetImpact, string> = {
   already_budgeted: 'Déjà budgétisée',
   additional_commitment: 'Engagement additionnel',
   informational: 'Informatif uniquement',
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function startOfIsoDay(d: Date): string {
@@ -167,10 +157,6 @@ function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: st
   }
 }
 
-function displayTxnLabel(t: Transaction): string {
-  return (t.normalized_label ?? t.raw_label ?? 'Operation').trim() || 'Operation'
-}
-
 function displayTxnCategoryName(t: Transaction): string {
   return t.category?.name ?? 'Sans categorie'
 }
@@ -202,17 +188,6 @@ function formatMoneyInteger(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.floor(amount))
-}
-
-function formatCategoryModalLabel(name: string): string {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
-  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
-  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
-  return name
 }
 
 function resultNoun(flow: FlowFilter): string {
@@ -710,7 +685,7 @@ export function Flux() {
 
     if (search.trim()) {
       const q = search.trim().toLowerCase()
-      list = list.filter((t) => displayTxnLabel(t).toLowerCase().includes(q))
+      list = list.filter((t) => getTxLabel(t).toLowerCase().includes(q))
     }
 
     return list
@@ -1227,7 +1202,7 @@ export function Flux() {
         ) : (
           <div>
             {filtered.map((t) => {
-              const label = displayTxnLabel(t)
+              const label = getTxLabel(t)
               const category = displayTxnCategoryName(t)
               const amount = signedAmount(t)
 

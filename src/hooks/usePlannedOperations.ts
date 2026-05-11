@@ -7,7 +7,7 @@ export function usePlannedOperations(userId?: string) {
     queryKey: ['planned-operations', userId],
     enabled: Boolean(userId),
     queryFn: async (): Promise<PlannedOperation[]> => {
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('planned_operations')
         .select('*, category:categories(id,name,icon_key)')
         .eq('user_id', userId as string)
@@ -26,7 +26,7 @@ export function useAddPlannedOperation() {
 
   return useMutation({
     mutationFn: async (plannedOperation: PlannedOperationInsert) => {
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('planned_operations')
         .insert(plannedOperation)
         .select()

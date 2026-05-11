@@ -14,7 +14,7 @@ const MONTHLY_METRICS_COLUMNS = [
 ].join(', ')
 
 export async function getMonthlyMetrics(year?: number): Promise<AnalyticsMonthlyMetrics[]> {
-  let query = budgetDb()
+  let query = budgetDb
     .from('analytics_monthly_metrics')
     .select(MONTHLY_METRICS_COLUMNS)
     .order('month_start', { ascending: true })

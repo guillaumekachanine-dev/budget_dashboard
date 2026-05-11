@@ -1,3 +1,4 @@
+import { getMonthLabel } from '@/lib/utils'
 import type {
   BudgetBucketTotalSourceRow,
   BudgetBucketVsActualSourceRow,
@@ -25,11 +26,6 @@ const SAVINGS_CATEGORY_DEFAULTS = ['Réserve sécurité', 'Projet / apport', 'In
 function asNumber(value: unknown): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-function formatMonthYearLabel(year: number, month: number): string {
-  const date = new Date(year, month - 1, 1)
-  return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 }
 
 function normalizeKey(value: string): string {
@@ -332,7 +328,7 @@ export function buildStatsPeriodOptions(
     id: row.id,
     period_year: row.periodYear,
     period_month: row.periodMonth,
-    label: row.label || formatMonthYearLabel(row.periodYear, row.periodMonth),
+    label: row.label || getMonthLabel(row.periodYear, row.periodMonth),
   }))
 
   return monthOptions
@@ -367,5 +363,5 @@ export function formatCurrency(value: number, currency = 'EUR'): string {
 
 export function formatPeriodLabel(period: StatsSelectedPeriod): string {
   if (period.label) return period.label
-  return formatMonthYearLabel(period.period_year, period.period_month)
+  return getMonthLabel(period.period_year, period.period_month)
 }

@@ -61,7 +61,7 @@ export async function getBudgetPagePayload({
     throw new Error('getBudgetPagePayload failed: user not authenticated')
   }
 
-  const { data, error } = await budgetDb().rpc('get_budget_page_payload', {
+  const { data, error } = await budgetDb.rpc('get_budget_page_payload', {
     p_user_id: userId,
     p_period_year: periodYear,
     p_period_month: periodMonth,

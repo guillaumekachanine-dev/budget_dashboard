@@ -18,7 +18,7 @@ export async function getExpenseBudgetTotalForPeriod(
     return 0
   }
 
-  const { data: budgetRowsData, error: budgetError } = await budgetDb()
+  const { data: budgetRowsData, error: budgetError } = await budgetDb
     .from('budgets')
     .select('amount, category_id')
     .eq('period_id', periodId)
@@ -37,7 +37,7 @@ export async function getExpenseBudgetTotalForPeriod(
     return 0
   }
 
-  const { data: categoriesData, error: categoriesError } = await budgetDb()
+  const { data: categoriesData, error: categoriesError } = await budgetDb
     .from('categories')
     .select('id, flow_type')
     .in('id', categoryIds)

@@ -106,16 +106,16 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
       if (!userId) return []
 
       const [metricsRes, bucketTotalsRes, savingsTotalsRes, personalBalancesByMonth] = await Promise.all([
-        budgetDb()
+        budgetDb
           .from('analytics_monthly_metrics')
           .select('period_month, expense_total, income_total')
           .eq('period_year', 2026)
           .order('period_month', { ascending: true }),
-        budgetDb()
+        budgetDb
           .from('budget_bucket_totals_by_period')
           .select('period_month, total_budget_bucket_eur')
           .eq('period_year', 2026),
-        budgetDb()
+        budgetDb
           .from('savings_budget_totals_by_period')
           .select('period_month, total_savings_budget_eur')
           .eq('period_year', 2026),

@@ -8,7 +8,7 @@ export async function getBudgetGlobalVariableForPeriod(
     return 0
   }
 
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budgets')
     .select('amount')
     .eq('period_id', periodId)

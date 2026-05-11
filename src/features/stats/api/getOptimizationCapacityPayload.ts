@@ -125,7 +125,7 @@ function toRecordArray(value: unknown): Record<string, unknown>[] {
 }
 
 export async function getOptimizationCapacityPayload(year: number): Promise<OptimizationCapacityPayload | null> {
-  const { data, error } = await budgetDb().rpc('get_optimization_capacity_payload', { p_year: year })
+  const { data, error } = await budgetDb.rpc('get_optimization_capacity_payload', { p_year: year })
 
   if (error) {
     throw new Error(`getOptimizationCapacityPayload failed: ${error.message}`)

@@ -1,3 +1,4 @@
+import { formatCurrencyAdaptive, getMonthLabel } from '@/lib/utils'
 import type {
   BudgetActualCategoryMetric,
   BudgetLineWithCategory,
@@ -6,15 +7,6 @@ import type {
   BudgetVsActualRow,
   GlobalVariableBudgetLine,
 } from '@/features/budget/types'
-
-const monthFormatter = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' })
-const currencyFormatter = new Intl.NumberFormat('fr-FR', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-})
-
 function normalizeBucket(value: string | null): string {
   if (!value) return ''
 
@@ -27,15 +19,12 @@ function normalizeBucket(value: string | null): string {
 }
 
 export function formatCurrency(value: number): string {
-  if (!Number.isFinite(value)) return currencyFormatter.format(0)
-  return currencyFormatter.format(value)
+  return formatCurrencyAdaptive(value)
 }
 
 export function formatPeriodLabel(periodYear: number, periodMonth: number, label?: string | null): string {
   if (label && label.trim()) return label
-
-  const date = new Date(periodYear, Math.max(0, periodMonth - 1), 1)
-  return monthFormatter.format(date)
+  return getMonthLabel(periodYear, periodMonth)
 }
 
 export function computeBudgetConsumptionRatio(budgetAmount: number, actualAmount: number): number {

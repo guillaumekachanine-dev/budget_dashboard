@@ -7,7 +7,7 @@ function asNullableNumber(value: unknown): number | null {
 }
 
 export async function getSavingsCurrentSummary(): Promise<SavingsCurrentSummary | null> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('v_savings_current_summary')
     .select(`
       total_savings,

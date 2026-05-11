@@ -3,7 +3,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import type { Budget, BudgetPeriod, CategoryBudgetSummary } from '@/lib/types'
 
 async function fetchCurrentPeriod(year: number, month: number): Promise<BudgetPeriod | null> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_periods')
     .select('*')
     .eq('period_year', year)
@@ -17,7 +17,7 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
   const period = await fetchCurrentPeriod(year, month)
   if (!period) return []
 
-  const { data: budgets, error: bErr } = await budgetDb()
+  const { data: budgets, error: bErr } = await budgetDb
     .from('budgets')
     .select('*, category:categories(*)')
     .eq('period_id', period.id)
@@ -33,7 +33,7 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
   const spentByCategory = new Map<string, number>()
 
   if (categoryIds.length > 0) {
-    const { data: txns, error: txErr } = await budgetDb()
+    const { data: txns, error: txErr } = await budgetDb
       .from('transactions')
       .select('category_id, amount')
       .eq('flow_type', 'expense')
@@ -72,7 +72,7 @@ export function useBudgetSummaries(year: number, month: number) {
   return useQuery({
     queryKey: ['budgets', year, month],
     queryFn: () => fetchBudgetSummaries(year, month),
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
   })
 }
 

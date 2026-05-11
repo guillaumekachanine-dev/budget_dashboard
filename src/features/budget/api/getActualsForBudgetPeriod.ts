@@ -23,7 +23,7 @@ const CATEGORY_METRICS_COLUMNS = [
 ].join(', ')
 
 export async function getActualsForBudgetPeriod(year: number, month: number): Promise<BudgetActualsForPeriod> {
-  const monthlyMetricsPromise = budgetDb()
+  const monthlyMetricsPromise = budgetDb
     .from('analytics_monthly_metrics')
     .select(MONTHLY_METRICS_COLUMNS)
     .eq('period_year', year)
@@ -31,7 +31,7 @@ export async function getActualsForBudgetPeriod(year: number, month: number): Pr
     .limit(1)
     .maybeSingle()
 
-  const categoryMetricsPromise = budgetDb()
+  const categoryMetricsPromise = budgetDb
     .from('analytics_monthly_category_metrics')
     .select(CATEGORY_METRICS_COLUMNS)
     .eq('period_year', year)

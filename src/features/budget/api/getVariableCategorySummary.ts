@@ -17,7 +17,7 @@ const VARIABLE_CATEGORY_SUMMARY_COLUMNS = [
 ].join(', ')
 
 export async function getVariableCategorySummary(): Promise<AnalyticsVariableCategorySummary[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('analytics_variable_category_summary')
     .select(VARIABLE_CATEGORY_SUMMARY_COLUMNS)
     .order('total_amount', { ascending: false })

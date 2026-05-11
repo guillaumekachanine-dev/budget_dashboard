@@ -22,6 +22,9 @@ import {
   getDaysRemainingInMonth,
   getMonthLabel,
   getCategoryColor,
+  formatCurrencyFloored,
+  formatCurrencyAdaptive,
+  getTxLabel,
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -30,41 +33,16 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { normalizeIconKey } from '@/lib/categoryIcons'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
 import type { PlannedOperationItem } from '@/features/home/types'
 import { budgetDb } from '@/lib/supabaseBudget'
-import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
+import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT, PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
 import percolIcon from "@/assets/icons/accounts/amundi_epargne.png";
 import cryptoIcon from "@/assets/icons/accounts/bitcoin.png";
-
-function formatMoneyInteger(amount: number): string {
-  if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(0)
-
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.floor(amount))
-}
-
-function formatMoneyWithDecimals(amount: number): string {
-  if (!Number.isFinite(amount)) return '–'
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
 
 function formatPlannedDateShort(isoDate?: string | null): string {
   if (!isoDate) return '--/--'
@@ -80,36 +58,7 @@ function formatPlannedDateLong(isoDate?: string | null): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function plannedFlowTypeLabel(flowType?: PlannedOperationItem['flow_type']): string {
-  if (flowType === 'expense') return 'Dépense planifiée'
-  if (flowType === 'income') return 'Revenu planifié'
-  if (flowType === 'savings') return 'Épargne planifiée'
-  if (flowType === 'transfer') return 'Transfert planifié'
-  return '—'
-}
 
-function plannedBudgetBucketLabel(bucket?: string | null): string {
-  if (bucket === 'socle_fixe') return 'Socle fixe'
-  if (bucket === 'variable_essentielle') return 'Variable essentielle'
-  if (bucket === 'discretionnaire') return 'Discrétionnaire'
-  if (bucket === 'provision') return 'Provision'
-  if (bucket === 'epargne') return 'Épargne'
-  if (bucket === 'revenu') return 'Revenus'
-  if (bucket === 'hors_pilotage') return 'Hors pilotage'
-  return '—'
-}
-
-function normalizePlannedIconKey(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/['’]/g, '_')
-    .replace(/&/g, 'et')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .toLowerCase()
-}
 
 function plannedOperationIconKey(item: PlannedOperationItem): string | null {
   const candidates: string[] = []
@@ -131,7 +80,7 @@ function plannedOperationIconKey(item: PlannedOperationItem): string | null {
   }
 
   for (const candidate of candidates) {
-    const normalized = normalizePlannedIconKey(candidate)
+    const normalized = normalizeIconKey(candidate)
     if (iconAliases[normalized]) return iconAliases[normalized]
   }
 
@@ -360,7 +309,7 @@ function DriftCategoryTransactionsModal({
                   categoryTransactions?.map((tx) => {
                     const d = new Date(`${tx.transaction_date}T00:00:00`)
                     const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-                    const label = (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
+                    const label = getTxLabel(tx)
                     return (
                       <button
                         key={tx.id}
@@ -388,7 +337,7 @@ function DriftCategoryTransactionsModal({
                       >
                         <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
-                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoneyInteger(Number(tx.amount))}</span>
+                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
                       </button>
                     )
                   })
@@ -419,7 +368,7 @@ export function Home() {
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
   const trajectoryTotalBudget = trajectorySummaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
 
-  const todayIso = now.toISOString().slice(0, 10)
+  const todayDate = now.toISOString().slice(0, 10)
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -441,7 +390,7 @@ export function Home() {
   const trajectoryDaysInMonth = new Date(trajectoryYear, selectedTrajectoryMonth, 0).getDate()
   const trajectoryIsCurrentMonth = now.getFullYear() === trajectoryYear && now.getMonth() + 1 === selectedTrajectoryMonth
   const trajectoryDaysElapsed = trajectoryIsCurrentMonth ? now.getDate() : trajectoryDaysInMonth
-  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayIso : trajectoryMonthEnd
+  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayDate : trajectoryMonthEnd
   const { data: trajectoryMonthExpenseTxns } = useTransactions({
     startDate: trajectoryMonthStart,
     endDate: trajectoryMonthEnd,
@@ -450,7 +399,7 @@ export function Home() {
   const { data: recurringOperationsRows } = useQuery<RecurringOperationRow[]>({
     queryKey: ['home', 'recurring-operations', trajectoryYear, selectedTrajectoryMonth],
     queryFn: async () => {
-      const { data } = await budgetDb()
+      const { data } = await budgetDb
         .from('recurring_obligations')
         .select('id, due_day, starts_on, ends_on, is_active, recurrence_frequency')
       return (data ?? []) as RecurringOperationRow[]
@@ -478,16 +427,16 @@ export function Home() {
   const realToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso)
+      .filter((t) => t.transaction_date <= todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const plannedFuture = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.is_recurring && t.transaction_date > todayIso)
+      .filter((t) => t.is_recurring && t.transaction_date > todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const fallbackVariableBudget = useMemo(() => {
     const rows = summaries ?? []
@@ -506,30 +455,30 @@ export function Home() {
   const variableSpentToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'variable')
+      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'variable')
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const fixedChargesToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'fixed')
+      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'fixed')
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const savingsContributionsToDate = useMemo(() => {
     const rows = monthSavingsTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso)
+      .filter((t) => t.transaction_date <= todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthSavingsTxns, todayIso])
+  }, [monthSavingsTxns, todayDate])
 
   const certainUpcomingExpenses = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date > todayIso && (t.is_recurring || t.budget_behavior === 'fixed'))
+      .filter((t) => t.transaction_date > todayDate && (t.is_recurring || t.budget_behavior === 'fixed'))
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const resteUtile = useMemo(() => {
     return Math.max(0, totalBudget - realToDate - plannedFuture)
@@ -627,16 +576,6 @@ export function Home() {
     })
   }, [accountEntries])
 
-  useEffect(() => {
-    if (selectedAccountPresetId === 'ldds') {
-      setSelectedAccountPresetId('livret_a')
-      return
-    }
-    const mapped = mapPresetIdToDisplayed(selectedAccountPresetId ?? '')
-    if (mapped !== selectedAccountPresetId) {
-      setSelectedAccountPresetId(mapped)
-    }
-  }, [selectedAccountPresetId])
 
   useEffect(() => {
     if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal && !selectedPlannedOperation) return
@@ -743,18 +682,14 @@ export function Home() {
     () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
     [now],
   )
-  const consumedVariablePct = useMemo(() => {
-    if (variableBudgetMonthly <= 0) return 0
-    return (variableSpentToDate / variableBudgetMonthly) * 100
+  const { consumedVariablePct, consumedVariablePctClamped, consumedVariablePctDisplay } = useMemo(() => {
+    const pct = variableBudgetMonthly <= 0 ? 0 : (variableSpentToDate / variableBudgetMonthly) * 100
+    return {
+      consumedVariablePct: pct,
+      consumedVariablePctClamped: Math.max(0, Math.min(100, pct)),
+      consumedVariablePctDisplay: `${Math.round(pct)}%`,
+    }
   }, [variableBudgetMonthly, variableSpentToDate])
-  const consumedVariablePctClamped = useMemo(
-    () => Math.max(0, Math.min(100, consumedVariablePct)),
-    [consumedVariablePct],
-  )
-  const consumedVariablePctDisplay = useMemo(
-    () => `${Math.round(consumedVariablePct)}%`,
-    [consumedVariablePct],
-  )
   const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
   const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
@@ -781,7 +716,8 @@ export function Home() {
   }, [])
 
   const handleSelectAccountPreset = useCallback((presetId: string) => {
-    setSelectedAccountPresetId(presetId)
+    const normalized = presetId === 'ldds' ? 'livret_a' : mapPresetIdToDisplayed(presetId)
+    setSelectedAccountPresetId(normalized)
     setShowAccountsModal(false)
   }, [])
 
@@ -791,28 +727,25 @@ export function Home() {
 
   useEffect(() => {
     setShowTop5ExpensesInDrift(false)
-  }, [homeInsightsSlide, selectedTrajectoryMonth])
-
-  useEffect(() => {
     setSelectedPlannedDay(null)
-  }, [selectedTrajectoryMonth, homeInsightsSlide])
+  }, [homeInsightsSlide, selectedTrajectoryMonth])
 
   const heroMetrics = useMemo(
     () => [
-      { key: 'reste', label: 'Reste utile', value: formatMoneyInteger(resteUtile) },
-      { key: 'jour', label: 'Budget / jour', value: formatMoneyInteger(budgetParJour) },
-      { key: 'avenir', label: 'Dépenses à venir', value: formatMoneyInteger(plannedFuture) },
-      { key: 'fin', label: 'Fin de mois', value: formatMoneyInteger(previsionFinDeMois) },
+      { key: 'reste', label: 'Reste utile', value: formatCurrencyFloored(resteUtile) },
+      { key: 'jour', label: 'Budget / jour', value: formatCurrencyFloored(budgetParJour) },
+      { key: 'avenir', label: 'Dépenses à venir', value: formatCurrencyFloored(plannedFuture) },
+      { key: 'fin', label: 'Fin de mois', value: formatCurrencyFloored(previsionFinDeMois) },
     ],
     [budgetParJour, plannedFuture, previsionFinDeMois, resteUtile],
   )
 
   const mainCheckingHeroMetrics = useMemo(
     () => [
-      { key: 'variable-budget', label: 'Budget variable', value: formatMoneyInteger(variableBudgetMonthly) },
-      { key: 'variable-spent', label: 'Variable consommé', value: formatMoneyInteger(variableSpentToDate) },
-      { key: 'reste-utile-main', label: 'Reste utile', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
-      { key: 'daily-available', label: 'Disponible / jour', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
+      { key: 'variable-budget', label: 'Budget variable', value: formatCurrencyFloored(variableBudgetMonthly) },
+      { key: 'variable-spent', label: 'Variable consommé', value: formatCurrencyFloored(variableSpentToDate) },
+      { key: 'reste-utile-main', label: 'Reste utile', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
+      { key: 'daily-available', label: 'Disponible / jour', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
     ],
     [mainAccountDailyAvailable, mainAccountResteUtile, variableBudgetMonthly, variableSpentToDate],
   )
@@ -848,14 +781,14 @@ export function Home() {
   const latestSavingsDepositLabel = useMemo(() => {
     if (!isSavingsBooklet) return ''
     if (!latestSavingsDeposit) return 'Aucun versement'
-    return `${formatMoneyInteger(Number(latestSavingsDeposit.amount))} · ${formatDateShort(latestSavingsDeposit.transaction_date)}`
+    return `${formatCurrencyFloored(Number(latestSavingsDeposit.amount))} · ${formatDateShort(latestSavingsDeposit.transaction_date)}`
   }, [isSavingsBooklet, latestSavingsDeposit])
 
   const savingsInterestYtd2026 = useMemo(() => {
     if (!isSavingsBooklet) return 0
     const rows = selectedAccountTxns ?? []
     const hasExplicitInterest = rows.filter((txn) => {
-      if (txn.transaction_date < '2026-01-01' || txn.transaction_date > todayIso) return false
+      if (txn.transaction_date < '2026-01-01' || txn.transaction_date > todayDate) return false
       const label = `${txn.raw_label ?? ''} ${txn.normalized_label ?? ''} ${txn.merchant_name ?? ''}`
       return normalizeLabel(label).includes('interet')
     })
@@ -864,7 +797,7 @@ export function Home() {
     }
     const ytdRatio = Math.max(0, Math.min(1, (now.getMonth() + 1) / 12))
     return selectedBalance * (SAVINGS_INTEREST_RATE_BY_YEAR[2026] ?? 0.015) * ytdRatio
-  }, [isSavingsBooklet, now, selectedAccountTxns, selectedBalance, todayIso])
+  }, [isSavingsBooklet, now, selectedAccountTxns, selectedBalance, todayDate])
 
   const projectedInterest2027 = useMemo(() => {
     if (!isSavingsBooklet) return 0
@@ -876,8 +809,8 @@ export function Home() {
     () => [
       { key: 'statut', label: 'Statut', value: savingsStatusLabel },
       { key: 'versement', label: 'Dernier versement réalisé', value: latestSavingsDepositLabel },
-      { key: 'interets2026', label: 'Intérêts perçus début 2026', value: formatMoneyInteger(savingsInterestYtd2026) },
-      { key: 'projection2027', label: 'Projection intérêt 2027', value: formatMoneyInteger(projectedInterest2027) },
+      { key: 'interets2026', label: 'Intérêts perçus début 2026', value: formatCurrencyFloored(savingsInterestYtd2026) },
+      { key: 'projection2027', label: 'Projection intérêt 2027', value: formatCurrencyFloored(projectedInterest2027) },
     ],
     [latestSavingsDepositLabel, projectedInterest2027, savingsInterestYtd2026, savingsStatusLabel],
   )
@@ -1023,7 +956,7 @@ export function Home() {
     const plannedAmount = plannedOperation
       ? Number(plannedOperation.planned_personal_amount ?? plannedOperation.planned_amount)
       : null
-    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatMoneyWithDecimals(plannedAmount) : '–'
+    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatCurrencyAdaptive(plannedAmount) : '–'
   }, [getPlannedOperationFromDay])
 
   const trajectoryTooltipContent = useCallback((payload: any) => {
@@ -1034,7 +967,7 @@ export function Home() {
     return (
       <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3, minWidth: 146 }}>
         <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${day}`}</p>
-        <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${actualValue == null ? '—' : formatMoneyInteger(Number(actualValue))}`}</p>
+        <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${actualValue == null ? '—' : formatCurrencyFloored(Number(actualValue))}`}</p>
         {hasPlannedOperation ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
             <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(day)}`}</p>
@@ -1205,7 +1138,7 @@ export function Home() {
   const trajectoryDeltaColor =
     trajectoryDeltaPct == null ? 'var(--neutral-500)' : trajectoryDeltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
   const monthlyBudgetCap = Math.max(0, Number(trajectoryTotalBudget ?? 0))
-  const monthlyBudgetCapLabel = formatMoneyInteger(monthlyBudgetCap)
+  const monthlyBudgetCapLabel = formatCurrencyFloored(monthlyBudgetCap)
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
   const heroPrimaryColor = accountVisualGroup === 'savings'
     ? 'var(--color-success)'
@@ -1267,10 +1200,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-success)',
           metrics: [
-            { key: 'solde-per', label: 'Solde', value: formatMoneyInteger(perBalance) },
+            { key: 'solde-per', label: 'Solde', value: formatCurrencyFloored(perBalance) },
             { key: 'liquidite-per', label: 'Liquidite', value: 'Bloque' },
             { key: 'perf-per', label: 'Performance', value: '+2,3%' },
-            { key: 'simulation-2026-per', label: 'Projection 2026', value: formatMoneyInteger(perBalance + 3000) },
+            { key: 'simulation-2026-per', label: 'Projection 2026', value: formatCurrencyFloored(perBalance + 3000) },
           ],
         },
       ]
@@ -1286,10 +1219,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-pea', label: 'Solde', value: formatMoneyInteger(peaBalance) },
+            { key: 'solde-pea', label: 'Solde', value: formatCurrencyFloored(peaBalance) },
             { key: 'liquidite-pea', label: 'Liquidite', value: 'Disponible' },
             { key: 'perf-pea', label: 'Performance', value: '+8,2%' },
-            { key: 'gain-pea', label: 'Gain realise', value: formatMoneyInteger(peaBalance * 0.082) },
+            { key: 'gain-pea', label: 'Gain realise', value: formatCurrencyFloored(peaBalance * 0.082) },
           ],
         },
         {
@@ -1301,10 +1234,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-percol', label: 'Solde', value: formatMoneyInteger(percolBalance) },
+            { key: 'solde-percol', label: 'Solde', value: formatCurrencyFloored(percolBalance) },
             { key: 'liquidite-percol', label: 'Liquidite', value: 'Bloque' },
             { key: 'perf-percol', label: 'Performance', value: '+1,5%' },
-            { key: 'gain-percol', label: 'Gain realise', value: formatMoneyInteger(percolBalance * 0.015) },
+            { key: 'gain-percol', label: 'Gain realise', value: formatCurrencyFloored(percolBalance * 0.015) },
           ],
         },
         {
@@ -1316,10 +1249,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-crypto', label: 'Solde', value: formatMoneyInteger(cryptoBalance) },
+            { key: 'solde-crypto', label: 'Solde', value: formatCurrencyFloored(cryptoBalance) },
             { key: 'liquidite-crypto', label: 'Liquidite', value: 'Disponible' },
             { key: 'perf-crypto', label: 'Performance', value: '+45,2%' },
-            { key: 'gain-crypto', label: 'Gain realise', value: formatMoneyInteger(cryptoBalance * 0.452) },
+            { key: 'gain-crypto', label: 'Gain realise', value: formatCurrencyFloored(cryptoBalance * 0.452) },
           ],
         },
       ]
@@ -1374,11 +1307,11 @@ export function Home() {
                   <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
                   <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: `color-mix(in oklab, ${section.color} 58%, var(--neutral-900) 42%)` }}>
-                      {formatMoneyInteger(section.balance)}
+                      {formatCurrencyFloored(section.balance)}
                     </p>
                     {section.ceiling !== null && section.ceilingPct !== null ? (
                       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatMoneyInteger(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
+                        {`Plafond ${formatCurrencyFloored(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
                       </p>
                     ) : null}
                   </div>
@@ -1478,7 +1411,7 @@ export function Home() {
                     lineHeight: 1.1,
                     letterSpacing: '-0.02em',
                   }}>
-                    {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                    {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                   </p>
                   <p style={{
                     margin: '4px 0 0',
@@ -1495,11 +1428,11 @@ export function Home() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', alignItems: 'start' }}>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>variable</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableBudgetMonthly).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(variableBudgetMonthly).replace(/\s+€/, '€')}</p>
                     </div>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>consommé</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableSpentToDate).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(variableSpentToDate).replace(/\s+€/, '€')}</p>
                     </div>
                     <button
                       type="button"
@@ -1508,7 +1441,7 @@ export function Home() {
                       style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
                     >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>reste utile</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(resteUtileDisplay).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(resteUtileDisplay).replace(/\s+€/, '€')}</p>
                     </button>
                     <button
                       type="button"
@@ -1517,7 +1450,7 @@ export function Home() {
                       style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
                     >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>budget/jour</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
                     </button>
                   </div>
                 </div>
@@ -1542,11 +1475,11 @@ export function Home() {
                         color: heroAmountColor,
                       }}
                     >
-                      {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                      {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                     </p>
                     {isSavingsBooklet && savingsBookletCeiling ? (
                       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
+                        {`Plafond ${formatCurrencyFloored(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
                       </p>
                     ) : null}
                   </div>
@@ -1756,7 +1689,7 @@ export function Home() {
                               axisLine={false}
                               tickLine={false}
                               width={54}
-                              tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                              tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                             />
                             <Tooltip content={trajectoryTooltipContent} />
                             <ReferenceLine
@@ -1815,7 +1748,7 @@ export function Home() {
                         {selectedPlannedDay != null && getPlannedOperationFromDay(selectedPlannedDay) ? (
                           <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3 }}>
                             <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
-                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
+                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatCurrencyFloored(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
                               <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(selectedPlannedDay)}`}</p>
                               <button
@@ -1882,7 +1815,7 @@ export function Home() {
                                   const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
                                   return (
                                     <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                                      {`#${idx + 1}. ${row.name} - ${formatMoneyInteger(row.spent)} - `}
+                                      {`#${idx + 1}. ${row.name} - ${formatCurrencyFloored(row.spent)} - `}
                                       <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                                         {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
                                       </span>
@@ -1954,7 +1887,7 @@ export function Home() {
                                     fontWeight: 'var(--font-weight-regular)', 
                                     color: 'var(--neutral-800)' 
                                   }}>
-                                    {`${row.name} - ${formatMoneyInteger(row.spent)}`}
+                                    {`${row.name} - ${formatCurrencyFloored(row.spent)}`}
                                   </span>
 
                                   {/* Drift Percentage */}
@@ -1989,7 +1922,7 @@ export function Home() {
                                 const dateStr = formatPlannedDateShort(displayDate)
                                 const rawAmount = op.planned_personal_amount ?? op.planned_amount
                                 const hasAmount = Number.isFinite(Number(rawAmount))
-                                const amountStr = hasAmount ? formatMoneyWithDecimals(Number(rawAmount)) : '–'
+                                const amountStr = hasAmount ? formatCurrencyAdaptive(Number(rawAmount)) : '–'
                                 const isAdditionalCommitmentExpense = op.flow_type === 'expense' && op.budget_impact === 'additional_commitment'
                                 const impactsRemainingUseful = isAdditionalCommitmentExpense
                                   && (op.impacts_remaining_useful === true || Number(op.remaining_useful_impact_amount ?? 0) > 0)
@@ -2098,7 +2031,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2108,7 +2041,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Solde modélisé']}
+                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Solde modélisé']}
                       labelFormatter={(label) => `2026 · ${label}`}
                     />
                     <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
@@ -2124,7 +2057,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2134,7 +2067,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Fonds projetés']}
+                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Fonds projetés']}
                       labelFormatter={(label) => `Année ${label}`}
                     />
                     <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
@@ -2150,7 +2083,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2160,7 +2093,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number, name: string) => [formatMoneyInteger(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
+                      formatter={(value: number, name: string) => [formatCurrencyFloored(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
                       labelFormatter={(label) => `Année ${label}`}
                     />
                     <Line type="monotone" dataKey="yearlyInterest" name="Intérêts annuels" stroke="var(--primary-500)" strokeWidth={2.5} dot={false} />
@@ -2183,7 +2116,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip content={trajectoryTooltipContent} />
                     <ReferenceLine
@@ -2284,7 +2217,7 @@ export function Home() {
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>{label}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoneyInteger(row.actual_amount)} / {formatMoneyInteger(row.budget_amount)}
+                          {formatCurrencyFloored(row.actual_amount)} / {formatCurrencyFloored(row.budget_amount)}
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: isOver ? 'var(--color-error)' : 'var(--color-success)' }}>
                           {row.variance_pct != null ? `${isOver ? '+' : ''}${(row.variance_pct * 100).toFixed(0)}%` : '—'}
@@ -2296,7 +2229,7 @@ export function Home() {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                       <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                        Reste : {row.remaining_amount >= 0 ? '' : '−'}{formatMoneyInteger(Math.abs(row.remaining_amount))}
+                        Reste : {row.remaining_amount >= 0 ? '' : '−'}{formatCurrencyFloored(Math.abs(row.remaining_amount))}
                       </span>
                       <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>
                         {row.transaction_count} opération{row.transaction_count > 1 ? 's' : ''}
@@ -2375,16 +2308,16 @@ export function Home() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(48px, auto))', gap: 'var(--space-2)', alignItems: 'center', justifyItems: 'end' }}>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Budget</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', fontWeight: 600 }}>{cat.budget_amount > 0 ? formatMoneyInteger(cat.budget_amount) : '—'}</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', fontWeight: 600 }}>{cat.budget_amount > 0 ? formatCurrencyFloored(cat.budget_amount) : '—'}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Consommé</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', fontWeight: 700 }}>{formatMoneyInteger(cat.actual_amount)}</p>
+                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', fontWeight: 700 }}>{formatCurrencyFloored(cat.actual_amount)}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Reste</p>
                           <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: cat.remaining_amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)', fontWeight: 600 }}>
-                            {cat.budget_amount > 0 ? formatMoneyInteger(cat.remaining_amount) : '—'}
+                            {cat.budget_amount > 0 ? formatCurrencyFloored(cat.remaining_amount) : '—'}
                           </p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -2441,7 +2374,7 @@ export function Home() {
               {(() => {
                 const displayDate = selectedPlannedOperation.occurrence_date ?? selectedPlannedOperation.planned_date
                 const displayAmount = selectedPlannedOperation.planned_personal_amount ?? selectedPlannedOperation.planned_amount
-                const amountText = Number.isFinite(Number(displayAmount)) ? formatMoneyWithDecimals(Number(displayAmount)) : '–'
+                const amountText = Number.isFinite(Number(displayAmount)) ? formatCurrencyAdaptive(Number(displayAmount)) : '–'
                 const categoryLabel = selectedPlannedOperation.parent_category_name && selectedPlannedOperation.category_name
                   ? `${selectedPlannedOperation.parent_category_name} > ${selectedPlannedOperation.category_name}`
                   : (selectedPlannedOperation.category_name ?? 'Non catégorisé')
@@ -2489,7 +2422,7 @@ export function Home() {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Type</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedFlowTypeLabel(selectedPlannedOperation.flow_type)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{PLANNED_FLOW_LABELS[selectedPlannedOperation.flow_type] ?? '—'}</span>
                       </div>
                     </div>
 
@@ -2504,7 +2437,7 @@ export function Home() {
                       <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pilotage</p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Bloc de pilotage</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedBudgetBucketLabel(selectedPlannedOperation.budget_bucket)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{BUCKET_LABELS[selectedPlannedOperation.budget_bucket ?? ''] ?? '—'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Récurrence</span>
@@ -2525,7 +2458,7 @@ export function Home() {
                             + €
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                            {formatMoneyWithDecimals(Math.max(0, Number(impactDetail.amount ?? 0)))}
+                            {formatCurrencyAdaptive(Math.max(0, Number(impactDetail.amount ?? 0)))}
                           </span>
                         </div>
                       ) : null}
@@ -2590,33 +2523,33 @@ export function Home() {
               <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenus encaissés</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(revenueAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(revenueAmountDisplay)}</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Montants protégés
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(fixedBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(fixedBudgetAmountDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(provisionBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(provisionBudgetAmountDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(savingsBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(savingsBudgetAmountDisplay)}</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Déjà consommé
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(variableEssentialConsumedDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(variableEssentialConsumedDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(discretionaryConsumedDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
                 </div>
               </div>
 
@@ -2634,10 +2567,10 @@ export function Home() {
                   Reste utile
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
-                  {formatMoneyInteger(resteUtileDisplay)}
+                  {formatCurrencyFloored(resteUtileDisplay)}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.92)', fontWeight: 700 }}>
-                  {`${formatMoneyInteger(budgetPerDayDisplay)} / jour`}
+                  {`${formatCurrencyFloored(budgetPerDayDisplay)} / jour`}
                 </p>
               </div>
 

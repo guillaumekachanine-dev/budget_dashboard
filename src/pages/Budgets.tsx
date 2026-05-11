@@ -18,7 +18,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { formatCurrencyRounded } from '@/lib/utils'
+import { formatCurrencyRounded, formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel } from '@/lib/utils'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { Transaction } from '@/lib/types'
 import type { BudgetLineWithCategory, BudgetPeriodOption } from '@/features/budget/types'
@@ -140,15 +140,6 @@ interface HistoryWindowMonth {
   periodMonth: number
 }
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function formatMoney(amount: number): string {
-  if (!Number.isFinite(amount)) return formatCurrencyRounded(0)
-  return formatCurrencyRounded(Math.floor(amount))
-}
-
 function formatPercentSigned(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 }
@@ -173,21 +164,6 @@ function formatMonthYearFrench(monthStart: string | null | undefined): string {
   return d
     .toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
     .replace('.', '')
-}
-
-function formatCategoryModalLabel(name: string): string {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
-  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
-  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
-  return name
-}
-
-function txLabel(tx: Transaction): string {
-  return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
 }
 
 function extractPiePayload(slice: unknown): Partial<PieDatum> | null {
@@ -231,7 +207,7 @@ function getPeriodRange(
   selectedMonth: number,
 ): { startDate: string; endDate: string } {
   const now = new Date()
-  const today = todayStr()
+  const today = todayIso()
 
   if (key === 'annee') {
     return { startDate: `${selectedYear}-01-01`, endDate: today }
@@ -434,7 +410,7 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
   return (
     <div style={{ background: 'var(--primary-600)', borderRadius: 'var(--radius-md)', padding: '6px 11px', boxShadow: 'var(--shadow-md)', display: 'grid', gap: 2 }}>
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', textAlign: 'center' }}>
-        {formatMoney(amount)}
+        {formatCurrencyFloored(amount)}
       </span>
       {gapPct != null ? (
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: gapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', textAlign: 'center' }}>
@@ -504,7 +480,7 @@ function SubCategoryTransactionsModal({
             }}
           >
             <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>{categoryName} - {formatMoney(categoryAmount)}</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>{categoryName} - {formatCurrencyFloored(categoryAmount)}</p>
               <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                 <X size={20} />
               </button>
@@ -542,8 +518,8 @@ function SubCategoryTransactionsModal({
                     }}
                   >
                     <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatTxDateDayMonth(tx.transaction_date)}</span>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{txLabel(tx)}</span>
-                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoney(Number(tx.amount))}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{getTxLabel(tx)}</span>
+                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
                   </button>
                 ))
               )}
@@ -570,7 +546,11 @@ export function Budgets() {
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
   const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
   const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(defaultPeriodMonth)
-  const [availableBudgetPeriods, setAvailableBudgetPeriods] = useState<BudgetPeriodOption[]>([])
+  const { data: availableBudgetPeriods = [] } = useQuery({
+    queryKey: ['budget-periods'],
+    queryFn: getBudgetPeriods,
+    staleTime: 5 * 60_000,
+  })
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
   const selectedBlockQuery = searchParams.get('block')
@@ -661,7 +641,6 @@ export function Budgets() {
   const dragStartXRef = useRef<number | null>(null)
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
-  const hasAppliedDefaultParamsRef = useRef(false)
   const topSectionRef = useRef<HTMLElement | null>(null)
   const categoriesSectionRef = useRef<HTMLElement | null>(null)
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
@@ -680,15 +659,15 @@ export function Budgets() {
   const slideThreeParamCardWidth = isCompactMobile ? 132 : 140
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
-    const nextParams = new URLSearchParams(searchParams)
+    const nextParams = new URLSearchParams(searchParamsKey)
     if (nextCategoryId === 'all') nextParams.delete('category')
     else nextParams.set('category', nextCategoryId)
     nextParams.delete('block')
     setSearchParams(nextParams, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParamsKey, setSearchParams])
 
   const setSelectedBlockPage = useCallback((nextBlockId: BlockPageId | null) => {
-    const nextParams = new URLSearchParams(searchParams)
+    const nextParams = new URLSearchParams(searchParamsKey)
     if (nextBlockId) {
       nextParams.set('block', nextBlockId)
       nextParams.delete('category')
@@ -696,12 +675,9 @@ export function Budgets() {
       nextParams.delete('block')
     }
     setSearchParams(nextParams, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParamsKey, setSearchParams])
 
   useEffect(() => {
-    if (hasAppliedDefaultParamsRef.current) return
-    hasAppliedDefaultParamsRef.current = true
-
     setPeriodKey('mois')
     setSelectedPeriodYear(defaultPeriodYear)
     setSelectedPeriodMonth(defaultPeriodMonth)
@@ -714,39 +690,19 @@ export function Budgets() {
       nextParams.delete('block')
       setSearchParams(nextParams, { replace: true })
     }
-  }, [defaultPeriodMonth, defaultPeriodYear, searchParamsKey, setSearchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
-    let active = true
-
-    const loadBudgetPeriods = async () => {
-      try {
-        const periods = await getBudgetPeriods()
-        if (!active) return
-
-        setAvailableBudgetPeriods(periods)
-        if (!periods.length) return
-
-        const hasCurrentSelection = periods.some(
-          (period) => period.period_year === defaultPeriodYear && period.period_month === defaultPeriodMonth,
-        )
-
-        if (!hasCurrentSelection) {
-          setSelectedPeriodYear(periods[0].period_year)
-          setSelectedPeriodMonth(periods[0].period_month)
-        }
-      } catch {
-        if (!active) return
-        setAvailableBudgetPeriods([])
-      }
+    if (!availableBudgetPeriods.length) return
+    const hasCurrentSelection = availableBudgetPeriods.some(
+      (p) => p.period_year === defaultPeriodYear && p.period_month === defaultPeriodMonth,
+    )
+    if (!hasCurrentSelection) {
+      setSelectedPeriodYear(availableBudgetPeriods[0].period_year)
+      setSelectedPeriodMonth(availableBudgetPeriods[0].period_month)
     }
-
-    void loadBudgetPeriods()
-
-    return () => {
-      active = false
-    }
-  }, [nowMonth, nowYear])
+  }, [availableBudgetPeriods, defaultPeriodYear, defaultPeriodMonth])
 
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
@@ -1183,7 +1139,7 @@ export function Budgets() {
       const startMonth = historyWindowMonths[0].monthStart
       const endMonth = historyWindowMonths[historyWindowMonths.length - 1].monthStart
 
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('analytics_monthly_category_metrics')
         .select('period_year, period_month, amount_total, category_id')
         .eq('flow_type', 'expense')
@@ -1843,7 +1799,7 @@ export function Budgets() {
               >
                 <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Réel</span>
                 <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-                  {formatMoney(selectedPeriodSpent).replace(/\s+€/, '€')}
+                  {formatCurrencyFloored(selectedPeriodSpent).replace(/\s+€/, '€')}
                 </span>
               </button>
               <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700, flexShrink: 0 }}>-</span>
@@ -1869,7 +1825,7 @@ export function Budgets() {
               >
                 <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Budget</span>
                 <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-                  {formatMoney(totalMonthlyBudget).replace(/\s+€/, '€')}
+                  {formatCurrencyFloored(totalMonthlyBudget).replace(/\s+€/, '€')}
                 </span>
               </button>
             </div>
@@ -2045,12 +2001,12 @@ export function Budgets() {
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(blockPageSixMonthAverage).replace(/\s+€/, '€')}</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(blockPageSixMonthAverage).replace(/\s+€/, '€')}</span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
@@ -2068,7 +2024,7 @@ export function Budgets() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={blockPageHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                 <ReferenceLine y={Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0))} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2076,7 +2032,7 @@ export function Budgets() {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                     const item = payload
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
                   {blockPageHistory.map((entry, i) => <Cell key={`block-history-${i}`} fill={selectedBlockPage.color} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
@@ -2155,7 +2111,7 @@ export function Budgets() {
                           />
                         </span>
                         <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {`${formatMoney(displayedAmount)} · ${dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}`}
+                          {`${formatCurrencyFloored(displayedAmount)} · ${dataDisplayMode === 'budget' ? `Réel ${formatCurrencyFloored(secondaryAmount)}` : `Budget ${formatCurrencyFloored(secondaryAmount)}`}`}
                         </span>
                       </span>
                     </button>
@@ -2218,19 +2174,19 @@ export function Budgets() {
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois sélectionné</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 2025-2026</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
-                    {formatMoney(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
-                    {formatMoney(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
               </div>
@@ -2245,14 +2201,14 @@ export function Budgets() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
                   <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                     const item = payload
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
                   {revenueMonthlyHistory.map((entry, i) => <Cell key={`revenue-history-${i}`} fill={revenuePageColor} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
@@ -2325,7 +2281,7 @@ export function Budgets() {
                           />
                         </span>
                         <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {`${formatMoney(displayedAmount)} · ${source.transaction_count} op · moy ${formatMoney(source.avg_amount)}`}
+                          {`${formatCurrencyFloored(displayedAmount)} · ${source.transaction_count} op · moy ${formatCurrencyFloored(source.avg_amount)}`}
                         </span>
                       </span>
                     </div>
@@ -2352,7 +2308,7 @@ export function Budgets() {
                       {formatMonthYearFrench(row.month_start)}
                     </span>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatMoney(row.revenue_amount)}
+                      {formatCurrencyFloored(row.revenue_amount)}
                     </span>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
                       {row.transaction_count.toLocaleString('fr-FR')}
@@ -2390,7 +2346,7 @@ export function Budgets() {
                       </span>
                     </span>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatMoney(tx.pilotage_amount)}
+                      {formatCurrencyFloored(tx.pilotage_amount)}
                     </span>
                   </div>
                 )) : (
@@ -2453,12 +2409,12 @@ export function Budgets() {
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
@@ -2476,7 +2432,7 @@ export function Budgets() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                 <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2484,7 +2440,7 @@ export function Budgets() {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                     const item = payload
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
                   {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={accentFromLabel(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
@@ -2554,7 +2510,7 @@ export function Budgets() {
                           />
                         </span>
                         <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {formatMoney(row.displayAmount)}
+                          {formatCurrencyFloored(row.displayAmount)}
                         </span>
                       </span>
                     </button>
@@ -2616,7 +2572,7 @@ export function Budgets() {
                   <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                       <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
-                        {formatMoney(donutCenterAmount)}
+                        {formatCurrencyFloored(donutCenterAmount)}
                       </span>
                       <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
                         {donutCenterLabel}
@@ -2715,7 +2671,7 @@ export function Budgets() {
                               />
                             </span>
                             <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                              {formatMoney(row.displayAmount)}
+                              {formatCurrencyFloored(row.displayAmount)}
                             </span>
                           </span>
                         </button>
@@ -2791,7 +2747,7 @@ export function Budgets() {
                       <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                           <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
-                            {formatMoney(blockDonutTotal)}
+                            {formatCurrencyFloored(blockDonutTotal)}
                           </span>
                           <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
                             {dataDisplayMode === 'budget' ? 'budgétés' : 'dépensés'}
@@ -2840,7 +2796,7 @@ export function Budgets() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                       <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2848,7 +2804,7 @@ export function Budgets() {
                           const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                           const item = payload
                           if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                         }} />
                         {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                       </Bar>
@@ -2861,7 +2817,7 @@ export function Budgets() {
                       Montant moyen mensuel
                     </span>
                     <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                      {formatMoney(sixMonthAverageAmount)}
+                      {formatCurrencyFloored(sixMonthAverageAmount)}
                     </span>
                   </div>
                   <div style={{ display: 'grid', gap: 2 }}>
@@ -3061,7 +3017,7 @@ export function Budgets() {
                           {`Socle ${row.label.toLowerCase()}`}
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                          {formatMoney(budgetAmount)}
+                          {formatCurrencyFloored(budgetAmount)}
                         </p>
                       </div>
 
@@ -3079,10 +3035,10 @@ export function Budgets() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoney(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
+                          {formatCurrencyFloored(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
                         </p>
 		                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-		                          {isOverBudget ? `Dépassement ${formatMoney(Math.abs(variance))}` : `Restant ${formatMoney(variance)}`}
+		                          {isOverBudget ? `Dépassement ${formatCurrencyFloored(Math.abs(variance))}` : `Restant ${formatCurrencyFloored(variance)}`}
 		                        </p>
 		                      </div>
 		                    </div>
@@ -3139,7 +3095,7 @@ export function Budgets() {
                           </span>
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                          {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0)}
+                          {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0)}
                         </p>
                       </div>
 
@@ -3157,7 +3113,7 @@ export function Budgets() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoney(selectedMonthRevenueAmount)} <span style={{ color: 'var(--neutral-500)' }}>({revenueCoveragePctRounded}%)</span>
+                          {formatCurrencyFloored(selectedMonthRevenueAmount)} <span style={{ color: 'var(--neutral-500)' }}>({revenueCoveragePctRounded}%)</span>
                         </p>
                         <p
                           style={{
@@ -3172,12 +3128,12 @@ export function Budgets() {
                         >
                           {isRevenueAboveTarget
                             ? `Dépassement +${Math.round(revenueSurplusPct ?? 0)}%`
-                            : `Cible ${formatMoney(monthlyCommitmentsTarget)}`}
+                            : `Cible ${formatCurrencyFloored(monthlyCommitmentsTarget)}`}
                         </p>
                       </div>
                       <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
                         {isRevenueAboveTarget
-                          ? `+${formatMoney(Math.max(0, revenueSurplusAmount))} vs cible`
+                          ? `+${formatCurrencyFloored(Math.max(0, revenueSurplusAmount))} vs cible`
                           : `${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
                       </p>
                     </div>
@@ -3254,7 +3210,7 @@ export function Budgets() {
                 <div style={{ padding: 'var(--space-3) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>
-                      Bloc <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
+                      Bloc <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatCurrencyFloored(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
                     </p>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.72)' }}>
                       {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
@@ -3328,7 +3284,7 @@ export function Budgets() {
                               {line.categoryName}
                             </span>
                             <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
-                              {formatMoney(displayedAmount)}
+                              {formatCurrencyFloored(displayedAmount)}
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
@@ -3336,7 +3292,7 @@ export function Budgets() {
                               {line.parentCategoryName ?? 'Autres'}
                             </span>
                             <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                              {dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}
+                              {dataDisplayMode === 'budget' ? `Réel ${formatCurrencyFloored(secondaryAmount)}` : `Budget ${formatCurrencyFloored(secondaryAmount)}`}
                             </span>
                           </div>
                         </div>

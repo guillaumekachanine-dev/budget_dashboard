@@ -1,3 +1,12 @@
+// ─── Flow types d'opérations planifiées ─────────────────────────────────────
+
+export const PLANNED_FLOW_LABELS: Record<string, string> = {
+  expense:  'Dépense planifiée',
+  income:   'Revenu planifié',
+  savings:  'Épargne planifiée',
+  transfer: 'Transfert planifié',
+}
+
 // ─── Buckets ──────────────────────────────────────────────────────────────────
 
 export const BUCKET_COLORS: Record<string, string> = {

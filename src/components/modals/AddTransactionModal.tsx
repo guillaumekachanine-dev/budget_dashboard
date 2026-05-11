@@ -9,6 +9,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useAuth } from '@/hooks/useAuth'
 import { useCategories } from '@/hooks/useCategories'
 import { useAddTransaction } from '@/hooks/useTransactions'
+import { formatCurrencyAdaptive, todayIso } from '@/lib/utils'
 import type { BudgetBehavior, Category, Direction, RecurrenceFrequency } from '@/lib/types'
 
 interface AddTransactionModalProps {
@@ -114,10 +115,6 @@ function createDefaultFormValues(): FormValues {
   }
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function parseMoney(value: string): number | null {
   const normalized = value.replace(/\s/g, '').replace('€', '').replace(/,/g, '.').trim()
   const sanitized = normalized.replace(/[^\d.]/g, '')
@@ -130,15 +127,6 @@ function parseMoney(value: string): number | null {
   if (!Number.isFinite(parsed)) return null
   if (parsed <= 0) return null
   return Math.round(parsed * 100) / 100
-}
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount)
 }
 
 function isValidDate(value: string): boolean {
@@ -160,7 +148,7 @@ function readFormattedAmount(value: string, focused: boolean): string {
   if (focused) return value
   const parsed = parseMoney(value)
   if (parsed == null) return ''
-  return formatMoney(parsed)
+  return formatCurrencyAdaptive(parsed)
 }
 
 function toAmountInputValue(value: string): string {

@@ -9,7 +9,6 @@ import { getMonthlyEvolution2026 } from '@/features/stats/api/getMonthlyEvolutio
 import {
   getLatestUsableStatsPeriod,
   getUsableStatsMonthlyPeriods,
-  hasUsableStatsPeriod,
   type UsableStatsPeriod,
 } from '@/features/stats/api/getLatestUsableStatsPeriod'
 import { getSavingsBudgetLinesByPeriod } from '@/features/stats/api/getSavingsBudgetLinesByPeriod'
@@ -342,21 +341,19 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
 
     try {
       const periodCandidate = resolvePeriodFromStateOrInput(options.period, options.ignoreStoredSelectedPeriod === true)
-      let checkedCandidate = periodCandidate
 
+      const usablePeriods = await getUsableStatsMonthlyPeriods(resolvedUserId, STATS_REFERENCE_YEAR)
+
+      let checkedCandidate = periodCandidate
       if (checkedCandidate) {
         const isExpectedYear = checkedCandidate.period_year === STATS_REFERENCE_YEAR
-        const exists = await hasUsableStatsPeriod(
-          resolvedUserId,
-          checkedCandidate.period_year,
-          checkedCandidate.period_month,
+        const exists = usablePeriods.some(
+          (p) => p.period_year === checkedCandidate!.period_year && p.period_month === checkedCandidate!.period_month,
         )
         if (!isExpectedYear || !exists) {
           checkedCandidate = null
         }
       }
-
-      const usablePeriods = await getUsableStatsMonthlyPeriods(resolvedUserId, STATS_REFERENCE_YEAR)
       if (usablePeriods.length === 0) {
         const latestPeriod = await getLatestUsableStatsPeriod(resolvedUserId)
         const selectedPeriod: StatsSelectedPeriod = latestPeriod
@@ -411,14 +408,18 @@ export async function hydrateStatsReferenceData(options: HydrateOptions = {}): P
         return emptySnapshot
       }
 
-      const monthlyReferences = await Promise.all(usablePeriods.map((period) => fetchMonthlyReference(period)))
+      const [monthlyReferences, monthlyEvolution2026Raw] = await Promise.all([
+        Promise.all(usablePeriods.map((period) => fetchMonthlyReference(period))),
+        getMonthlyEvolution2026(),
+      ])
+
       monthlyReferences.sort((a, b) => {
         if (a.periodYear !== b.periodYear) return b.periodYear - a.periodYear
         return b.periodMonth - a.periodMonth
       })
 
       const selectedPeriod = pickFinalSelectedPeriod(checkedCandidate, monthlyReferences)
-      const monthlyEvolution2026 = await getMonthlyEvolution2026()
+      const monthlyEvolution2026 = monthlyEvolution2026Raw
       const displayData = buildDisplayData(selectedPeriod, monthlyReferences)
 
       const snapshot: StatsReferenceSnapshot = {

@@ -68,7 +68,7 @@ function normalizeDestinationRow(row: Record<string, unknown>): SavingsDestinati
 }
 
 export async function getSavingsAnalytics(year: number): Promise<SavingsAnalyticsData> {
-  const monthlyMetricsQuery = budgetDb()
+  const monthlyMetricsQuery = budgetDb
     .from('v_savings_monthly_metrics')
     .select(`
       month_start,
@@ -90,7 +90,7 @@ export async function getSavingsAnalytics(year: number): Promise<SavingsAnalytic
     .eq('period_year', year)
     .order('month_start', { ascending: true })
 
-  const destinationBreakdownQuery = budgetDb()
+  const destinationBreakdownQuery = budgetDb
     .from('v_savings_destination_breakdown')
     .select(`
       month_start,
@@ -106,7 +106,7 @@ export async function getSavingsAnalytics(year: number): Promise<SavingsAnalytic
     .order('month_start', { ascending: true })
     .order('saved_amount', { ascending: false })
 
-  const currentSummaryQuery = budgetDb()
+  const currentSummaryQuery = budgetDb
     .from('v_savings_current_summary')
     .select(`
       total_savings,

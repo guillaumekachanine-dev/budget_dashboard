@@ -5,7 +5,7 @@ export async function getSavingsBudgetTotalsByPeriod(
   periodYear: number,
   periodMonth: number,
 ): Promise<SavingsBudgetTotalsSourceRow[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('savings_budget_totals_by_period')
     .select('*')
     .eq('period_year', periodYear)

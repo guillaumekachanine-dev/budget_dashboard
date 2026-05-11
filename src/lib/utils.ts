@@ -1,31 +1,35 @@
+const FMT_EUR_2 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const FMT_EUR_0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+const FMT_EUR_ADAPTIVE = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+const FMT_EUR_COMPACT = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 })
+
 export function formatCurrency(amount: number, currency = 'EUR'): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
+  if (currency !== 'EUR') {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+  }
+  return FMT_EUR_2.format(amount)
 }
 
 export function formatCurrencyRounded(amount: number, currency = 'EUR'): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  if (currency !== 'EUR') {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
+  }
+  return FMT_EUR_0.format(amount)
+}
+
+export function formatCurrencyFloored(amount: number): string {
+  if (!Number.isFinite(amount)) return FMT_EUR_0.format(0)
+  return FMT_EUR_0.format(Math.floor(amount))
+}
+
+export function formatCurrencyAdaptive(amount: number): string {
+  if (!Number.isFinite(amount)) return '–'
+  return FMT_EUR_ADAPTIVE.format(amount)
 }
 
 export function formatCompact(amount: number): string {
-  if (Math.abs(amount) >= 1000) {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(amount)
-  }
-  return formatCurrency(amount)
+  if (Math.abs(amount) >= 1000) return FMT_EUR_COMPACT.format(amount)
+  return FMT_EUR_2.format(amount)
 }
 
 export function getCurrentPeriod(): { year: number; month: number } {
@@ -112,4 +116,20 @@ export function getCategoryColor(colorToken: string | null, index = 0): string {
   if (colorToken && CATEGORY_COLOR_MAP[colorToken]) return CATEGORY_COLOR_MAP[colorToken]
   const fallbacks = Object.values(CATEGORY_COLOR_MAP)
   return fallbacks[index % fallbacks.length]
+}
+
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+export function getTxLabel(tx: { normalized_label?: string | null; raw_label?: string | null }): string {
+  return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
+}
+
+export function formatCategoryModalLabel(name: string): string {
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
+  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
+  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
+  return name
 }

@@ -5,7 +5,7 @@ import { BottomNav } from '@/components/layout/BottomNav'
 import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
-import { StatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
+import { useStatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
 
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
@@ -26,14 +26,12 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const location = useLocation()
 
+  useStatsReferenceBootstrap({ userId: user?.id ?? null, enabled: !!user && location.pathname === '/stats' })
+
   useEffect(() => {
     forceUnlockDocumentScroll()
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search])
-
-  useEffect(() => {
-    forceUnlockDocumentScroll()
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('scrollRestoration' in window.history)) return
@@ -71,7 +69,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <StatsReferenceBootstrap userId={user.id} enabled />
 
       <main className="app-main">
         <Suspense fallback={<RouteFallback />}>

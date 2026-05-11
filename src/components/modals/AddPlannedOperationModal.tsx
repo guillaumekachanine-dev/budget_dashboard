@@ -16,6 +16,7 @@ import type {
   PlannedOperationFlowType,
   PlannedOperationInsert,
 } from '@/lib/types'
+import { todayIso } from '@/lib/utils'
 
 type AddPlannedOperationModalProps = {
   open: boolean
@@ -65,10 +66,6 @@ const BUDGET_IMPACT_LABELS: Record<PlannedOperationBudgetImpact, string> = {
   already_budgeted: 'Déjà budgétisée',
   additional_commitment: 'Additionnel',
   informational: 'Informatif uniquement',
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function createDefaultFormValues(): FormValues {

@@ -97,7 +97,7 @@ function unwrapPayload(data: unknown): Record<string, unknown> | null {
 }
 
 export async function getFinancialSecurityPayload(): Promise<FinancialSecurityPayload | null> {
-  const { data, error } = await budgetDb().rpc('get_financial_security_payload')
+  const { data, error } = await budgetDb.rpc('get_financial_security_payload')
 
   if (error) {
     throw new Error(`getFinancialSecurityPayload failed: ${error.message}`)

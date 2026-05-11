@@ -83,14 +83,14 @@ async function fetchBudgetRevenueAnalytics(
   periodMonth: number | undefined,
 ): Promise<BudgetRevenueAnalytics> {
   const [monthlyResponse, transactionsResponse] = await Promise.all([
-    budgetDb()
+    budgetDb
       .from('v_monthly_bucket_actuals_clean')
       .select('month_start,budget_bucket,transaction_count,revenue_amount,net_amount')
       .eq('user_id', userId)
       .eq('budget_bucket', 'revenu')
       .gte('month_start', REVENUE_ANALYTICS_START_DATE)
       .order('month_start', { ascending: true }),
-    budgetDb()
+    budgetDb
       .from('v_budget_transactions_enriched')
       .select('id,transaction_date,amount,pilotage_amount,normalized_label,raw_label,mapped_category_name,mapped_parent_category_name,mapped_budget_bucket,account_id')
       .eq('user_id', userId)

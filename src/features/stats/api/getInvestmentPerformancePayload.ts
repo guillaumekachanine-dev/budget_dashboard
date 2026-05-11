@@ -144,7 +144,7 @@ function normalizePositionSnapshot(row: Record<string, unknown>): InvestmentPosi
 }
 
 export async function getInvestmentPerformancePayload(year: number): Promise<InvestmentPerformancePayload | null> {
-  const { data, error } = await budgetDb().rpc('get_investment_performance_payload', { p_year: year })
+  const { data, error } = await budgetDb.rpc('get_investment_performance_payload', { p_year: year })
 
   if (error) {
     throw new Error(`getInvestmentPerformancePayload failed: ${error.message}`)
