@@ -15,8 +15,6 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Legend,
-  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -61,13 +59,6 @@ function getCurrentMonthCutoff2026(): number {
   return Math.max(1, Math.min(12, now.getMonth() + 1))
 }
 
-function getLastCompletedMonthCutoff2026(): number {
-  const now = new Date()
-  if (now.getFullYear() < 2026) return 0
-  if (now.getFullYear() > 2026) return 12
-  return Math.max(0, Math.min(12, now.getMonth()))
-}
-
 function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
@@ -78,13 +69,20 @@ const CHART_SERIES = [
   { key: 'income',  name: 'Revenus',  color: '#2ED47A', gradId: 'gInc', dashed: false },
   { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
 ]
-const CHART_MAX_Y = 8000
+const SOLDE_SERIES = { key: 'balance', name: 'Solde', color: '#4A4A62' } as const
+
+const fmtTickK = (v: number) => {
+  if (!Number.isFinite(v)) return '0'
+  const abs = Math.abs(v)
+  if (abs < 1000) return `${Math.round(v)}`
+  const k = Math.round(v / 1000)
+  return `${k}k`
+}
 
 export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>('table')
   const { user, loading: authLoading } = useAuth()
   const tableMonthCutoff = getCurrentMonthCutoff2026()
-  const chartMonthCutoff = getLastCompletedMonthCutoff2026()
 
   const fallbackRows: MonthlySynthRow[] = monthlyProfile.map((point) => ({
     month: point.month,
@@ -183,15 +181,25 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   const rows = (dbRows && dbRows.length > 0 ? dbRows : fallbackRows).filter((row) => row.month <= tableMonthCutoff)
   if (rows.length === 0) return null
 
-  const chartRows = rows.filter((row) => row.month <= chartMonthCutoff)
+  const chartRows = rows
   const chartData = chartRows.map((row) => ({
     label: row.monthLabel,
+    // Reprend exactement la valeur affichée dans la colonne "Solde" du tableau.
+    balance: row.openingBalance,
     budget: row.budget,
     expense: row.expense,
     income: row.income,
     savings: row.savings,
   }))
-  const overflowIncomeRows = chartRows.filter((row) => row.income > CHART_MAX_Y)
+  const chartMaxY = Math.max(
+    1000,
+    Math.ceil(
+      chartData.reduce((max, row) => {
+        const values = [row.budget, row.expense, row.income, row.savings, Number(row.balance ?? 0)]
+        return Math.max(max, ...values.filter((value) => Number.isFinite(value) && value >= 0))
+      }, 0) / 1000,
+    ) * 1000,
+  )
 
   return (
     <div style={{ padding: '0 var(--space-4)' }}>
@@ -199,8 +207,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
             <div>
-              <h3 style={cardTitleStyle}>Vue mensuelle synthétique</h3>
-              <p style={cardSubStyle}>Analyse des flux mensuels</p>
+              <h3 style={cardTitleStyle}>Analyse des flux mensuels</h3>
             </div>
             
             {/* Carousel Toggle */}
@@ -345,14 +352,14 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                           tickLine={false}
                         />
                         <YAxis
-                          tick={{ fontSize: 10, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+                          tick={{ fontSize: 10, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', textAnchor: 'end' }}
                           axisLine={false}
                           tickLine={false}
-                          width={40}
-                          domain={[0, CHART_MAX_Y]}
+                          width={30}
+                          domain={[0, chartMaxY]}
                           allowDataOverflow
                           tickCount={5}
-                          tickFormatter={(v: number) => `${Math.round(v).toLocaleString('fr-FR')}€`}
+                          tickFormatter={(v: number) => fmtTickK(Number(v))}
                         />
                         <Tooltip
                           contentStyle={{
@@ -364,16 +371,6 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                             padding: '8px 12px',
                           }}
                           cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }}
-                        />
-                        <Legend
-                          wrapperStyle={{
-                            fontSize: 10,
-                            paddingTop: 14,
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--neutral-500)',
-                          }}
-                          iconType="circle"
-                          iconSize={7}
                         />
                         {CHART_SERIES.map((s) => (
                           <Area
@@ -389,27 +386,49 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                             activeDot={{ r: 4, strokeWidth: 0 }}
                           />
                         ))}
-                        {overflowIncomeRows.map((row, idx) => (
-                          <ReferenceDot
-                            key={`overflow-income-${row.month}`}
-                            x={row.monthLabel}
-                            y={CHART_MAX_Y}
-                            r={3.5}
-                            fill="#2ED47A"
-                            stroke="#2ED47A"
-                            isFront
-                            label={idx === 0 ? {
-                              value: 'hors échelle',
-                              position: 'top',
-                              fill: 'var(--neutral-500)',
-                              fontSize: 10,
-                              fontFamily: 'var(--font-sans)',
-                              fontWeight: 600,
-                            } : undefined}
-                          />
-                        ))}
+                        <Area
+                          type="monotone"
+                          dataKey={SOLDE_SERIES.key}
+                          name={SOLDE_SERIES.name}
+                          stroke={SOLDE_SERIES.color}
+                          strokeWidth={2.4}
+                          dot={false}
+                          connectNulls
+                          fill="none"
+                          fillOpacity={0}
+                          activeDot={{ r: 4, strokeWidth: 0 }}
+                        />
                       </AreaChart>
                     </ResponsiveContainer>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        paddingTop: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          flexWrap: 'nowrap',
+                          gap: 10,
+                          fontSize: 9,
+                          color: 'var(--neutral-500)',
+                          fontFamily: 'var(--font-mono)',
+                          whiteSpace: 'nowrap',
+                          overflowX: 'auto',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {[...CHART_SERIES, SOLDE_SERIES].map((serie) => (
+                          <span key={serie.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: serie.color, flexShrink: 0 }} />
+                            <span>{serie.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -442,13 +461,6 @@ const cardTitleStyle: CSSProperties = {
   margin: 0, fontSize: 'var(--font-size-sm)',
   fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)',
 }
-
-const cardSubStyle: CSSProperties = {
-  margin: '2px 0 0', fontSize: 10,
-  color: 'var(--neutral-400)', textTransform: 'uppercase',
-  letterSpacing: '0.05em', fontWeight: 600,
-}
-
 
 const thStyle: CSSProperties = {
   padding: '8px 2px', textAlign: 'left',
