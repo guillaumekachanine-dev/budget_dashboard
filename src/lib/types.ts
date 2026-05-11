@@ -202,6 +202,37 @@ export interface PlannedOperation {
   updated_at: string
 }
 
+export type PlannedOperationFlowItem = {
+  id: string
+  source_planned_operation_id: string
+  account_id: string | null
+  category_id: string | null
+  label: string | null
+  original_planned_date: string | null
+  original_month_start: string | null
+  planned_date: string
+  month_start: string
+  planned_amount: number
+  personal_share_ratio: number | null
+  planned_personal_amount: number
+  currency: string | null
+  flow_type: PlannedOperationFlowType | null
+  status: string | null
+  budget_impact: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  impacts_remaining_useful: boolean | null
+  remaining_useful_impact_amount: number | null
+  matched_transaction_id: string | null
+  notes: string | null
+  is_generated_occurrence: boolean
+  created_at: string | null
+  updated_at: string | null
+  source: 'planned_operation'
+  planned_status: 'done' | 'upcoming'
+}
+
 export type PlannedOperationInsert = {
   user_id: string
   account_id?: string | null
@@ -222,6 +253,37 @@ export type PlannedOperationInsert = {
   recurrence_day_of_month: number | null
   recurrence_start_date: string | null
   recurrence_end_date: string | null
+}
+
+export interface PlannedOperationsEnrichedViewRow {
+  id: string | null
+  user_id: string | null
+  source_planned_operation_id: string | null
+  account_id: string | null
+  category_id: string | null
+  label: string | null
+  original_planned_date: string | null
+  original_month_start: string | null
+  planned_date: string | null
+  month_start: string | null
+  planned_amount: number | null
+  personal_share_ratio: number | null
+  planned_personal_amount: number | null
+  currency: string | null
+  flow_type: PlannedOperationFlowType | null
+  status: string | null
+  budget_impact: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  impacts_remaining_useful: boolean | null
+  remaining_useful_impact_amount: number | null
+  matched_transaction_id: string | null
+  notes: string | null
+  planned_status: 'done' | 'upcoming' | null
+  is_generated_occurrence: boolean | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface AccountWithBalance extends Account {
@@ -463,6 +525,8 @@ export type Database = {
       v_savings_destination_breakdown: { Row: SavingsDestinationBreakdownViewRow & Record<string, unknown>; Relationships: [] }
       v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
+      v_planned_operations_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
+      v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
     }
     Functions: {

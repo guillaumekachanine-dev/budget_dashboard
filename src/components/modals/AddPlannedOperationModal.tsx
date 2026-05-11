@@ -31,7 +31,6 @@ type FormValues = {
   flowType: PlannedOperationFlowType
   amount: string
   label: string
-  merchantName: string
   categoryId: string
   subCategoryId: string
   accountId: string
@@ -39,7 +38,6 @@ type FormValues = {
   personalShareRatio: number
   budgetImpact: PlannedOperationBudgetImpact
   isRecurringMonthly: boolean
-  notes: string
 }
 
 type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'personalShareRatio' | 'submit', string>>
@@ -74,7 +72,6 @@ function createDefaultFormValues(): FormValues {
     flowType: 'expense',
     amount: '',
     label: '',
-    merchantName: '',
     categoryId: '',
     subCategoryId: '',
     accountId: '',
@@ -82,7 +79,6 @@ function createDefaultFormValues(): FormValues {
     personalShareRatio: 1,
     budgetImpact: 'already_budgeted',
     isRecurringMonthly: false,
-    notes: '',
   }
 }
 
@@ -168,20 +164,20 @@ function SettingsRow({
       type="button"
       onClick={interactive ? onClick : undefined}
       disabled={!interactive}
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-3)] text-left"
+      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left"
       style={{
         cursor: interactive ? 'pointer' : 'default',
         opacity: disabled ? 0.6 : 1,
       }}
     >
       <span
-        className="text-[var(--font-size-lg)] font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
+        className="text-[var(--font-size-base)] font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
         style={{ lineHeight: 'var(--line-height-tight)' }}
       >
         {label}
       </span>
       <span
-        className="text-[var(--font-size-lg)] font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
+        className="text-[var(--font-size-base)] font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
         style={{ lineHeight: 'var(--line-height-tight)' }}
       >
         {value}
@@ -198,6 +194,14 @@ function FlowTypePill({
   onChange: (next: PlannedOperationFlowType) => void
 }) {
   const label = FLOW_OPTIONS.find((option) => option.value === value)?.label ?? FLOW_OPTIONS[0].label
+  const borderColor =
+    value === 'expense'
+      ? 'color-mix(in oklab, var(--color-error) 52%, white 48%)'
+      : value === 'income'
+        ? 'color-mix(in oklab, var(--color-success) 52%, white 48%)'
+        : value === 'savings'
+          ? '#FFD700'
+          : 'rgba(255,255,255,0.8)'
 
   return (
     <button
@@ -209,18 +213,19 @@ function FlowTypePill({
         onChange(nextValue)
       }}
       style={{
-        marginTop: 'var(--space-4)',
-        width: '100%',
-        border: '2px solid rgba(255,255,255,0.8)',
+        width: 'auto',
+        border: `2px solid ${borderColor}`,
         borderRadius: 'var(--radius-full)',
         background: 'rgba(255,255,255,0.16)',
         color: 'var(--neutral-0)',
         fontSize: 'var(--font-size-sm)',
         fontWeight: 800,
-        padding: '10px 12px',
+        padding: '10px 18px',
         cursor: 'pointer',
         textAlign: 'center',
         letterSpacing: '0.01em',
+        lineHeight: 'var(--line-height-tight)',
+        whiteSpace: 'nowrap',
       }}
       aria-label={`Type d'opération planifiée: ${label}. Cliquer pour changer.`}
     >
@@ -260,7 +265,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
   }, [categories, hasHierarchy])
 
   const directSubcategoryRoot = useMemo(() => {
-    if (values.flowType !== 'income' && values.flowType !== 'transfer') return null
+    if (values.flowType !== 'income' && values.flowType !== 'transfer' && values.flowType !== 'savings') return null
     if (!hasHierarchy || rootCategories.length !== 1) return null
     return rootCategories[0] ?? null
   }, [hasHierarchy, rootCategories, values.flowType])
@@ -298,7 +303,16 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
         return aIndex - bIndex
       })
 
-      if (merged.length > 0) return merged
+      const filteredTransfer = merged.filter((category) => {
+        const normalizedName = normalizeText(category.name)
+        const normalizedIconKey = normalizeText(category.icon_key)
+        const isVirementEpargne = normalizedName.includes('virement') && normalizedName.includes('epargne')
+        const isEpargneProjet = normalizedName.includes('epargne') && normalizedName.includes('projet')
+        const byIconAlias = normalizedIconKey.includes('epargne virement') || normalizedIconKey.includes('epargne projet')
+        return !isVirementEpargne && !isEpargneProjet && !byIconAlias
+      })
+
+      if (filteredTransfer.length > 0) return filteredTransfer
     }
 
     if (!values.categoryId) return []
@@ -316,6 +330,10 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
   const selectedSubCategory = values.subCategoryId ? categoryById.get(values.subCategoryId) ?? null : null
 
   const categoryLabel = selectedSubCategory?.name ?? selectedCategory?.name ?? (values.flowType === 'transfer' ? 'Optionnelle (transfert)' : 'Choisir')
+  const pickerItemLabel = useCallback((name: string) => {
+    if (name.trim().toLowerCase() === 'remboursement') return 'Rembours.'
+    return name
+  }, [])
 
   const amountDisplay = useMemo(
     () => readFormattedAmount(values.amount, amountFocused),
@@ -482,6 +500,15 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     }, 420)
   }
 
+  const handleSubCategoryBackToCategory = () => {
+    setPickerClosing('subcategory')
+    setFlipSubId(null)
+    window.setTimeout(() => {
+      setPickerMode('category')
+      setPickerClosing('none')
+    }, 280)
+  }
+
   const handleAccountModeToggle = () => {
     if (!canUseJoint) return
     const nextMode: AccountMode = values.accountMode === 'personal' ? 'joint' : 'personal'
@@ -563,7 +590,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       category_id: values.flowType === 'transfer'
         ? null
         : (values.subCategoryId || values.categoryId || null),
-      merchant_name: values.merchantName.trim() || null,
+      merchant_name: null,
       label: values.label.trim(),
       planned_date: values.date,
       planned_amount: parsedAmount,
@@ -575,7 +602,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
         : 'informational',
       personal_share_ratio: values.personalShareRatio,
       matched_transaction_id: null,
-      notes: values.notes.trim() ? values.notes.trim() : null,
+      notes: null,
       is_recurring: values.isRecurringMonthly,
       recurrence_frequency: values.isRecurringMonthly ? 'monthly' : 'none',
       recurrence_day_of_month: recurringDay,
@@ -615,14 +642,14 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 141, maxHeight: '88dvh' }}
+            style={{ zIndex: 141, maxHeight: '81dvh' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex max-h-[88dvh] flex-col">
+            <div className="flex max-h-[81dvh] flex-col">
               <header
                 className="relative overflow-hidden px-[var(--space-6)]"
                 style={{
-                  minHeight: 242,
+                  minHeight: 176,
                   paddingTop: 'var(--space-5)',
                   background: 'linear-gradient(135deg, color-mix(in oklab, var(--viz-a) 82%, #000 18%) 0%, color-mix(in oklab, var(--viz-b) 76%, #000 24%) 100%)',
                 }}
@@ -647,7 +674,8 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     if (pickerInput?.showPicker) pickerInput.showPicker()
                     else dateRef.current?.focus()
                   }}
-                  className="absolute left-1/2 top-[var(--space-5)] -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
+                  className="absolute left-1/2 -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
+                  style={{ top: 'calc(var(--space-5) + 4px)' }}
                 >
                   <span
                     className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
@@ -657,7 +685,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   </span>
                 </button>
 
-                <div className="absolute left-[var(--space-6)] right-[var(--space-6)] top-[72px]">
+                <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 74 }}>
                   <FlowTypePill
                     value={values.flowType}
                     onChange={(next) => {
@@ -671,12 +699,24 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   style={{
                     position: 'absolute',
                     left: '50%',
-                    bottom: -176,
+                    bottom: -178,
                     width: '190%',
-                    height: 260,
+                    height: 224,
                     transform: 'translateX(-50%)',
                     borderRadius: '50%',
                     background: 'var(--neutral-0)',
+                  }}
+                />
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: -1,
+                    height: 8,
+                    background: 'var(--neutral-0)',
+                    zIndex: 0,
                   }}
                 />
 
@@ -693,8 +733,8 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 />
               </header>
 
-              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-[var(--space-1)]">
-                <section className="px-[var(--space-6)]" style={{ marginTop: '-6px' }} aria-labelledby="planned-amount-input-label">
+              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0">
+                <section className="relative z-[2] px-[var(--space-6)]" style={{ marginTop: '-4px' }} aria-labelledby="planned-amount-input-label">
                   <p id="planned-amount-input-label" className="sr-only">
                     Montant planifié
                   </p>
@@ -725,7 +765,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         clearFieldError('amount')
                       }}
                       placeholder="0 €"
-                      className="w-full border-none bg-transparent px-0 py-[var(--space-2)] text-center text-[var(--font-size-kpi)] font-[var(--font-weight-extrabold)] text-[var(--viz-a)] outline-none placeholder:text-[var(--neutral-300)]"
+                      className="w-full border-none bg-transparent px-0 py-[var(--space-2)] text-center text-[var(--font-size-kpi)] font-[var(--font-weight-extrabold)] text-[var(--primary-700)] outline-none placeholder:text-[var(--neutral-300)]"
                       style={{
                         lineHeight: 'var(--line-height-tight)',
                         transform: amountFocused ? 'scale(1.015)' : 'scale(1)',
@@ -754,43 +794,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   <FieldError message={errors.label} />
                 </div>
 
-                <div className="mt-[var(--space-3)] px-[var(--space-6)]">
-                  <Input
-                    id="planned-operation-merchant"
-                    type="text"
-                    value={values.merchantName}
-                    onChange={(event) => {
-                      setValues((current) => ({ ...current, merchantName: event.target.value }))
-                    }}
-                    placeholder="marchand (optionnel)"
-                    aria-label="Marchand"
-                    className="rounded-[var(--radius-md)] border-[var(--neutral-200)] px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-md)] font-[var(--font-weight-medium)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100"
-                  />
-                </div>
-
-                <div className="mt-[var(--space-3)] px-[var(--space-6)]">
-                  <textarea
-                    id="planned-operation-notes"
-                    value={values.notes}
-                    onChange={(event) => {
-                      setValues((current) => ({ ...current, notes: event.target.value }))
-                    }}
-                    placeholder="Notes (optionnel)"
-                    aria-label="Notes"
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--neutral-200)',
-                      padding: 'var(--space-3) var(--space-4)',
-                      fontSize: 'var(--font-size-sm)',
-                      color: 'var(--neutral-700)',
-                      resize: 'vertical',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  />
-                </div>
-
                 <div className="mt-[var(--space-3)]">
                   <section className="mx-[var(--space-6)]">
                     <div className="divide-y divide-[var(--neutral-200)] border-t border-[var(--neutral-200)]">
@@ -799,6 +802,16 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         value={categoryLabel}
                         onClick={() => {
                           if (values.flowType === 'transfer') {
+                            setPickerMode('subcategory')
+                            setPickerClosing('none')
+                            return
+                          }
+
+                          if (values.flowType === 'savings') {
+                            const savingsRoot = directSubcategoryRoot ?? rootCategories[0] ?? null
+                            if (savingsRoot) {
+                              setValues((current) => ({ ...current, categoryId: savingsRoot.id, subCategoryId: '' }))
+                            }
                             setPickerMode('subcategory')
                             setPickerClosing('none')
                             return
@@ -862,15 +875,15 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 </div>
               </div>
 
-              <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)] py-[var(--space-3)]">
+              <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)] py-[var(--space-2)]">
                 <div className="flex items-center justify-between gap-[var(--space-3)]">
-                  <Button type="button" variant="outline" size="md" className="rounded-[var(--radius-md)]" onClick={closeAndReset}>
+                  <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" onClick={closeAndReset}>
                     Annuler
                   </Button>
                   <Button
                     type="button"
                     variant="primary"
-                    size="md"
+                    size="sm"
                     className="rounded-[var(--radius-md)]"
                     disabled={!canSubmit}
                     loading={isPending}
@@ -891,6 +904,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             selectedId={values.categoryId}
             closing={pickerClosing === 'category'}
             showAllOption={values.flowType !== 'expense'}
+            getItemDisplayLabel={(item) => pickerItemLabel(item.name)}
             onClose={() => {
               setPickerMode('none')
               setPickerClosing('none')
@@ -906,6 +920,8 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             selectedId={values.subCategoryId}
             closing={pickerClosing === 'subcategory'}
             flipId={flipSubId}
+            getItemDisplayLabel={(item) => pickerItemLabel(item.name)}
+            onBackgroundClick={handleSubCategoryBackToCategory}
             onClose={() => {
               setPickerMode('none')
               setPickerClosing('none')

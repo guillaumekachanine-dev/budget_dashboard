@@ -7,6 +7,7 @@ type PageHeaderProps = {
   centerLabel?: string
   rightLabel?: string
   rightSlot?: ReactNode
+  contentOffsetY?: number
   actionIcon?: ReactNode
   actionAriaLabel?: string
   onActionClick?: () => void
@@ -21,6 +22,7 @@ export function PageHeader({
   centerLabel,
   rightLabel,
   rightSlot,
+  contentOffsetY = 0,
   actionIcon,
   actionAriaLabel = 'Action',
   onActionClick,
@@ -60,6 +62,7 @@ export function PageHeader({
             alignItems: 'center',
             justifyContent: 'flex-start',
             minHeight: 44,
+            transform: `translateY(${contentOffsetY}px)`,
           }}
         >
           <h1

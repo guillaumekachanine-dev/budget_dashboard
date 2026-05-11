@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -26,7 +26,6 @@ import { getBudgetPeriods } from '@/features/budget/api/getBudgetPeriods'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
@@ -44,6 +43,7 @@ import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.png'
+import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.png'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -1505,9 +1505,6 @@ export function Budgets() {
     [revenueAnalytics],
   )
 
-  const headerPeriodLabel = periodKey === 'annee'
-    ? `Année ${selectedPeriodYear}`
-    : formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth)
   const headerPeriodOptions = useMemo(() => {
     const monthOptions = availableBudgetPeriods
       .filter((period) => {
@@ -1549,6 +1546,8 @@ export function Budgets() {
   const slideCount = showExtendedSlides ? 3 : 2
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const isSlideThreeMetricsMode = showExtendedSlides && activeSlide === 2
+  const isSlideOneOrTwoMode = showExtendedSlides && activeSlide < 2
+  const headerModeLabel = isSlideThreeMetricsMode ? 'Analyse' : activeSlide === 1 ? 'Blocs' : 'Catégories'
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
   const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
@@ -1559,6 +1558,11 @@ export function Budgets() {
   useEffect(() => {
     setActiveSlide((current) => Math.min(current, slideCount - 1))
   }, [slideCount])
+
+  useEffect(() => {
+    if (isSlideOneOrTwoMode) return
+    setShowHeaderPeriodMenu(false)
+  }, [isSlideOneOrTwoMode])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse') return
@@ -1703,7 +1707,19 @@ export function Budgets() {
         titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
         onTitleClick={handleHeaderTitleReset}
         actionIcon={
-          isSlideThreeMetricsMode
+          isSlideOneOrTwoMode
+            ? (
+              <img
+                src={budgetsPeriodIcon}
+                alt="Icône période budgets"
+                width={30}
+                height={30}
+                loading="lazy"
+                decoding="async"
+                style={{ display: 'block', objectFit: 'contain' }}
+              />
+              )
+            : isSlideThreeMetricsMode
             ? (
               slideThreeSelectedScopeMeta.iconType === 'block'
                 ? (
@@ -1744,11 +1760,27 @@ export function Budgets() {
               />
               )
             : selectedCat === 'all'
-              ? <Search size={24} />
+              ? (
+                <img
+                  src={budgetsPeriodIcon}
+                  alt="Icône période budgets"
+                  width={26}
+                  height={26}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ display: 'block', objectFit: 'contain' }}
+                />
+                )
               : <CategoryIcon iconKey={selectedCatInfo?.icon_key} label={selectedCatInfo?.name} size={28} />
         }
-        actionAriaLabel={isSlideThreeMetricsMode ? 'Choisir un bloc ou une catégorie' : 'Choisir une catégorie'}
+        actionAriaLabel={isSlideOneOrTwoMode ? 'Choisir une période' : (isSlideThreeMetricsMode ? 'Choisir un bloc ou une catégorie' : 'Choisir une catégorie')}
         onActionClick={() => {
+          if (isSlideOneOrTwoMode) {
+            setShowCatSheet(false)
+            setShowSlideThreeScopeSheet(false)
+            setShowHeaderPeriodMenu((current) => !current)
+            return
+          }
           setShowHeaderPeriodMenu(false)
           if (isSlideThreeMetricsMode) {
             setShowCatSheet(false)
@@ -1758,18 +1790,70 @@ export function Budgets() {
           setShowSlideThreeScopeSheet(false)
           setShowCatSheet((current) => !current)
         }}
-        rightSlot={(
-          <HeaderPeriodMenu
-            buttonLabel={headerPeriodLabel}
-            buttonAriaLabel="Choisir une période"
-            menuAriaLabel="Choisir une période Budgets"
-            open={showHeaderPeriodMenu}
-            onOpenChange={setShowHeaderPeriodMenu}
-            onBeforeToggle={() => setShowCatSheet(false)}
-            options={headerPeriodOptions}
-          />
-        )}
+        rightLabel={headerModeLabel}
       />
+      {showHeaderPeriodMenu && isSlideOneOrTwoMode ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 160,
+            background: 'rgba(10, 12, 22, 0.18)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            paddingTop: 'calc(var(--safe-top) + 84px)',
+          }}
+          onClick={() => setShowHeaderPeriodMenu(false)}
+        >
+          <div
+            role="menu"
+            aria-label="Choisir une période Budgets"
+            style={{
+              width: 'min(360px, calc(100vw - 2 * var(--page-gutter)))',
+              maxHeight: 'min(68vh, 520px)',
+              overflowY: 'auto',
+              background: 'var(--neutral-0)',
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-card)',
+              padding: 'var(--space-2)',
+              display: 'grid',
+              gap: 2,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {headerPeriodOptions.map((option) => (
+              <div key={option.key}>
+                {option.showDividerBefore ? (
+                  <div style={{ height: 1, background: 'var(--neutral-200)', margin: 'var(--space-1) 0' }} />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    option.onSelect()
+                    setShowHeaderPeriodMenu(false)
+                  }}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    background: option.active ? 'var(--primary-50)' : 'transparent',
+                    color: option.active ? 'var(--primary-700)' : 'var(--neutral-800)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: option.active ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                    textAlign: 'left',
+                    padding: 'var(--space-2) var(--space-3)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {option.label}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {showExtendedSlides ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: `0 ${slideHeaderHorizontalPadding}` }}>
@@ -1781,7 +1865,7 @@ export function Budgets() {
                 type="button"
                 onClick={() => setDataDisplayMode('reel')}
                 style={{
-                  border: '1px solid var(--neutral-200)',
+                  border: dataDisplayMode === 'reel' ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
                   background: dataDisplayMode === 'reel' ? 'var(--primary-50)' : 'var(--neutral-0)',
                   color: dataDisplayMode === 'reel' ? 'var(--primary-600)' : 'var(--neutral-600)',
                   borderRadius: 'var(--radius-md)',
@@ -1807,7 +1891,7 @@ export function Budgets() {
                 type="button"
                 onClick={() => setDataDisplayMode('budget')}
                 style={{
-                  border: '1px solid var(--neutral-200)',
+                  border: dataDisplayMode === 'budget' ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
                   background: dataDisplayMode === 'budget' ? 'var(--primary-50)' : 'var(--neutral-0)',
                   color: dataDisplayMode === 'budget' ? 'var(--primary-600)' : 'var(--neutral-600)',
                   borderRadius: 'var(--radius-md)',
