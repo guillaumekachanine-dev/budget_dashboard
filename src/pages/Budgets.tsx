@@ -29,6 +29,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
+import { useCategoryRolling12mStats } from '@/features/budget/hooks/useCategoryRolling12mStats'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
 import {
@@ -226,6 +227,12 @@ function getPeriodRange(
   return { startDate, endDate }
 }
 
+function formatMonthYearShort(month: number, year: number): string {
+  const monthLabel = MONTHS_FR_FULL[Math.max(0, Math.min(11, month - 1))] ?? 'Mois'
+  const shortYear = String(year).slice(-2)
+  return `${monthLabel} ${shortYear}`
+}
+
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
@@ -270,6 +277,16 @@ const BUCKET_SCOPE_ICON_SRC: Record<string, string> = {
   epargne: blockEpargneIcon,
   revenu: blockRevenusIcon,
   cagnotte_projet: blockEpargneIcon,
+}
+
+const SLIDE_THREE_SCOPE_COLORS: Record<string, string> = {
+  revenu: 'var(--color-success)',
+  socle_fixe: 'var(--primary-500)',
+  variable_essentielle: '#4CC9F0',
+  discretionnaire: 'var(--color-error)',
+  provision: 'var(--viz-d)',
+  epargne: 'var(--color-warning)',
+  hors_pilotage: 'var(--neutral-400)',
 }
 
 function accentFromLabel(label: string | null | undefined): string {
@@ -615,6 +632,16 @@ export function Budgets() {
     if (!import.meta.env.DEV) return
     console.log('[BudgetRevenueAnalytics]', revenueAnalytics)
   }, [revenueAnalytics])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.log('[BudgetYTD] selected slide view', {
+      selectedYtdSlideView,
+      slideThreeScopeSelection,
+      slideThreePeriod,
+      activeSlide,
+    })
+  }, [activeSlide, selectedYtdSlideView, slideThreePeriod, slideThreeScopeSelection])
 
   const visibleBudgetBuckets = useMemo(
     () => PILOTAGE_BUCKET_ORDER.map((bucket) => ({
@@ -1034,6 +1061,7 @@ export function Budgets() {
         iconType: 'block' as const,
         iconSrc: BUCKET_SCOPE_ICON_SRC[slideThreeScopeSelection.id] ?? blockProvisionsIcon,
         iconKey: null as string | null,
+        color: SLIDE_THREE_SCOPE_COLORS[slideThreeScopeSelection.id] ?? 'var(--primary-500)',
       }
     }
     if (slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID) {
@@ -1042,16 +1070,22 @@ export function Budgets() {
         iconType: 'category' as const,
         iconSrc: null as string | null,
         iconKey: 'toutes_categories',
+        color: 'var(--primary-500)',
       }
     }
     const category = categoryById.get(slideThreeScopeSelection.id) ?? null
+    const categoryPayload = payloadByCategory.find((row) => row.category_id === slideThreeScopeSelection.id)
+    const scopeColor = categoryPayload?.budget_bucket
+      ? (SLIDE_THREE_SCOPE_COLORS[categoryPayload.budget_bucket] ?? accentFromLabel(category?.name))
+      : accentFromLabel(category?.name)
     return {
       label: category?.name ?? 'Catégorie',
       iconType: 'category' as const,
       iconSrc: null as string | null,
       iconKey: category?.icon_key ?? null,
+      color: scopeColor,
     }
-  }, [categoryById, slideThreeScopeSelection])
+  }, [categoryById, payloadByCategory, slideThreeScopeSelection])
   const slideThreePeriods = useMemo(() => ['2026', ...MONTHS_FR_FULL.slice(0, 5)], [])
 
   useEffect(() => {
@@ -1559,29 +1593,57 @@ export function Budgets() {
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const isSlideThreeMetricsMode = showExtendedSlides && activeSlide === 2
   const isSlideOneOrTwoMode = showExtendedSlides && activeSlide < 2
+  const shouldLoadRolling12mStats = isSlideThreeMetricsMode
+    && (selectedYtdSlideView === 'kpi' || selectedYtdSlideView === 'history')
+  const { data: categoryRolling12mStats = [] } = useCategoryRolling12mStats(shouldLoadRolling12mStats)
   const ytdSlideViewLabel: Record<BudgetYtdSlideView, string> = {
     kpi: 'KPI',
-    history: 'Historique 2026',
+    history: 'Historique',
     monthly_flows_table: 'Flux mensuels',
     monthly_flows_chart: 'Graphique flux',
   }
   const ytdSlideViewOptions: Array<{ id: BudgetYtdSlideView; label: string }> = [
     { id: 'kpi', label: 'KPI' },
-    { id: 'history', label: 'Historique 2026' },
+    { id: 'history', label: 'Historique' },
     { id: 'monthly_flows_table', label: 'Flux mensuels' },
     { id: 'monthly_flows_chart', label: 'Graphique flux' },
   ]
+  const isSlideThreeMonthlyFlowsView = isSlideThreeMetricsMode
+    && (selectedYtdSlideView === 'monthly_flows_table' || selectedYtdSlideView === 'monthly_flows_chart')
+  const slideThreeLockedPeriodLabel = '2026 YTD'
   const ytdSlideHeading = selectedYtdSlideView === 'kpi'
     ? 'Indicateurs clé'
     : selectedYtdSlideView === 'history'
-      ? 'Historique 2026'
+      ? 'Historique'
       : selectedYtdSlideView === 'monthly_flows_table'
         ? 'Flux mensuels'
         : 'Graphique flux'
   const ytdScopeLabel = slideThreeSelectedScopeMeta.label
     ? `${slideThreeSelectedScopeMeta.label.charAt(0).toUpperCase()}${slideThreeSelectedScopeMeta.label.slice(1)}`
     : '—'
-  const headerModeLabel = isSlideThreeMetricsMode ? 'Analyse YTD' : activeSlide === 1 ? 'Blocs' : 'Catégories'
+  const slideThreeBaseYear = useMemo(() => {
+    const yearOption = slideThreePeriods.find((periodOption) => /^\d{4}$/.test(periodOption))
+    return yearOption ? Number(yearOption) : selectedPeriodYear
+  }, [selectedPeriodYear, slideThreePeriods])
+  const headerPeriodLabel = useMemo(() => {
+    if (isSlideThreeMetricsMode) {
+      if (isSlideThreeMonthlyFlowsView) return slideThreeLockedPeriodLabel
+      if (/^\d{4}$/.test(slideThreePeriod)) return `Année ${slideThreePeriod}`
+      const shortYear = String(slideThreeBaseYear).slice(-2)
+      return `${slideThreePeriod} ${shortYear}`
+    }
+    if (periodKey === 'annee') return `Année ${selectedPeriodYear}`
+    return formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)
+  }, [
+    isSlideThreeMetricsMode,
+    isSlideThreeMonthlyFlowsView,
+    periodKey,
+    selectedPeriodMonth,
+    selectedPeriodYear,
+    slideThreeLockedPeriodLabel,
+    slideThreeBaseYear,
+    slideThreePeriod,
+  ])
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
   const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
@@ -1829,7 +1891,7 @@ export function Budgets() {
           setShowSlideThreeScopeSheet(false)
           setShowCatSheet((current) => !current)
         }}
-        rightLabel={headerModeLabel}
+        rightLabel={headerPeriodLabel}
       />
       {showHeaderPeriodMenu && isSlideOneOrTwoMode ? (
         <div
@@ -2017,8 +2079,8 @@ export function Budgets() {
                   <label
                     style={{
                       border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-0)',
-                      color: 'var(--neutral-600)',
+                      background: isSlideThreeMonthlyFlowsView ? 'var(--neutral-100)' : 'var(--neutral-0)',
+                      color: isSlideThreeMonthlyFlowsView ? 'var(--neutral-400)' : 'var(--neutral-600)',
                       borderRadius: 'var(--radius-md)',
                       padding: 'var(--space-2) var(--space-3)',
                       display: 'flex',
@@ -2030,40 +2092,62 @@ export function Budgets() {
                       minWidth: slideThreeParamCardWidth,
                       width: slideThreeParamCardWidth,
                       minHeight: 48,
-                      cursor: 'pointer',
+                      cursor: isSlideThreeMonthlyFlowsView ? 'not-allowed' : 'pointer',
                       position: 'relative',
+                      opacity: isSlideThreeMonthlyFlowsView ? 0.9 : 1,
                     }}
                   >
-                    <select
-                      aria-label="Choisir une période"
-                      value={slideThreePeriod}
-                      onChange={(event) => setSlideThreePeriod(event.target.value)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--neutral-700)',
-                        fontSize: isCompactMobile ? '10px' : '11px',
-                        fontWeight: 700,
-                        fontFamily: 'inherit',
-                        lineHeight: 1.1,
-                        width: '100%',
-                        textAlign: 'center',
-                        textAlignLast: 'center',
-                        outline: 'none',
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none',
-                        cursor: 'pointer',
-                        paddingRight: 12,
-                        paddingLeft: 8,
-                        WebkitTextSizeAdjust: '100%',
-                      }}
-                    >
-                      {slideThreePeriods.map((periodOption) => (
-                        <option key={periodOption} value={periodOption}>{periodOption}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    {isSlideThreeMonthlyFlowsView ? (
+                      <span
+                        style={{
+                          color: 'var(--neutral-500)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          lineHeight: 1.1,
+                          width: '100%',
+                          textAlign: 'center',
+                          paddingRight: 12,
+                          paddingLeft: 8,
+                          WebkitTextSizeAdjust: '100%',
+                        }}
+                      >
+                        {slideThreeLockedPeriodLabel}
+                      </span>
+                    ) : (
+                      <>
+                        <select
+                          aria-label="Choisir une période"
+                          value={slideThreePeriod}
+                          onChange={(event) => setSlideThreePeriod(event.target.value)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: 'var(--neutral-700)',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            fontFamily: 'inherit',
+                            lineHeight: 1.1,
+                            width: '100%',
+                            textAlign: 'center',
+                            textAlignLast: 'center',
+                            outline: 'none',
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'none',
+                            cursor: 'pointer',
+                            paddingRight: 12,
+                            paddingLeft: 8,
+                            WebkitTextSizeAdjust: '100%',
+                          }}
+                        >
+                          {slideThreePeriods.map((periodOption) => (
+                            <option key={periodOption} value={periodOption}>{periodOption}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                      </>
+                    )}
                   </label>
                 </div>
                 {showYtdSlideViewMenu ? (
@@ -3035,18 +3119,22 @@ export function Budgets() {
                     <Annual2026BlockMetrics
                       hideParameterRow
                       scopeSelection={slideThreeScopeSelection}
+                      visualAccentColor={slideThreeSelectedScopeMeta.color}
                       period={slideThreePeriod}
                       displayMode="tableau"
                       compactMobile={isCompactMobile}
+                      rollingStats={categoryRolling12mStats}
                     />
                   </div>
                 ) : selectedYtdSlideView === 'history' ? (
                   <Annual2026BlockMetrics
                     hideParameterRow
                     scopeSelection={slideThreeScopeSelection}
+                    visualAccentColor={slideThreeSelectedScopeMeta.color}
                     period={slideThreePeriod}
                     displayMode="graphique"
                     compactMobile={isCompactMobile}
+                    rollingStats={categoryRolling12mStats}
                   />
                 ) : (
                   <div style={{ padding: '0 var(--space-5)', marginTop: 'var(--space-2)' }}>
@@ -3540,14 +3628,14 @@ export function Budgets() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-4) var(--space-3)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-1)) var(--space-4) var(--space-2)',
                 maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-3)', background: 'var(--neutral-300)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-2)', background: 'var(--neutral-300)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Bloc ou catégorie</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowSlideThreeScopeSheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
                   <ChevronDown size={16} />
@@ -3555,7 +3643,7 @@ export function Budgets() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
                   <div>
                     <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Blocs
@@ -3575,17 +3663,17 @@ export function Budgets() {
                               border: 'none',
                               background: 'transparent',
                               borderRadius: 'var(--radius-md)',
-                              padding: '5px 4px',
+                              padding: '3px 3px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 3,
+                              gap: 2,
                               cursor: 'pointer',
                               opacity: selected ? 1 : 0.92,
                             }}
                           >
                             <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
-                              <img src={option.iconSrc} alt={`Icône ${option.label}`} width={30} height={30} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
+                              <img src={option.iconSrc} alt={`Icône ${option.label}`} width={28} height={28} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
                             </div>
                             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.05 }}>{option.label}</span>
                           </button>
@@ -3600,7 +3688,7 @@ export function Budgets() {
                     <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Catégories
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2) var(--space-1)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-1) var(--space-1)' }}>
                       {(() => {
                         const selectedAll = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID
                         return (
@@ -3614,17 +3702,17 @@ export function Budgets() {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              padding: '5px 3px',
+                              padding: '3px 2px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 4,
+                              gap: 2,
                               cursor: 'pointer',
                               opacity: selectedAll ? 1 : 0.92,
                             }}
                           >
                             <div style={{ border: selectedAll ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
-                              <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
+                              <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={32} />
                             </div>
                             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
                               Toutes
@@ -3645,17 +3733,17 @@ export function Budgets() {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              padding: '5px 3px',
+                              padding: '3px 2px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 4,
+                              gap: 2,
                               cursor: 'pointer',
                               opacity: selected ? 1 : 0.92,
                             }}
                           >
                             <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
-                              <CategoryIcon iconKey={category.icon_key} label={category.name} size={34} />
+                              <CategoryIcon iconKey={category.icon_key} label={category.name} size={32} />
                             </div>
                             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
                               {formatCategoryModalLabel(category.name)}

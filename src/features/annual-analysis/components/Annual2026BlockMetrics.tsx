@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { budgetDb } from '@/lib/supabaseBudget'
+import type { CategoryRolling12mStats } from '@/features/budget/api/getCategoryRolling12mStats'
 import { BUCKET_LABELS, BUCKET_ORDER, MONTH_LABELS_SHORT } from './_constants'
 
 export type MetricsScopeKind = 'bloc' | 'categorie'
@@ -17,9 +18,11 @@ export interface MetricsScopeSelection {
 interface Annual2026BlockMetricsProps {
   hideParameterRow?: boolean
   scopeSelection?: MetricsScopeSelection
+  visualAccentColor?: string
   period?: string
   displayMode?: MetricsDisplayMode
   compactMobile?: boolean
+  rollingStats?: CategoryRolling12mStats[]
 }
 
 interface CategoryRow {
@@ -75,6 +78,19 @@ interface BucketBudgetVsActualRow {
   budget_bucket: string | null
   target_budget_bucket_eur: number | null
   actual_budget_bucket_eur: number | null
+}
+
+interface MonthlyBucketActualsFallbackRow {
+  month_start: string | null
+  budget_bucket: string | null
+  revenue_amount: number | null
+  net_amount: number | null
+}
+
+interface MonthlyBucketBudgetsFallbackRow {
+  period_month: number | null
+  budget_bucket: string | null
+  total_budget_bucket_eur: number | null
 }
 
 const YEAR_2026 = 2026
@@ -140,6 +156,22 @@ function fmtPercentCompact(value: number): string {
   return `${value > 0 ? '+' : ''}${formatted}%`
 }
 
+function asNullableFiniteNumber(value: number | null | undefined): number | null {
+  if (value == null) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function getNiceStep(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 100
+  const magnitude = 10 ** Math.floor(Math.log10(value))
+  const normalized = value / magnitude
+  if (normalized <= 1) return magnitude
+  if (normalized <= 2) return 2 * magnitude
+  if (normalized <= 5) return 5 * magnitude
+  return 10 * magnitude
+}
+
 function getActiveYearMonth(): number {
   const now = new Date()
   if (now.getFullYear() !== YEAR_2026) return 12
@@ -156,6 +188,24 @@ const ALLOWED_BUCKETS: BudgetBucketId[] = [
   'hors_pilotage',
 ]
 
+const HISTOGRAM_BUCKET_COLOR: Record<BudgetBucketId, string> = {
+  revenu: '#2ED47A',
+  socle_fixe: '#5B57F5',
+  variable_essentielle: '#4CC9F0',
+  discretionnaire: '#FC5A5A',
+  provision: '#6C63FF',
+  epargne: '#FFAB2E',
+  hors_pilotage: '#B0BEC5',
+}
+const HISTOGRAM_BUDGET_LINE_COLOR = '#EF4444'
+const HISTOGRAM_AVG12_LINE_COLOR = '#7C4DFF'
+const HISTOGRAM_MEDIAN12_LINE_COLOR = '#FFB300'
+const HISTORIQUE_LEGEND = [
+  { key: 'budget_2026', label: 'Budget 2026', color: HISTOGRAM_BUDGET_LINE_COLOR },
+  { key: 'avg_12m', label: 'Moy.12 mois', color: HISTOGRAM_AVG12_LINE_COLOR },
+  { key: 'median_12m', label: 'Méd.12 mois', color: HISTOGRAM_MEDIAN12_LINE_COLOR },
+] as const
+
 function isBudgetBucketId(value: string | null | undefined): value is BudgetBucketId {
   if (!value) return false
   return (ALLOWED_BUCKETS as string[]).includes(value)
@@ -164,6 +214,13 @@ function isBudgetBucketId(value: string | null | undefined): value is BudgetBuck
 function normalizeBucketAmount(bucket: BudgetBucketId, value: number): number {
   if (bucket === 'revenu' || bucket === 'epargne') return Math.abs(value)
   return value
+}
+
+function parseMonthFromMonthStart(value?: string | null): number | null {
+  if (!value) return null
+  const rawMonth = Number(value.slice(5, 7))
+  if (!Number.isFinite(rawMonth) || rawMonth < 1 || rawMonth > 12) return null
+  return rawMonth
 }
 
 function buildBudgetYtdBucketMetrics(rows: BucketBudgetVsActualRow[], months: number[]): {
@@ -228,8 +285,83 @@ function buildBudgetYtdBucketMetrics(rows: BucketBudgetVsActualRow[], months: nu
   return { byBucket, byBucketMonth }
 }
 
-async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows: AnalyticsRow[]; periodRows: BudgetPeriodRow[]; budgetRows: BudgetRow[]; bucketRows: BucketBudgetVsActualRow[] }> {
-  const [analyticsRes, periodsRes, bucketVsActualRes] = await Promise.all([
+function applyRevenueSavingsFallbackToMetrics(
+  metrics: { byBucket: Map<BudgetBucketId, { actualAmount: number; budgetAmount: number; varianceAmount: number; variancePct: number | null }>; byBucketMonth: Map<string, MonthlyBucketMetric> },
+  months: number[],
+  actualRows: MonthlyBucketActualsFallbackRow[],
+  budgetRows: MonthlyBucketBudgetsFallbackRow[],
+) {
+  const fallbackBuckets: BudgetBucketId[] = ['revenu', 'epargne']
+
+  for (const bucket of fallbackBuckets) {
+    let hasPrimaryData = false
+    for (const month of months) {
+      const metric = metrics.byBucketMonth.get(`${bucket}:${month}`)
+      if (!metric) continue
+      if (Math.abs(metric.actual_amount) > 0.0001 || Math.abs(metric.budget_amount) > 0.0001) {
+        hasPrimaryData = true
+        break
+      }
+    }
+    if (hasPrimaryData) continue
+
+    for (const row of actualRows) {
+      if (!isBudgetBucketId(row.budget_bucket) || row.budget_bucket !== bucket) continue
+      const month = parseMonthFromMonthStart(row.month_start)
+      if (month == null || !months.includes(month)) continue
+      const key = `${bucket}:${month}`
+      const metric = metrics.byBucketMonth.get(key)
+      if (!metric) continue
+      const rawActual = bucket === 'revenu' ? Number(row.revenue_amount ?? row.net_amount ?? 0) : Number(row.net_amount ?? row.revenue_amount ?? 0)
+      metric.actual_amount = normalizeBucketAmount(bucket, rawActual)
+    }
+
+    for (const row of budgetRows) {
+      if (!isBudgetBucketId(row.budget_bucket) || row.budget_bucket !== bucket) continue
+      const month = Number(row.period_month)
+      if (!Number.isFinite(month) || !months.includes(month)) continue
+      const key = `${bucket}:${month}`
+      const metric = metrics.byBucketMonth.get(key)
+      if (!metric) continue
+      metric.budget_amount = normalizeBucketAmount(bucket, Number(row.total_budget_bucket_eur ?? 0))
+    }
+  }
+
+  for (const bucket of ALLOWED_BUCKETS) {
+    let actualAmount = 0
+    let budgetAmount = 0
+    for (const month of months) {
+      const metric = metrics.byBucketMonth.get(`${bucket}:${month}`)
+      if (!metric) continue
+      metric.variance_amount = metric.actual_amount - metric.budget_amount
+      metric.variance_pct = metric.budget_amount > 0 ? metric.variance_amount / metric.budget_amount : null
+      actualAmount += metric.actual_amount
+      budgetAmount += metric.budget_amount
+    }
+    const varianceAmount = actualAmount - budgetAmount
+    metrics.byBucket.set(bucket, {
+      actualAmount,
+      budgetAmount,
+      varianceAmount,
+      variancePct: budgetAmount > 0 ? varianceAmount / budgetAmount : null,
+    })
+  }
+}
+
+async function fetchDatasetForMonths(months: number[]): Promise<{
+  analyticsRows: AnalyticsRow[]
+  periodRows: BudgetPeriodRow[]
+  budgetRows: BudgetRow[]
+  bucketRows: BucketBudgetVsActualRow[]
+  monthlyBucketActualRows: MonthlyBucketActualsFallbackRow[]
+  monthlyBucketBudgetRows: MonthlyBucketBudgetsFallbackRow[]
+}> {
+  const startMonth = Math.min(...months)
+  const endMonth = Math.max(...months)
+  const startDate = `${YEAR_2026}-${String(startMonth).padStart(2, '0')}-01`
+  const endDate = `${YEAR_2026}-${String(endMonth).padStart(2, '0')}-31`
+
+  const [analyticsRes, periodsRes, bucketVsActualRes, monthlyBucketActualsRes, monthlyBucketBudgetsRes] = await Promise.all([
     budgetDb
       .from('analytics_monthly_category_metrics')
       .select('period_month, category_id, amount_total')
@@ -245,11 +377,23 @@ async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows:
       .select('period_month,budget_bucket,target_budget_bucket_eur,actual_budget_bucket_eur')
       .eq('period_year', YEAR_2026)
       .in('period_month', months),
+    budgetDb
+      .from('v_monthly_bucket_actuals_clean')
+      .select('month_start,budget_bucket,revenue_amount,net_amount')
+      .gte('month_start', startDate)
+      .lte('month_start', endDate),
+    budgetDb
+      .from('budget_bucket_totals_by_period')
+      .select('period_month,budget_bucket,total_budget_bucket_eur')
+      .eq('period_year', YEAR_2026)
+      .in('period_month', months),
   ])
 
   if (analyticsRes.error) throw new Error(`analytics query failed: ${analyticsRes.error.message}`)
   if (periodsRes.error) throw new Error(`periods query failed: ${periodsRes.error.message}`)
   if (bucketVsActualRes.error) throw new Error(`bucket budget-vs-actual query failed: ${bucketVsActualRes.error.message}`)
+  if (monthlyBucketActualsRes.error) throw new Error(`v_monthly_bucket_actuals_clean query failed: ${monthlyBucketActualsRes.error.message}`)
+  if (monthlyBucketBudgetsRes.error) throw new Error(`budget_bucket_totals_by_period query failed: ${monthlyBucketBudgetsRes.error.message}`)
 
   const periodRows = (periodsRes.data ?? []) as BudgetPeriodRow[]
   const periodIds = periodRows.map((row) => row.id)
@@ -270,15 +414,19 @@ async function fetchDatasetForMonths(months: number[]): Promise<{ analyticsRows:
     periodRows,
     budgetRows,
     bucketRows: (bucketVsActualRes.data ?? []) as BucketBudgetVsActualRow[],
+    monthlyBucketActualRows: (monthlyBucketActualsRes.data ?? []) as MonthlyBucketActualsFallbackRow[],
+    monthlyBucketBudgetRows: (monthlyBucketBudgetsRes.data ?? []) as MonthlyBucketBudgetsFallbackRow[],
   }
 }
 
 export function Annual2026BlockMetrics({
   hideParameterRow = false,
   scopeSelection,
+  visualAccentColor,
   period,
   displayMode = 'tableau',
   compactMobile = false,
+  rollingStats = [],
 }: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
   const [selectedBlock, setSelectedBlock] = useState<string>(BUCKET_ORDER[0] as string)
@@ -369,15 +517,37 @@ export function Annual2026BlockMetrics({
     queryFn: () => fetchDatasetForMonths(yearMonths),
   })
 
-  const periodBucketMetrics = useMemo(
-    () => buildBudgetYtdBucketMetrics(periodDataset?.bucketRows ?? [], selectedMonths),
-    [periodDataset?.bucketRows, selectedMonths],
-  )
+  const periodBucketMetrics = useMemo(() => {
+    const metrics = buildBudgetYtdBucketMetrics(periodDataset?.bucketRows ?? [], selectedMonths)
+    applyRevenueSavingsFallbackToMetrics(
+      metrics,
+      selectedMonths,
+      periodDataset?.monthlyBucketActualRows ?? [],
+      periodDataset?.monthlyBucketBudgetRows ?? [],
+    )
+    return metrics
+  }, [
+    periodDataset?.bucketRows,
+    periodDataset?.monthlyBucketActualRows,
+    periodDataset?.monthlyBucketBudgetRows,
+    selectedMonths,
+  ])
 
-  const yearBucketMetrics = useMemo(
-    () => buildBudgetYtdBucketMetrics(yearDataset?.bucketRows ?? [], yearMonths),
-    [yearDataset?.bucketRows, yearMonths],
-  )
+  const yearBucketMetrics = useMemo(() => {
+    const metrics = buildBudgetYtdBucketMetrics(yearDataset?.bucketRows ?? [], yearMonths)
+    applyRevenueSavingsFallbackToMetrics(
+      metrics,
+      yearMonths,
+      yearDataset?.monthlyBucketActualRows ?? [],
+      yearDataset?.monthlyBucketBudgetRows ?? [],
+    )
+    return metrics
+  }, [
+    yearDataset?.bucketRows,
+    yearDataset?.monthlyBucketActualRows,
+    yearDataset?.monthlyBucketBudgetRows,
+    yearMonths,
+  ])
 
   const scopeCategoryIds = useMemo(() => {
     if (analysisType === 'bloc') {
@@ -389,6 +559,95 @@ export function Annual2026BlockMetrics({
     if (!selectedCategoryId) return []
     return [selectedCategoryId, ...(childrenByParentId.get(selectedCategoryId) ?? [])]
   }, [analysisType, selectedBlock, selectedCategoryId, bucketMapRows, childrenByParentId, categories])
+
+  const selectedVisualizationBucket = useMemo<BudgetBucketId | null>(() => {
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) return selectedBlock
+    if (analysisType !== 'catégorie') return null
+    if (!selectedCategoryId || selectedCategoryId === ALL_CATEGORIES_ID) return null
+
+    const candidateIds = new Set<string>([selectedCategoryId, ...(childrenByParentId.get(selectedCategoryId) ?? [])])
+    const counts = new Map<BudgetBucketId, number>()
+
+    for (const row of bucketMapRows) {
+      if (!candidateIds.has(row.category_id)) continue
+      if (!isBudgetBucketId(row.budget_bucket)) continue
+      counts.set(row.budget_bucket, (counts.get(row.budget_bucket) ?? 0) + 1)
+    }
+
+    if (counts.size === 0) return null
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  }, [analysisType, selectedBlock, selectedCategoryId, childrenByParentId, bucketMapRows])
+
+  const histogramBarColor = visualAccentColor
+    ?? (selectedVisualizationBucket
+      ? HISTOGRAM_BUCKET_COLOR[selectedVisualizationBucket]
+      : 'var(--primary-500)')
+
+  const selectedRevenueSavingsUnavailable = useMemo(() => {
+    if (analysisType !== 'bloc') return false
+    if (selectedBlock !== 'revenu' && selectedBlock !== 'epargne') return false
+    if (!isBudgetBucketId(selectedBlock)) return false
+    const totals = periodBucketMetrics.byBucket.get(selectedBlock)
+    if (!totals) return true
+    return Math.abs(totals.actualAmount) < 0.0001 && Math.abs(totals.budgetAmount) < 0.0001
+  }, [analysisType, selectedBlock, periodBucketMetrics.byBucket])
+
+  const rollingStatsByCategoryId = useMemo(() => (
+    new Map(rollingStats.map((row) => [row.category_id, row]))
+  ), [rollingStats])
+
+  const rollingScopeStats = useMemo((): { averageAmount12m: number | null; medianAmount12m: number | null } => {
+    if (!rollingStats.length) return { averageAmount12m: null, medianAmount12m: null }
+
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
+      const bucketRows = rollingStats.filter((row) => row.budget_bucket === selectedBlock)
+      const avgRows = bucketRows
+        .map((row) => asNullableFiniteNumber(row.avg_monthly_amount_12m))
+        .filter((value): value is number => value != null)
+      const averageAmount12m = avgRows.length > 0
+        ? avgRows.reduce((sum, value) => sum + value, 0)
+        : null
+
+      const yearMonthValues = yearMonths.map((month) => yearBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)?.actual_amount ?? 0)
+      const hasYearValues = yearMonthValues.some((value) => Number.isFinite(value))
+      const medianAmount12m = hasYearValues ? median(yearMonthValues) : null
+      return { averageAmount12m, medianAmount12m }
+    }
+
+    const categoryIdSet = new Set(scopeCategoryIds)
+    const scopedRows = rollingStats.filter((row) => categoryIdSet.has(row.category_id))
+    const avgRows = scopedRows
+      .map((row) => asNullableFiniteNumber(row.avg_monthly_amount_12m))
+      .filter((value): value is number => value != null)
+    const averageAmount12m = avgRows.length > 0
+      ? avgRows.reduce((sum, value) => sum + value, 0)
+      : null
+
+    let medianAmount12m: number | null = null
+    if (scopeCategoryIds.length === 1) {
+      medianAmount12m = asNullableFiniteNumber(rollingStatsByCategoryId.get(scopeCategoryIds[0])?.median_monthly_amount_12m)
+    } else {
+      const selectedCategoryIdSet = new Set(scopeCategoryIds)
+      const monthlyTotals = new Map<number, number>()
+      for (const month of yearMonths) monthlyTotals.set(month, 0)
+      for (const row of yearDataset?.analyticsRows ?? []) {
+        if (!selectedCategoryIdSet.has(row.category_id)) continue
+        monthlyTotals.set(row.period_month, (monthlyTotals.get(row.period_month) ?? 0) + Number(row.amount_total ?? 0))
+      }
+      medianAmount12m = median(yearMonths.map((month) => monthlyTotals.get(month) ?? 0))
+    }
+
+    return { averageAmount12m, medianAmount12m }
+  }, [
+    analysisType,
+    rollingStats,
+    rollingStatsByCategoryId,
+    scopeCategoryIds,
+    selectedBlock,
+    yearBucketMetrics.byBucketMonth,
+    yearDataset?.analyticsRows,
+    yearMonths,
+  ])
 
   const { data: transactionCount = 0 } = useQuery({
     queryKey: ['budget-metrics-transaction-count', range.startDate, range.endDate, scopeCategoryIds.join(',')],
@@ -417,8 +676,8 @@ export function Annual2026BlockMetrics({
         variancePct: null,
       }
       const monthValues = selectedMonths.map((month) => periodBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)?.actual_amount ?? 0)
-      const averageAmount = monthValues.length ? monthValues.reduce((sum, value) => sum + value, 0) / monthValues.length : 0
-      const medianAmount = median(monthValues)
+      const averageAmountComputed = monthValues.length ? monthValues.reduce((sum, value) => sum + value, 0) / monthValues.length : 0
+      const medianAmountComputed = median(monthValues)
       const rankedBuckets = ALLOWED_BUCKETS
         .map((bucket) => ({ bucket, amount: periodBucketMetrics.byBucket.get(bucket)?.actualAmount ?? 0 }))
         .sort((a, b) => b.amount - a.amount)
@@ -429,8 +688,8 @@ export function Annual2026BlockMetrics({
         budgetAmount: selectedTotals.budgetAmount,
         deltaPct: selectedTotals.variancePct == null ? 0 : selectedTotals.variancePct * 100,
         deltaPctRaw: selectedTotals.variancePct,
-        averageAmount,
-        medianAmount,
+        averageAmount: rollingScopeStats.averageAmount12m ?? averageAmountComputed,
+        medianAmount: rollingScopeStats.medianAmount12m ?? medianAmountComputed,
         rank: rankIndex >= 0 ? `#${rankIndex + 1}` : '—',
       }
     }
@@ -460,8 +719,8 @@ export function Annual2026BlockMetrics({
     }
 
     const monthValues = selectedMonths.map((month) => monthActualMap.get(month) ?? 0)
-    const averageAmount = monthValues.length ? monthValues.reduce((sum, value) => sum + value, 0) / monthValues.length : 0
-    const medianAmount = median(monthValues)
+    const averageAmountComputed = monthValues.length ? monthValues.reduce((sum, value) => sum + value, 0) / monthValues.length : 0
+    const medianAmountComputed = median(monthValues)
     const deltaPct = budgetAmount > 0 ? ((actualAmount - budgetAmount) / budgetAmount) * 100 : 0
 
     const bucketByCategoryId = new Map<string, string>()
@@ -513,11 +772,13 @@ export function Annual2026BlockMetrics({
       budgetAmount,
       deltaPct,
       deltaPctRaw: budgetAmount > 0 ? deltaPct / 100 : null,
-      averageAmount,
-      medianAmount,
+      averageAmount: rollingScopeStats.averageAmount12m ?? averageAmountComputed,
+      medianAmount: rollingScopeStats.medianAmount12m ?? medianAmountComputed,
       rank: rank > 0 ? `#${rank}` : '—',
     }
   }, [
+    rollingScopeStats.averageAmount12m,
+    rollingScopeStats.medianAmount12m,
     periodBucketMetrics,
     periodDataset,
     scopeCategoryIds,
@@ -539,6 +800,8 @@ export function Annual2026BlockMetrics({
           monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
           amount: metric?.actual_amount ?? 0,
           budget: metric?.budget_amount ?? 0,
+          avg12m: rollingScopeStats.averageAmount12m,
+          median12m: rollingScopeStats.medianAmount12m,
         }
       })
 
@@ -576,15 +839,50 @@ export function Annual2026BlockMetrics({
       monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
       amount: monthActualMap.get(month) ?? 0,
       budget: monthBudgetMap.get(month) ?? 0,
+      avg12m: rollingScopeStats.averageAmount12m,
+      median12m: rollingScopeStats.medianAmount12m,
     }))
 
     const budgetTarget = rows.length ? rows.reduce((sum, row) => sum + row.budget, 0) / rows.length : 0
     return { rows, budgetTarget }
-  }, [analysisType, selectedBlock, yearBucketMetrics.byBucketMonth, yearDataset, scopeCategoryIds, yearMonths])
+  }, [
+    analysisType,
+    rollingScopeStats.averageAmount12m,
+    rollingScopeStats.medianAmount12m,
+    selectedBlock,
+    yearBucketMetrics.byBucketMonth,
+    yearDataset,
+    scopeCategoryIds,
+    yearMonths,
+  ])
 
   const currentItemLabel = analysisType === 'bloc'
     ? (BUCKET_LABELS[selectedBlock] ?? selectedBlock)
     : (selectedCategoryId === ALL_CATEGORIES_ID ? 'Toutes catégories' : (categoryNameById.get(selectedCategoryId) ?? 'Catégorie'))
+
+  const histogramYAxisDomain = useMemo(() => {
+    const highestDisplayedValue = Math.max(
+      0,
+      ...yearlySeries.rows.map((row) => Number(row.amount ?? 0)),
+      Number(yearlySeries.budgetTarget ?? 0),
+      Number(rollingScopeStats.averageAmount12m ?? 0),
+      Number(rollingScopeStats.medianAmount12m ?? 0),
+    )
+
+    if (!Number.isFinite(highestDisplayedValue) || highestDisplayedValue <= 0) {
+      return { min: 0, max: 1000 }
+    }
+
+    const step = getNiceStep(highestDisplayedValue / 5)
+    const max = highestDisplayedValue + (step * 0.5)
+
+    return { min: 0, max }
+  }, [
+    rollingScopeStats.averageAmount12m,
+    rollingScopeStats.medianAmount12m,
+    yearlySeries.budgetTarget,
+    yearlySeries.rows,
+  ])
 
   const periodLabelSuffix = FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod
 
@@ -601,6 +899,48 @@ export function Annual2026BlockMetrics({
     { label: `Nbre d'opérations ${periodLabelSuffix}`, value: String(transactionCount), color: 'var(--neutral-900)' },
     { label: 'Rang', value: metricsState.rank, color: 'var(--neutral-900)' },
   ]
+
+  const renderHistoryTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean
+    payload?: Array<{ payload?: { amount?: number; budget?: number; avg12m?: number | null; median12m?: number | null } }>
+    label?: string
+  }) => {
+    if (!active || !payload?.length) return null
+    const row = payload[0]?.payload
+    if (!row) return null
+    const monthLabelFull = label ? (FULL_MONTH_LABEL_BY_SHORT[label] ?? label) : 'Mois'
+
+    return (
+      <div
+        style={{
+          background: 'var(--neutral-0)',
+          border: '1px solid var(--neutral-150)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-card)',
+          padding: '8px 10px',
+          display: 'grid',
+          gap: 4,
+          width: 'fit-content',
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 800 }}>{monthLabelFull}</p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>Réel: <strong>{fmtCurrencyCompact(Number(row.amount ?? 0))}</strong></p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
+          Budget 26: <strong>{fmtCurrencyCompact(Number(row.budget ?? 0))}</strong>
+        </p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
+          Moy. 12m: <strong>{row.avg12m == null ? '—' : fmtCurrencyCompact(Number(row.avg12m))}</strong>
+        </p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
+          Méd. 12m: <strong>{row.median12m == null ? '—' : fmtCurrencyCompact(Number(row.median12m))}</strong>
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'grid', gap: compactMobile ? 'var(--space-2)' : 'var(--space-3)', padding: hideParameterRow ? '0' : '0 var(--space-6)', marginTop: hideParameterRow ? 0 : 'var(--space-4)' }}>
@@ -644,19 +984,63 @@ export function Annual2026BlockMetrics({
           </>
         ) : null}
 
+        {selectedRevenueSavingsUnavailable ? (
+          <p style={{ margin: '0 0 var(--space-2)', fontSize: 11, color: 'var(--neutral-500)', textAlign: 'center' }}>
+            Données Revenus / Épargne non disponibles pour cette vue.
+          </p>
+        ) : null}
+
         {displayMode === 'graphique' ? (
-          <div style={{ margin: compactMobile ? 'var(--space-1) var(--space-3) var(--space-3)' : 'var(--space-1) var(--space-5) var(--space-4)', height: compactMobile ? 294 : 308, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ margin: compactMobile ? 'var(--space-1) var(--space-3) var(--space-3)' : 'var(--space-1) var(--space-5) var(--space-4)', display: 'grid', gap: 8 }}>
             <div style={{ width: '100%', height: compactMobile ? 234 : 252 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={yearlySeries.rows} margin={{ top: 8, right: 4, left: -10, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
                   <XAxis dataKey="monthLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => fmtCurrencyCompact(Number(value))} width={68} />
-                  <Tooltip formatter={(value: number) => fmtCurrencyCompact(Number(value))} />
-                  <ReferenceLine y={yearlySeries.budgetTarget} stroke="var(--color-error)" strokeWidth={2} strokeDasharray="4 4" />
-                  <Bar dataKey="amount" fill="var(--primary-500)" radius={[6, 6, 0, 0]} maxBarSize={34} />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: 'var(--neutral-500)' }}
+                    tickFormatter={(value) => fmtCurrencyCompact(Number(value))}
+                    width={68}
+                    domain={[histogramYAxisDomain.min, histogramYAxisDomain.max]}
+                    tickCount={5}
+                  />
+                  <Tooltip content={renderHistoryTooltip} />
+                  <ReferenceLine y={yearlySeries.budgetTarget} stroke={HISTOGRAM_BUDGET_LINE_COLOR} strokeWidth={2} />
+                  {rollingScopeStats.averageAmount12m != null ? (
+                    <ReferenceLine y={rollingScopeStats.averageAmount12m} stroke={HISTOGRAM_AVG12_LINE_COLOR} strokeWidth={2} strokeDasharray="4 4" />
+                  ) : null}
+                  {rollingScopeStats.medianAmount12m != null ? (
+                    <ReferenceLine y={rollingScopeStats.medianAmount12m} stroke={HISTOGRAM_MEDIAN12_LINE_COLOR} strokeWidth={2} strokeDasharray="4 4" />
+                  ) : null}
+                  <Bar dataKey="amount" fill={histogramBarColor} radius={[6, 6, 0, 0]} maxBarSize={34} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  flexWrap: 'nowrap',
+                  overflowX: 'auto',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '100%',
+                  fontSize: 9,
+                  color: 'var(--neutral-500)',
+                  fontFamily: 'var(--font-mono)',
+                  paddingBottom: 2,
+                }}
+              >
+                {HISTORIQUE_LEGEND.map((item) => (
+                  <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                    <span>{item.label}</span>
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         ) : (

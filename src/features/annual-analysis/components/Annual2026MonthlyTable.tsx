@@ -47,6 +47,19 @@ type MonthlySynthRow = {
   deltaRealBudgetPct: number
 }
 
+type SavingsBucketActualRow = {
+  period_month: number | null
+  budget_bucket: string | null
+  actual_budget_bucket_eur: number | null
+}
+
+type MonthlyBucketActualsCleanRow = {
+  month_start: string | null
+  budget_bucket: string | null
+  revenue_amount: number | null
+  net_amount: number | null
+}
+
 const fmt = (n: number) => {
   const val = Math.round(n).toLocaleString('fr-FR')
   return `${val}€`
@@ -75,7 +88,7 @@ const CHART_SERIES = [
   { key: 'income',  name: 'Revenus',  color: '#2ED47A', gradId: 'gInc', dashed: false },
   { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
 ]
-const SOLDE_SERIES = { key: 'balance', name: 'Solde', color: '#4A4A62' } as const
+const SOLDE_SERIES = { key: 'balance', name: 'Cashflow', color: '#4A4A62' } as const
 
 const fmtTickK = (v: number) => {
   if (!Number.isFinite(v)) return '0'
@@ -122,7 +135,7 @@ export function MonthlyFlowsAnalysisCard({
       const userId = user?.id
       if (!userId) return []
 
-      const [metricsRes, bucketTotalsRes, savingsTotalsRes, personalBalancesByMonth] = await Promise.all([
+      const [metricsRes, bucketTotalsRes, savingsActualsRes, savingsMonthlyActualsRes, savingsTotalsRes, personalBalancesByMonth] = await Promise.all([
         budgetDb
           .from('analytics_monthly_metrics')
           .select('period_month, expense_total, income_total')
@@ -133,6 +146,15 @@ export function MonthlyFlowsAnalysisCard({
           .select('period_month, total_budget_bucket_eur')
           .eq('period_year', year),
         budgetDb
+          .from('budget_bucket_budget_vs_actual_by_month')
+          .select('period_month, budget_bucket, actual_budget_bucket_eur')
+          .eq('period_year', year)
+          .eq('budget_bucket', 'epargne'),
+        budgetDb
+          .from('v_monthly_bucket_actuals_clean')
+          .select('month_start, budget_bucket, revenue_amount, net_amount')
+          .eq('budget_bucket', 'epargne'),
+        budgetDb
           .from('savings_budget_totals_by_period')
           .select('period_month, total_savings_budget_eur')
           .eq('period_year', year),
@@ -141,12 +163,16 @@ export function MonthlyFlowsAnalysisCard({
 
       if (metricsRes.error) throw new Error(`monthly metrics query failed: ${metricsRes.error.message}`)
       if (bucketTotalsRes.error) throw new Error(`budget bucket totals query failed: ${bucketTotalsRes.error.message}`)
+      if (savingsActualsRes.error) throw new Error(`savings actuals query failed: ${savingsActualsRes.error.message}`)
+      if (savingsMonthlyActualsRes.error) throw new Error(`savings monthly actuals query failed: ${savingsMonthlyActualsRes.error.message}`)
       if (savingsTotalsRes.error) throw new Error(`savings totals query failed: ${savingsTotalsRes.error.message}`)
 
       const expenseByMonth = new Map<number, number>()
       const incomeByMonth = new Map<number, number>()
       const budgetByMonth = new Map<number, number>()
       const savingsByMonth = new Map<number, number>()
+      const hasSavingsPrimaryByMonth = new Set<number>()
+      const hasSavingsSecondaryByMonth = new Set<number>()
       const openingBalanceByMonth = new Map<number, number | null>()
       const monthSet = new Set<number>()
 
@@ -165,11 +191,32 @@ export function MonthlyFlowsAnalysisCard({
         budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(row.total_budget_bucket_eur ?? 0))
       }
 
+      for (const row of (savingsActualsRes.data ?? []) as SavingsBucketActualRow[]) {
+        const month = Number(row.period_month ?? 0)
+        if (!Number.isFinite(month) || month <= 0) continue
+        monthSet.add(month)
+        hasSavingsPrimaryByMonth.add(month)
+        savingsByMonth.set(month, Math.abs(Number(row.actual_budget_bucket_eur ?? 0)))
+      }
+
+      for (const row of (savingsMonthlyActualsRes.data ?? []) as MonthlyBucketActualsCleanRow[]) {
+        if (row.budget_bucket !== 'epargne') continue
+        const monthRaw = row.month_start?.slice(5, 7) ?? ''
+        const month = Number(monthRaw)
+        if (!Number.isFinite(month) || month <= 0) continue
+        monthSet.add(month)
+        if (hasSavingsPrimaryByMonth.has(month)) continue
+        hasSavingsSecondaryByMonth.add(month)
+        savingsByMonth.set(month, Math.abs(Number(row.net_amount ?? row.revenue_amount ?? 0)))
+      }
+
       for (const row of savingsTotalsRes.data ?? []) {
         const month = Number(row.period_month ?? 0)
         if (!Number.isFinite(month) || month <= 0) continue
         monthSet.add(month)
-        savingsByMonth.set(month, Number(row.total_savings_budget_eur ?? 0))
+        if (!hasSavingsPrimaryByMonth.has(month) && !hasSavingsSecondaryByMonth.has(month)) {
+          savingsByMonth.set(month, Number(row.total_savings_budget_eur ?? 0))
+        }
       }
 
       for (let month = 1; month <= tableMonthCutoff; month += 1) {
@@ -210,6 +257,15 @@ export function MonthlyFlowsAnalysisCard({
     income: row.income,
     savings: row.savings,
   }))
+
+  if (import.meta.env.DEV) {
+    console.log('[Graphique flux] chartData', chartData)
+    console.log('[Graphique flux] epargne series', chartData.map((row) => ({
+      month: row.label,
+      savings: row.savings,
+      epargne: row.savings,
+    })))
+  }
   const chartMaxY = Math.max(
     1000,
     Math.ceil(

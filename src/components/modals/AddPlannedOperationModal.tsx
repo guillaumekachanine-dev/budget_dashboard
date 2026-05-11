@@ -10,6 +10,7 @@ import { useAddPlannedOperation } from '@/hooks/usePlannedOperations'
 import {
   ALL_CATEGORY_TOKEN,
   CategoryPickerModal,
+  orderExpenseRootCategories,
 } from '@/components/modals/AddTransactionModal'
 import type {
   PlannedOperationBudgetImpact,
@@ -151,11 +152,13 @@ function SettingsRow({
   label,
   value,
   onClick,
+  compactMobile = false,
   disabled = false,
 }: {
   label: string
   value: string
   onClick?: () => void
+  compactMobile?: boolean
   disabled?: boolean
 }) {
   const interactive = Boolean(onClick) && !disabled
@@ -171,16 +174,18 @@ function SettingsRow({
       }}
     >
       <span
-        className="text-[var(--font-size-base)] font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
-        style={{ lineHeight: 'var(--line-height-tight)' }}
+        className="font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
+        style={{ lineHeight: 'var(--line-height-tight)', fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}
       >
         {label}
       </span>
       <span
-        className="text-[var(--font-size-base)] font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
+        className="font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
         style={{ lineHeight: 'var(--line-height-tight)' }}
       >
-        {value}
+        <span style={{ fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}>
+          {value}
+        </span>
       </span>
     </button>
   )
@@ -245,6 +250,11 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
   const [pickerClosing, setPickerClosing] = useState<PickerMode>('none')
   const [flipSubId, setFlipSubId] = useState<string | null>(null)
   const [amountFocused, setAmountFocused] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.matchMedia('(max-width: 768px)').matches
+  })
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
@@ -263,6 +273,12 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     if (!hasHierarchy) return list
     return list.filter((category) => category.parent_id === null)
   }, [categories, hasHierarchy])
+
+  const orderedRootCategories = useMemo(() => (
+    values.flowType === 'expense'
+      ? orderExpenseRootCategories(rootCategories)
+      : rootCategories
+  ), [rootCategories, values.flowType])
 
   const directSubcategoryRoot = useMemo(() => {
     if (values.flowType !== 'income' && values.flowType !== 'transfer' && values.flowType !== 'savings') return null
@@ -371,6 +387,11 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     )
   }, [values])
 
+  const modalTopOffset = isMobileViewport
+    ? 'calc(var(--safe-top-offset) + var(--space-2))'
+    : undefined
+  const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+
   const closeAndReset = useCallback(() => {
     setValues(createDefaultFormValues())
     setErrors({})
@@ -386,6 +407,37 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     const timeout = window.setTimeout(() => amountRef.current?.focus(), 70)
     return () => window.clearTimeout(timeout)
   }, [open])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia('(max-width: 768px)')
+    const onChange = (event: MediaQueryListEvent) => setIsMobileViewport(event.matches)
+    setIsMobileViewport(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (!open || !isMobileViewport || typeof window === 'undefined') {
+      setKeyboardVisible(false)
+      return
+    }
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const updateKeyboardState = () => {
+      const keyboardDelta = window.innerHeight - viewport.height
+      setKeyboardVisible(keyboardDelta > 140)
+    }
+
+    updateKeyboardState()
+    viewport.addEventListener('resize', updateKeyboardState)
+    viewport.addEventListener('scroll', updateKeyboardState)
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState)
+      viewport.removeEventListener('scroll', updateKeyboardState)
+    }
+  }, [isMobileViewport, open])
 
   useEffect(() => {
     if (!accounts?.length || values.accountId) return
@@ -644,14 +696,14 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 141, maxHeight: '81dvh' }}
+            style={{ zIndex: 141, maxHeight: '81dvh', top: modalTopOffset }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex max-h-[81dvh] flex-col">
               <header
                 className="relative overflow-hidden px-[var(--space-6)]"
                 style={{
-                  minHeight: 176,
+                  minHeight: isMobileViewport ? 162 : 176,
                   paddingTop: 'var(--space-5)',
                   background: 'linear-gradient(135deg, color-mix(in oklab, var(--viz-a) 82%, #000 18%) 0%, color-mix(in oklab, var(--viz-b) 76%, #000 24%) 100%)',
                 }}
@@ -664,20 +716,18 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   type="button"
                   aria-label="Fermer"
                   onClick={closeAndReset}
-                  className="absolute right-[var(--space-3)] top-[var(--space-3)] inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
+                  className="absolute right-[var(--space-3)] top-[var(--space-3)] inline-flex items-center justify-center rounded-[var(--radius-pill)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
+                  style={{
+                    width: isMobileViewport ? 38 : 44,
+                    height: isMobileViewport ? 38 : 44,
+                  }}
                 >
-                  <X size={20} />
+                  <X size={isMobileViewport ? 18 : 20} />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const pickerInput = dateRef.current as (HTMLInputElement & { showPicker?: () => void }) | null
-                    if (pickerInput?.showPicker) pickerInput.showPicker()
-                    else dateRef.current?.focus()
-                  }}
-                  className="absolute left-1/2 -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
-                  style={{ top: 'calc(var(--space-5) + 4px)' }}
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 text-[var(--neutral-0)]"
+                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40 }}
                 >
                   <span
                     className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
@@ -685,9 +735,31 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   >
                     {formatLongDate(values.date)}
                   </span>
-                </button>
+                  <input
+                    id="planned-operation-date"
+                    type="date"
+                    ref={dateRef}
+                    value={values.date}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, date: event.target.value }))
+                      clearFieldError('date')
+                    }}
+                    aria-label="Date de l'opération planifiée"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0.001,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 41,
+                      WebkitAppearance: 'none',
+                      appearance: 'none',
+                    }}
+                  />
+                </div>
 
-                <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 74 }}>
+                <div className="absolute left-1/2 -translate-x-1/2" style={{ top: isMobileViewport ? 60 : 74 }}>
                   <FlowTypePill
                     value={values.flowType}
                     onChange={(next) => {
@@ -722,21 +794,11 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   }}
                 />
 
-                <input
-                  id="planned-operation-date"
-                  type="date"
-                  ref={dateRef}
-                  value={values.date}
-                  onChange={(event) => {
-                    setValues((current) => ({ ...current, date: event.target.value }))
-                    clearFieldError('date')
-                  }}
-                  className="sr-only"
-                />
+                
               </header>
 
-              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0">
-                <section className="relative z-[2] px-[var(--space-6)]" style={{ marginTop: '-4px' }} aria-labelledby="planned-amount-input-label">
+              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0" style={{ position: 'relative', zIndex: 20 }}>
+                <section className="relative z-[2] px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-14px' : '-4px' }} aria-labelledby="planned-amount-input-label">
                   <p id="planned-amount-input-label" className="sr-only">
                     Montant planifié
                   </p>
@@ -780,7 +842,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   <FieldError message={errors.amount} />
                 </section>
 
-                <div className="mt-[var(--space-1)] px-[var(--space-6)]">
+                <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
                   <Input
                     id="planned-operation-label"
                     type="text"
@@ -791,7 +853,10 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     }}
                     placeholder="libellé de l'opération"
                     aria-label="Libellé de l'opération"
-                    className="rounded-[var(--radius-md)] border-[var(--neutral-200)] px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-lg)] font-[var(--font-weight-semibold)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100"
+                    className="rounded-[var(--radius-md)] border-transparent px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-lg)] font-[var(--font-weight-semibold)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100 focus:border-transparent"
+                    style={{
+                      minHeight: isMobileViewport ? 36 : 58,
+                    }}
                   />
                   <FieldError message={errors.label} />
                 </div>
@@ -802,6 +867,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                       <SettingsRow
                         label="Catégorie"
                         value={categoryLabel}
+                        compactMobile={isMobileViewport}
                         onClick={() => {
                           if (values.flowType === 'transfer') {
                             setPickerMode('subcategory')
@@ -833,17 +899,20 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                       <SettingsRow
                         label="Compte"
                         value={values.accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
+                        compactMobile={isMobileViewport}
                         onClick={handleAccountModeToggle}
                         disabled={!canUseJoint}
                       />
                       <SettingsRow
                         label="Part personnelle"
                         value={shareRatioLabel(values.personalShareRatio)}
+                        compactMobile={isMobileViewport}
                         onClick={handleShareRatioToggle}
                       />
                       <SettingsRow
                         label="Récurrent mensuel"
                         value={values.isRecurringMonthly ? 'Oui' : 'Non'}
+                        compactMobile={isMobileViewport}
                         onClick={() => {
                           setValues((current) => ({ ...current, isRecurringMonthly: !current.isRecurringMonthly }))
                         }}
@@ -852,12 +921,14 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         <SettingsRow
                           label="Impact budget"
                           value={BUDGET_IMPACT_LABELS[values.budgetImpact]}
+                          compactMobile={isMobileViewport}
                           onClick={handleBudgetImpactToggle}
                         />
                       ) : (
                         <SettingsRow
                           label="Impact budget"
                           value={BUDGET_IMPACT_LABELS.informational}
+                          compactMobile={isMobileViewport}
                           disabled
                         />
                       )}
@@ -877,24 +948,27 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 </div>
               </div>
 
-              <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)] py-[var(--space-2)]">
-                <div className="flex items-center justify-between gap-[var(--space-3)]">
-                  <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" onClick={closeAndReset}>
-                    Annuler
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    className="rounded-[var(--radius-md)]"
-                    disabled={!canSubmit}
-                    loading={isPending}
-                    onClick={onSubmit}
-                  >
-                    Planifier
-                  </Button>
-                </div>
-              </footer>
+              {!shouldHideFooter ? (
+                <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
+                  <div className="flex items-center justify-between gap-[var(--space-3)]">
+                    <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
+                      Annuler
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="rounded-[var(--radius-md)]"
+                      style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
+                      disabled={!canSubmit}
+                      loading={isPending}
+                      onClick={onSubmit}
+                    >
+                      Planifier
+                    </Button>
+                  </div>
+                </footer>
+              ) : null}
             </div>
           </motion.section>
 
@@ -902,7 +976,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             open={pickerMode === 'category'}
             mode="category"
             title="Sélectionner une catégorie"
-            items={rootCategories}
+            items={orderedRootCategories}
             selectedId={values.categoryId}
             closing={pickerClosing === 'category'}
             showAllOption={values.flowType !== 'expense'}
@@ -911,6 +985,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
               setPickerMode('none')
               setPickerClosing('none')
             }}
+            iconTreatment="croppedCircle"
             onSelect={handleCategorySelect}
           />
 
@@ -929,6 +1004,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
               setPickerClosing('none')
               setFlipSubId(null)
             }}
+            iconTreatment="croppedCircle"
             onSelect={handleSubCategorySelect}
           />
 

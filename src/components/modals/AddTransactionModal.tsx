@@ -69,6 +69,7 @@ export type CategoryPickerModalProps = {
   onClose: () => void
   onBackgroundClick?: () => void
   getItemDisplayLabel?: (item: Category) => string
+  iconTreatment?: 'default' | 'croppedCircle'
 }
 
 type SettingsListProps = {
@@ -89,6 +90,19 @@ type SettingsListProps = {
 export const ALL_CATEGORY_TOKEN = '__all__'
 const TRANSFER_SUBCATEGORY_NAMES = ['Virement épargne', 'Virement investissement', 'Épargne projet'] as const
 const SAVINGS_SUBCATEGORY_NAMES = ['Virement épargne', 'Placement', 'Investissement', 'Épargne projet', 'Intérêts'] as const
+const EXPENSE_ROOT_CATEGORY_ORDER = [
+  'logement',
+  'alimentation',
+  'achats divers',
+  'sorties',
+  'famille enfant',
+  'voyages',
+  'transport',
+  'business',
+  'abonnements',
+  'sante',
+  'taxes frais',
+] as const
 
 function normalizeText(value?: string | null): string {
   if (!value) return ''
@@ -98,6 +112,22 @@ function normalizeText(value?: string | null): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
+}
+
+export function orderExpenseRootCategories(items: Category[]): Category[] {
+  if (!items.length) return items
+  const remaining = [...items]
+  const ordered: Category[] = []
+
+  for (const token of EXPENSE_ROOT_CATEGORY_ORDER) {
+    const index = remaining.findIndex((category) => normalizeText(category.name).includes(token))
+    if (index >= 0) {
+      const [matched] = remaining.splice(index, 1)
+      if (matched) ordered.push(matched)
+    }
+  }
+
+  return [...ordered, ...remaining]
 }
 const TRANSACTION_ORDER: TransactionType[] = ['expense', 'income', 'transfer', 'savings']
 const TRANSACTION_LABEL: Record<TransactionType, string> = {
@@ -322,6 +352,7 @@ export function CategoryPickerModal({
   onClose,
   onBackgroundClick,
   getItemDisplayLabel,
+  iconTreatment = 'default',
 }: CategoryPickerModalProps) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const displayItems = useMemo(
@@ -393,12 +424,32 @@ export function CategoryPickerModal({
             onClick={handlePanelClick}
           >
             <div className="modal-picker-scroll" style={{ overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gap: 'var(--space-4)' }} role="listbox" aria-label={title}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gridTemplateRows: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)' }} role="listbox" aria-label={title}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
+                    gap: 6,
+                    alignContent: 'start',
+                    minHeight: mode === 'subcategory' ? 'calc(2 * 68px + 6px)' : undefined,
+                  }}
+                >
                 {displayItems.map((item, index) => {
                   const selected = item.id === selectedId || (item.id === ALL_CATEGORY_TOKEN && selectedId === '')
                   const flipping = mode === 'subcategory' && item.id === flipId
                   const itemLabel = getItemDisplayLabel ? getItemDisplayLabel(item) : item.name
+                  const iconStyle: CSSProperties | undefined =
+                    iconTreatment === 'croppedCircle'
+                      ? {
+                          borderRadius: '50%',
+                          clipPath: 'circle(50%)',
+                          border: '0.75px solid var(--neutral-700)',
+                          boxSizing: 'border-box',
+                          objectFit: 'cover',
+                          transform: 'scale(1.16)',
+                          transformOrigin: 'center',
+                        }
+                      : undefined
                   return (
                     <motion.button
                       key={item.id}
@@ -426,24 +477,22 @@ export function CategoryPickerModal({
                           ? { duration: 0.4, ease: [0.68, -0.55, 0.265, 1.55] }
                           : { duration: 0.15, ease: 'easeOut' }
                       }
-                      className="flex flex-col items-center gap-[var(--space-2)] rounded-[var(--radius-lg)] border px-[var(--space-2)] py-[var(--space-3)]"
+                      className="flex flex-col items-center gap-[var(--space-1)] border-none bg-transparent px-0 py-[var(--space-1)]"
                       style={{
-                        borderColor: selected ? 'var(--primary-500)' : 'var(--neutral-200)',
-                        borderWidth: selected ? 3 : 1,
-                        background: 'var(--neutral-0)',
                         transformStyle: 'preserve-3d',
-                        padding: '10px 8px',
+                        padding: '4px 2px',
                         cursor: 'pointer',
-                        transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
+                        opacity: selected ? 1 : 0.92,
+                        transition: 'opacity var(--transition-fast), transform var(--transition-fast)',
                       }}
                     >
-                      <CategoryIcon iconKey={item.icon_key} label={item.name} size={30} />
+                      <CategoryIcon iconKey={item.icon_key} label={item.name} size={30} style={iconStyle} />
                       <span
                         style={{
                           fontSize: 10,
-                          fontWeight: 700,
-                          color: 'var(--neutral-700)',
-                          lineHeight: 1.15,
+                          fontWeight: selected ? 800 : 700,
+                          color: selected ? 'var(--primary-700)' : 'var(--neutral-700)',
+                          lineHeight: 1.05,
                           textAlign: 'center',
                           maxWidth: '100%',
                           whiteSpace: 'normal',
@@ -477,6 +526,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     if (typeof window === 'undefined') return true
     return window.matchMedia('(max-width: 768px)').matches
   })
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
@@ -517,6 +567,12 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     if (!hasHierarchy || rootCategories.length !== 1) return null
     return rootCategories[0] ?? null
   }, [hasHierarchy, rootCategories, values.transactionType])
+
+  const orderedRootCategories = useMemo(() => (
+    values.transactionType === 'expense'
+      ? orderExpenseRootCategories(rootCategories)
+      : rootCategories
+  ), [rootCategories, values.transactionType])
 
   const savingsRootCategory = useMemo(() => {
     if (values.transactionType !== 'savings') return null
@@ -663,6 +719,11 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
 
+  const modalTopOffset = isMobileViewport
+    ? 'calc(var(--safe-top-offset) + var(--space-2))'
+    : undefined
+  const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+
   const closeAndReset = useCallback(() => {
     reset(createDefaultFormValues())
     setPickerMode('none')
@@ -686,6 +747,28 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     media.addEventListener('change', onChange)
     return () => media.removeEventListener('change', onChange)
   }, [])
+
+  useEffect(() => {
+    if (!open || !isMobileViewport || typeof window === 'undefined') {
+      setKeyboardVisible(false)
+      return
+    }
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const updateKeyboardState = () => {
+      const keyboardDelta = window.innerHeight - viewport.height
+      setKeyboardVisible(keyboardDelta > 140)
+    }
+
+    updateKeyboardState()
+    viewport.addEventListener('resize', updateKeyboardState)
+    viewport.addEventListener('scroll', updateKeyboardState)
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState)
+      viewport.removeEventListener('scroll', updateKeyboardState)
+    }
+  }, [isMobileViewport, open])
 
   useEffect(() => {
     if (!accounts?.length || values.accountId) return
@@ -879,7 +962,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 101, maxHeight: '81dvh' }}
+            style={{ zIndex: 101, maxHeight: '81dvh', top: modalTopOffset }}
             onClick={(event) => event.stopPropagation()}
           >
             <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[81dvh] flex-col">
@@ -921,15 +1004,9 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   <X size={isMobileViewport ? 18 : 20} />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const pickerInput = dateRef.current as (HTMLInputElement & { showPicker?: () => void }) | null
-                    if (pickerInput?.showPicker) pickerInput.showPicker()
-                    else dateRef.current?.focus()
-                  }}
-                  className="absolute left-1/2 -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
-                  style={{ top: 'calc(var(--space-5) + 4px)' }}
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 text-[var(--neutral-0)]"
+                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40 }}
                 >
                   <span
                     className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
@@ -937,7 +1014,33 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   >
                     {formatLongDate(values.date)}
                   </span>
-                </button>
+                  <input
+                    id="transaction-date"
+                    type="date"
+                    {...dateRegister}
+                    ref={(node) => {
+                      dateRef.current = node
+                      dateRegister.ref(node)
+                    }}
+                    value={values.date}
+                    onChange={(event) => {
+                      setValue('date', event.target.value)
+                      clearErrors('date')
+                    }}
+                    aria-label="Date de l'opération"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0.001,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 41,
+                      WebkitAppearance: 'none',
+                      appearance: 'none',
+                    }}
+                  />
+                </div>
 
                 <button
                   type="button"
@@ -979,21 +1082,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   }}
                 />
 
-                <input
-                  id="transaction-date"
-                  type="date"
-                  {...dateRegister}
-                  ref={(node) => {
-                    dateRef.current = node
-                    dateRegister.ref(node)
-                  }}
-                  value={values.date}
-                  onChange={(event) => {
-                    setValue('date', event.target.value)
-                    clearErrors('date')
-                  }}
-                  className="sr-only"
-                />
+                
               </header>
 
               <div style={{ position: 'relative', zIndex: 1000, marginTop: isMobileViewport ? -14 : -4 }}>
@@ -1087,27 +1176,29 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 </div>
               </div>
 
-              <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
-                <div
-                  className="flex items-center justify-between gap-[var(--space-3)]"
-                  style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
-                >
-                  <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
-                    Annuler
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
-                    style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
-                    disabled={!canSubmit}
-                    loading={isPending}
+              {!shouldHideFooter ? (
+                <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
+                  <div
+                    className="flex items-center justify-between gap-[var(--space-3)]"
+                    style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
                   >
-                    Ajouter
-                  </Button>
-                </div>
-              </footer>
+                    <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
+                      Annuler
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
+                      style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
+                      disabled={!canSubmit}
+                      loading={isPending}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                </footer>
+              ) : null}
             </form>
           </motion.section>
 
@@ -1115,7 +1206,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             open={pickerMode === 'category'}
             mode="category"
             title="Sélectionner une catégorie"
-            items={rootCategories}
+            items={orderedRootCategories}
             selectedId={values.categoryId}
             closing={pickerClosing === 'category'}
             showAllOption={values.transactionType !== 'expense'}
@@ -1123,6 +1214,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               setPickerMode('none')
               setPickerClosing('none')
             }}
+            iconTreatment="croppedCircle"
             onSelect={handleCategorySelect}
           />
 
@@ -1140,6 +1232,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               setPickerClosing('none')
               setFlipSubId(null)
             }}
+            iconTreatment="croppedCircle"
             onSelect={handleSubCategorySelect}
             getItemDisplayLabel={(item) => {
               if (values.transactionType === 'income' && item.name.trim().toLowerCase() === 'remboursement') {
