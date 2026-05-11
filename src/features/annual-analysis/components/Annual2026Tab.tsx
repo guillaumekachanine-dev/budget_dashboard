@@ -3,7 +3,6 @@ import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnua
 import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
-import { Annual2026MonthlyTable } from './Annual2026MonthlyTable'
 
 export function Annual2026Tab() {
   const {
@@ -13,7 +12,6 @@ export function Annual2026Tab() {
     buckets,
     categories,
     insights,
-    monthlyProfile,
   } = useAnnual2026Analysis()
   void insights
 
@@ -53,7 +51,6 @@ export function Annual2026Tab() {
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
           <Annual2026Hero summary={summary} buckets={buckets} />
           <SectionTitle title="Vue d'ensemble 2026" />
-          <Annual2026MonthlyTable monthlyProfile={monthlyProfile} />
           {categories.length > 0 ? <AnnualProjectionCard categories={categories} /> : null}
         </div>
       ) : null}

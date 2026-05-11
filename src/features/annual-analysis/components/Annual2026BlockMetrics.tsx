@@ -51,6 +51,7 @@ interface BudgetRow {
 }
 
 const YEAR_2026 = 2026
+const ALL_CATEGORIES_ID = 'all_categories'
 const FULL_MONTH_LABEL_BY_SHORT: Record<string, string> = {
   Jan: 'Janvier',
   Fév: 'Février',
@@ -258,9 +259,12 @@ export function Annual2026BlockMetrics({
     if (analysisType === 'bloc') {
       return bucketMapRows.filter((row) => row.budget_bucket === selectedBlock).map((row) => row.category_id)
     }
+    if (selectedCategoryId === ALL_CATEGORIES_ID) {
+      return categories.map((row) => row.id)
+    }
     if (!selectedCategoryId) return []
     return [selectedCategoryId, ...(childrenByParentId.get(selectedCategoryId) ?? [])]
-  }, [analysisType, selectedBlock, selectedCategoryId, bucketMapRows, childrenByParentId])
+  }, [analysisType, selectedBlock, selectedCategoryId, bucketMapRows, childrenByParentId, categories])
 
   const { data: transactionCount = 0 } = useQuery({
     queryKey: ['budget-metrics-transaction-count', range.startDate, range.endDate, scopeCategoryIds.join(',')],
@@ -329,7 +333,7 @@ export function Annual2026BlockMetrics({
 
       const sorted = [...totalsByBucket.entries()].sort((a, b) => b[1] - a[1]).map(([key]) => key)
       rank = sorted.findIndex((key) => key === selectedBlock) + 1
-    } else if (selectedCategoryId) {
+    } else if (selectedCategoryId && selectedCategoryId !== ALL_CATEGORIES_ID) {
       const rootCategoryIds = rootCategories.map((row) => row.id)
       const totalsByRootId = new Map<string, number>()
       for (const rootId of rootCategoryIds) totalsByRootId.set(rootId, 0)
@@ -414,7 +418,7 @@ export function Annual2026BlockMetrics({
 
   const currentItemLabel = analysisType === 'bloc'
     ? (BUCKET_LABELS[selectedBlock] ?? selectedBlock)
-    : (categoryNameById.get(selectedCategoryId) ?? 'Catégorie')
+    : (selectedCategoryId === ALL_CATEGORIES_ID ? 'Toutes catégories' : (categoryNameById.get(selectedCategoryId) ?? 'Catégorie'))
 
   const periodLabelSuffix = FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod
 

@@ -33,9 +33,9 @@ import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryL
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
 import {
   Annual2026BlockMetrics,
-  type MetricsDisplayMode,
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
+import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
 import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
 import blockVariableIcon from '@/assets/icons/blocks/variable.png'
@@ -48,6 +48,7 @@ import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.png'
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
 type SubCatTrend = 'up' | 'down' | 'equal'
+type BudgetYtdSlideView = 'kpi' | 'history' | 'monthly_flows_table' | 'monthly_flows_chart'
 
 interface MonthlyBucket {
   month: string
@@ -66,6 +67,7 @@ interface PieDatum {
 
 type BudgetBlockId = 'socle_fixe' | 'variable_essentielle' | 'discretionnaire' | 'epargne' | 'provision' | 'cagnotte'
 const REVENUE_BLOCK_PAGE_ID = 'revenu' as const
+const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 
 interface BudgetBlockLineItem {
@@ -578,7 +580,8 @@ export function Budgets() {
   })
   const [showSlideThreeScopeSheet, setShowSlideThreeScopeSheet] = useState(false)
   const [slideThreePeriod, setSlideThreePeriod] = useState('2026')
-  const [slideThreeDisplayMode, setSlideThreeDisplayMode] = useState<MetricsDisplayMode>('tableau')
+  const [selectedYtdSlideView, setSelectedYtdSlideView] = useState<BudgetYtdSlideView>('kpi')
+  const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
   const {
     data: budgetPayload,
   } = useBudgetPagePayload({
@@ -1031,6 +1034,14 @@ export function Budgets() {
         iconType: 'block' as const,
         iconSrc: BUCKET_SCOPE_ICON_SRC[slideThreeScopeSelection.id] ?? blockProvisionsIcon,
         iconKey: null as string | null,
+      }
+    }
+    if (slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID) {
+      return {
+        label: 'Toutes catégories',
+        iconType: 'category' as const,
+        iconSrc: null as string | null,
+        iconKey: 'toutes_categories',
       }
     }
     const category = categoryById.get(slideThreeScopeSelection.id) ?? null
@@ -1548,7 +1559,29 @@ export function Budgets() {
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const isSlideThreeMetricsMode = showExtendedSlides && activeSlide === 2
   const isSlideOneOrTwoMode = showExtendedSlides && activeSlide < 2
-  const headerModeLabel = isSlideThreeMetricsMode ? 'Analyse' : activeSlide === 1 ? 'Blocs' : 'Catégories'
+  const ytdSlideViewLabel: Record<BudgetYtdSlideView, string> = {
+    kpi: 'KPI',
+    history: 'Historique 2026',
+    monthly_flows_table: 'Flux mensuels',
+    monthly_flows_chart: 'Graphique flux',
+  }
+  const ytdSlideViewOptions: Array<{ id: BudgetYtdSlideView; label: string }> = [
+    { id: 'kpi', label: 'KPI' },
+    { id: 'history', label: 'Historique 2026' },
+    { id: 'monthly_flows_table', label: 'Flux mensuels' },
+    { id: 'monthly_flows_chart', label: 'Graphique flux' },
+  ]
+  const ytdSlideHeading = selectedYtdSlideView === 'kpi'
+    ? 'Indicateurs clé'
+    : selectedYtdSlideView === 'history'
+      ? 'Historique 2026'
+      : selectedYtdSlideView === 'monthly_flows_table'
+        ? 'Flux mensuels'
+        : 'Graphique flux'
+  const ytdScopeLabel = slideThreeSelectedScopeMeta.label
+    ? `${slideThreeSelectedScopeMeta.label.charAt(0).toUpperCase()}${slideThreeSelectedScopeMeta.label.slice(1)}`
+    : '—'
+  const headerModeLabel = isSlideThreeMetricsMode ? 'Analyse YTD' : activeSlide === 1 ? 'Blocs' : 'Catégories'
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
   const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
@@ -1564,6 +1597,11 @@ export function Budgets() {
     if (isSlideOneOrTwoMode) return
     setShowHeaderPeriodMenu(false)
   }, [isSlideOneOrTwoMode])
+
+  useEffect(() => {
+    if (isSlideThreeMetricsMode) return
+    setShowYtdSlideViewMenu(false)
+  }, [isSlideThreeMetricsMode])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse') return
@@ -1944,8 +1982,38 @@ export function Budgets() {
             </div>
               </>
             ) : activeSlide === 2 ? (
-              <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center', position: 'relative' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowYtdSlideViewMenu((current) => !current)}
+                    aria-label="Choisir le contenu de la slide Analyse"
+                    aria-haspopup="menu"
+                    aria-expanded={showYtdSlideViewMenu}
+                    style={{
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      color: 'var(--neutral-600)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      textAlign: 'center',
+                      minWidth: slideThreeParamCardWidth,
+                      width: slideThreeParamCardWidth,
+                      minHeight: 48,
+                      cursor: 'pointer',
+                      position: 'relative',
+                    }}
+                  >
+                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
+                      {ytdSlideViewLabel[selectedYtdSlideView]}
+                    </span>
+                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showYtdSlideViewMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
+                  </button>
                   <label
                     style={{
                       border: '1px solid var(--neutral-200)',
@@ -1974,7 +2042,7 @@ export function Budgets() {
                         border: 'none',
                         background: 'transparent',
                         color: 'var(--neutral-700)',
-                        fontSize: '13px',
+                        fontSize: isCompactMobile ? '10px' : '11px',
                         fontWeight: 700,
                         fontFamily: 'inherit',
                         lineHeight: 1.1,
@@ -1997,36 +2065,58 @@ export function Budgets() {
                     </select>
                     <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setSlideThreeDisplayMode((current) => (current === 'tableau' ? 'graphique' : 'tableau'))}
-                    aria-label="Basculer le mode d'affichage"
-                    aria-pressed={slideThreeDisplayMode === 'graphique'}
-                    style={{
-                      border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-0)',
-                      color: 'var(--neutral-600)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: 'var(--space-2) var(--space-3)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      textAlign: 'center',
-                      minWidth: slideThreeParamCardWidth,
-                      width: slideThreeParamCardWidth,
-                      minHeight: 48,
-                      cursor: 'pointer',
-                      position: 'relative',
-                    }}
-                  >
-                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
-                      {slideThreeDisplayMode}
-                    </span>
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
-                  </button>
                 </div>
+                {showYtdSlideViewMenu ? (
+                  <>
+                    <div
+                      onClick={() => setShowYtdSlideViewMenu(false)}
+                      style={{ position: 'fixed', inset: 0, zIndex: 120 }}
+                    />
+                    <div
+                      role="menu"
+                      aria-label="Choisir un contenu pour la slide Analyse"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + var(--space-2))',
+                        right: 'var(--space-5)',
+                        zIndex: 130,
+                        minWidth: 196,
+                        background: 'var(--neutral-0)',
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: 'var(--shadow-card)',
+                        padding: 'var(--space-2)',
+                        display: 'grid',
+                        gap: 2,
+                      }}
+                    >
+                      {ytdSlideViewOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedYtdSlideView(option.id)
+                            setShowYtdSlideViewMenu(false)
+                          }}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: selectedYtdSlideView === option.id ? 'var(--primary-50)' : 'transparent',
+                            color: selectedYtdSlideView === option.id ? 'var(--primary-700)' : 'var(--neutral-800)',
+                            fontSize: 'var(--font-size-sm)',
+                            fontWeight: selectedYtdSlideView === option.id ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                            textAlign: 'left',
+                            padding: 'var(--space-2) var(--space-3)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </div>
             ) : (
               <div aria-hidden="true" style={{ width: '100%', height: 80 }} />
@@ -2925,30 +3015,49 @@ export function Budgets() {
                       <img
                         src={slideThreeSelectedScopeMeta.iconSrc ?? blockProvisionsIcon}
                         alt={`Icône ${slideThreeSelectedScopeMeta.label}`}
-                        width={22}
-                        height={22}
+                        width={25}
+                        height={25}
                         loading="lazy"
                         decoding="async"
                         style={{ display: 'block', objectFit: 'contain' }}
                       />
                     ) : (
-                      <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={22} />
+                      <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={25} />
                     )}
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)' }}>
-                      {slideThreeSelectedScopeMeta.label}
-                    </p>
+                    <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                      <span style={{ fontWeight: 800 }}>{ytdScopeLabel}</span>
+                      <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}> - {ytdSlideHeading}</span>
+                    </h3>
                   </div>
-                  <h3 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--font-size-base)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {slideThreeDisplayMode === 'tableau' ? 'Indicateurs clé' : 'Historique 6 mois'}
-                  </h3>
                 </section>
-                <Annual2026BlockMetrics
-                  hideParameterRow
-                  scopeSelection={slideThreeScopeSelection}
-                  period={slideThreePeriod}
-                  displayMode={slideThreeDisplayMode}
-                  compactMobile={isCompactMobile}
-                />
+                {selectedYtdSlideView === 'kpi' ? (
+                  <div style={{ padding: isCompactMobile ? '0 var(--space-2)' : '0 var(--space-4)' }}>
+                    <Annual2026BlockMetrics
+                      hideParameterRow
+                      scopeSelection={slideThreeScopeSelection}
+                      period={slideThreePeriod}
+                      displayMode="tableau"
+                      compactMobile={isCompactMobile}
+                    />
+                  </div>
+                ) : selectedYtdSlideView === 'history' ? (
+                  <Annual2026BlockMetrics
+                    hideParameterRow
+                    scopeSelection={slideThreeScopeSelection}
+                    period={slideThreePeriod}
+                    displayMode="graphique"
+                    compactMobile={isCompactMobile}
+                  />
+                ) : (
+                  <div style={{ padding: '0 var(--space-5)', marginTop: 'var(--space-2)' }}>
+                    <MonthlyFlowsAnalysisCard
+                      year={2026}
+                      forcedView={selectedYtdSlideView === 'monthly_flows_chart' ? 'chart' : 'table'}
+                      showInternalViewToggle={false}
+                      variant="embedded"
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
@@ -3431,14 +3540,14 @@ export function Budgets() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-4)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-4) var(--space-3)',
                 maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-4)', background: 'var(--neutral-300)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-3)', background: 'var(--neutral-300)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Bloc ou catégorie</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowSlideThreeScopeSheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
                   <ChevronDown size={16} />
@@ -3446,12 +3555,12 @@ export function Budgets() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   <div>
-                    <p style={{ margin: '0 0 var(--space-2)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Blocs
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-1)' }}>
                       {slideThreeBlockOptions.map((option) => {
                         const selected = slideThreeScopeSelection.kind === 'bloc' && slideThreeScopeSelection.id === option.id
                         return (
@@ -3463,19 +3572,22 @@ export function Budgets() {
                               setShowSlideThreeScopeSheet(false)
                             }}
                             style={{
-                              border: selected ? '2px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              background: selected ? 'var(--primary-50)' : 'var(--neutral-0)',
-                              borderRadius: 'var(--radius-lg)',
-                              padding: '8px 6px',
+                              border: 'none',
+                              background: 'transparent',
+                              borderRadius: 'var(--radius-md)',
+                              padding: '5px 4px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 4,
+                              gap: 3,
                               cursor: 'pointer',
+                              opacity: selected ? 1 : 0.92,
                             }}
                           >
-                            <img src={option.iconSrc} alt={`Icône ${option.label}`} width={30} height={30} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.15 }}>{option.label}</span>
+                            <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
+                              <img src={option.iconSrc} alt={`Icône ${option.label}`} width={30} height={30} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.05 }}>{option.label}</span>
                           </button>
                         )
                       })}
@@ -3485,10 +3597,41 @@ export function Budgets() {
                   <div style={{ height: 1, background: 'var(--neutral-200)' }} />
 
                   <div>
-                    <p style={{ margin: '0 0 var(--space-2)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Catégories
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2) var(--space-1)' }}>
+                      {(() => {
+                        const selectedAll = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID
+                        return (
+                          <button
+                            key={ALL_CATEGORIES_SCOPE_ID}
+                            type="button"
+                            onClick={() => {
+                              setSlideThreeScopeSelection({ kind: 'categorie', id: ALL_CATEGORIES_SCOPE_ID })
+                              setShowSlideThreeScopeSheet(false)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              padding: '5px 3px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 4,
+                              cursor: 'pointer',
+                              opacity: selectedAll ? 1 : 0.92,
+                            }}
+                          >
+                            <div style={{ border: selectedAll ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
+                              <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
+                              Toutes
+                            </span>
+                          </button>
+                        )
+                      })()}
                       {rootExpenseCategories.map((category) => {
                         const selected = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === category.id
                         return (
@@ -3502,11 +3645,11 @@ export function Budgets() {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              padding: '6px 4px',
+                              padding: '5px 3px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 5,
+                              gap: 4,
                               cursor: 'pointer',
                               opacity: selected ? 1 : 0.92,
                             }}
@@ -3514,7 +3657,7 @@ export function Budgets() {
                             <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
                               <CategoryIcon iconKey={category.icon_key} label={category.name} size={34} />
                             </div>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
                               {formatCategoryModalLabel(category.name)}
                             </span>
                           </button>

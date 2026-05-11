@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { 
@@ -26,8 +26,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { getMonthlyPersonalAccountBalances } from '@/features/annual-analysis/api/getMonthlyPersonalAccountBalances'
 
-type Props = {
-  monthlyProfile: MonthlyBudget2026Point[]
+type MonthlyFlowsAnalysisCardProps = {
+  year: number
+  initialView?: 'table' | 'chart'
+  forcedView?: 'table' | 'chart'
+  showInternalViewToggle?: boolean
+  className?: string
+  variant?: 'standalone' | 'embedded'
+  monthlyProfile?: MonthlyBudget2026Point[]
 }
 
 type MonthlySynthRow = {
@@ -52,10 +58,10 @@ const fmtPct = (r: number) => {
 }
 
 
-function getCurrentMonthCutoff2026(): number {
+function getCurrentMonthCutoff(year: number): number {
   const now = new Date()
-  if (now.getFullYear() < 2026) return 0
-  if (now.getFullYear() > 2026) return 12
+  if (now.getFullYear() < year) return 0
+  if (now.getFullYear() > year) return 12
   return Math.max(1, Math.min(12, now.getMonth() + 1))
 }
 
@@ -79,10 +85,23 @@ const fmtTickK = (v: number) => {
   return `${k}k`
 }
 
-export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
-  const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>('table')
+export function MonthlyFlowsAnalysisCard({
+  year,
+  initialView = 'table',
+  forcedView,
+  showInternalViewToggle = true,
+  className,
+  variant = 'standalone',
+  monthlyProfile = [],
+}: MonthlyFlowsAnalysisCardProps) {
+  const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>(initialView)
   const { user, loading: authLoading } = useAuth()
-  const tableMonthCutoff = getCurrentMonthCutoff2026()
+  const tableMonthCutoff = getCurrentMonthCutoff(year)
+  const activeView = forcedView ?? activeSlide
+
+  useEffect(() => {
+    setActiveSlide(initialView)
+  }, [initialView])
 
   const fallbackRows: MonthlySynthRow[] = monthlyProfile.map((point) => ({
     month: point.month,
@@ -96,7 +115,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   }))
 
   const { data: dbRows } = useQuery({
-    queryKey: ['annual-2026-monthly-synth', tableMonthCutoff, user?.id ?? 'anon'],
+    queryKey: ['monthly-flows-analysis-card', year, tableMonthCutoff, user?.id ?? 'anon'],
     enabled: !authLoading && Boolean(user?.id),
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<MonthlySynthRow[]> => {
@@ -107,17 +126,17 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
         budgetDb
           .from('analytics_monthly_metrics')
           .select('period_month, expense_total, income_total')
-          .eq('period_year', 2026)
+          .eq('period_year', year)
           .order('period_month', { ascending: true }),
         budgetDb
           .from('budget_bucket_totals_by_period')
           .select('period_month, total_budget_bucket_eur')
-          .eq('period_year', 2026),
+          .eq('period_year', year),
         budgetDb
           .from('savings_budget_totals_by_period')
           .select('period_month, total_savings_budget_eur')
-          .eq('period_year', 2026),
-        getMonthlyPersonalAccountBalances(2026),
+          .eq('period_year', year),
+        getMonthlyPersonalAccountBalances(year),
       ])
 
       if (metricsRes.error) throw new Error(`monthly metrics query failed: ${metricsRes.error.message}`)
@@ -154,7 +173,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
       }
 
       for (let month = 1; month <= tableMonthCutoff; month += 1) {
-        const key = monthKey(2026, month)
+        const key = monthKey(year, month)
         openingBalanceByMonth.set(month, personalBalancesByMonth.get(key) ?? null)
       }
 
@@ -200,62 +219,67 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
       }, 0) / 1000,
     ) * 1000,
   )
+  const showHeaderRow = variant !== 'embedded' || (showInternalViewToggle && !forcedView)
 
   return (
-    <div style={{ padding: '0 var(--space-4)' }}>
+    <div className={className} style={{ padding: variant === 'embedded' ? '0' : '0 var(--space-4)' }}>
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-            <div>
-              <h3 style={cardTitleStyle}>Analyse des flux mensuels</h3>
+        <div style={variant === 'embedded' ? cardStyleEmbedded : cardStyle}>
+          {showHeaderRow ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+              <div>
+                <h3 style={cardTitleStyle}>Analyse des flux mensuels</h3>
+              </div>
+
+              {/* Carousel Toggle */}
+              {showInternalViewToggle && !forcedView ? (
+                <div style={{ 
+                  display: 'flex', 
+                  background: 'var(--neutral-100)', 
+                  borderRadius: 'var(--radius-lg)', 
+                  padding: 2,
+                  gap: 2
+                }}>
+                  <button 
+                    onClick={() => setActiveSlide('table')}
+                    style={{
+                      border: 'none',
+                      background: activeView === 'table' ? 'var(--neutral-0)' : 'transparent',
+                      padding: '4px 8px',
+                      borderRadius: 'calc(var(--radius-lg) - 2px)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      boxShadow: activeView === 'table' ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <LayoutList size={14} color={activeView === 'table' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
+                  </button>
+                  <button 
+                    onClick={() => setActiveSlide('chart')}
+                    style={{
+                      border: 'none',
+                      background: activeView === 'chart' ? 'var(--neutral-0)' : 'transparent',
+                      padding: '4px 8px',
+                      borderRadius: 'calc(var(--radius-lg) - 2px)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      boxShadow: activeView === 'chart' ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <LineChartIcon size={14} color={activeView === 'chart' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
+                  </button>
+                </div>
+              ) : null}
             </div>
-            
-            {/* Carousel Toggle */}
-            <div style={{ 
-              display: 'flex', 
-              background: 'var(--neutral-100)', 
-              borderRadius: 'var(--radius-lg)', 
-              padding: 2,
-              gap: 2
-            }}>
-              <button 
-                onClick={() => setActiveSlide('table')}
-                style={{
-                  border: 'none',
-                  background: activeSlide === 'table' ? 'var(--neutral-0)' : 'transparent',
-                  padding: '4px 8px',
-                  borderRadius: 'calc(var(--radius-lg) - 2px)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  boxShadow: activeSlide === 'table' ? 'var(--shadow-sm)' : 'none',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <LayoutList size={14} color={activeSlide === 'table' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
-              </button>
-              <button 
-                onClick={() => setActiveSlide('chart')}
-                style={{
-                  border: 'none',
-                  background: activeSlide === 'chart' ? 'var(--neutral-0)' : 'transparent',
-                  padding: '4px 8px',
-                  borderRadius: 'calc(var(--radius-lg) - 2px)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  boxShadow: activeSlide === 'chart' ? 'var(--shadow-sm)' : 'none',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <LineChartIcon size={14} color={activeSlide === 'chart' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
-              </button>
-            </div>
-          </div>
+          ) : null}
 
           <div style={{ position: 'relative', overflow: 'hidden', minHeight: 300 }}>
             <AnimatePresence mode="wait">
-              {activeSlide === 'table' ? (
+              {activeView === 'table' ? (
                 <motion.div
                   key="table"
                   initial={{ opacity: 0, x: -20 }}
@@ -330,7 +354,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                   transition={{ duration: 0.2 }}
                 >
                   <div style={{ marginTop: 'var(--space-2)' }}>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={variant === 'embedded' ? 232 : 260}>
                       <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
                         <defs>
                           {CHART_SERIES.map((s) => (
@@ -404,7 +428,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
                       style={{
                         display: 'flex',
                         justifyContent: 'center',
-                        paddingTop: 12,
+                        paddingTop: variant === 'embedded' ? 8 : 12,
                       }}
                     >
                       <div
@@ -440,6 +464,22 @@ export function Annual2026MonthlyTable({ monthlyProfile }: Props) {
   )
 }
 
+type LegacyAnnual2026MonthlyTableProps = {
+  monthlyProfile: MonthlyBudget2026Point[]
+}
+
+export function Annual2026MonthlyTable({ monthlyProfile }: LegacyAnnual2026MonthlyTableProps) {
+  return (
+    <MonthlyFlowsAnalysisCard
+      year={2026}
+      monthlyProfile={monthlyProfile}
+      initialView="table"
+      showInternalViewToggle
+      variant="standalone"
+    />
+  )
+}
+
 function IconHeader({ icon: Icon, color, label }: { icon: LucideIcon; color: string; label: string }) {
   return (
     <div style={{ display: 'grid', justifyItems: 'center', gap: 2 }} title={label}>
@@ -455,6 +495,14 @@ const cardStyle: CSSProperties = {
   boxShadow: 'var(--shadow-card)',
   border: '1px solid var(--neutral-150)',
   padding: 'var(--space-4) var(--space-3)',
+}
+
+const cardStyleEmbedded: CSSProperties = {
+  background: 'transparent',
+  borderRadius: 0,
+  boxShadow: 'none',
+  border: 'none',
+  padding: 0,
 }
 
 const cardTitleStyle: CSSProperties = {
