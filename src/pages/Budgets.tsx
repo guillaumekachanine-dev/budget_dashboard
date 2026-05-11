@@ -1518,6 +1518,7 @@ export function Budgets() {
         active: periodKey === 'mois'
           && selectedPeriodYear === period.period_year
           && selectedPeriodMonth === period.period_month,
+        showDividerBefore: false,
         onSelect: () => {
           setPeriodKey('mois')
           setSelectedPeriodYear(period.period_year)
