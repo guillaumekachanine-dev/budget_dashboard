@@ -76,12 +76,6 @@ function normalizeToken(value: string | null | undefined): string {
     .trim()
 }
 
-function fuzzyEquals(a: string, b: string): boolean {
-  if (!a || !b) return false
-  if (a === b) return true
-  return a.includes(b) || b.includes(a)
-}
-
 function formatSharePercentInt(share: number | null | undefined): string {
   if (share == null || !Number.isFinite(share)) return '—'
   const normalizedPct = share <= 1 ? share * 100 : share
