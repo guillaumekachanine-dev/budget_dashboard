@@ -24,7 +24,7 @@ export function Annual2026Tab() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
-      style={{ display: 'grid', gap: 'var(--space-7)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
+      style={{ display: 'grid', gap: 'var(--space-6)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
     >
       {/* Message d'avertissement si données statiques */}
       {error ? (

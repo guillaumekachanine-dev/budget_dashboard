@@ -39,6 +39,7 @@ type Ytd2026KpiData = {
   topLeaf: RankedKpiRow | null
   avgMonthlyExpense: number | null
   medianMonthlyExpense: number | null
+  totalYtdExpense: number | null
 }
 
 type CardFaceData = {
@@ -46,6 +47,7 @@ type CardFaceData = {
   name?: string
   amount: number | null
   detail?: string
+  delta?: number | null   // % écart 2026 vs 2025 (positif = hausse des dépenses)
   cardColor: string
   emphasizeName?: boolean
   nameAccent?: string
@@ -120,6 +122,19 @@ function findLeafCategoryByNames(
   )) ?? null
 }
 
+async function getAnnual2025YtdMetricRows(): Promise<Annual2026YtdMetricRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_monthly_category_metrics')
+    .select('period_month, amount_total, category_id, category_name, parent_category_id, parent_category_name')
+    .eq('period_year', 2025)
+    .eq('flow_type', 'expense')
+    .in('period_month', [1, 2, 3, 4])
+    .order('period_month', { ascending: true })
+
+  if (error) throw new Error(`getAnnual2025YtdMetricRows failed: ${error.message}`)
+  return (data ?? []) as Annual2026YtdMetricRow[]
+}
+
 async function getAnnual2026YtdMetricRows(): Promise<Annual2026YtdMetricRow[]> {
   const { data, error } = await budgetDb
     .from('analytics_monthly_category_metrics')
@@ -139,6 +154,7 @@ function buildAnnual2026YtdKpis(rows: Annual2026YtdMetricRow[], categories: Cate
       topLeaf: null,
       avgMonthlyExpense: null,
       medianMonthlyExpense: null,
+      totalYtdExpense: null,
     }
   }
 
@@ -215,6 +231,7 @@ function buildAnnual2026YtdKpis(rows: Annual2026YtdMetricRow[], categories: Cate
     topLeaf,
     avgMonthlyExpense,
     medianMonthlyExpense,
+    totalYtdExpense: totalYtd > 0 ? totalYtd : null,
   }
 }
 
@@ -225,7 +242,14 @@ export function AnnualKeyInsightsGrid({
   top5LeafCategories,
 }: Props) {
   const { data: categories = [] } = useCategories()
+  const [selectedYear, setSelectedYear] = useState<2025 | 2026>(2025)
   const [flippedByCard, setFlippedByCard] = useState<Record<string, boolean>>({})
+
+  const { data: ytd2025Rows = [] } = useQuery({
+    queryKey: ['annual-2025-ytd-kpi-cards'],
+    queryFn: getAnnual2025YtdMetricRows,
+    staleTime: 15 * 60_000,
+  })
 
   const { data: ytd2026Rows = [] } = useQuery({
     queryKey: ['annual-2026-ytd-kpi-cards'],
@@ -233,32 +257,34 @@ export function AnnualKeyInsightsGrid({
     staleTime: 15 * 60_000,
   })
 
+  const ytd2025 = useMemo(() => buildAnnual2026YtdKpis(ytd2025Rows, categories), [ytd2025Rows, categories])
   const ytd2026 = useMemo(() => buildAnnual2026YtdKpis(ytd2026Rows, categories), [ytd2026Rows, categories])
 
-  const topParentCategory = top5ParentCategories[0]
-  const topLeafCategory = top5LeafCategories[0]
-  const averageMonthlyExpense2025 = asFiniteNumber(annualTotals?.avg_monthly_expense)
-  const monthlyExpenses2025 = monthlyProfile
-    .map((item) => asFiniteNumber(item.expense_total))
-    .filter((value): value is number => value != null)
-  const medianMonthlyExpense2025 = computeMedian(monthlyExpenses2025)
+  // Front (2025): how does 2025 compare to 2026 — ref=2026
+  const avgFrontDelta = (ytd2025.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense !== 0)
+    ? ((ytd2025.avgMonthlyExpense - ytd2026.avgMonthlyExpense) / ytd2026.avgMonthlyExpense) * 100
+    : null
+  // Back (2026): how does 2026 compare to 2025 — ref=2025
+  const avgBackDelta = (ytd2025.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense != null && ytd2025.avgMonthlyExpense !== 0)
+    ? ((ytd2026.avgMonthlyExpense - ytd2025.avgMonthlyExpense) / ytd2025.avgMonthlyExpense) * 100
+    : null
 
-  const parentMeta2025 = useMemo(() => (
-    findParentCategoryByName(categories, topParentCategory?.category_name)
-  ), [categories, topParentCategory?.category_name])
-  const leafMeta2025 = useMemo(() => (
-    findLeafCategoryByNames(categories, topLeafCategory?.category_name, topLeafCategory?.parent_category_name)
-  ), [categories, topLeafCategory?.category_name, topLeafCategory?.parent_category_name])
+  const totalFrontDelta = (ytd2025.totalYtdExpense != null && ytd2026.totalYtdExpense != null && ytd2026.totalYtdExpense !== 0)
+    ? ((ytd2025.totalYtdExpense - ytd2026.totalYtdExpense) / ytd2026.totalYtdExpense) * 100
+    : null
+  const totalBackDelta = (ytd2025.totalYtdExpense != null && ytd2026.totalYtdExpense != null && ytd2025.totalYtdExpense !== 0)
+    ? ((ytd2026.totalYtdExpense - ytd2025.totalYtdExpense) / ytd2025.totalYtdExpense) * 100
+    : null
 
   const frontCards: Array<{ id: string; face: CardFaceData }> = [
     {
       id: 'top-parent',
       face: {
         title: 'Catégorie #1',
-        name: topParentCategory?.category_name ?? '—',
-        amount: topParentCategory?.amount ?? null,
-        detail: `${formatSharePercentInt(topParentCategory?.pct)} du budget 2025`,
-        cardColor: getCategoryColor(parentMeta2025?.color_token ?? null, 0),
+        name: ytd2025.topParent?.name ?? '—',
+        amount: ytd2025.topParent?.amount ?? null,
+        detail: `${formatSharePercentInt(ytd2025.topParent?.sharePct)} du budget`,
+        cardColor: ytd2025.topParent?.color ?? 'var(--primary-500)',
         emphasizeName: true,
         nameAccent: 'var(--primary-700)',
       },
@@ -267,10 +293,10 @@ export function AnnualKeyInsightsGrid({
       id: 'top-leaf',
       face: {
         title: 'Poste #1',
-        name: topLeafCategory?.category_name ?? '—',
-        amount: topLeafCategory?.amount ?? null,
-        detail: `${formatSharePercentInt(topLeafCategory?.pct)} du budget 2025`,
-        cardColor: getCategoryColor(leafMeta2025?.color_token ?? null, 1),
+        name: ytd2025.topLeaf?.name ?? '—',
+        amount: ytd2025.topLeaf?.amount ?? null,
+        detail: `${formatSharePercentInt(ytd2025.topLeaf?.sharePct)} du budget`,
+        cardColor: ytd2025.topLeaf?.color ?? 'var(--color-warning)',
         emphasizeName: true,
         nameAccent: 'var(--color-error)',
       },
@@ -280,17 +306,19 @@ export function AnnualKeyInsightsGrid({
       face: {
         title: 'Moyenne/mois',
         name: 'Dépenses',
-        amount: averageMonthlyExpense2025,
+        amount: ytd2025.avgMonthlyExpense,
+        delta: avgFrontDelta,
         cardColor: 'var(--primary-500)',
       },
     },
     {
-      id: 'median',
+      id: 'total-ytd',
       face: {
-        title: 'Médiane 2025',
+        title: 'Total YTD',
         name: 'Dépenses',
-        amount: medianMonthlyExpense2025,
-        cardColor: 'var(--color-warning)',
+        amount: ytd2025.totalYtdExpense,
+        delta: totalFrontDelta,
+        cardColor: '#17C3B2',
       },
     },
   ]
@@ -300,7 +328,7 @@ export function AnnualKeyInsightsGrid({
       title: 'Catégorie #1 YTD',
       name: ytd2026.topParent?.name ?? '—',
       amount: ytd2026.topParent?.amount ?? null,
-      detail: `${formatSharePercentInt(ytd2026.topParent?.sharePct)} du budget YTD 2026`,
+      detail: `${formatSharePercentInt(ytd2026.topParent?.sharePct)} du budget`,
       cardColor: ytd2026.topParent?.color ?? 'var(--primary-500)',
       emphasizeName: true,
       nameAccent: 'var(--primary-700)',
@@ -309,32 +337,98 @@ export function AnnualKeyInsightsGrid({
       title: 'Poste #1 YTD',
       name: ytd2026.topLeaf?.name ?? '—',
       amount: ytd2026.topLeaf?.amount ?? null,
-      detail: `${formatSharePercentInt(ytd2026.topLeaf?.sharePct)} du budget YTD 2026`,
+      detail: `${formatSharePercentInt(ytd2026.topLeaf?.sharePct)} du budget`,
       cardColor: ytd2026.topLeaf?.color ?? 'var(--color-warning)',
       emphasizeName: true,
       nameAccent: 'var(--color-error)',
     },
     'avg-month': {
-      title: 'Moyenne/mois YTD',
+      title: 'Moy/mois YTD',
       name: 'Dépenses',
       amount: ytd2026.avgMonthlyExpense,
+      delta: avgBackDelta,
       cardColor: 'var(--primary-500)',
     },
-    median: {
-      title: 'Médiane 2025 YTD',
+    'total-ytd': {
+      title: 'Total YTD',
       name: 'Dépenses',
-      amount: ytd2026.medianMonthlyExpense,
-      cardColor: 'var(--color-warning)',
+      amount: ytd2026.totalYtdExpense,
+      delta: totalBackDelta,
+      cardColor: '#17C3B2',
     },
   }
 
+  // Handle year selection - flip all cards to match selected year
+  const handleYearSelect = (year: 2025 | 2026) => {
+    setSelectedYear(year)
+    // Set all cards to match the selected year
+    setFlippedByCard({
+      'top-parent': year === 2026,
+      'top-leaf': year === 2026,
+      'avg-month': year === 2026,
+      'total-ytd': year === 2026,
+    })
+  }
+
   return (
-    <section style={{ padding: '0 var(--space-6)', marginTop: 'var(--space-3)' }}>
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+    <section style={{ marginTop: 'var(--space-3)' }}>
+
+      {/* ── Period banner – pills on left, date on right ── */}
+      <div style={{
+        background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 85%, #000 15%) 0%, color-mix(in oklab, var(--color-warning) 68%, #000 32%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
+        padding: '8px var(--space-5)',
+        margin: '0 var(--space-6)',
+        borderRadius: 'var(--radius-lg)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        {/* Left: year pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <YearPill
+            year={2025}
+            selected={selectedYear === 2025}
+            onSelect={() => handleYearSelect(2025)}
+          />
+          <YearPill
+            year={2026}
+            selected={selectedYear === 2026}
+            onSelect={() => handleYearSelect(2026)}
+          />
+        </div>
+
+        {/* Right: period info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11,
+            fontWeight: 800,
+            color: '#fff',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+          }}>
+            Janvier – Avril
+          </span>
+          <span style={{
+            fontSize: 9,
+            fontWeight: 700,
+            color: 'rgba(255,255,255,0.75)',
+            background: 'rgba(0,0,0,0.20)',
+            borderRadius: 'var(--radius-full)',
+            padding: '2px 7px',
+            letterSpacing: '0.05em',
+          }}>
+            4 mois
+          </span>
+        </div>
+      </div>
+
+      {/* ── KPI Cards ── */}
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 var(--space-6)' }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 'var(--space-3)',
+          marginTop: 'var(--space-3)',
         }}>
           {frontCards.map(({ id, face }) => (
             <FlipInsightCard
@@ -352,6 +446,43 @@ export function AnnualKeyInsightsGrid({
     </section>
   )
 }
+
+function YearPill({
+  year,
+  selected,
+  onSelect,
+}: {
+  year: 2025 | 2026
+  selected: boolean
+  onSelect: () => void
+}) {
+  const isOrange = year === 2025
+  const backgroundColor = isOrange ? '#FFAB2E' : '#002FA7'
+  const opacity = selected ? 1 : 0.4
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      style={{
+        padding: '5px 12px',
+        borderRadius: 'var(--radius-full)',
+        border: 'none',
+        background: backgroundColor,
+        color: '#FFFFFF',
+        fontSize: '11px',
+        fontWeight: 'var(--font-weight-bold)',
+        cursor: 'pointer',
+        transition: 'opacity 200ms ease-in-out',
+        opacity,
+        letterSpacing: '0.05em',
+      }}
+    >
+      {year}
+    </button>
+  )
+}
+
 
 function FlipInsightCard({
   front,
@@ -524,7 +655,7 @@ function CardFace({
       ) : null}
 
       <span style={{
-        margin: hasName ? '8px 0 0' : '24px 0 0',
+        margin: hasName ? '4px 0 0' : '16px 0 0',
         textAlign: 'center',
         fontSize: 'var(--font-size-base)',
         fontWeight: 'var(--font-weight-bold)',
@@ -537,14 +668,41 @@ function CardFace({
 
       {face.detail ? (
         <span style={{
-          margin: '4px 0 0',
-          fontSize: 10,
-          color: 'var(--neutral-700)',
+          margin: '5px 0 0',
+          display: 'inline-flex',
+          alignItems: 'center',
+          fontSize: 9,
+          fontWeight: 700,
           fontFamily: 'var(--font-mono)',
+          color: 'var(--neutral-600)',
+          background: 'rgba(255,255,255,0.92)',
+          borderRadius: 'var(--radius-full)',
+          padding: '2px 7px',
+          letterSpacing: '0.02em',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
           whiteSpace: 'nowrap',
-          textAlign: 'center',
         }}>
           {face.detail}
+        </span>
+      ) : null}
+
+      {face.delta != null ? (
+        <span style={{
+          margin: '5px 0 0',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: 'var(--font-mono)',
+          color: face.delta > 0 ? '#C0392B' : '#1A7A4A',
+          background: 'rgba(255,255,255,0.92)',
+          borderRadius: 'var(--radius-full)',
+          padding: '2px 7px',
+          letterSpacing: '0.02em',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
+        }}>
+          {face.delta > 0 ? '▲' : '▼'} {face.delta > 0 ? '+' : ''}{face.delta.toFixed(1)}%
         </span>
       ) : null}
     </span>

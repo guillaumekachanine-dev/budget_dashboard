@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import analyticsIcon from '@/assets/icons/app/analytics.png'
+import performanceIcon from '@/assets/icons/app/performance.png'
 import optimisationIcon from '@/assets/icons/app/optimisation.png'
 import epargneIcon from '@/assets/icons/app/epargne.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
@@ -33,8 +34,8 @@ type SavingsAnalyticsYear = 2026 | 2025
 
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
-  { id: 'analytics_2025', label: 'Analytics\n2025', iconSrc: analyticsIcon },
-  { id: 'performance', label: 'Performance', iconSrc: analyticsIcon },
+  { id: 'analytics_2025', label: 'Analytics', iconSrc: analyticsIcon },
+  { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
 ]
@@ -52,10 +53,12 @@ export function Stats() {
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
 
-  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2026')
+  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2025')
   const [selectedSavingsYear, setSelectedSavingsYear] = useState<SavingsAnalyticsYear>(2026)
+  const [selectedAnalyticsYear, setSelectedAnalyticsYear] = useState<2024 | 2025>(2025)
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
+  const [showYearModal, setShowYearModal] = useState(false)
   const hasAppliedDefaultPeriodRef = useRef(false)
 
   const activeTab = useMemo(
@@ -131,13 +134,6 @@ export function Stats() {
 
   const selectedPeriod = snapshot?.selectedPeriod ?? null
 
-  const lastUpdateText = (() => {
-    if (!snapshot?.loadedAt) return 'Jamais mis à jour'
-    const date = new Date(snapshot.loadedAt)
-    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
-    return `Mis à jour le ${date.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
-  })()
-
   const lastUpdateHeaderText = (() => {
     if (!snapshot?.loadedAt) return 'Jamais mis à jour'
     const date = new Date(snapshot.loadedAt)
@@ -148,44 +144,71 @@ export function Stats() {
     const hours = date.getHours().toString().padStart(2, '0')
     const minutes = date.getMinutes().toString().padStart(2, '0')
 
-    return `Dernière actualisation : ${day}/${month} à ${hours}:${minutes}`
+    return `Actualisé le ${day}/${month} à ${hours}:${minutes}`
   })()
 
   const monthButtonLabel = selectedPeriod?.label ?? 'Mois'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
         title="Analytics"
         rightSlot={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', transform: 'translateY(4px)' }}>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              aria-label="Actualiser les données"
-              style={{
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '4px 10px',
-                background: 'rgba(255, 255, 255, 0.15)',
-                color: 'var(--neutral-0)',
-                fontSize: '11px',
-                fontWeight: 'var(--font-weight-semibold)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all var(--transition-base)',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <RotateCw size={11} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              {loading ? 'Chargement' : 'Actualiser'}
-            </button>
-            <p style={{ margin: 0, fontSize: '9px', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'var(--font-weight-medium)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {activeTabId === 'analytics_2025' ? lastUpdateHeaderText : lastUpdateText}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setShowYearModal(prev => !prev)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: 'var(--font-size-2xl)',
+                  fontWeight: 'var(--font-weight-extrabold)',
+                  color: 'var(--neutral-0)',
+                  lineHeight: 1.1,
+                  letterSpacing: '-0.02em',
+                  margin: 0,
+                  transition: 'opacity var(--transition-base)',
+                }}
+              >
+                {selectedAnalyticsYear}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading}
+                aria-label="Actualiser les données"
+                style={{
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '4px',
+                  width: '24px',
+                  height: '24px',
+                  background: 'color-mix(in oklab, var(--neutral-0) 20%, var(--primary-600) 80%)',
+                  color: 'var(--neutral-0)',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1,
+                  transition: 'all var(--transition-base)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <RotateCw size={12} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              </button>
+            </div>
+            <p style={{
+              margin: 0,
+              fontSize: '9px',
+              color: 'color-mix(in oklab, var(--neutral-0) 70%, var(--primary-100) 30%)',
+              fontWeight: 'var(--font-weight-medium)',
+              lineHeight: 1.2,
+              textAlign: 'right',
+            }}>
+              {lastUpdateHeaderText}
             </p>
           </div>
         ) : (
@@ -198,38 +221,6 @@ export function Stats() {
             onBeforeToggle={() => setShowTabModal(false)}
             options={headerPeriodOptions}
           />
-        )}
-        headerSubtitle={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? null : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-medium)' }}>
-              {lastUpdateText}
-            </p>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              aria-label="Actualiser les données"
-              style={{
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '6px 12px',
-                background: 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)',
-                color: 'var(--primary-600)',
-                fontSize: '12px',
-                fontWeight: 'var(--font-weight-semibold)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all var(--transition-base)',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <RotateCw size={13} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              {loading ? 'Chargement' : 'Actualiser'}
-            </button>
-          </div>
         )}
         actionIcon={(
           <img
@@ -413,6 +404,95 @@ export function Stats() {
                     </button>
                   )
                 })}
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+
+        {showYearModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowYearModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner une année"
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '-100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
+                top: 0,
+                zIndex: 61,
+                width: 'auto',
+                maxWidth: 340,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-4) var(--space-4)',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-3)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
+                  Année
+                </p>
+                <button
+                  type="button"
+                  aria-label="Fermer"
+                  onClick={() => setShowYearModal(false)}
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                {[2024, 2025].map((year) => (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnalyticsYear(year as 2024 | 2025)
+                      setShowYearModal(false)
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: 'var(--space-2) var(--space-3)',
+                      border: selectedAnalyticsYear === year ? '2px solid var(--primary-600)' : '1px solid var(--neutral-300)',
+                      borderRadius: 'var(--radius-md)',
+                      background: selectedAnalyticsYear === year ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                      color: selectedAnalyticsYear === year ? 'var(--primary-600)' : 'var(--neutral-900)',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 'var(--font-weight-bold)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-base)',
+                    }}
+                  >
+                    {year}
+                  </button>
+                ))}
               </div>
             </motion.div>
           </>
