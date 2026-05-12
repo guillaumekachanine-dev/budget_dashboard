@@ -294,7 +294,7 @@ function BucketQuickPanel({
 // ─── BucketDetailModal ────────────────────────────────────────────────────────
 
 function BucketDetailModal({
-  bucket, bucketLabel, headerColor, rows, loading, onClose,
+  bucket: _bucket, bucketLabel, headerColor, rows, loading, onClose,
 }: {
   bucket:       string
   bucketLabel:  string
