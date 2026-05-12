@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts'
 import { ChevronRight, X } from 'lucide-react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
@@ -9,6 +9,7 @@ import {
   type BucketCategoryBreakdownRow,
 } from '@/features/annual-analysis/api/getComparedBucketCategoryBreakdown'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { useCategories } from '@/hooks/useCategories'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ChartEntry = {
@@ -42,6 +43,15 @@ const BUCKET_SHORT: Record<string, string> = {
 }
 
 type Props = { metrics: ComparedBucketMetric[] }
+
+function formatVariation(value: number): string {
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${Math.round(value)}%`
+}
+
+function formatTightEuro(value: number): string {
+  return fmt(value).replace(/[\u00A0\u202F ]+€$/u, '€')
+}
 
 // ─── Component principal ──────────────────────────────────────────────────────
 
@@ -158,7 +168,7 @@ export function ComparedBucketChart({ metrics }: Props) {
               {/* Tooltip hover masqué quand un bloc est sélectionné */}
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
-                formatter={(value: number, name: string) => [fmt(value), name === 'v2025' ? '2025' : '2026']}
+                formatter={(value: number, name: string) => [formatTightEuro(value), name === 'v2025' ? '2025' : '2026']}
                 labelStyle={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}
                 itemStyle={{ fontSize: 11 }}
                 wrapperStyle={{ opacity: clickedBucket ? 0 : 1, pointerEvents: 'none', transition: 'opacity 100ms' }}
@@ -197,7 +207,6 @@ export function ComparedBucketChart({ metrics }: Props) {
       {/* Modale détail sous-catégories */}
       {showDetail && clickedBucket && (
         <BucketDetailModal
-          bucket={clickedBucket}
           bucketLabel={BUCKET_LABELS[clickedBucket] ?? clickedBucket}
           headerColor={BUCKET_HEADER_COLORS[clickedBucket] ?? '#5B57F5'}
           rows={detailData}
@@ -280,7 +289,7 @@ function ClickedTooltip({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>2025</span>
         <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-500)' }}>
-          {entry.v2025 > 0 ? fmt(entry.v2025) : '—'}
+          {entry.v2025 > 0 ? formatTightEuro(entry.v2025) : '—'}
         </span>
       </div>
 
@@ -288,7 +297,7 @@ function ClickedTooltip({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: COLOR_2026 }}>2026</span>
         <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-          {entry.v2026 > 0 ? fmt(entry.v2026) : '—'}
+          {entry.v2026 > 0 ? formatTightEuro(entry.v2026) : '—'}
         </span>
       </div>
 
@@ -317,7 +326,7 @@ function ClickedTooltip({
           fontFamily: 'var(--font-mono)',
           color: deltaColor,
         }}>
-          {delta !== 0 ? `${delta > 0 ? '+' : ''}${fmt(delta)}` : ''}
+          {delta !== 0 ? `${delta > 0 ? '+' : ''}${formatTightEuro(delta)}` : ''}
         </span>
       </div>
 
@@ -351,15 +360,19 @@ function ClickedTooltip({
 // ─── BucketDetailModal ────────────────────────────────────────────────────────
 
 function BucketDetailModal({
-  bucket: _bucket, bucketLabel, headerColor, rows, loading, onClose,
+  bucketLabel, headerColor, rows, loading, onClose,
 }: {
-  bucket:       string
   bucketLabel:  string
   headerColor:  string
   rows:         BucketCategoryBreakdownRow[] | null
   loading:      boolean
   onClose:      () => void
 }) {
+  const { data: categories = [] } = useCategories('expense')
+  const iconByCategoryId = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.icon_key])),
+    [categories],
+  )
   const sorted = (rows ?? []).filter((r) => r.amount_2025 > 0 || r.amount_2026 > 0)
 
   return (
@@ -385,7 +398,7 @@ function BucketDetailModal({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: 'min(480px, 100%)',
+            width: 'min(520px, 100%)',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-xl)',
             boxShadow: '0 24px 60px rgba(0,0,0,0.30)',
@@ -429,14 +442,16 @@ function BucketDetailModal({
 
           {/* Sous-headers colonnes */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+            display: 'grid', gridTemplateColumns: 'minmax(0,1fr) max-content max-content max-content',
             padding: '8px var(--space-5)',
             background: 'var(--neutral-50)',
             borderBottom: '1px solid var(--neutral-150)',
+            columnGap: 2,
             flexShrink: 0,
           }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sous-catégorie</span>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>2025</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>Var.</span>
             <span style={{ fontSize: 9, fontWeight: 700, color: COLOR_2026, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>2026</span>
           </div>
 
@@ -452,30 +467,60 @@ function BucketDetailModal({
               </div>
             ) : (
               sorted.map((row, i) => {
-                const iconKey   = row.parent_category_name ? `${row.parent_category_name}_${row.category_name}` : row.category_name
+                const directIconKey = row.category_id ? iconByCategoryId.get(row.category_id) ?? null : null
+                const inferredIconKey = row.parent_category_name ? `${row.parent_category_name}_${row.category_name}` : row.category_name
+                const iconKey = directIconKey ?? inferredIconKey
                 const isLast    = i === sorted.length - 1
+                const hasBothYears = row.amount_2025 > 0 && row.amount_2026 > 0
+                const variationPct = hasBothYears && row.amount_2025 !== 0
+                  ? ((row.amount_2026 - row.amount_2025) / row.amount_2025) * 100
+                  : null
+                const variationColor = variationPct != null && variationPct < 0 ? '#1A7A4A' : '#C0392B'
                 return (
                   <div
-                    key={`${row.parent_category_name}__${row.category_name}`}
+                    key={`${row.category_id ?? ''}__${row.parent_category_name}__${row.category_name}`}
                     style={{
-                      display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+                      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) max-content max-content max-content',
                       alignItems: 'center',
                       padding: '10px var(--space-5)',
                       borderBottom: isLast ? 'none' : '1px solid var(--neutral-100)',
-                      gap: 8,
+                      columnGap: 2,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <CategoryIcon iconKey={iconKey} size={22} style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--neutral-800)',
+                        lineHeight: 1.2,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}>
                         {row.category_name}
                       </span>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', color: row.amount_2025 > 0 ? 'var(--neutral-500)' : 'var(--neutral-300)', textAlign: 'right' }}>
-                      {row.amount_2025 > 0 ? fmt(row.amount_2025) : '—'}
+                    <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', color: row.amount_2025 > 0 ? 'var(--neutral-500)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'end' }}>
+                      {row.amount_2025 > 0 ? formatTightEuro(row.amount_2025) : '—'}
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: row.amount_2026 > 0 ? 'var(--neutral-900)' : 'var(--neutral-300)', textAlign: 'right' }}>
-                      {row.amount_2026 > 0 ? fmt(row.amount_2026) : '—'}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        color: variationPct == null ? 'var(--neutral-300)' : variationColor,
+                        textAlign: 'right',
+                        justifySelf: 'end',
+                        lineHeight: 1.1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {variationPct == null ? '—' : formatVariation(variationPct)}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: row.amount_2026 > 0 ? 'var(--neutral-900)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'end' }}>
+                      {row.amount_2026 > 0 ? formatTightEuro(row.amount_2026) : '—'}
                     </span>
                   </div>
                 )

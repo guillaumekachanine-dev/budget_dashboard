@@ -3,12 +3,10 @@ import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnua
 import { AnnualOverviewHero } from './AnnualOverviewHero'
 import { AnnualKeyInsightsGrid } from './AnnualKeyInsightsGrid'
 import { AnnualSpendingStructureSection } from './AnnualSpendingStructureSection'
-import { AnnualTopCategoriesSection } from './AnnualTopCategoriesSection'
-import { AnnualSeasonalitySection } from './AnnualSeasonalitySection'
 import { ComparedAnalysisSection } from './ComparedAnalysisSection'
 
 export function Annual2025Tab() {
-  const { loading, error, annualTotals, insightByKey, yearlyBuckets, yearlyParentCategories, monthlyProfile, top5ParentCategories, top5LeafCategories } =
+  const { loading, error, annualTotals, yearlyBuckets, yearlyParentCategories, monthlyProfile, top5ParentCategories, top5LeafCategories } =
     useAnnual2025Analysis()
 
   if (loading) {
@@ -46,21 +44,8 @@ export function Annual2025Tab() {
       {yearlyBuckets.length > 0 || yearlyParentCategories.length > 0 ? (
         <AnnualSpendingStructureSection
           buckets={yearlyBuckets}
-          parentCategories={yearlyParentCategories}
         />
       ) : null}
-
-      {top5ParentCategories.length > 0 || top5LeafCategories.length > 0 ? (
-        <AnnualTopCategoriesSection
-          top5ParentCategories={top5ParentCategories}
-          top5LeafCategories={top5LeafCategories}
-        />
-      ) : null}
-
-      <AnnualSeasonalitySection
-        insightByKey={insightByKey}
-        monthlyProfile={monthlyProfile}
-      />
     </motion.div>
   )
 }
