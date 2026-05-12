@@ -5,13 +5,21 @@ import { formatCurrencyRounded as fmt } from '@/lib/utils'
 const REAL_2025_ANNUAL = 38_144
 
 type Props = {
-  expense2025:   number
-  expense2026:   number
-  projected2025: number | null
-  projected2026: number | null
+  expense2025:       number
+  expense2026:       number
+  projected2025:     number | null
+  projected2026:     number | null
+  medianMonthly2025: number | null
+  medianMonthly2026: number | null
+  remainingMonths:   number
 }
 
-export function ComparedVelocityCard({ expense2025, expense2026, projected2025, projected2026 }: Props) {
+export function ComparedVelocityCard({
+  expense2025, expense2026,
+  projected2025, projected2026,
+  medianMonthly2025, medianMonthly2026,
+  remainingMonths,
+}: Props) {
   const [openModal, setOpenModal] = useState<null | '2025' | '2026'>(null)
 
   const delta = projected2026 != null && projected2025 != null
@@ -159,6 +167,8 @@ export function ComparedVelocityCard({ expense2025, expense2026, projected2025, 
         <CalcModal
           year={openModal}
           ytd={openModal === '2025' ? expense2025 : expense2026}
+          medianMonthly={openModal === '2025' ? medianMonthly2025 : medianMonthly2026}
+          remainingMonths={remainingMonths}
           projected={openModal === '2025' ? projected2025 : projected2026}
           onClose={() => setOpenModal(null)}
         />
@@ -219,14 +229,16 @@ function VelocityItem({
 
 // ─── CalcModal ─────────────────────────────────────────────────────────────────
 
-function CalcModal({ year, ytd, projected, onClose }: {
+function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClose }: {
   year: string
   ytd: number
+  medianMonthly: number | null
+  remainingMonths: number
   projected: number | null
   onClose: () => void
 }) {
-  const monthly = ytd / 4
   const accentColor = year === '2025' ? '#FFAB2E' : '#4CC9F0'
+  const nbMonths = 12 - remainingMonths
 
   return (
     <div
@@ -261,7 +273,7 @@ function CalcModal({ year, ytd, projected, onClose }: {
             Détail du calcul · {year}
           </p>
           <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
-            Extrapolation linéaire Jan – Avr → fin d'année
+            YTD réel + médiane × mois restants
           </p>
         </div>
 
@@ -269,22 +281,29 @@ function CalcModal({ year, ytd, projected, onClose }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <StepRow
             step="①"
-            label="Total dépenses Jan – Avr"
+            label={`Consommé réel Jan–Avr (${nbMonths} mois)`}
             value={fmt(ytd)}
             accent={accentColor}
             bold={false}
           />
           <StepRow
             step="②"
-            label="Moyenne mensuelle (÷ 4)"
-            value={fmt(monthly)}
+            label={`Médiane mensuelle sur ${nbMonths} mois`}
+            value={medianMonthly != null ? fmt(medianMonthly) : '—'}
+            accent={accentColor}
+            bold={false}
+          />
+          <StepRow
+            step="③"
+            label={`Médiane × ${remainingMonths} mois restants`}
+            value={medianMonthly != null ? fmt(medianMonthly * remainingMonths) : '—'}
             accent={accentColor}
             bold={false}
           />
           <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
           <StepRow
-            step="③"
-            label="Projection annuelle (× 12)"
+            step="="
+            label="Projection fin d'année"
             value={projected != null ? fmt(projected) : '—'}
             accent={accentColor}
             bold
@@ -292,7 +311,7 @@ function CalcModal({ year, ytd, projected, onClose }: {
         </div>
 
         <p style={{ margin: 'var(--space-4) 0 var(--space-4)', fontSize: 10, color: 'var(--neutral-400)', lineHeight: 1.5 }}>
-          Hypothèse : le rythme de dépense de janvier à avril se maintient sur les 8 mois restants.
+          La médiane neutralise les mois exceptionnels non reproductibles, contrairement à la moyenne.
         </p>
 
         <button

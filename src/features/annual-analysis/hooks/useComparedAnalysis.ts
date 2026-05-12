@@ -18,6 +18,16 @@ const STALE = 15 * 60_000
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Médiane d'un tableau de nombres (robuste aux valeurs atypiques) */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
 function safePct(numerator: number, denominator: number): number | null {
   if (denominator === 0) return null
   return ((numerator - denominator) / denominator) * 100
@@ -188,12 +198,23 @@ export function useComparedAnalysis(): ComparedAnalysis {
   const categoryMetrics = buildCategoryMetrics(categoryRows)
   const bucketMetrics   = buildBucketMetrics(bucketRows)
 
-  const nbMonths = COMPARED_MONTHS.length
-  const projectedExpense2025 = flows2025
-    ? (flows2025.expense_total / nbMonths) * 12
+  const nbMonths       = COMPARED_MONTHS.length
+  const remainingMonths = 12 - nbMonths  // mois non encore écoulés dans l'année
+
+  // Médiane des dépenses mensuelles sur la fenêtre Jan-Avr
+  const medianMonthly2025 = flows2025
+    ? median(flows2025.months.map((m) => m.expense_total))
     : null
-  const projectedExpense2026 = flows2026
-    ? (flows2026.expense_total / nbMonths) * 12
+  const medianMonthly2026 = flows2026
+    ? median(flows2026.months.map((m) => m.expense_total))
+    : null
+
+  // Projection = consommé réel YTD + (médiane × mois restants)
+  const projectedExpense2025 = flows2025 != null && medianMonthly2025 != null
+    ? flows2025.expense_total + medianMonthly2025 * remainingMonths
+    : null
+  const projectedExpense2026 = flows2026 != null && medianMonthly2026 != null
+    ? flows2026.expense_total + medianMonthly2026 * remainingMonths
     : null
 
   return {
@@ -209,5 +230,8 @@ export function useComparedAnalysis(): ComparedAnalysis {
     bucketMetrics,
     projectedExpense2025,
     projectedExpense2026,
+    medianMonthly2025,
+    medianMonthly2026,
+    remainingMonths,
   }
 }

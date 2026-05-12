@@ -10,6 +10,7 @@ export function ComparedAnalysisSection() {
     fluxMetrics, categoryMetrics, bucketMetrics,
     flows2025, flows2026,
     projectedExpense2025, projectedExpense2026,
+    medianMonthly2025, medianMonthly2026, remainingMonths,
   } = useComparedAnalysis()
 
   return (
@@ -46,6 +47,9 @@ export function ComparedAnalysisSection() {
               expense2026={flows2026?.expense_total ?? 0}
               projected2025={projectedExpense2025}
               projected2026={projectedExpense2026}
+              medianMonthly2025={medianMonthly2025}
+              medianMonthly2026={medianMonthly2026}
+              remainingMonths={remainingMonths}
             />
 
             <ComparedBucketChart metrics={bucketMetrics} />

@@ -119,7 +119,10 @@ export interface ComparedAnalysis {
   categoryMetrics:      ComparedCategoryMetric[]
   bucketMetrics:        ComparedBucketMetric[]
 
-  // Projection fin d'année (rythme Jan-Avr × 12/4)
-  projectedExpense2025: number | null
-  projectedExpense2026: number | null
+  // Projection fin d'année (YTD + médiane × mois restants)
+  projectedExpense2025:  number | null
+  projectedExpense2026:  number | null
+  medianMonthly2025:     number | null
+  medianMonthly2026:     number | null
+  remainingMonths:       number          // 12 - nbMonths dans la fenêtre comparée
 }
