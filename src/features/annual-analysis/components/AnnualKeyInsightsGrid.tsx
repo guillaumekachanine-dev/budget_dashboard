@@ -48,9 +48,54 @@ type CardFaceData = {
   amount: number | null
   detail?: string
   delta?: number | null   // % écart 2026 vs 2025 (positif = hausse des dépenses)
-  cardColor: string
+  tone: KpiBlueTone
   emphasizeName?: boolean
   nameAccent?: string
+}
+
+type KpiBlueTone = 'mist' | 'sky' | 'ocean' | 'ink'
+
+const KPI_BLUE_CAMAIEU: Record<
+  KpiBlueTone,
+  {
+    cardBackground: string
+    cardBorder: string
+    headerBackground: string
+    headerBorder: string
+  }
+> = {
+  mist: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--primary-100) 58%, var(--neutral-0) 42%) 0%, color-mix(in oklab, var(--primary-300) 44%, var(--neutral-0) 56%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--primary-300) 62%, var(--neutral-0) 38%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--primary-200) 78%, var(--neutral-0) 22%) 0%, color-mix(in oklab, var(--primary-400) 64%, var(--neutral-0) 36%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--primary-300) 74%, var(--neutral-0) 26%)',
+  },
+  sky: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--primary-200) 55%, var(--neutral-0) 45%) 0%, color-mix(in oklab, var(--primary-400) 48%, var(--neutral-0) 52%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--primary-400) 60%, var(--neutral-0) 40%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--primary-300) 76%, var(--neutral-0) 24%) 0%, color-mix(in oklab, var(--primary-500) 66%, var(--neutral-0) 34%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--primary-400) 72%, var(--neutral-0) 28%)',
+  },
+  ocean: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--primary-300) 52%, var(--neutral-0) 48%) 0%, color-mix(in oklab, var(--primary-500) 52%, var(--neutral-0) 48%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--primary-500) 58%, var(--neutral-0) 42%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--primary-400) 72%, var(--neutral-0) 28%) 0%, color-mix(in oklab, var(--primary-600) 64%, var(--neutral-0) 36%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--primary-500) 70%, var(--neutral-0) 30%)',
+  },
+  ink: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--primary-400) 46%, var(--neutral-0) 54%) 0%, color-mix(in oklab, var(--primary-600) 55%, var(--neutral-0) 45%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--primary-600) 56%, var(--neutral-0) 44%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--primary-500) 72%, var(--neutral-0) 28%) 0%, color-mix(in oklab, var(--primary-700) 62%, var(--neutral-0) 38%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)',
+  },
 }
 
 function asFiniteNumber(value: unknown): number | null {
@@ -246,7 +291,7 @@ export function AnnualKeyInsightsGrid({
         name: ytd2025.topParent?.name ?? '—',
         amount: ytd2025.topParent?.amount ?? null,
         detail: `${formatSharePercentInt(ytd2025.topParent?.sharePct)} du budget`,
-        cardColor: ytd2025.topParent?.color ?? 'var(--primary-500)',
+        tone: 'mist',
         emphasizeName: true,
         nameAccent: 'var(--primary-700)',
       },
@@ -258,7 +303,7 @@ export function AnnualKeyInsightsGrid({
         name: ytd2025.topLeaf?.name ?? '—',
         amount: ytd2025.topLeaf?.amount ?? null,
         detail: `${formatSharePercentInt(ytd2025.topLeaf?.sharePct)} du budget`,
-        cardColor: ytd2025.topLeaf?.color ?? 'var(--color-warning)',
+        tone: 'sky',
         emphasizeName: true,
         nameAccent: 'var(--color-error)',
       },
@@ -270,7 +315,7 @@ export function AnnualKeyInsightsGrid({
         name: 'Dépenses',
         amount: ytd2025.avgMonthlyExpense,
         delta: avgFrontDelta,
-        cardColor: 'var(--primary-500)',
+        tone: 'ocean',
       },
     },
     {
@@ -280,7 +325,7 @@ export function AnnualKeyInsightsGrid({
         name: 'Dépenses',
         amount: ytd2025.totalYtdExpense,
         delta: totalFrontDelta,
-        cardColor: '#17C3B2',
+        tone: 'ink',
       },
     },
   ]
@@ -291,7 +336,7 @@ export function AnnualKeyInsightsGrid({
       name: ytd2026.topParent?.name ?? '—',
       amount: ytd2026.topParent?.amount ?? null,
       detail: `${formatSharePercentInt(ytd2026.topParent?.sharePct)} du budget`,
-      cardColor: ytd2026.topParent?.color ?? 'var(--primary-500)',
+      tone: 'mist',
       emphasizeName: true,
       nameAccent: 'var(--primary-700)',
     },
@@ -300,7 +345,7 @@ export function AnnualKeyInsightsGrid({
       name: ytd2026.topLeaf?.name ?? '—',
       amount: ytd2026.topLeaf?.amount ?? null,
       detail: `${formatSharePercentInt(ytd2026.topLeaf?.sharePct)} du budget`,
-      cardColor: ytd2026.topLeaf?.color ?? 'var(--color-warning)',
+      tone: 'sky',
       emphasizeName: true,
       nameAccent: 'var(--color-error)',
     },
@@ -309,14 +354,14 @@ export function AnnualKeyInsightsGrid({
       name: 'Dépenses',
       amount: ytd2026.avgMonthlyExpense,
       delta: avgBackDelta,
-      cardColor: 'var(--primary-500)',
+      tone: 'ocean',
     },
     'total-ytd': {
       title: 'Total YTD',
       name: 'Dépenses',
       amount: ytd2026.totalYtdExpense,
       delta: totalBackDelta,
-      cardColor: '#17C3B2',
+      tone: 'ink',
     },
   }
 
@@ -509,13 +554,14 @@ function CardFace({
   const yearText = isBack ? '2026' : '2025'
   const yearBadgeColor = isBack ? '#002FA7' : '#FF9A00'
   const yearTransitionDelay = visible ? Math.round(flipDurationMs * 0.34) : 0
+  const tone = KPI_BLUE_CAMAIEU[face.tone]
 
   return (
     <span style={{
       position: 'relative',
-      background: `color-mix(in srgb, ${face.cardColor} 40%, transparent)`,
+      background: tone.cardBackground,
       borderRadius: 'var(--radius-lg)',
-      border: `1px solid color-mix(in srgb, ${face.cardColor} 55%, white)`,
+      border: `1px solid ${tone.cardBorder}`,
       padding: 0,
       display: 'flex',
       flexDirection: 'column',
@@ -536,13 +582,13 @@ function CardFace({
         position: 'relative',
         padding: '5px 44px 4px 10px',
         borderRadius: 0,
-        background: `linear-gradient(135deg, color-mix(in srgb, ${face.cardColor} 72%, white), color-mix(in srgb, ${face.cardColor} 42%, var(--neutral-0)))`,
+        background: tone.headerBackground,
         boxShadow: `
           inset 0 1px 0 rgba(255,255,255,0.58),
           inset 0 -1px 0 rgba(0,0,0,0.08),
           0 4px 10px rgba(13,13,31,0.1)
         `,
-        borderBottom: `1px solid color-mix(in srgb, ${face.cardColor} 78%, white)`,
+        borderBottom: `1px solid ${tone.headerBorder}`,
         fontSize: 10,
         fontWeight: 800,
         color: 'var(--neutral-900)',
