@@ -464,6 +464,36 @@ export interface MonthlyBucketActualsCleanRow {
   net_amount: number | null
 }
 
+export interface CategoryAnnualCostProjection2026Row {
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  months_elapsed: number | null
+  remaining_months: number | null
+  actual_ytd_amount: number | null
+  avg_monthly_ytd_amount: number | null
+  projected_remaining_amount: number | null
+  projected_annual_amount: number | null
+  budget_ytd_amount: number | null
+  budget_annual_amount: number | null
+  projected_vs_budget_amount: number | null
+  projected_vs_budget_pct: number | null
+}
+
+export interface AnnualProjectionOverview2026Row {
+  months_elapsed: number | null
+  remaining_months: number | null
+  projected_core_expenses_amount: number | null
+  projected_flexible_expenses_amount: number | null
+  projected_total_expenses_amount: number | null
+  projected_revenue_amount: number | null
+  projected_savings_amount: number | null
+  projected_revenue_after_savings_amount: number | null
+  projected_expenses_to_revenue_pct: number | null
+  projected_savings_to_revenue_pct: number | null
+}
+
 export interface BudgetTransactionsEnrichedRow {
   id: string | null
   user_id: string | null
@@ -524,6 +554,8 @@ export type Database = {
       v_savings_monthly_metrics: { Row: SavingsMonthlyMetricsRow & Record<string, unknown>; Relationships: [] }
       v_savings_destination_breakdown: { Row: SavingsDestinationBreakdownViewRow & Record<string, unknown>; Relationships: [] }
       v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
+      v_category_annual_cost_projection_2026: { Row: CategoryAnnualCostProjection2026Row & Record<string, unknown>; Relationships: [] }
+      v_annual_projection_overview_2026: { Row: AnnualProjectionOverview2026Row & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
       v_planned_operations_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }

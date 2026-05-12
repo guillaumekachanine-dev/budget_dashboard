@@ -37,7 +37,7 @@ import {
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
-import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/Annual2026CategoryRanking'
+import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
 import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
 import blockVariableIcon from '@/assets/icons/blocks/variable.png'
@@ -3525,7 +3525,7 @@ export function Budgets() {
               <h3 ref={projectionSectionTitleRef} style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Projection coûts annuels
               </h3>
-              <AnnualProjectionSectionConnected />
+              <AnnualProjectionSectionConnected scopeSelection={slideThreeScopeSelection} />
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
