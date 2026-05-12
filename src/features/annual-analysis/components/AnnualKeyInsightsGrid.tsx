@@ -88,39 +88,7 @@ function formatSharePercentInt(share: number | null | undefined): string {
   return `${Math.round(normalizedPct)}%`
 }
 
-function findParentCategoryByName(categories: Category[], parentName?: string): Category | null {
-  if (!parentName) return null
-  const parentToken = normalizeToken(parentName)
-  return categories.find((category) => (
-    category.parent_id === null && fuzzyEquals(normalizeToken(category.name), parentToken)
-  )) ?? null
-}
 
-function findLeafCategoryByNames(
-  categories: Category[],
-  leafName?: string,
-  parentName?: string | null,
-): Category | null {
-  if (!leafName) return null
-  const leafToken = normalizeToken(leafName)
-  const parentToken = normalizeToken(parentName)
-  const categoryById = new Map(categories.map((category) => [category.id, category]))
-
-  const exact = categories.find((category) => {
-    if (category.parent_id == null) return false
-    if (normalizeToken(category.name) !== leafToken) return false
-    if (!parentToken) return true
-    const parentCategory = categoryById.get(category.parent_id)
-    return normalizeToken(parentCategory?.name) === parentToken
-  })
-  if (exact) return exact
-
-  return categories.find((category) => (
-    category.parent_id != null
-    && fuzzyEquals(normalizeToken(category.name), leafToken)
-    && (!parentToken || fuzzyEquals(normalizeToken(categoryById.get(category.parent_id)?.name), parentToken))
-  )) ?? null
-}
 
 async function getAnnual2025YtdMetricRows(): Promise<Annual2026YtdMetricRow[]> {
   const { data, error } = await budgetDb
@@ -236,10 +204,10 @@ function buildAnnual2026YtdKpis(rows: Annual2026YtdMetricRow[], categories: Cate
 }
 
 export function AnnualKeyInsightsGrid({
-  annualTotals,
-  monthlyProfile,
-  top5ParentCategories,
-  top5LeafCategories,
+  annualTotals: _annualTotals,
+  monthlyProfile: _monthlyProfile,
+  top5ParentCategories: _top5ParentCategories,
+  top5LeafCategories: _top5LeafCategories,
 }: Props) {
   const { data: categories = [] } = useCategories()
   const [selectedYear, setSelectedYear] = useState<2025 | 2026>(2025)
