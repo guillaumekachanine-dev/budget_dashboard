@@ -37,6 +37,7 @@ import {
   type MetricsScopeSelection,
 } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
+import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/Annual2026CategoryRanking'
 import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
 import blockVariableIcon from '@/assets/icons/blocks/variable.png'
@@ -592,8 +593,8 @@ export function Budgets() {
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const [slideThreeScopeSelection, setSlideThreeScopeSelection] = useState<MetricsScopeSelection>({
-    kind: 'bloc',
-    id: BUCKET_ORDER[0],
+    kind: 'categorie',
+    id: ALL_CATEGORIES_SCOPE_ID,
   })
   const [showSlideThreeScopeSheet, setShowSlideThreeScopeSheet] = useState(false)
   const [slideThreePeriod, setSlideThreePeriod] = useState('2026')
@@ -674,8 +675,10 @@ export function Budgets() {
   const topSectionRef = useRef<HTMLElement | null>(null)
   const categoriesSectionRef = useRef<HTMLElement | null>(null)
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const projectionSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const smoothScrollFrameRef = useRef<number | null>(null)
   const shouldFocusCategoriesSectionRef = useRef(false)
+  const shouldFocusBlocksSectionRef = useRef(false)
   const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === 'undefined' ? 1024 : window.innerWidth))
 
   useEffect(() => {
@@ -808,7 +811,9 @@ export function Budgets() {
       ? categoriesSectionRef.current
       : activeSlide === 1
         ? blocksSectionTitleRef.current
-        : null
+        : activeSlide === 2
+          ? projectionSectionTitleRef.current
+          : null
     if (!target) return
     const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
     smoothScrollToY(Math.max(0, y))
@@ -826,7 +831,28 @@ export function Budgets() {
     if (!target) return false
     const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
     const headerPx = Number.parseFloat(rawHeader || '0')
-    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx : 68
+    const breathingMargin = 12
+    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx + breathingMargin : 80
+    const y = target.getBoundingClientRect().top + window.scrollY - effectiveHeaderOffset
+    cancelSmoothScroll()
+    const targetY = Math.max(0, y)
+    const scroller = document.scrollingElement as HTMLElement | null
+    if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+      window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    })
+    return true
+  }, [cancelSmoothScroll])
+
+  const scrollToBlocksSectionTop = useCallback(() => {
+    const target = blocksSectionTitleRef.current
+    if (!target) return false
+    const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+    const headerPx = Number.parseFloat(rawHeader || '0')
+    const breathingMargin = 12
+    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx + breathingMargin : 80
     const y = target.getBoundingClientRect().top + window.scrollY - effectiveHeaderOffset
     cancelSmoothScroll()
     const targetY = Math.max(0, y)
@@ -944,6 +970,37 @@ export function Budgets() {
       cancelled = true
     }
   }, [selectedCat, activeSlide, scrollToCategoriesSectionTop])
+
+  useEffect(() => {
+    if (!shouldFocusBlocksSectionRef.current) return
+    if (selectedBlockPageId != null || activeSlide !== 1) return
+
+    let cancelled = false
+
+    const tryFocus = (attemptsLeft: number) => {
+      if (cancelled || !shouldFocusBlocksSectionRef.current) return
+      const scrolledNow = scrollToBlocksSectionTop()
+      if (scrolledNow) {
+        shouldFocusBlocksSectionRef.current = false
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            void scrollToBlocksSectionTop()
+          })
+        })
+        return
+      }
+      if (attemptsLeft <= 0) return
+      window.setTimeout(() => {
+        tryFocus(attemptsLeft - 1)
+      }, 48)
+    }
+
+    tryFocus(14)
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedBlockPageId, activeSlide, scrollToBlocksSectionTop])
 
   const configuredBudgetCategoryLines = useMemo<BudgetLineWithCategory[]>(() => {
     if (!budgetPayload) return []
@@ -1621,6 +1678,16 @@ export function Budgets() {
   const ytdScopeLabel = slideThreeSelectedScopeMeta.label
     ? `${slideThreeSelectedScopeMeta.label.charAt(0).toUpperCase()}${slideThreeSelectedScopeMeta.label.slice(1)}`
     : '—'
+  const slideThreeMonthlyBudget = useMemo(() => {
+    if (!isSlideThreeMonthlyFlowsView) return null
+    if (slideThreeScopeSelection.kind === 'bloc') {
+      return payloadByBucket[slideThreeScopeSelection.id]?.budget_amount ?? null
+    }
+    if (slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id !== ALL_CATEGORIES_SCOPE_ID) {
+      return payloadByParentCategory.find((r) => r.parent_category_id === slideThreeScopeSelection.id)?.budget_amount ?? null
+    }
+    return null
+  }, [isSlideThreeMonthlyFlowsView, slideThreeScopeSelection, payloadByBucket, payloadByParentCategory])
   const slideThreeBaseYear = useMemo(() => {
     const yearOption = slideThreePeriods.find((periodOption) => /^\d{4}$/.test(periodOption))
     return yearOption ? Number(yearOption) : selectedPeriodYear
@@ -1646,7 +1713,8 @@ export function Budgets() {
   ])
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
-  const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
+  const canJumpToProjectionSection = isSlideThreeMetricsMode
+  const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection || canJumpToProjectionSection
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
@@ -2218,9 +2286,9 @@ export function Budgets() {
                   <button
                     type="button"
                     onClick={() => {
+                      shouldFocusBlocksSectionRef.current = true
                       setSelectedBlockPage(null)
                       setActiveSlide(1)
-                      scrollViewportToTop()
                     }}
                     aria-label="Retour"
                     style={{
@@ -3110,7 +3178,11 @@ export function Budgets() {
                     )}
                     <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                       <span style={{ fontWeight: 800 }}>{ytdScopeLabel}</span>
-                      <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}> - {ytdSlideHeading}</span>
+                      <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                        {isSlideThreeMonthlyFlowsView && slideThreeMonthlyBudget != null
+                          ? ` - Budget ${Math.round(slideThreeMonthlyBudget).toLocaleString('fr-FR')}€`
+                          : ` - ${ytdSlideHeading}`}
+                      </span>
                     </h3>
                   </div>
                 </section>
@@ -3143,6 +3215,7 @@ export function Budgets() {
                       forcedView={selectedYtdSlideView === 'monthly_flows_chart' ? 'chart' : 'table'}
                       showInternalViewToggle={false}
                       variant="embedded"
+                      scopeSelection={slideThreeScopeSelection}
                     />
                   </div>
                 )}
@@ -3190,7 +3263,7 @@ export function Budgets() {
             <button
               type="button"
               onClick={scrollToLowerSection}
-              aria-label={canJumpToCategoriesSection ? 'Aller à la répartition par catégories' : 'Aller à la répartition par blocs'}
+              aria-label={canJumpToCategoriesSection ? 'Aller à la répartition par catégories' : canJumpToBlocksSection ? 'Aller à la répartition par blocs' : 'Aller à la projection coûts annuels'}
               style={{
                 width: 38,
                 height: 38,
@@ -3421,6 +3494,38 @@ export function Budgets() {
                     </div>
                   </button>
 		              </div>
+              <div aria-hidden="true" style={{ width: '100%', height: 120 }} />
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={scrollToTopSection}
+                  aria-label="Revenir au carrousel"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    minWidth: 38,
+                    minHeight: 38,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-700)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  <ArrowUp size={16} />
+                </button>
+              </div>
+            </motion.section>
+          ) : activeSlide === 2 ? (
+            <motion.section key="slide2-projection" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
+              <h3 ref={projectionSectionTitleRef} style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                Projection coûts annuels
+              </h3>
+              <AnnualProjectionSectionConnected />
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"

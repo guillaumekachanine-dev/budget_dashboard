@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Budget2026Line } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
 import { getAnnual2026BudgetLines } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
+import { getAnnual2026Actuals } from '@/features/annual-analysis/api/getAnnual2026Actuals'
 import {
   BUCKET_ORDER,
   BUCKET_LABELS,
@@ -24,10 +25,15 @@ export interface Budget2026BucketSummary {
 export interface Budget2026CategorySummary {
   name: string
   monthlyBudget: number
+  annualBudget: number
   pctOfTotal: number
   color: string
   bucket: string
   lines: Budget2026Line[]
+  ytdActual: number
+  ytdMonthCount: number
+  ytdAvgMonthly: number
+  realisticAnnual: number
 }
 
 export interface Budget2026InsightCard {
@@ -124,7 +130,12 @@ function buildBuckets(lines: Budget2026Line[], totalBudget: number): Budget2026B
     })
 }
 
-function buildCategories(lines: Budget2026Line[], totalBudget: number): Budget2026CategorySummary[] {
+function buildCategories(
+  lines: Budget2026Line[],
+  totalBudget: number,
+  actualsMap: Map<string, { ytdActual: number; monthCount: number }>,
+  remainingMonths: number,
+): Budget2026CategorySummary[] {
   const map = new Map<string, { amount: number; bucket: string; lines: Budget2026Line[] }>()
 
   for (const line of lines) {
@@ -139,14 +150,24 @@ function buildCategories(lines: Budget2026Line[], totalBudget: number): Budget20
 
   return [...map.entries()]
     .sort((a, b) => b[1].amount - a[1].amount)
-    .map(([name, entry], i) => ({
-      name,
-      monthlyBudget: entry.amount,
-      pctOfTotal: pct(entry.amount, totalBudget),
-      color: VIZ_PALETTE[i % VIZ_PALETTE.length] ?? '#B0BEC5',
-      bucket: entry.bucket,
-      lines: entry.lines,
-    }))
+    .map(([name, entry], i) => {
+      const actuals = actualsMap.get(name) ?? { ytdActual: 0, monthCount: 0 }
+      const ytdAvgMonthly = actuals.monthCount > 0 ? actuals.ytdActual / actuals.monthCount : 0
+      const realisticAnnual = actuals.ytdActual + ytdAvgMonthly * remainingMonths
+      return {
+        name,
+        monthlyBudget: entry.amount,
+        annualBudget: entry.amount * 12,
+        pctOfTotal: pct(entry.amount, totalBudget),
+        color: VIZ_PALETTE[i % VIZ_PALETTE.length] ?? '#B0BEC5',
+        bucket: entry.bucket,
+        lines: entry.lines,
+        ytdActual: actuals.ytdActual,
+        ytdMonthCount: actuals.monthCount,
+        ytdAvgMonthly,
+        realisticAnnual,
+      }
+    })
 }
 
 function buildInsights(
@@ -299,13 +320,23 @@ function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2
 type Annual2026QueryData = Omit<Annual2026Analysis, 'loading'> & { error: string | null }
 
 async function fetchAnnual2026Analysis(): Promise<Annual2026QueryData> {
+  const year = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+  const remainingMonths = 12 - currentMonth
+
   let effectiveLines: Budget2026Line[]
   let queryError: string | null = null
+  let actualsMap = new Map<string, { ytdActual: number; monthCount: number }>()
 
   try {
-    const lines = await getAnnual2026BudgetLines()
-    // Si pas de lignes en DB, on utilise les données statiques comme fallback
+    const [lines, actuals] = await Promise.all([
+      getAnnual2026BudgetLines(),
+      getAnnual2026Actuals(year),
+    ])
     effectiveLines = lines.length > 0 ? lines : STATIC_BUDGET_LINES
+    for (const a of actuals) {
+      actualsMap.set(a.parentCategoryName, { ytdActual: a.ytdActual, monthCount: a.monthCount })
+    }
   } catch (err) {
     effectiveLines = STATIC_BUDGET_LINES
     queryError = err instanceof Error ? `${err.message} (données statiques affichées)` : null
@@ -326,7 +357,7 @@ async function fetchAnnual2026Analysis(): Promise<Annual2026QueryData> {
   }
 
   const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
-  const categories = buildCategories(effectiveLines, totalMonthlyBudget)
+  const categories = buildCategories(effectiveLines, totalMonthlyBudget, actualsMap, remainingMonths)
 
   return {
     error: queryError,

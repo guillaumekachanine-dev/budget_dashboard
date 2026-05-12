@@ -1,16 +1,20 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { 
-  ArrowDownCircle, 
-  ArrowUpCircle, 
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
   CalendarDays,
-  Wallet, 
+  Wallet,
   Zap,
   LayoutList,
   LineChart as LineChartIcon,
+  TrendingUp,
+  PieChart,
   type LucideIcon,
 } from 'lucide-react'
+import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
+import { useMonthlyFlowsByScope } from '@/features/budget/hooks/useMonthlyFlowsByScope'
 import {
   Area,
   AreaChart,
@@ -26,6 +30,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { getMonthlyPersonalAccountBalances } from '@/features/annual-analysis/api/getMonthlyPersonalAccountBalances'
 
+const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
+
 type MonthlyFlowsAnalysisCardProps = {
   year: number
   initialView?: 'table' | 'chart'
@@ -34,6 +40,7 @@ type MonthlyFlowsAnalysisCardProps = {
   className?: string
   variant?: 'standalone' | 'embedded'
   monthlyProfile?: MonthlyBudget2026Point[]
+  scopeSelection?: MetricsScopeSelection
 }
 
 type MonthlySynthRow = {
@@ -68,6 +75,13 @@ const fmt = (n: number) => {
 const fmtPct = (r: number) => {
   const val = (r * 100).toFixed(1)
   return `${val}%`
+}
+
+// Pas de décimales sauf si la valeur absolue est < 1%
+const fmtPctScope = (r: number) => {
+  const pct = r * 100
+  const decimals = Math.abs(pct) < 1 ? 1 : 0
+  return `${pct.toFixed(decimals)}%`
 }
 
 
@@ -106,11 +120,18 @@ export function MonthlyFlowsAnalysisCard({
   className,
   variant = 'standalone',
   monthlyProfile = [],
+  scopeSelection,
 }: MonthlyFlowsAnalysisCardProps) {
   const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>(initialView)
   const { user, loading: authLoading } = useAuth()
   const tableMonthCutoff = getCurrentMonthCutoff(year)
   const activeView = forcedView ?? activeSlide
+
+  const isScopedMode =
+    Boolean(scopeSelection) &&
+    !(scopeSelection?.kind === 'categorie' && scopeSelection?.id === ALL_CATEGORIES_SCOPE_ID)
+
+  const { data: scopedData } = useMonthlyFlowsByScope(scopeSelection, year, isScopedMode && !authLoading)
 
   useEffect(() => {
     setActiveSlide(initialView)
@@ -344,62 +365,185 @@ export function MonthlyFlowsAnalysisCard({
                   transition={{ duration: 0.2 }}
                   style={{ overflowX: 'hidden', margin: 0 }}
                 >
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '24%' }} />
-                      <col style={{ width: '22%' }} />
-                      <col style={{ width: '22%' }} />
-                      <col style={{ width: '18%' }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 'var(--space-3)' }}>
-                          <div style={{ display: 'grid', justifyItems: 'start', gap: 2 }} title="Mois">
-                            <CalendarDays size={14} color="var(--neutral-500)" strokeWidth={2.2} />
-                            <span style={{ fontSize: 9, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mois</span>
-                          </div>
-                        </th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={Wallet} color="var(--neutral-500)" label="Solde" />
-                        </th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
-                        </th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
-                        </th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>
-                          <IconHeader icon={Zap} color="var(--neutral-400)" label="% Écart" />
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => {
-                        const deltaColor = row.deltaRealBudgetPct > 0 ? '#E57373' : '#81C784'
-                        const deltaPrefix = row.deltaRealBudgetPct > 0 ? '+' : ''
-                        return (
-                          <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
-                            <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)' }}>
-                              {row.openingBalance == null ? '—' : fmt(row.openingBalance)}
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
-                              {fmt(row.expense)}
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-3)', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
-                              {fmt(row.income)}
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 'var(--space-2)', fontFamily: 'var(--font-mono)', color: deltaColor, fontWeight: 700 }}>
-                              {deltaPrefix}{fmtPct(row.deltaRealBudgetPct)}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  {isScopedMode && scopedData ? (
+                    // ── Mode scope : catégorie ou bloc ──────────────────────
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '23%' }} />
+                        <col style={{ width: '21%' }} />
+                        <col style={{ width: '24%' }} />
+                        <col style={{ width: '18%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title="Mois">
+                              <CalendarDays size={14} color="var(--neutral-500)" strokeWidth={2.2} />
+                              <span style={{ fontSize: 9, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mois</span>
+                            </div>
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépensé" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={Zap} color="var(--neutral-400)" label="Écart" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={TrendingUp} color="var(--neutral-400)" label="Évol M-1" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={PieChart} color="var(--neutral-400)" label="Part" />
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scopedData.rows.map((row) => {
+                          const ecartColor = row.ecartPct == null ? 'var(--neutral-500)' : row.ecartPct > 0 ? '#E57373' : '#81C784'
+                          const ecartPrefix = row.ecartPct != null && row.ecartPct > 0 ? '+' : ''
+                          const evolColor = row.evolMoins1Pct == null ? 'var(--neutral-500)' : row.evolMoins1Pct > 0 ? '#E57373' : '#81C784'
+                          const evolPrefix = row.evolMoins1Pct != null && row.evolMoins1Pct > 0 ? '+' : ''
+                          return (
+                            <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                              <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
+                                {fmt(row.depense)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: ecartColor }}>
+                                {row.ecartPct == null ? '—' : `${ecartPrefix}${fmtPctScope(row.ecartPct)}`}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: evolColor }}>
+                                {row.evolMoins1Pct == null ? '—' : `${evolPrefix}${fmtPctScope(row.evolMoins1Pct)}`}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)', fontWeight: 600 }}>
+                                {row.partPct == null ? '—' : fmtPctScope(row.partPct)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {/* Ligne Synth. */}
+                        {scopedData.rows.length > 0 && (() => {
+                          const { synth } = scopedData
+                          const ecartColor = synth.avgEcartPct == null ? 'var(--neutral-500)' : synth.avgEcartPct > 0 ? '#E57373' : '#81C784'
+                          const ecartPrefix = synth.avgEcartPct != null && synth.avgEcartPct > 0 ? '+' : ''
+                          const evolColor = synth.avgEvolPct == null ? 'var(--neutral-500)' : synth.avgEvolPct > 0 ? '#E57373' : '#81C784'
+                          const evolPrefix = synth.avgEvolPct != null && synth.avgEvolPct > 0 ? '+' : ''
+                          return (
+                            <tr style={synthRowStyle}>
+                              <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 800, color: 'var(--neutral-600)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Synth.</span>
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#E57373' }}>
+                                {fmt(synth.totalDepense)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: ecartColor }}>
+                                {synth.avgEcartPct == null ? '—' : `${ecartPrefix}${fmtPctScope(synth.avgEcartPct)}`}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: evolColor }}>
+                                {synth.avgEvolPct == null ? '—' : `${evolPrefix}${fmtPctScope(synth.avgEvolPct)}`}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)', fontWeight: 800 }}>
+                                {synth.partYtdPct == null ? '—' : fmtPctScope(synth.partYtdPct)}
+                              </td>
+                            </tr>
+                          )
+                        })()}
+                      </tbody>
+                    </table>
+                  ) : (
+                    // ── Mode défaut : Toutes catégories ─────────────────────
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '24%' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '18%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title="Mois">
+                              <CalendarDays size={14} color="var(--neutral-500)" strokeWidth={2.2} />
+                              <span style={{ fontSize: 9, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mois</span>
+                            </div>
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={Wallet} color="var(--neutral-500)" label="Solde" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
+                          </th>
+                          <th style={{ ...thStyle, textAlign: 'center' }}>
+                            <IconHeader icon={Zap} color="var(--neutral-400)" label="% Écart" />
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => {
+                          const deltaColor = row.deltaRealBudgetPct > 0 ? '#E57373' : '#81C784'
+                          const deltaPrefix = row.deltaRealBudgetPct > 0 ? '+' : ''
+                          return (
+                            <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                              <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)' }}>
+                                {row.openingBalance == null ? '—' : fmt(row.openingBalance)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
+                                {fmt(row.expense)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
+                                {fmt(row.income)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, fontWeight: 700 }}>
+                                {deltaPrefix}{fmtPct(row.deltaRealBudgetPct)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {/* Ligne Synth. — totaux/moyennes YTD */}
+                        {rows.length > 0 && (() => {
+                          const nonNullBalances = rows
+                            .map((r) => r.openingBalance)
+                            .filter((v): v is number => v != null)
+                          const synthSolde = nonNullBalances.length > 0
+                            ? nonNullBalances.reduce((s, v) => s + v, 0) / nonNullBalances.length
+                            : null
+                          const synthExpense = rows.reduce((s, r) => s + r.expense, 0)
+                          const synthIncome = rows.reduce((s, r) => s + r.income, 0)
+                          const synthDelta = rows.reduce((s, r) => s + r.deltaRealBudgetPct, 0) / rows.length
+                          const deltaColor = synthDelta > 0 ? '#E57373' : '#81C784'
+                          const deltaPrefix = synthDelta > 0 ? '+' : ''
+                          return (
+                            <tr style={synthRowStyle}>
+                              <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 800, color: 'var(--neutral-600)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Synth.</span>
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-700)' }}>
+                                {synthSolde == null ? '—' : fmt(synthSolde)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#E57373' }}>
+                                {fmt(synthExpense)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#81C784' }}>
+                                {fmt(synthIncome)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: deltaColor }}>
+                                {deltaPrefix}{fmtPct(synthDelta)}
+                              </td>
+                            </tr>
+                          )
+                        })()}
+                      </tbody>
+                    </table>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
@@ -538,7 +682,7 @@ export function Annual2026MonthlyTable({ monthlyProfile }: LegacyAnnual2026Month
 
 function IconHeader({ icon: Icon, color, label }: { icon: LucideIcon; color: string; label: string }) {
   return (
-    <div style={{ display: 'grid', justifyItems: 'center', gap: 2 }} title={label}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }} title={label}>
       <Icon size={14} color={color} strokeWidth={2.5} />
       <span style={{ fontSize: 9, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
     </div>
@@ -574,9 +718,13 @@ const thStyle: CSSProperties = {
 }
 
 const tdStyle: CSSProperties = {
-  padding: '12px 2px', fontSize: 11, color: 'var(--neutral-700)',
+  padding: '9px 2px', fontSize: 11, color: 'var(--neutral-700)',
   verticalAlign: 'middle',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'clip',
+}
+
+const synthRowStyle: CSSProperties = {
+  borderTop: '2px solid var(--neutral-300)',
 }

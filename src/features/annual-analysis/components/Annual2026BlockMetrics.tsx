@@ -202,8 +202,8 @@ const HISTOGRAM_AVG12_LINE_COLOR = '#7C4DFF'
 const HISTOGRAM_MEDIAN12_LINE_COLOR = '#FFB300'
 const HISTORIQUE_LEGEND = [
   { key: 'budget_2026', label: 'Budget 2026', color: HISTOGRAM_BUDGET_LINE_COLOR },
-  { key: 'avg_12m', label: 'Moy.12 mois', color: HISTOGRAM_AVG12_LINE_COLOR },
-  { key: 'median_12m', label: 'Méd.12 mois', color: HISTOGRAM_MEDIAN12_LINE_COLOR },
+  { key: 'avg_12m', label: 'Moyenne (12M)', color: HISTOGRAM_AVG12_LINE_COLOR },
+  { key: 'median_12m', label: 'Médiane (12M)', color: HISTOGRAM_MEDIAN12_LINE_COLOR },
 ] as const
 
 function isBudgetBucketId(value: string | null | undefined): value is BudgetBucketId {
@@ -1018,29 +1018,25 @@ export function Annual2026BlockMetrics({
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  flexWrap: 'nowrap',
-                  overflowX: 'auto',
-                  whiteSpace: 'nowrap',
-                  maxWidth: '100%',
-                  fontSize: 9,
-                  color: 'var(--neutral-500)',
-                  fontFamily: 'var(--font-mono)',
-                  paddingBottom: 2,
-                }}
-              >
-                {HISTORIQUE_LEGEND.map((item) => (
-                  <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-                    <span>{item.label}</span>
-                  </span>
-                ))}
-              </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'nowrap',
+                fontSize: 9,
+                color: 'var(--neutral-500)',
+                fontFamily: 'var(--font-mono)',
+                paddingBottom: 2,
+              }}
+            >
+              {HISTORIQUE_LEGEND.map((item) => (
+                <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                  <span>{item.label}</span>
+                </span>
+              ))}
             </div>
           </div>
         ) : (
