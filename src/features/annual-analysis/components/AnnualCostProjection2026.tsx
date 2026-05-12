@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { CalendarDays, ChevronRight, LayoutGrid, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, LayoutGrid, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -61,6 +61,7 @@ type AnnualProjectionSectionConnectedProps = {
 const fmtCurrency = (n: number) => formatCurrencyFloored(n)
 
 const fmtPctSigned = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+const fmtPctSignedRounded = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value)}%`
 
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
 
@@ -699,6 +700,7 @@ function ProjectionListModal({
   const hiddenParentKeys = new Set(['revenus', 'epargne', 'épargne', 'transferts'])
   const visibleRows = rows.filter((row) => !hiddenParentKeys.has(parentKeyFromName(row.parentName)))
   const totalProjected = visibleRows.reduce((sum, row) => sum + row.projectedAnnualAmount, 0)
+  const statusIconSize = 13
 
   return (
     <div style={listModalOverlayCenteredStyle} onClick={onClose}>
@@ -725,6 +727,24 @@ function ProjectionListModal({
           >
             <X size={20} />
           </button>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0,1fr) auto',
+          alignItems: 'center',
+          columnGap: 10,
+          padding: '8px 0',
+          borderBottom: '1px solid var(--neutral-150)',
+          background: 'var(--neutral-50)',
+          marginBottom: 2,
+        }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Catégorie / budget annuel théorique
+          </span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            Atterrissage 2026 projeté
+          </span>
         </div>
 
         <div style={{ display: 'grid', gap: 0 }}>
@@ -758,13 +778,18 @@ function ProjectionListModal({
                       style={{ width: 28, height: 28, display: 'block', objectFit: 'contain' }}
                     />
                     <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                      <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {row.parentName}
-                      </span>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {row.parentName}
+                        </span>
+                        {overBudget ? (
+                          <AlertTriangle size={statusIconSize} color="var(--color-warning)" aria-label="Attention risque de dépassement" />
+                        ) : (
+                          <CheckCircle2 size={statusIconSize} color="var(--color-success)" aria-label="Sous contrôle" />
+                        )}
+                      </div>
                       <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                        Budget {fmtCurrency(row.budgetAnnualAmount)}
-                        {' · '}
-                        {overBudget ? 'risque dépassement' : 'sous contrôle'}
+                        Budget annuel : {fmtCurrency(row.budgetAnnualAmount)}
                       </span>
                     </div>
                   </div>
@@ -774,15 +799,15 @@ function ProjectionListModal({
                     {fmtCurrency(row.projectedAnnualAmount)}
                   </span>
                   <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
-                    {fmtPctSigned(row.projectedVsBudgetPct)}
+                    {fmtPctSignedRounded(row.projectedVsBudgetPct)}
                   </span>
                 </div>
               </button>
             )
           })}
           <div style={{ ...listModalTotalRowStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0 2px' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total projeté</span>
-            <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#C88400', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total projeté</span>
+            <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#C88400' }}>
               {fmtCurrency(totalProjected)}
             </span>
           </div>
@@ -861,13 +886,18 @@ function ParentCategoryDetailsModal({
                       style={{ width: 28, height: 28, display: 'block', objectFit: 'contain' }}
                     />
                     <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                      <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {child.categoryName}
-                      </span>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {child.categoryName}
+                        </span>
+                        {overBudget ? (
+                          <AlertTriangle size={13} color="var(--color-warning)" aria-label="Attention risque de dépassement" />
+                        ) : (
+                          <CheckCircle2 size={13} color="var(--color-success)" aria-label="Sous contrôle" />
+                        )}
+                      </div>
                       <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                        Théorique {fmtCurrency(child.budgetAnnualAmount)}
-                        {' · '}
-                        {overBudget ? 'risque dépassement' : 'sous contrôle'}
+                        Budget annuel : {fmtCurrency(child.budgetAnnualAmount)}
                       </span>
                     </div>
                   </div>
@@ -877,7 +907,7 @@ function ParentCategoryDetailsModal({
                     {fmtCurrency(child.projectedAnnualAmount)}
                   </span>
                   <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
-                    {fmtPctSigned(child.projectedVsBudgetPct)}
+                    {fmtPctSignedRounded(child.projectedVsBudgetPct)}
                   </span>
                 </div>
               </div>

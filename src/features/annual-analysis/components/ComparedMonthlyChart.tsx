@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowDownCircle, ArrowUpCircle, RotateCw } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -34,7 +35,7 @@ const METRICS: Array<{
   { key: 'expense', label: 'Dépenses', shortLabel: 'Dépenses', color: '#FC5A5A', fluxLabel: 'Dépenses',       key2025: 'exp2025', key2026: 'exp2026' },
   { key: 'income',  label: 'Revenus',  shortLabel: 'Revenus',  color: '#2ED47A', fluxLabel: 'Revenus',        key2025: 'inc2025', key2026: 'inc2026' },
   { key: 'savings', label: 'Épargne',  shortLabel: 'Épargne',  color: '#FFAB2E', fluxLabel: 'Capacité épar.', key2025: 'sav2025', key2026: 'sav2026' },
-  { key: 'net',     label: 'Cashflow', shortLabel: 'Cash',     color: '#5B57F5', fluxLabel: 'Cashflow net',   key2025: 'net2025', key2026: 'net2026' },
+  { key: 'net',     label: 'Cashflow', shortLabel: 'Cashflow', color: '#111111', fluxLabel: 'Cashflow net',   key2025: 'net2025', key2026: 'net2026' },
 ]
 
 const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr']
@@ -90,29 +91,142 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
       ? 'rgba(46,212,122,0.12)'
       : 'rgba(252,90,90,0.10)'
   const arrow = deltaEur === 0 ? '—' : deltaEur > 0 ? '▲' : '▼'
+  const deltaSign = deltaEur === 0 ? '—' : deltaEur > 0 ? '+' : '-'
+
+  const renderMetricIcon = (key: MetricKey) => {
+    if (key === 'expense') {
+      return <ArrowUpCircle size={24} strokeWidth={2.2} color="#FC5A5A" />
+    }
+    if (key === 'income') {
+      return <ArrowDownCircle size={24} strokeWidth={2.2} color="#2ED47A" />
+    }
+    if (key === 'savings') {
+      return (
+        <span style={{ fontSize: 11, fontWeight: 900, color: '#111111', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+          €
+        </span>
+      )
+    }
+    return <RotateCw size={13} strokeWidth={2.3} color="#FFFFFF" />
+  }
 
   return (
     <div style={CARD_BASE}>
       {/* Header */}
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <p style={{
-          margin: 0,
-          fontSize: 'var(--font-size-sm)',
-          fontWeight: 700,
-          color: 'var(--neutral-700)',
-        }}>
-          Flux mensuels comparés
-        </p>
-        <p style={{
-          margin: '2px 0 0',
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--neutral-400)',
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.04em',
-        }}>
-          2025 vs 2026
-        </p>
+      <div style={{ marginBottom: 'var(--space-4)', display: 'grid', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{
+              margin: 0,
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 700,
+              color: 'var(--neutral-700)',
+            }}>
+              Flux mensuels comparés
+            </p>
+            <div style={{
+              marginTop: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+            }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--neutral-500)',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.04em',
+              }}>
+                2025
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 26,
+                    borderTop: `2px solid ${active.color}`,
+                    opacity: 0.95,
+                  }}
+                />
+              </span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--neutral-500)',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.04em',
+              }}>
+                2026
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 26,
+                    borderTop: `2px dashed ${active.color}`,
+                    opacity: 0.7,
+                  }}
+                />
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 1 }}>
+            {METRICS.map((m) => {
+              const isActive = m.key === activeMetric
+              const hasCircle = m.key === 'savings' || m.key === 'net'
+              const background = m.key === 'savings'
+                ? '#FFAB2E'
+                : m.key === 'net'
+                  ? '#111111'
+                  : 'transparent'
+              const borderColor = hasCircle && isActive
+                ? m.key === 'savings'
+                  ? '#FFAB2E'
+                  : m.key === 'net'
+                    ? '#111111'
+                    : m.color
+                : hasCircle
+                  ? 'var(--neutral-200)'
+                  : 'transparent'
+              const iconOpacity = isActive ? 1 : 0.82
+
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setActiveMetric(m.key)}
+                  aria-label={m.label}
+                  title={m.label}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    minWidth: 28,
+                    minHeight: 28,
+                    borderRadius: 'var(--radius-full)',
+                    border: `1.5px solid ${borderColor}`,
+                    background,
+                    color: m.key === 'net' ? '#FFFFFF' : 'inherit',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: hasCircle && isActive ? 'var(--shadow-card)' : 'none',
+                    transform: isActive ? 'translateY(-1px)' : 'none',
+                    opacity: iconOpacity,
+                    transition: 'all 140ms ease',
+                    outline: 'none',
+                    padding: 0,
+                  }}
+                >
+                  {renderMetricIcon(m.key)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Chart */}
@@ -180,107 +294,17 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
         </AreaChart>
       </ResponsiveContainer>
 
-      {/* Year legend */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        gap: 'var(--space-4)',
-        marginTop: 'var(--space-2)',
-      }}>
-        {([{ label: '2025', dashed: false }, { label: '2026', dashed: true }] as const).map(({ label, dashed }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width={22} height={8}>
-              <line
-                x1="0" y1="4" x2="22" y2="4"
-                stroke={active.color}
-                strokeWidth={2}
-                strokeDasharray={dashed ? '5 3' : undefined}
-                strokeOpacity={dashed ? 0.65 : 1}
-              />
-            </svg>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Metric toggles — single row ── */}
-      <div style={{
-        display: 'flex',
-        gap: 6,
-        justifyContent: 'center',
-        marginTop: 'var(--space-4)',
-      }}>
-        {METRICS.map((m) => {
-          const isActive = m.key === activeMetric
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setActiveMetric(m.key)}
-              style={{
-                flex: '1 1 0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                padding: '5px 6px',
-                borderRadius: 'var(--radius-full)',
-                border: `1.5px solid ${isActive ? m.color : 'var(--neutral-200)'}`,
-                background: isActive
-                  ? `color-mix(in oklab, ${m.color} 10%, var(--neutral-0) 90%)`
-                  : 'var(--neutral-50)',
-                cursor: 'pointer',
-                fontSize: 10,
-                fontWeight: isActive ? 700 : 600,
-                color: isActive ? m.color : 'var(--neutral-500)',
-                transition: 'all 150ms ease',
-                outline: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span style={{
-                width: 9,
-                height: 9,
-                borderRadius: 2,
-                border: `1.5px solid ${isActive ? m.color : 'var(--neutral-300)'}`,
-                background: isActive ? m.color : 'transparent',
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                {isActive && (
-                  <svg width="5" height="4" viewBox="0 0 5 4">
-                    <polyline
-                      points="0.5,2 2,3.5 4.5,0.5"
-                      stroke="#fff"
-                      strokeWidth="1.5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </span>
-              {m.shortLabel}
-            </button>
-          )
-        })}
-      </div>
-
       {/* ── Active metric KPI — inline, no nested card ── */}
       {activeFlux != null && (
         <div style={{
-          marginTop: 'var(--space-4)',
-          paddingTop: 'var(--space-4)',
+          marginTop: 'var(--space-2)',
+          paddingTop: 'var(--space-2)',
           borderTop: `1px solid color-mix(in oklab, ${active.color} 20%, var(--neutral-100) 80%)`,
         }}>
           {/* Metric name */}
           <p style={{
-            margin: '0 0 var(--space-3)',
-            fontSize: 12,
+            margin: '0 0 var(--space-2)',
+            fontSize: 11,
             fontWeight: 800,
             textTransform: 'uppercase',
             letterSpacing: '0.10em',
@@ -295,16 +319,16 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
             display: 'grid',
             gridTemplateColumns: '1fr auto 1fr',
             alignItems: 'center',
-            gap: 'var(--space-3)',
+            gap: 'var(--space-2)',
           }}>
             {/* 2025 */}
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center', transform: 'translateY(-4px)' }}>
               <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 2025
               </p>
               <p style={{
                 margin: 0,
-                fontSize: 20,
+                fontSize: 17,
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--neutral-600)',
@@ -319,38 +343,50 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 3,
-                padding: '3px 9px',
+                justifyContent: 'center',
+                width: 104,
+                height: 24,
                 borderRadius: 'var(--radius-full)',
                 background: deltaBg,
                 fontSize: 11,
                 fontWeight: 800,
                 color: deltaColor,
                 fontFamily: 'var(--font-mono)',
+                lineHeight: 1,
               }}>
-                {arrow} {deltaPct != null ? `${Math.abs(deltaPct).toFixed(1)}%` : '—'}
+                <span style={{ width: 12, textAlign: 'center', display: 'inline-block' }}>{arrow}</span>
+                <span>{deltaPct != null ? `${Math.abs(deltaPct).toFixed(1)}%` : '—'}</span>
               </span>
               <span style={{
-                fontSize: 10,
-                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 104,
+                height: 24,
+                borderRadius: 'var(--radius-full)',
+                background: deltaBg,
+                fontSize: 11,
+                fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: deltaColor,
+                lineHeight: 1,
               }}>
-                {deltaEur > 0 ? '+' : ''}{fmt(deltaEur)}
+                <span style={{ width: 12, textAlign: 'center', display: 'inline-block' }}>{deltaSign}</span>
+                <span>{fmtCompact(Math.abs(deltaEur))}</span>
               </span>
             </div>
 
             {/* 2026 */}
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--primary-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <div style={{ textAlign: 'center', transform: 'translateY(-4px)' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 2026
               </p>
               <p style={{
                 margin: 0,
-                fontSize: 20,
+                fontSize: 17,
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
-                color: 'var(--neutral-900)',
+                color: 'var(--neutral-600)',
                 lineHeight: 1,
               }}>
                 {fmtCompact(activeFlux.value_2026)}

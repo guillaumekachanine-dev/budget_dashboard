@@ -128,10 +128,22 @@ export function ComparedCategoryBars({ metrics }: Props) {
       border: '1px solid var(--neutral-150)',
       padding: 'var(--space-5)',
     }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
-          Dépenses par catégorie
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+        <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
+            Dépenses par catégorie
+          </p>
+          {viewMode === 'bars' ? (
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              {[{ label: '2025', color: 'var(--neutral-300)' }, { label: '2026', color: 'var(--neutral-700)' }].map(({ label, color }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <div style={switchStyle} role="tablist" aria-label="Sélecteur d’affichage dépenses par catégorie">
           <button
             type="button"
@@ -157,15 +169,6 @@ export function ComparedCategoryBars({ metrics }: Props) {
           >
             <PieChartIcon size={14} color={viewMode === 'donuts' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
           </button>
-        </div>
-        {/* Légende inline */}
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          {[{ label: '2025', color: 'var(--neutral-300)' }, { label: '2026', color: 'var(--neutral-700)' }].map(({ label, color }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -234,16 +237,13 @@ function DonutCard({
       display: 'grid',
       gap: 'var(--space-2)',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 var(--space-1)' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: yearLabel === '2025' ? 'var(--neutral-500)' : 'var(--neutral-800)', letterSpacing: '0.05em' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0 var(--space-1)' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: yearLabel === '2025' ? 'var(--neutral-500)' : 'var(--neutral-800)', letterSpacing: '0.05em', textAlign: 'center' }}>
           {yearLabel}
-        </span>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--neutral-500)' }}>
-          {fmt(total)}
         </span>
       </div>
 
-      <div style={{ height: 182 }}>
+      <div style={{ height: 166, position: 'relative' }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -252,8 +252,8 @@ function DonutCard({
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={78}
+              innerRadius={44}
+              outerRadius={68}
               paddingAngle={1}
               stroke="var(--neutral-0)"
               strokeWidth={1}
@@ -282,14 +282,31 @@ function DonutCard({
             />
           </PieChart>
         </ResponsiveContainer>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'grid',
+            placeItems: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+            {fmt(total)}
+          </span>
+        </div>
       </div>
 
-      <div style={{ minHeight: 36, padding: '0 var(--space-1)' }}>
+      <div style={{ minHeight: 38, padding: '0 var(--space-1)' }}>
         {selected ? (
-          <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', lineHeight: 1.25 }}>
-            <strong style={{ color: 'var(--neutral-900)' }}>{selected.name}</strong>{' '}
-            · {fmt(selected.value)}{selectedPct != null ? ` (${Math.round(selectedPct)}%)` : ''}
-          </p>
+          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
+              {selected.name}
+            </p>
+            <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', lineHeight: 1.2, fontFamily: 'var(--font-mono)' }}>
+              {fmt(selected.value)}{selectedPct != null ? ` (${Math.round(selectedPct)}%)` : ''}
+            </p>
+          </div>
         ) : (
           <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)' }}>Clique une section pour voir le détail</p>
         )}

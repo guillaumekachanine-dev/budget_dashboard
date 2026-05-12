@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts'
-import { ChevronRight, X } from 'lucide-react'
+import { BarChart3, ChevronRight, Rows3, X } from 'lucide-react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
 import type { ComparedBucketMetric } from '@/features/annual-analysis/types.compared'
@@ -19,15 +19,18 @@ type ChartEntry = {
   v2026:  number
 }
 
+type ViewMode = 'bars' | 'allocation'
+
 // ─── Couleurs unifiées ────────────────────────────────────────────────────────
 const COLOR_2025 = 'rgba(255,171,46,0.38)'
 const COLOR_2026 = '#B8860B'
+const CONTENT_HEIGHT = 260
 
 // ─── Couleurs d'accent par bloc ───────────────────────────────────────────────
 const BUCKET_HEADER_COLORS: Record<string, string> = {
   socle_fixe:           '#5B57F5',
   variable_essentielle: '#4CC9F0',
-  provision:            '#FFAB2E',
+  provision:            '#6C63FF',
   discretionnaire:      '#FF9F43',
   epargne:              '#2ED47A',
   hors_pilotage:        '#FC5A5A',
@@ -40,6 +43,22 @@ const BUCKET_SHORT: Record<string, string> = {
   provision:            'Provisions',
   discretionnaire:      'Discrétion.',
   epargne:              'Épargne',
+}
+
+const ALLOCATION_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+  'epargne',
+]
+
+const ALLOCATION_COLORS: Record<string, string> = {
+  socle_fixe: '#5B57F5',
+  variable_essentielle: '#2ED47A',
+  discretionnaire: '#FC5A5A',
+  provision: '#6C63FF',
+  epargne: '#FFAB2E',
 }
 
 type Props = { metrics: ComparedBucketMetric[] }
@@ -56,6 +75,7 @@ function formatTightEuro(value: number): string {
 // ─── Component principal ──────────────────────────────────────────────────────
 
 export function ComparedBucketChart({ metrics }: Props) {
+  const [viewMode,      setViewMode]      = useState<ViewMode>('bars')
   const [clickedBucket, setClickedBucket] = useState<string | null>(null)
   const [clickedCoord,  setClickedCoord]  = useState<{ x: number; y: number } | null>(null)
   const [detailData,    setDetailData]    = useState<BucketCategoryBreakdownRow[] | null>(null)
@@ -74,6 +94,46 @@ export function ComparedBucketChart({ metrics }: Props) {
 
   const clickedEntry  = data.find((d) => d.bucket === clickedBucket) ?? null
   const clickedMetric = metrics.find((m) => m.bucket === clickedBucket) ?? null
+
+  const allocationRows = useMemo(() => ALLOCATION_ORDER.map((bucket) => {
+    const row = data.find((entry) => entry.bucket === bucket)
+    return {
+      bucket,
+      label: BUCKET_LABELS[bucket] ?? bucket,
+      color: ALLOCATION_COLORS[bucket] ?? '#B0BEC5',
+      v2025: row?.v2025 ?? 0,
+      v2026: row?.v2026 ?? 0,
+    }
+  }), [data])
+
+  const allocationTotal2025 = useMemo(
+    () => allocationRows.reduce((sum, row) => sum + row.v2025, 0),
+    [allocationRows],
+  )
+  const allocationTotal2026 = useMemo(
+    () => allocationRows.reduce((sum, row) => sum + row.v2026, 0),
+    [allocationRows],
+  )
+
+  const toggleViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    if (mode !== 'bars') {
+      setClickedBucket(null)
+      setClickedCoord(null)
+      setShowDetail(false)
+      setDetailData(null)
+    }
+  }
+
+  const headerLegend = viewMode === 'bars'
+    ? [
+        { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
+        { label: '2026', color: COLOR_2026, border: COLOR_2026 },
+      ]
+    : [
+        { label: '2025', color: 'var(--neutral-300)', border: 'transparent' },
+        { label: '2026', color: 'var(--neutral-700)', border: 'transparent' },
+      ]
 
   // ── Clic sur une barre : mémorise le bucket + la coordonnée SVG ───────────
   const handleChartClick = (chartData: {
@@ -134,73 +194,136 @@ export function ComparedBucketChart({ metrics }: Props) {
         border: '1px solid var(--neutral-150)',
         padding: 'var(--space-5)',
       }}>
-        {/* Titre */}
-        <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
-          Dépenses YTD par bloc
-        </p>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
+              Dépenses YTD par bloc
+            </p>
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              {headerLegend.map(({ label, color, border }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: color, border: `1px solid ${border}` }} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        {/* Wrapper relatif : permet de positionner le tooltip custom en absolu */}
-        <div style={{ position: 'relative' }}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              data={data}
-              barCategoryGap="22%"
-              barGap={3}
-              margin={{ top: 4, right: 4, left: -22, bottom: 0 }}
-              onClick={handleChartClick}
-              style={{ cursor: 'pointer' }}
+          <div
+            role="tablist"
+            aria-label="Sélecteur d'affichage du graphique des dépenses YTD par bloc"
+            style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--neutral-100)', borderRadius: 'var(--radius-lg)', padding: 2, gap: 2, flexShrink: 0 }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'bars'}
+              aria-label="Graphique comparatif à barres verticales"
+              onClick={() => toggleViewMode('bars')}
+              style={{
+                border: 'none',
+                background: viewMode === 'bars' ? 'var(--neutral-0)' : 'transparent',
+                color: viewMode === 'bars' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                width: 30,
+                height: 26,
+                borderRadius: 'calc(var(--radius-lg) - 2px)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: viewMode === 'bars' ? 'var(--shadow-sm)' : 'none',
+              }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 9, fill: 'var(--neutral-500)', fontWeight: 600 }}
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-              />
-              <YAxis
-                tick={{ fontSize: 9, fill: 'var(--neutral-400)' }}
-                axisLine={false}
-                tickLine={false}
-                width={38}
-                tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
-              />
-              {/* Tooltip hover masqué quand un bloc est sélectionné */}
-              <Tooltip
-                contentStyle={CHART_TOOLTIP_STYLE}
-                formatter={(value: number, name: string) => [formatTightEuro(value), name === 'v2025' ? '2025' : '2026']}
-                labelStyle={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}
-                itemStyle={{ fontSize: 11 }}
-                wrapperStyle={{ opacity: clickedBucket ? 0 : 1, pointerEvents: 'none', transition: 'opacity 100ms' }}
-              />
-              <Bar dataKey="v2025" name="v2025" fill={COLOR_2025} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="v2026" name="v2026" fill={COLOR_2026} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-
-          {/* Tooltip custom sticky — positionné sur la barre cliquée */}
-          {clickedEntry && clickedCoord && (
-            <ClickedTooltip
-              entry={clickedEntry}
-              metric={clickedMetric}
-              coord={clickedCoord}
-              onClose={closeAll}
-              onDetail={openDetail}
-            />
-          )}
+              <BarChart3 size={14} />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'allocation'}
+              aria-label="Répartition linéaire par bloc"
+              onClick={() => toggleViewMode('allocation')}
+              style={{
+                border: 'none',
+                background: viewMode === 'allocation' ? 'var(--neutral-0)' : 'transparent',
+                color: viewMode === 'allocation' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                width: 30,
+                height: 26,
+                borderRadius: 'calc(var(--radius-lg) - 2px)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: viewMode === 'allocation' ? 'var(--shadow-sm)' : 'none',
+              }}
+            >
+              <Rows3 size={14} />
+            </button>
+          </div>
         </div>
 
-        {/* Légende */}
-        <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', justifyContent: 'center' }}>
-          {[
-            { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
-            { label: '2026', color: COLOR_2026, border: COLOR_2026 },
-          ].map(({ label, color, border }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: color, border: `1.5px solid ${border}` }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-500)' }}>{label}</span>
-            </div>
-          ))}
+        <div style={{ position: 'relative', height: CONTENT_HEIGHT }}>
+          {viewMode === 'bars' ? (
+            <>
+              {/* Wrapper relatif : permet de positionner le tooltip custom en absolu */}
+              <div style={{ position: 'relative', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={data}
+                    barCategoryGap="22%"
+                    barGap={3}
+                    margin={{ top: 4, right: 4, left: -22, bottom: 0 }}
+                    onClick={handleChartClick}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 9, fill: 'var(--neutral-500)', fontWeight: 600 }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={0}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 9, fill: 'var(--neutral-400)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={38}
+                      tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                    />
+                    {/* Tooltip hover masqué quand un bloc est sélectionné */}
+                    <Tooltip
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      formatter={(value: number, name: string) => [formatTightEuro(value), name === 'v2025' ? '2025' : '2026']}
+                      labelStyle={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}
+                      itemStyle={{ fontSize: 11 }}
+                      wrapperStyle={{ opacity: clickedBucket ? 0 : 1, pointerEvents: 'none', transition: 'opacity 100ms' }}
+                    />
+                    <Bar dataKey="v2025" name="v2025" fill={COLOR_2025} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="v2026" name="v2026" fill={COLOR_2026} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+
+                {/* Tooltip custom sticky — positionné sur la barre cliquée */}
+                {clickedEntry && clickedCoord && (
+                  <ClickedTooltip
+                    entry={clickedEntry}
+                    metric={clickedMetric}
+                    coord={clickedCoord}
+                    onClose={closeAll}
+                    onDetail={openDetail}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <AllocationLineView
+              rows={allocationRows}
+              total2025={allocationTotal2025}
+              total2026={allocationTotal2026}
+              height={CONTENT_HEIGHT}
+            />
+          )}
         </div>
       </div>
 
@@ -296,14 +419,17 @@ function ClickedTooltip({
       {/* Ligne 2026 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: COLOR_2026 }}>2026</span>
-        <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
           {entry.v2026 > 0 ? formatTightEuro(entry.v2026) : '—'}
         </span>
       </div>
 
       {/* Ligne Var. */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 5,
+        display: 'grid',
+        gridTemplateColumns: 'auto auto 1fr',
+        alignItems: 'center',
+        columnGap: 5,
         marginBottom: 8,
         paddingTop: 5,
         borderTop: '1px solid var(--neutral-100)',
@@ -325,8 +451,10 @@ function ClickedTooltip({
           fontSize: 10, fontWeight: 600,
           fontFamily: 'var(--font-mono)',
           color: deltaColor,
+          justifySelf: 'end',
+          textAlign: 'right',
         }}>
-          {delta !== 0 ? `${delta > 0 ? '+' : ''}${formatTightEuro(delta)}` : ''}
+          {delta !== 0 ? `${delta > 0 ? '+' : ''}${formatTightEuro(delta)}` : '—'}
         </span>
       </div>
 
@@ -353,6 +481,163 @@ function ClickedTooltip({
         Détails
         <ChevronRight size={11} strokeWidth={2.5} />
       </button>
+    </div>
+  )
+}
+
+function formatEuroShare(value: number, total: number): string {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0
+  return `${formatTightEuro(value)} (${pct}%)`
+}
+
+function formatBlockShare(value: number, total: number): string {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0
+  return `${pct}%`
+}
+
+function AllocationLineView({
+  rows,
+  total2025,
+  total2026,
+  height,
+}: {
+  rows: Array<{
+    bucket: string
+    label: string
+    color: string
+    v2025: number
+    v2026: number
+  }>
+  total2025: number
+  total2026: number
+  height: number
+}) {
+  const renderYearStrip = (year: '2025' | '2026') => {
+    const total = year === '2026' ? total2026 : total2025
+    return (
+      <div style={{
+        width: '100%',
+        height: 20,
+        borderRadius: 'var(--radius-full)',
+        background: 'var(--neutral-100)',
+        overflow: 'hidden',
+        display: 'flex',
+        position: 'relative',
+      }}>
+        {rows.map((row, index) => {
+          const value = year === '2026' ? row.v2026 : row.v2025
+          const widthPct = total > 0 ? (value / total) * 100 : 0
+          return (
+            <div
+              key={`${year}-${row.bucket}`}
+              title={`${row.label} — ${formatEuroShare(value, total)}`}
+              style={{
+                height: '100%',
+                width: `${widthPct}%`,
+                background: row.color,
+                minWidth: value > 0 ? 2 : 0,
+                borderRight: index < rows.length - 1 ? '1px solid rgba(255,255,255,0.72)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              <span style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: '#fff',
+                fontFamily: 'var(--font-mono)',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+                opacity: widthPct >= 7 ? 0.95 : 0.6,
+              }}>
+                {formatBlockShare(value, total)}
+              </span>
+            </div>
+          )
+        })}
+        <span style={{
+          position: 'absolute',
+          left: 8,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          fontSize: 10,
+          fontWeight: 700,
+          color: '#fff',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.04em',
+          lineHeight: 1,
+          pointerEvents: 'none',
+        }}>
+          {year}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateRows: 'auto 1fr auto',
+      height,
+      gap: 'var(--space-4)',
+      padding: '2px 0',
+    }}>
+      {renderYearStrip('2026')}
+
+      <div style={{
+        display: 'grid',
+        alignContent: 'space-evenly',
+        rowGap: 'var(--space-3)',
+      }}>
+        {rows.map((row) => (
+          <div
+            key={`row-${row.bucket}`}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0,1fr) 120px 120px',
+              columnGap: 'var(--space-1)',
+              alignItems: 'center',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span
+                aria-hidden="true"
+                style={{ width: 14, height: 14, borderRadius: 4, background: row.color, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-700)', minWidth: 0, whiteSpace: 'nowrap' }}>
+                {row.label}
+              </span>
+            </div>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--neutral-400)',
+              textAlign: 'right',
+              fontFamily: 'var(--font-mono)',
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+              transform: 'translateX(16px)',
+            }}>
+              {formatTightEuro(row.v2025)}
+            </span>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--neutral-900)',
+              textAlign: 'right',
+              fontFamily: 'var(--font-mono)',
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+            }}>
+              {formatTightEuro(row.v2026)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {renderYearStrip('2025')}
     </div>
   )
 }
@@ -398,7 +683,7 @@ function BucketDetailModal({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: 'min(520px, 100%)',
+            width: 'min(580px, 100%)',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-xl)',
             boxShadow: '0 24px 60px rgba(0,0,0,0.30)',
@@ -442,17 +727,18 @@ function BucketDetailModal({
 
           {/* Sous-headers colonnes */}
           <div style={{
-            display: 'grid', gridTemplateColumns: 'minmax(0,1fr) max-content max-content max-content',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0,1fr) 96px 82px 96px',
             padding: '8px var(--space-5)',
             background: 'var(--neutral-50)',
             borderBottom: '1px solid var(--neutral-150)',
-            columnGap: 2,
+            columnGap: 10,
             flexShrink: 0,
           }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sous-catégorie</span>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>2025</span>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>Var.</span>
-            <span style={{ fontSize: 9, fontWeight: 700, color: COLOR_2026, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>2026</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>2025</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>Var.</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: COLOR_2026, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>2026</span>
           </div>
 
           {/* Liste */}
@@ -480,11 +766,12 @@ function BucketDetailModal({
                   <div
                     key={`${row.category_id ?? ''}__${row.parent_category_name}__${row.category_name}`}
                     style={{
-                      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) max-content max-content max-content',
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0,1fr) 96px 82px 96px',
                       alignItems: 'center',
                       padding: '10px var(--space-5)',
                       borderBottom: isLast ? 'none' : '1px solid var(--neutral-100)',
-                      columnGap: 2,
+                      columnGap: 10,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -502,7 +789,7 @@ function BucketDetailModal({
                         {row.category_name}
                       </span>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', color: row.amount_2025 > 0 ? 'var(--neutral-500)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'end' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', color: row.amount_2025 > 0 ? 'var(--neutral-500)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'stretch', fontVariantNumeric: 'tabular-nums' }}>
                       {row.amount_2025 > 0 ? formatTightEuro(row.amount_2025) : '—'}
                     </span>
                     <span
@@ -512,14 +799,15 @@ function BucketDetailModal({
                         fontFamily: 'var(--font-mono)',
                         color: variationPct == null ? 'var(--neutral-300)' : variationColor,
                         textAlign: 'right',
-                        justifySelf: 'end',
+                        justifySelf: 'stretch',
                         lineHeight: 1.1,
                         whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       {variationPct == null ? '—' : formatVariation(variationPct)}
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: row.amount_2026 > 0 ? 'var(--neutral-900)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'end' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: row.amount_2026 > 0 ? 'var(--neutral-900)' : 'var(--neutral-300)', textAlign: 'right', justifySelf: 'stretch', fontVariantNumeric: 'tabular-nums' }}>
                       {row.amount_2026 > 0 ? formatTightEuro(row.amount_2026) : '—'}
                     </span>
                   </div>

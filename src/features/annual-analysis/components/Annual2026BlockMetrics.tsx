@@ -101,6 +101,8 @@ interface MonthlyBucketBudgetsFallbackRow {
   total_budget_bucket_eur: number | null
 }
 
+type KpiGoldTone = 'champagne' | 'honey' | 'amber' | 'bronze'
+
 const YEAR_2026 = 2026
 const ALL_CATEGORIES_ID = 'all_categories'
 const FULL_MONTH_LABEL_BY_SHORT: Record<string, string> = {
@@ -206,6 +208,49 @@ const HISTORIQUE_LEGEND = [
   { key: 'avg_12m', label: 'Moyenne (12M)', color: HISTOGRAM_AVG12_LINE_COLOR },
   { key: 'median_12m', label: 'Médiane (12M)', color: HISTOGRAM_MEDIAN12_LINE_COLOR },
 ] as const
+
+const KPI_GOLD_CAMAIEU: Record<
+  KpiGoldTone,
+  {
+    cardBackground: string
+    cardBorder: string
+    headerBackground: string
+    headerBorder: string
+  }
+> = {
+  champagne: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--color-warning) 18%, var(--neutral-0) 82%) 0%, color-mix(in oklab, var(--color-warning) 30%, var(--neutral-0) 70%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--color-warning) 42%, var(--neutral-0) 58%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 45%, var(--neutral-0) 55%) 0%, color-mix(in oklab, var(--color-warning) 62%, var(--neutral-0) 38%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--color-warning) 58%, var(--neutral-0) 42%)',
+  },
+  honey: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--color-warning) 26%, var(--neutral-0) 74%) 0%, color-mix(in oklab, var(--color-warning) 40%, var(--neutral-0) 60%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--color-warning) 50%, var(--neutral-0) 50%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 56%, var(--neutral-0) 44%) 0%, color-mix(in oklab, var(--color-warning) 74%, var(--neutral-0) 26%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--color-warning) 64%, var(--neutral-0) 36%)',
+  },
+  amber: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--color-warning) 34%, var(--neutral-0) 66%) 0%, color-mix(in oklab, var(--color-warning) 52%, var(--neutral-0) 48%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--color-warning) 58%, var(--neutral-0) 42%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 66%, var(--neutral-0) 34%) 0%, color-mix(in oklab, var(--color-warning) 84%, var(--neutral-0) 16%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-0) 28%)',
+  },
+  bronze: {
+    cardBackground:
+      'linear-gradient(156deg, color-mix(in oklab, var(--color-warning) 30%, var(--neutral-0) 70%) 0%, color-mix(in oklab, var(--color-warning) 48%, color-mix(in oklab, var(--neutral-900) 8%, var(--neutral-0) 92%) 52%) 100%)',
+    cardBorder: 'color-mix(in oklab, var(--color-warning) 56%, color-mix(in oklab, var(--neutral-900) 12%, var(--neutral-0) 88%) 44%)',
+    headerBackground:
+      'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 58%, color-mix(in oklab, var(--neutral-900) 10%, var(--neutral-0) 90%) 42%) 0%, color-mix(in oklab, var(--color-warning) 76%, color-mix(in oklab, var(--neutral-900) 14%, var(--neutral-0) 86%) 24%) 100%)',
+    headerBorder: 'color-mix(in oklab, var(--color-warning) 66%, color-mix(in oklab, var(--neutral-900) 12%, var(--neutral-0) 88%) 34%)',
+  },
+}
 
 function isBudgetBucketId(value: string | null | undefined): value is BudgetBucketId {
   if (!value) return false
@@ -1029,6 +1074,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: true,
       node: (
         <KpiMiniCard
+          tone="champagne"
           title="Rang"
           value={metricsState.rank}
         />
@@ -1039,6 +1085,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: true,
       node: (
         <KpiMiniCard
+          tone="honey"
           title={isYtdPeriod ? 'Part moyenne YTD du budget' : 'Part du budget'}
           value={formatPercentNoSign(partValuePct)}
         />
@@ -1049,6 +1096,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: false,
       node: (
         <KpiMiniCard
+          tone="amber"
           title={`Consommé ${dynamicPeriodLabel}`}
           value={fmtCurrencyCompact(metricsState.actualAmount)}
           enlarged={isAllCategoriesKpiScope}
@@ -1060,6 +1108,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: false,
       node: (
         <KpiMiniCard
+          tone="bronze"
           title={`Budget ${dynamicPeriodLabel}`}
           value={fmtCurrencyCompact(metricsState.budgetAmount)}
           enlarged={isAllCategoriesKpiScope}
@@ -1071,6 +1120,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: false,
       node: (
         <KpiMiniCard
+          tone="champagne"
           title={isYtdPeriod ? 'Ecart moyen YTD' : `Ecart ${dynamicPeriodLabel}`}
           value={metricsState.deltaPctRaw == null ? '—' : fmtPercentCompact(metricsState.deltaPct)}
           valueColor={deltaPercentTone}
@@ -1085,6 +1135,7 @@ export function Annual2026BlockMetrics({
       hideWhenAllCategories: false,
       node: (
         <KpiMiniCard
+          tone="honey"
           asButton
           onClick={() => setIsProjectionModalOpen(true)}
           title="Projection fin 2026"
@@ -1354,6 +1405,7 @@ export function Annual2026BlockMetrics({
 }
 
 function KpiMiniCard({
+  tone,
   title,
   value,
   subValue,
@@ -1365,6 +1417,7 @@ function KpiMiniCard({
   enlarged = false,
   onClick,
 }: {
+  tone: KpiGoldTone
   title: string
   value: string
   subValue?: string
@@ -1376,11 +1429,12 @@ function KpiMiniCard({
   enlarged?: boolean
   onClick?: () => void
 }) {
+  const cardTone = KPI_GOLD_CAMAIEU[tone]
   const baseStyle: CSSProperties = {
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--neutral-200)',
-    background: 'var(--neutral-0)',
-    padding: enlarged ? '8px 9px' : '7px 8px',
+    borderRadius: 'var(--radius-lg)',
+    border: `1px solid ${cardTone.cardBorder}`,
+    background: cardTone.cardBackground,
+    padding: 0,
     width: '100%',
     height: '100%',
     display: 'flex',
@@ -1390,26 +1444,70 @@ function KpiMiniCard({
     textAlign: 'left' as const,
     minHeight: 0,
     position: 'relative' as const,
+    overflow: 'hidden',
   }
 
   const content = (
     <>
-      <p
+      <div
         style={{
-          margin: 0,
-          fontSize: 9,
-          fontWeight: 700,
-          color: 'var(--neutral-500)',
-          letterSpacing: '0.02em',
-          textTransform: 'uppercase',
-          position: 'absolute',
-          top: enlarged ? 8 : 7,
-          left: enlarged ? 9 : 8,
+          width: '100%',
+          minHeight: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '4px 10px 3px',
+          background: cardTone.headerBackground,
+          boxShadow: `
+            inset 0 1px 0 rgba(255,255,255,0.65),
+            inset 0 -1px 0 rgba(0,0,0,0.10),
+            0 3px 8px rgba(36, 26, 8, 0.16)
+          `,
+          borderBottom: `1px solid ${cardTone.headerBorder}`,
         }}
       >
-        {title}
-      </p>
-      <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'start', gap: 3, minHeight: '100%' }}>
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: -18,
+            top: -24,
+            width: 88,
+            height: 72,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 68%)',
+            pointerEvents: 'none',
+          }}
+        />
+        <p
+          style={{
+            margin: 0,
+            fontSize: 8.5,
+            fontWeight: 800,
+            color: 'var(--neutral-900)',
+            letterSpacing: '0.07em',
+            textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            width: '100%',
+          }}
+        >
+          {title}
+        </p>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          alignContent: 'center',
+          justifyItems: 'start',
+          gap: 3,
+          minHeight: '100%',
+          padding: enlarged ? '8px 10px 9px' : '7px 9px 8px',
+        }}
+      >
         {secondaryInlineValue ? (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <p style={{ margin: 0, fontSize: enlarged ? 15 : 14, lineHeight: 1.05, fontWeight: 900, color: valueColor, fontFamily: 'var(--font-mono)' }}>
