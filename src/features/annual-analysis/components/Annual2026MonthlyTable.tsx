@@ -9,7 +9,6 @@ import {
   Zap,
   LayoutList,
   LineChart as LineChartIcon,
-  TrendingUp,
   PieChart,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,7 +24,12 @@ import {
   YAxis,
 } from 'recharts'
 import type { MonthlyBudget2026Point } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { MONTH_LABELS_SHORT } from './_constants'
+import {
+  EXPENSE_BUCKETS,
+  MONTH_LABELS_SHORT,
+  assertNoNonExpenseBucketsInExpenseTotal,
+  isExpenseBucket,
+} from './_constants'
 import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { getMonthlyPersonalAccountBalances } from '@/features/annual-analysis/api/getMonthlyPersonalAccountBalances'
@@ -54,27 +58,33 @@ type MonthlySynthRow = {
   deltaRealBudgetPct: number
 }
 
-type SavingsBucketActualRow = {
-  period_month: number | null
-  budget_bucket: string | null
-  actual_budget_bucket_eur: number | null
+type SavingsTransactionRow = {
+  transaction_date: string | null
+  amount: number | null
 }
 
-type MonthlyBucketActualsCleanRow = {
+type StrictExpenseBucketRow = {
   month_start: string | null
   budget_bucket: string | null
+  expense_amount: number | null
+  net_amount: number | null
+}
+
+type RevenueBucketRow = {
+  month_start: string | null
   revenue_amount: number | null
   net_amount: number | null
+}
+
+type StrictExpenseBudgetBucketRow = {
+  period_month: number | null
+  budget_bucket: string | null
+  budget_amount: number | null
 }
 
 const fmt = (n: number) => {
   const val = Math.round(n).toLocaleString('fr-FR')
   return `${val}€`
-}
-
-const fmtPct = (r: number) => {
-  const val = (r * 100).toFixed(1)
-  return `${val}%`
 }
 
 // Pas de décimales sauf si la valeur absolue est < 1%
@@ -103,6 +113,20 @@ const CHART_SERIES = [
   { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
 ]
 const SOLDE_SERIES = { key: 'balance', name: 'Cashflow', color: '#4A4A62' } as const
+const MONTH_LABELS_FULL_FR = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+]
 
 const fmtTickK = (v: number) => {
   if (!Number.isFinite(v)) return '0'
@@ -138,11 +162,13 @@ export function MonthlyFlowsAnalysisCard({
   }, [initialView])
 
   const fallbackRows: MonthlySynthRow[] = monthlyProfile.map((point) => ({
+    // fallback historique: dépenses strictes = somme des buckets whitelistés
+    // (et non total global potentiellement contaminé)
     month: point.month,
     monthLabel: point.monthLabel,
     openingBalance: null,
-    budget: Number(point.totalExpenseBudget ?? 0),
-    expense: Number(point.totalExpenseBudget ?? 0),
+    budget: EXPENSE_BUCKETS.reduce((sum, bucket) => sum + Number(point.buckets?.[bucket] ?? 0), 0),
+    expense: EXPENSE_BUCKETS.reduce((sum, bucket) => sum + Number(point.buckets?.[bucket] ?? 0), 0),
     income: 0,
     savings: 0,
     deltaRealBudgetPct: 0,
@@ -156,93 +182,95 @@ export function MonthlyFlowsAnalysisCard({
       const userId = user?.id
       if (!userId) return []
 
-      const [metricsRes, bucketTotalsRes, savingsActualsRes, savingsMonthlyActualsRes, savingsTotalsRes, personalBalancesByMonth] = await Promise.all([
-        budgetDb
-          .from('analytics_monthly_metrics')
-          .select('period_month, expense_total, income_total')
-          .eq('period_year', year)
-          .order('period_month', { ascending: true }),
-        budgetDb
-          .from('budget_bucket_totals_by_period')
-          .select('period_month, total_budget_bucket_eur')
-          .eq('period_year', year),
-        budgetDb
-          .from('budget_bucket_budget_vs_actual_by_month')
-          .select('period_month, budget_bucket, actual_budget_bucket_eur')
-          .eq('period_year', year)
-          .eq('budget_bucket', 'epargne'),
+      const [strictExpenseRowsRes, strictExpenseBudgetRowsRes, revenueRowsRes, savingsTransactionsRes, personalBalancesByMonth] = await Promise.all([
         budgetDb
           .from('v_monthly_bucket_actuals_clean')
-          .select('month_start, budget_bucket, revenue_amount, net_amount')
-          .eq('budget_bucket', 'epargne'),
+          .select('month_start, budget_bucket, expense_amount, net_amount')
+          .gte('month_start', `${year}-01-01`)
+          .lt('month_start', `${year + 1}-01-01`)
+          .in('budget_bucket', [...EXPENSE_BUCKETS])
+          .order('month_start', { ascending: true }),
         budgetDb
-          .from('savings_budget_totals_by_period')
-          .select('period_month, total_savings_budget_eur')
-          .eq('period_year', year),
+          .from('v_monthly_bucket_budgets_clean' as never)
+          .select('period_month, budget_bucket, budget_amount')
+          .eq('period_year', year)
+          .in('budget_bucket', [...EXPENSE_BUCKETS])
+          .order('period_month', { ascending: true }),
+        budgetDb
+          .from('v_monthly_bucket_actuals_clean')
+          .select('month_start, revenue_amount, net_amount')
+          .gte('month_start', `${year}-01-01`)
+          .lt('month_start', `${year + 1}-01-01`)
+          .eq('budget_bucket', 'revenu')
+          .order('month_start', { ascending: true }),
+        budgetDb
+          .from('transactions')
+          .select('transaction_date, amount')
+          .eq('user_id', userId)
+          .eq('is_hidden', false)
+          .eq('flow_type', 'savings')
+          .gte('transaction_date', `${year}-01-01`)
+          .lte('transaction_date', `${year}-12-31`)
+          .order('transaction_date', { ascending: true }),
         getMonthlyPersonalAccountBalances(year),
       ])
 
-      if (metricsRes.error) throw new Error(`monthly metrics query failed: ${metricsRes.error.message}`)
-      if (bucketTotalsRes.error) throw new Error(`budget bucket totals query failed: ${bucketTotalsRes.error.message}`)
-      if (savingsActualsRes.error) throw new Error(`savings actuals query failed: ${savingsActualsRes.error.message}`)
-      if (savingsMonthlyActualsRes.error) throw new Error(`savings monthly actuals query failed: ${savingsMonthlyActualsRes.error.message}`)
-      if (savingsTotalsRes.error) throw new Error(`savings totals query failed: ${savingsTotalsRes.error.message}`)
+      if (strictExpenseRowsRes.error) throw new Error(`strict expense buckets query failed: ${strictExpenseRowsRes.error.message}`)
+      if (strictExpenseBudgetRowsRes.error) throw new Error(`strict expense budget buckets query failed: ${strictExpenseBudgetRowsRes.error.message}`)
+      if (revenueRowsRes.error) throw new Error(`revenue buckets query failed: ${revenueRowsRes.error.message}`)
+      if (savingsTransactionsRes.error) throw new Error(`savings transactions query failed: ${savingsTransactionsRes.error.message}`)
 
       const expenseByMonth = new Map<number, number>()
       const incomeByMonth = new Map<number, number>()
       const budgetByMonth = new Map<number, number>()
       const savingsByMonth = new Map<number, number>()
-      const hasSavingsPrimaryByMonth = new Set<number>()
-      const hasSavingsSecondaryByMonth = new Set<number>()
       const openingBalanceByMonth = new Map<number, number | null>()
       const monthSet = new Set<number>()
+      const includedBucketsInExpenses: string[] = []
 
-      for (const row of metricsRes.data ?? []) {
+      for (const row of (strictExpenseRowsRes.data ?? []) as StrictExpenseBucketRow[]) {
+        const month = Number(String(row.month_start ?? '').slice(5, 7))
+        if (!Number.isFinite(month) || month <= 0) continue
+        const bucket = String(row.budget_bucket ?? '')
+        includedBucketsInExpenses.push(bucket)
+        if (!isExpenseBucket(bucket)) continue
+        monthSet.add(month)
+        expenseByMonth.set(month, (expenseByMonth.get(month) ?? 0) + Number(row.expense_amount ?? row.net_amount ?? 0))
+      }
+      assertNoNonExpenseBucketsInExpenseTotal(includedBucketsInExpenses, 'MonthlyFlowsAnalysisCard:dbRows')
+
+      for (const row of (strictExpenseBudgetRowsRes.data ?? []) as StrictExpenseBudgetBucketRow[]) {
         const month = Number(row.period_month ?? 0)
         if (!Number.isFinite(month) || month <= 0) continue
+        const bucket = String(row.budget_bucket ?? '')
+        if (!isExpenseBucket(bucket)) continue
         monthSet.add(month)
-        expenseByMonth.set(month, Number(row.expense_total ?? 0))
-        incomeByMonth.set(month, Number(row.income_total ?? 0))
+        budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(row.budget_amount ?? 0))
       }
 
-      for (const row of bucketTotalsRes.data ?? []) {
-        const month = Number(row.period_month ?? 0)
+      for (const row of (revenueRowsRes.data ?? []) as RevenueBucketRow[]) {
+        const month = Number(String(row.month_start ?? '').slice(5, 7))
         if (!Number.isFinite(month) || month <= 0) continue
         monthSet.add(month)
-        budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(row.total_budget_bucket_eur ?? 0))
+        incomeByMonth.set(month, (incomeByMonth.get(month) ?? 0) + Number(row.revenue_amount ?? row.net_amount ?? 0))
       }
 
-      for (const row of (savingsActualsRes.data ?? []) as SavingsBucketActualRow[]) {
-        const month = Number(row.period_month ?? 0)
+      for (const row of (savingsTransactionsRes.data ?? []) as SavingsTransactionRow[]) {
+        const month = Number(row.transaction_date?.slice(5, 7) ?? 0)
         if (!Number.isFinite(month) || month <= 0) continue
         monthSet.add(month)
-        hasSavingsPrimaryByMonth.add(month)
-        savingsByMonth.set(month, Math.abs(Number(row.actual_budget_bucket_eur ?? 0)))
-      }
-
-      for (const row of (savingsMonthlyActualsRes.data ?? []) as MonthlyBucketActualsCleanRow[]) {
-        if (row.budget_bucket !== 'epargne') continue
-        const monthRaw = row.month_start?.slice(5, 7) ?? ''
-        const month = Number(monthRaw)
-        if (!Number.isFinite(month) || month <= 0) continue
-        monthSet.add(month)
-        if (hasSavingsPrimaryByMonth.has(month)) continue
-        hasSavingsSecondaryByMonth.add(month)
-        savingsByMonth.set(month, Math.abs(Number(row.net_amount ?? row.revenue_amount ?? 0)))
-      }
-
-      for (const row of savingsTotalsRes.data ?? []) {
-        const month = Number(row.period_month ?? 0)
-        if (!Number.isFinite(month) || month <= 0) continue
-        monthSet.add(month)
-        if (!hasSavingsPrimaryByMonth.has(month) && !hasSavingsSecondaryByMonth.has(month)) {
-          savingsByMonth.set(month, Number(row.total_savings_budget_eur ?? 0))
-        }
+        savingsByMonth.set(month, (savingsByMonth.get(month) ?? 0) + Number(row.amount ?? 0))
       }
 
       for (let month = 1; month <= tableMonthCutoff; month += 1) {
         const key = monthKey(year, month)
         openingBalanceByMonth.set(month, personalBalancesByMonth.get(key) ?? null)
+      }
+
+      if (import.meta.env.DEV) {
+        console.log('[Budgets Slide 3][Audit dépenses] rawData', strictExpenseRowsRes.data ?? [])
+        console.log('[Budgets Slide 3][Audit dépenses] buckets included in expenses', [...new Set(includedBucketsInExpenses)])
+        console.log('[Budgets Slide 3][Audit dépenses] expenseTotal', Object.fromEntries(expenseByMonth.entries()))
       }
 
       return [...monthSet]
@@ -271,6 +299,8 @@ export function MonthlyFlowsAnalysisCard({
   const chartRows = rows
   const chartData = chartRows.map((row) => ({
     label: row.monthLabel,
+    month: row.month,
+    monthFull: MONTH_LABELS_FULL_FR[Math.max(0, Math.min(11, row.month - 1))] ?? row.monthLabel,
     // Reprend exactement la valeur affichée dans la colonne "Solde" du tableau.
     balance: row.openingBalance,
     budget: row.budget,
@@ -387,10 +417,10 @@ export function MonthlyFlowsAnalysisCard({
                             <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépensé" />
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={Zap} color="var(--neutral-400)" label="Écart" />
+                            <IconHeader icon={Zap} color="var(--neutral-400)" label="Écart %" />
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={TrendingUp} color="var(--neutral-400)" label="Évol M-1" />
+                            <IconHeader icon={Wallet} color="var(--neutral-500)" label="Écart €" />
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
                             <IconHeader icon={PieChart} color="var(--neutral-400)" label="Part" />
@@ -401,8 +431,8 @@ export function MonthlyFlowsAnalysisCard({
                         {scopedData.rows.map((row) => {
                           const ecartColor = row.ecartPct == null ? 'var(--neutral-500)' : row.ecartPct > 0 ? '#E57373' : '#81C784'
                           const ecartPrefix = row.ecartPct != null && row.ecartPct > 0 ? '+' : ''
-                          const evolColor = row.evolMoins1Pct == null ? 'var(--neutral-500)' : row.evolMoins1Pct > 0 ? '#E57373' : '#81C784'
-                          const evolPrefix = row.evolMoins1Pct != null && row.evolMoins1Pct > 0 ? '+' : ''
+                          const ecartAmount = row.depense - row.budgetAmount
+                          const ecartAmountColor = ecartAmount > 0 ? '#E57373' : ecartAmount < 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
@@ -414,8 +444,8 @@ export function MonthlyFlowsAnalysisCard({
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: ecartColor }}>
                                 {row.ecartPct == null ? '—' : `${ecartPrefix}${fmtPctScope(row.ecartPct)}`}
                               </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: evolColor }}>
-                                {row.evolMoins1Pct == null ? '—' : `${evolPrefix}${fmtPctScope(row.evolMoins1Pct)}`}
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: ecartAmountColor }}>
+                                {fmt(ecartAmount)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)', fontWeight: 600 }}>
                                 {row.partPct == null ? '—' : fmtPctScope(row.partPct)}
@@ -428,8 +458,8 @@ export function MonthlyFlowsAnalysisCard({
                           const { synth } = scopedData
                           const ecartColor = synth.avgEcartPct == null ? 'var(--neutral-500)' : synth.avgEcartPct > 0 ? '#E57373' : '#81C784'
                           const ecartPrefix = synth.avgEcartPct != null && synth.avgEcartPct > 0 ? '+' : ''
-                          const evolColor = synth.avgEvolPct == null ? 'var(--neutral-500)' : synth.avgEvolPct > 0 ? '#E57373' : '#81C784'
-                          const evolPrefix = synth.avgEvolPct != null && synth.avgEvolPct > 0 ? '+' : ''
+                          const synthEcartAmount = scopedData.rows.reduce((sum, row) => sum + (row.depense - row.budgetAmount), 0)
+                          const synthEcartAmountColor = synthEcartAmount > 0 ? '#E57373' : synthEcartAmount < 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr style={synthRowStyle}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
@@ -441,8 +471,8 @@ export function MonthlyFlowsAnalysisCard({
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: ecartColor }}>
                                 {synth.avgEcartPct == null ? '—' : `${ecartPrefix}${fmtPctScope(synth.avgEcartPct)}`}
                               </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: evolColor }}>
-                                {synth.avgEvolPct == null ? '—' : `${evolPrefix}${fmtPctScope(synth.avgEvolPct)}`}
+                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: synthEcartAmountColor }}>
+                                {fmt(synthEcartAmount)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)', fontWeight: 800 }}>
                                 {synth.partYtdPct == null ? '—' : fmtPctScope(synth.partYtdPct)}
@@ -471,7 +501,7 @@ export function MonthlyFlowsAnalysisCard({
                             </div>
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={Wallet} color="var(--neutral-500)" label="Solde" />
+                            <IconHeader icon={Wallet} color="var(--neutral-500)" label="Cash" />
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
                             <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
@@ -480,14 +510,14 @@ export function MonthlyFlowsAnalysisCard({
                             <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
                           </th>
                           <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={Zap} color="var(--neutral-400)" label="% Écart" />
+                            <IconHeader icon={Zap} color="var(--neutral-400)" label="Solde" />
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row) => {
-                          const deltaColor = row.deltaRealBudgetPct > 0 ? '#E57373' : '#81C784'
-                          const deltaPrefix = row.deltaRealBudgetPct > 0 ? '+' : ''
+                          const monthlyCashDelta = row.income - row.expense
+                          const deltaColor = monthlyCashDelta < 0 ? '#E57373' : monthlyCashDelta > 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
@@ -503,7 +533,7 @@ export function MonthlyFlowsAnalysisCard({
                                 {fmt(row.income)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, fontWeight: 700 }}>
-                                {deltaPrefix}{fmtPct(row.deltaRealBudgetPct)}
+                                {fmt(monthlyCashDelta)}
                               </td>
                             </tr>
                           )
@@ -518,9 +548,8 @@ export function MonthlyFlowsAnalysisCard({
                             : null
                           const synthExpense = rows.reduce((s, r) => s + r.expense, 0)
                           const synthIncome = rows.reduce((s, r) => s + r.income, 0)
-                          const synthDelta = rows.reduce((s, r) => s + r.deltaRealBudgetPct, 0) / rows.length
-                          const deltaColor = synthDelta > 0 ? '#E57373' : '#81C784'
-                          const deltaPrefix = synthDelta > 0 ? '+' : ''
+                          const synthDelta = synthIncome - synthExpense
+                          const deltaColor = synthDelta < 0 ? '#E57373' : synthDelta > 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr style={synthRowStyle}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
@@ -536,7 +565,7 @@ export function MonthlyFlowsAnalysisCard({
                                 {fmt(synthIncome)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: deltaColor }}>
-                                {deltaPrefix}{fmtPct(synthDelta)}
+                                {fmt(synthDelta)}
                               </td>
                             </tr>
                           )
@@ -586,6 +615,7 @@ export function MonthlyFlowsAnalysisCard({
                           tickFormatter={(v: number) => fmtTickK(Number(v))}
                         />
                         <Tooltip
+                          content={<MonthlyFlowsChartTooltip />}
                           contentStyle={{
                             background: 'var(--neutral-0)',
                             border: '1px solid var(--neutral-200)',
@@ -616,6 +646,7 @@ export function MonthlyFlowsAnalysisCard({
                           name={SOLDE_SERIES.name}
                           stroke={SOLDE_SERIES.color}
                           strokeWidth={2.4}
+                          strokeDasharray="5 3"
                           dot={false}
                           connectNulls
                           fill="none"
@@ -659,6 +690,54 @@ export function MonthlyFlowsAnalysisCard({
             </AnimatePresence>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function MonthlyFlowsChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{
+    name?: string
+    value?: number | string | null
+    payload?: { monthFull?: string }
+  }>
+}) {
+  if (!active || !payload || payload.length === 0) return null
+
+  const monthFull = payload[0]?.payload?.monthFull ?? '—'
+  const formatAmount = (value: number | string | null | undefined) => {
+    const numeric = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(numeric)) return '—'
+    return `${Math.round(numeric).toLocaleString('fr-FR')} €`
+  }
+
+  return (
+    <div
+      style={{
+        background: 'var(--neutral-0)',
+        border: '1px solid var(--neutral-200)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-lg)',
+        padding: '8px 12px',
+        minWidth: 188,
+      }}
+    >
+      <p style={{ margin: '0 0 8px', color: 'var(--neutral-900)', fontSize: 14, fontWeight: 700 }}>
+        {monthFull}
+      </p>
+      <div style={{ display: 'grid', gap: 3 }}>
+        {payload.map((entry, index) => (
+          <div key={`${entry.name ?? 'metric'}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ color: 'var(--neutral-900)', fontSize: 12 }}>{entry.name ?? 'Valeur'}</span>
+            <span style={{ color: 'var(--neutral-900)', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+              {formatAmount(entry.value)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )

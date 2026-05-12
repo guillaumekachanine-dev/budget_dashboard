@@ -39,13 +39,20 @@ export function Annual2025Tab() {
           2025
         </h2>
       </div>
-      {annualTotals ? (
-        <AnnualOverviewHero data={annualTotals} />
-      ) : (
-        <EmptyCard message="Les totaux annuels ne sont pas encore disponibles." />
-      )}
+      <div style={{ transform: 'translateY(-10px)' }}>
+        {annualTotals ? (
+          <AnnualOverviewHero data={annualTotals} />
+        ) : (
+          <EmptyCard message="Les totaux annuels ne sont pas encore disponibles." />
+        )}
+      </div>
 
-      <AnnualKeyInsightsGrid insightByKey={insightByKey} />
+      <AnnualKeyInsightsGrid
+        annualTotals={annualTotals}
+        monthlyProfile={monthlyProfile}
+        top5ParentCategories={top5ParentCategories}
+        top5LeafCategories={top5LeafCategories}
+      />
 
       {yearlyBuckets.length > 0 || yearlyParentCategories.length > 0 ? (
         <AnnualSpendingStructureSection

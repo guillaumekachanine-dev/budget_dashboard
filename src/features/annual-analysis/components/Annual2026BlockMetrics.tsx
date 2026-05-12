@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { createPortal } from 'react-dom'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { CategoryRolling12mStats } from '@/features/budget/api/getCategoryRolling12mStats'
-import { BUCKET_LABELS, BUCKET_ORDER, MONTH_LABELS_SHORT } from './_constants'
+import {
+  BUCKET_LABELS,
+  BUCKET_ORDER,
+  EXPENSE_BUCKETS,
+  MONTH_LABELS_SHORT,
+  assertNoNonExpenseBucketsInExpenseTotal,
+  isExpenseBucket,
+} from './_constants'
 
 export type MetricsScopeKind = 'bloc' | 'categorie'
 export type MetricsDisplayMode = 'tableau' | 'graphique'
@@ -123,16 +131,8 @@ function monthFromPeriod(period: string): number | null {
 function periodMonths(period: string): number[] {
   const month = monthFromPeriod(period)
   if (month != null) return [month]
-  return [1, 2, 3, 4, 5]
-}
-
-function periodDateRange(months: number[]): { startDate: string; endDate: string } {
-  const first = Math.min(...months)
-  const last = Math.max(...months)
-  const startDate = `${YEAR_2026}-${String(first).padStart(2, '0')}-01`
-  const endDateObj = new Date(YEAR_2026, last, 0)
-  const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`
-  return { startDate, endDate }
+  const lastMonth = getActiveYearMonth()
+  return Array.from({ length: lastMonth }, (_, index) => index + 1)
 }
 
 function median(values: number[]): number {
@@ -187,6 +187,7 @@ const ALLOWED_BUCKETS: BudgetBucketId[] = [
   'epargne',
   'hors_pilotage',
 ]
+const STRICT_EXPENSE_BUCKETS: BudgetBucketId[] = [...EXPENSE_BUCKETS]
 
 const HISTOGRAM_BUCKET_COLOR: Record<BudgetBucketId, string> = {
   revenu: '#2ED47A',
@@ -429,9 +430,10 @@ export function Annual2026BlockMetrics({
   rollingStats = [],
 }: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
-  const [selectedBlock, setSelectedBlock] = useState<string>(BUCKET_ORDER[0] as string)
+  const [selectedBlock, setSelectedBlock] = useState<string>(STRICT_EXPENSE_BUCKETS[0] as string)
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState('2026')
+  const [isProjectionModalOpen, setIsProjectionModalOpen] = useState(false)
 
   useEffect(() => {
     if (!scopeSelection) return
@@ -449,9 +451,8 @@ export function Annual2026BlockMetrics({
     setSelectedPeriod(period)
   }, [period])
 
-  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, 5).map((label) => FULL_MONTH_LABEL_BY_SHORT[label] ?? label)]
+  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, getActiveYearMonth()).map((label) => FULL_MONTH_LABEL_BY_SHORT[label] ?? label)]
   const selectedMonths = useMemo(() => periodMonths(selectedPeriod), [selectedPeriod])
-  const range = useMemo(() => periodDateRange(selectedMonths), [selectedMonths])
 
   const yearMonths = useMemo(() => {
     const lastMonth = getActiveYearMonth()
@@ -554,7 +555,14 @@ export function Annual2026BlockMetrics({
       return bucketMapRows.filter((row) => row.budget_bucket === selectedBlock).map((row) => row.category_id)
     }
     if (selectedCategoryId === ALL_CATEGORIES_ID) {
-      return categories.map((row) => row.id)
+      const strictExpenseCategoryIds = new Set(
+        bucketMapRows
+          .filter((row) => isExpenseBucket(row.budget_bucket))
+          .map((row) => row.category_id),
+      )
+      return categories
+        .filter((row) => strictExpenseCategoryIds.has(row.id))
+        .map((row) => row.id)
     }
     if (!selectedCategoryId) return []
     return [selectedCategoryId, ...(childrenByParentId.get(selectedCategoryId) ?? [])]
@@ -649,24 +657,6 @@ export function Annual2026BlockMetrics({
     yearMonths,
   ])
 
-  const { data: transactionCount = 0 } = useQuery({
-    queryKey: ['budget-metrics-transaction-count', range.startDate, range.endDate, scopeCategoryIds.join(',')],
-    enabled: scopeCategoryIds.length > 0,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { count, error } = await budgetDb
-        .from('transactions')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_hidden', false)
-        .gte('transaction_date', range.startDate)
-        .lte('transaction_date', range.endDate)
-        .in('category_id', scopeCategoryIds)
-
-      if (error) throw new Error(`transactions count query failed: ${error.message}`)
-      return count ?? 0
-    },
-  })
-
   const metricsState = useMemo(() => {
     if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
       const selectedTotals = periodBucketMetrics.byBucket.get(selectedBlock) ?? {
@@ -698,6 +688,12 @@ export function Annual2026BlockMetrics({
     const budgetRows = periodDataset?.budgetRows ?? []
     const periodRows = periodDataset?.periodRows ?? []
     const selectedCategoryIdSet = new Set(scopeCategoryIds)
+    const isStrictExpenseTotalMode = analysisType === 'catégorie' && selectedCategoryId === ALL_CATEGORIES_ID
+    const bucketByCategoryId = new Map<string, string>()
+    for (const row of bucketMapRows) {
+      if (!bucketByCategoryId.has(row.category_id)) bucketByCategoryId.set(row.category_id, row.budget_bucket)
+    }
+    const includedBucketsForAudit: Array<string | null | undefined> = []
 
     const monthActualMap = new Map<number, number>()
     for (const month of selectedMonths) monthActualMap.set(month, 0)
@@ -705,6 +701,9 @@ export function Annual2026BlockMetrics({
     let actualAmount = 0
     for (const row of analyticsRows) {
       if (!selectedCategoryIdSet.has(row.category_id)) continue
+      const rowBucket = bucketByCategoryId.get(row.category_id) ?? null
+      if (isStrictExpenseTotalMode && !isExpenseBucket(rowBucket)) continue
+      includedBucketsForAudit.push(rowBucket)
       const amount = Number(row.amount_total ?? 0)
       actualAmount += amount
       monthActualMap.set(row.period_month, (monthActualMap.get(row.period_month) ?? 0) + amount)
@@ -714,8 +713,19 @@ export function Annual2026BlockMetrics({
     let budgetAmount = 0
     for (const row of budgetRows) {
       if (!row.category_id || !selectedCategoryIdSet.has(row.category_id)) continue
+      const rowBucket = bucketByCategoryId.get(row.category_id) ?? null
+      if (isStrictExpenseTotalMode && !isExpenseBucket(rowBucket)) continue
       if (!periodMonthById.has(row.period_id)) continue
       budgetAmount += Number(row.amount ?? 0)
+    }
+
+    if (isStrictExpenseTotalMode) {
+      assertNoNonExpenseBucketsInExpenseTotal(includedBucketsForAudit, 'Annual2026BlockMetrics:metricsState:all-categories')
+      if (import.meta.env.DEV) {
+        console.log('[Budgets Slide 3][Audit dépenses] rawData', analyticsRows)
+        console.log('[Budgets Slide 3][Audit dépenses] buckets included in expenses', [...new Set(includedBucketsForAudit)])
+        console.log('[Budgets Slide 3][Audit dépenses] expenseTotal', actualAmount)
+      }
     }
 
     const monthValues = selectedMonths.map((month) => monthActualMap.get(month) ?? 0)
@@ -723,19 +733,16 @@ export function Annual2026BlockMetrics({
     const medianAmountComputed = median(monthValues)
     const deltaPct = budgetAmount > 0 ? ((actualAmount - budgetAmount) / budgetAmount) * 100 : 0
 
-    const bucketByCategoryId = new Map<string, string>()
-    for (const row of bucketMapRows) {
-      if (!bucketByCategoryId.has(row.category_id)) bucketByCategoryId.set(row.category_id, row.budget_bucket)
-    }
-
     let rank = 0
     if (analysisType === 'bloc') {
+      const rankingBuckets = isExpenseBucket(selectedBlock) ? STRICT_EXPENSE_BUCKETS : ALLOWED_BUCKETS
       const totalsByBucket = new Map<string, number>()
-      for (const key of BUCKET_ORDER) totalsByBucket.set(key, 0)
+      for (const key of rankingBuckets) totalsByBucket.set(key, 0)
 
       for (const row of analyticsRows) {
         const bucket = bucketByCategoryId.get(row.category_id)
         if (!bucket) continue
+        if (!totalsByBucket.has(bucket)) continue
         totalsByBucket.set(bucket, (totalsByBucket.get(bucket) ?? 0) + Number(row.amount_total ?? 0))
       }
 
@@ -758,6 +765,8 @@ export function Annual2026BlockMetrics({
       }
 
       for (const row of analyticsRows) {
+        const bucket = bucketByCategoryId.get(row.category_id) ?? null
+        if (!isExpenseBucket(bucket)) continue
         const rootId = resolveRoot(row.category_id)
         if (!rootId) continue
         totalsByRootId.set(rootId, (totalsByRootId.get(rootId) ?? 0) + Number(row.amount_total ?? 0))
@@ -884,21 +893,213 @@ export function Annual2026BlockMetrics({
     yearlySeries.rows,
   ])
 
-  const periodLabelSuffix = FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod
+  const isYtdPeriod = selectedPeriod === '2026'
+  const dynamicPeriodLabel = isYtdPeriod ? 'YTD' : (FULL_MONTH_LABEL_BY_SHORT[selectedPeriod] ?? selectedPeriod)
+  const isAllCategoriesKpiScope = analysisType === 'catégorie' && selectedCategoryId === ALL_CATEGORIES_ID
 
-  const metrics = [
-    { label: `Réel ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.actualAmount), color: 'var(--neutral-900)' },
-    { label: `Budget ${periodLabelSuffix}`, value: fmtCurrencyCompact(metricsState.budgetAmount), color: 'var(--neutral-900)' },
+  const periodScopeMonthly = useMemo(() => {
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
+      return selectedMonths.map((month) => {
+        const metric = periodBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)
+        return {
+          month,
+          actual: Number(metric?.actual_amount ?? 0),
+          budget: Number(metric?.budget_amount ?? 0),
+        }
+      })
+    }
+
+    const selectedCategoryIdsSet = new Set(scopeCategoryIds)
+    const monthActual = new Map<number, number>()
+    const monthBudget = new Map<number, number>()
+    for (const month of selectedMonths) {
+      monthActual.set(month, 0)
+      monthBudget.set(month, 0)
+    }
+
+    for (const row of periodDataset?.analyticsRows ?? []) {
+      if (!selectedCategoryIdsSet.has(row.category_id)) continue
+      monthActual.set(row.period_month, (monthActual.get(row.period_month) ?? 0) + Number(row.amount_total ?? 0))
+    }
+
+    const periodMonthById = new Map((periodDataset?.periodRows ?? []).map((row) => [row.id, row.period_month]))
+    for (const row of periodDataset?.budgetRows ?? []) {
+      if (!row.category_id || !selectedCategoryIdsSet.has(row.category_id)) continue
+      const month = periodMonthById.get(row.period_id)
+      if (!month || !selectedMonths.includes(month)) continue
+      monthBudget.set(month, (monthBudget.get(month) ?? 0) + Number(row.amount ?? 0))
+    }
+
+    return selectedMonths.map((month) => ({
+      month,
+      actual: monthActual.get(month) ?? 0,
+      budget: monthBudget.get(month) ?? 0,
+    }))
+  }, [analysisType, periodBucketMetrics.byBucketMonth, periodDataset, scopeCategoryIds, selectedBlock, selectedMonths])
+
+  const yearScopeMonthly = useMemo(() => {
+    if (analysisType === 'bloc' && isBudgetBucketId(selectedBlock)) {
+      return yearMonths.map((month) => {
+        const metric = yearBucketMetrics.byBucketMonth.get(`${selectedBlock}:${month}`)
+        return {
+          month,
+          actual: Number(metric?.actual_amount ?? 0),
+          budget: Number(metric?.budget_amount ?? 0),
+        }
+      })
+    }
+
+    const selectedCategoryIdsSet = new Set(scopeCategoryIds)
+    const monthActual = new Map<number, number>()
+    const monthBudget = new Map<number, number>()
+    for (const month of yearMonths) {
+      monthActual.set(month, 0)
+      monthBudget.set(month, 0)
+    }
+
+    for (const row of yearDataset?.analyticsRows ?? []) {
+      if (!selectedCategoryIdsSet.has(row.category_id)) continue
+      monthActual.set(row.period_month, (monthActual.get(row.period_month) ?? 0) + Number(row.amount_total ?? 0))
+    }
+
+    const periodMonthById = new Map((yearDataset?.periodRows ?? []).map((row) => [row.id, row.period_month]))
+    for (const row of yearDataset?.budgetRows ?? []) {
+      if (!row.category_id || !selectedCategoryIdsSet.has(row.category_id)) continue
+      const month = periodMonthById.get(row.period_id)
+      if (!month || !yearMonths.includes(month)) continue
+      monthBudget.set(month, (monthBudget.get(month) ?? 0) + Number(row.amount ?? 0))
+    }
+
+    return yearMonths.map((month) => ({
+      month,
+      actual: monthActual.get(month) ?? 0,
+      budget: monthBudget.get(month) ?? 0,
+    }))
+  }, [analysisType, yearBucketMetrics.byBucketMonth, yearDataset, scopeCategoryIds, selectedBlock, yearMonths])
+
+  const partValuePct = useMemo(() => {
+    if (isYtdPeriod) {
+      const monthlyRatios = periodScopeMonthly
+        .map((row) => (row.budget > 0 ? (row.actual / row.budget) * 100 : null))
+        .filter((value): value is number => value != null && Number.isFinite(value))
+      if (monthlyRatios.length === 0) return null
+      return monthlyRatios.reduce((sum, value) => sum + value, 0) / monthlyRatios.length
+    }
+
+    if (metricsState.budgetAmount <= 0) return null
+    return (metricsState.actualAmount / metricsState.budgetAmount) * 100
+  }, [isYtdPeriod, metricsState.actualAmount, metricsState.budgetAmount, periodScopeMonthly])
+
+  const ytdProjection = useMemo(() => {
+    const monthsElapsed = yearScopeMonthly.length
+    const remainingMonths = Math.max(0, 12 - monthsElapsed)
+    const consumedYtd = yearScopeMonthly.reduce((sum, row) => sum + row.actual, 0)
+    const monthlyYtdValues = yearScopeMonthly.map((row) => row.actual)
+    const medianYtd = median(monthlyYtdValues)
+    const projectedTotal = consumedYtd + (medianYtd * remainingMonths)
+    return {
+      monthsElapsed,
+      remainingMonths,
+      consumedYtd,
+      medianYtd,
+      projectedTotal,
+    }
+  }, [yearScopeMonthly])
+
+  const deltaAmount = metricsState.actualAmount - metricsState.budgetAmount
+  const isDeltaPositive = metricsState.deltaPct >= 0
+  const deltaPercentTone = metricsState.deltaPctRaw == null
+    ? 'var(--neutral-500)'
+    : (isDeltaPositive ? 'var(--color-success)' : 'var(--color-error)')
+  const deltaAmountTone = metricsState.deltaPctRaw == null
+    ? 'var(--neutral-500)'
+    : (isDeltaPositive ? 'var(--color-warning)' : 'var(--neutral-700)')
+  const deltaAmountSigned = metricsState.deltaPctRaw == null
+    ? '—'
+    : `${deltaAmount >= 0 ? '+' : '-'}${fmtCurrencyCompact(Math.abs(deltaAmount))}`
+
+  const formatPercentNoSign = (value: number | null) => {
+    if (value == null || !Number.isFinite(value)) return '—'
+    return `${value.toFixed(1).replace('.', ',')}%`
+  }
+
+  const kpiCards = [
     {
-      label: `Ecart réel/budget ${periodLabelSuffix}`,
-      value: metricsState.deltaPctRaw == null ? '—' : fmtPercentCompact(metricsState.deltaPct),
-      color: metricsState.deltaPctRaw == null ? 'var(--neutral-500)' : metricsState.deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)',
+      id: 'rank',
+      hideWhenAllCategories: true,
+      node: (
+        <KpiMiniCard
+          title="Rang"
+          value={metricsState.rank}
+        />
+      ),
     },
-    { label: 'Montant moyen (12 mois)', value: fmtCurrencyCompact(metricsState.averageAmount), color: 'var(--neutral-900)' },
-    { label: 'Médiane (12 mois)', value: fmtCurrencyCompact(metricsState.medianAmount), color: 'var(--neutral-900)' },
-    { label: `Nbre d'opérations ${periodLabelSuffix}`, value: String(transactionCount), color: 'var(--neutral-900)' },
-    { label: 'Rang', value: metricsState.rank, color: 'var(--neutral-900)' },
-  ]
+    {
+      id: 'part',
+      hideWhenAllCategories: true,
+      node: (
+        <KpiMiniCard
+          title={isYtdPeriod ? 'Part moyenne YTD du budget' : 'Part du budget'}
+          value={formatPercentNoSign(partValuePct)}
+        />
+      ),
+    },
+    {
+      id: 'consumed',
+      hideWhenAllCategories: false,
+      node: (
+        <KpiMiniCard
+          title={`Consommé ${dynamicPeriodLabel}`}
+          value={fmtCurrencyCompact(metricsState.actualAmount)}
+          enlarged={isAllCategoriesKpiScope}
+        />
+      ),
+    },
+    {
+      id: 'budget',
+      hideWhenAllCategories: false,
+      node: (
+        <KpiMiniCard
+          title={`Budget ${dynamicPeriodLabel}`}
+          value={fmtCurrencyCompact(metricsState.budgetAmount)}
+          enlarged={isAllCategoriesKpiScope}
+        />
+      ),
+    },
+    {
+      id: 'delta',
+      hideWhenAllCategories: false,
+      node: (
+        <KpiMiniCard
+          title={isYtdPeriod ? 'Ecart moyen YTD' : `Ecart ${dynamicPeriodLabel}`}
+          value={metricsState.deltaPctRaw == null ? '—' : fmtPercentCompact(metricsState.deltaPct)}
+          valueColor={deltaPercentTone}
+          secondaryInlineValue={deltaAmountSigned}
+          secondaryInlineColor={deltaAmountTone}
+          enlarged={isAllCategoriesKpiScope}
+        />
+      ),
+    },
+    {
+      id: 'projection',
+      hideWhenAllCategories: false,
+      node: (
+        <KpiMiniCard
+          asButton
+          onClick={() => setIsProjectionModalOpen(true)}
+          title="Projection fin 2026"
+          value={fmtCurrencyCompact(ytdProjection.projectedTotal)}
+          enlarged={isAllCategoriesKpiScope}
+        />
+      ),
+    },
+  ] as const
+
+  const visibleKpiCards = isAllCategoriesKpiScope
+    ? kpiCards.filter((card) => !card.hideWhenAllCategories)
+    : kpiCards
+
+  const kpiGridRows = Math.max(1, Math.ceil(visibleKpiCards.length / 2))
 
   const renderHistoryTooltip = ({
     active,
@@ -1043,23 +1244,215 @@ export function Annual2026BlockMetrics({
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-1)', maxWidth: compactMobile ? 300 : 340, margin: '0 auto', width: '100%' }}
+            style={{
+              maxWidth: compactMobile ? 300 : 340,
+              margin: '0 auto',
+              width: '100%',
+              height: compactMobile ? 242 : 256,
+            }}
           >
-            {metrics.map((metric) => (
-              <div key={metric.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'baseline', gap: 'var(--space-2)', padding: '6px 0', borderBottom: '1px solid var(--neutral-100)' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                    {metric.label}
-                  </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gridTemplateRows: `repeat(${kpiGridRows}, minmax(0, 1fr))`,
+                gap: compactMobile ? 6 : 8,
+                height: '100%',
+              }}
+            >
+              {visibleKpiCards.map((card) => (
+                <div key={card.id} style={{ height: '100%' }}>
+                  {card.node}
                 </div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: metric.color, fontFamily: 'var(--font-mono)' }}>
-                  {metric.value}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {isProjectionModalOpen && typeof document !== 'undefined'
+              ? createPortal(
+                <>
+                  <button
+                    type="button"
+                    aria-label="Fermer le détail de projection"
+                    onClick={() => setIsProjectionModalOpen(false)}
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      border: 'none',
+                      background: 'rgba(12, 16, 37, 0.36)',
+                      zIndex: 70,
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    style={{
+                      position: 'fixed',
+                      left: '50%',
+                      top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: 'min(92vw, 360px)',
+                      borderRadius: 'var(--radius-xl)',
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      boxShadow: '0 16px 40px rgba(21, 26, 58, 0.24)',
+                      zIndex: 71,
+                      padding: 'var(--space-4)',
+                      display: 'grid',
+                      gap: 'var(--space-3)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+                        Projection fin 2026
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsProjectionModalOpen(false)}
+                        style={{
+                          border: '1px solid var(--neutral-200)',
+                          background: 'var(--neutral-50)',
+                          color: 'var(--neutral-700)',
+                          borderRadius: 'var(--radius-full)',
+                          width: 28,
+                          height: 28,
+                          fontSize: 16,
+                          lineHeight: 1,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-600)', lineHeight: 1.45 }}>
+                      Projection = (consommé YTD) + (médiane YTD × nombre de mois restants)
+                    </p>
+
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                      Projection = {fmtCurrencyCompact(ytdProjection.consumedYtd)} + ({fmtCurrencyCompact(ytdProjection.medianYtd)} × {ytdProjection.remainingMonths})
+                    </p>
+
+                    <div style={{ borderRadius: 'var(--radius-lg)', background: 'var(--primary-50)', border: '1px solid var(--primary-100)', padding: 'var(--space-3)' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--primary-700)', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
+                        Résultat projeté
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 18, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', fontWeight: 900 }}>
+                        {fmtCurrencyCompact(ytdProjection.projectedTotal)}
+                      </p>
+                    </div>
+                  </div>
+                </>,
+                document.body,
+              )
+              : null}
           </motion.div>
         )}
       </div>
+    </div>
+  )
+}
+
+function KpiMiniCard({
+  title,
+  value,
+  subValue,
+  valueColor = 'var(--neutral-900)',
+  subValueColor = 'var(--neutral-600)',
+  secondaryInlineValue,
+  secondaryInlineColor = 'var(--neutral-700)',
+  asButton = false,
+  enlarged = false,
+  onClick,
+}: {
+  title: string
+  value: string
+  subValue?: string
+  valueColor?: string
+  subValueColor?: string
+  secondaryInlineValue?: string
+  secondaryInlineColor?: string
+  asButton?: boolean
+  enlarged?: boolean
+  onClick?: () => void
+}) {
+  const baseStyle: CSSProperties = {
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--neutral-200)',
+    background: 'var(--neutral-0)',
+    padding: enlarged ? '8px 9px' : '7px 8px',
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    textAlign: 'left' as const,
+    minHeight: 0,
+    position: 'relative' as const,
+  }
+
+  const content = (
+    <>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 9,
+          fontWeight: 700,
+          color: 'var(--neutral-500)',
+          letterSpacing: '0.02em',
+          textTransform: 'uppercase',
+          position: 'absolute',
+          top: enlarged ? 8 : 7,
+          left: enlarged ? 9 : 8,
+        }}
+      >
+        {title}
+      </p>
+      <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'start', gap: 3, minHeight: '100%' }}>
+        {secondaryInlineValue ? (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <p style={{ margin: 0, fontSize: enlarged ? 15 : 14, lineHeight: 1.05, fontWeight: 900, color: valueColor, fontFamily: 'var(--font-mono)' }}>
+              {value}
+            </p>
+            <p style={{ margin: 0, fontSize: enlarged ? 15 : 14, lineHeight: 1.05, fontWeight: 900, color: secondaryInlineColor, fontFamily: 'var(--font-mono)' }}>
+              {secondaryInlineValue}
+            </p>
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: enlarged ? 15 : 14, lineHeight: 1.05, fontWeight: 900, color: valueColor, fontFamily: 'var(--font-mono)' }}>
+            {value}
+          </p>
+        )}
+        {!secondaryInlineValue && subValue ? (
+          <p style={{ margin: 0, fontSize: enlarged ? 10.5 : 10, lineHeight: 1.2, fontWeight: 700, color: subValueColor, fontFamily: 'var(--font-mono)' }}>
+            {subValue}
+          </p>
+        ) : null}
+      </div>
+    </>
+  )
+
+  if (asButton) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          ...baseStyle,
+          width: '100%',
+          height: '100%',
+          cursor: 'pointer',
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div style={baseStyle}>
+      {content}
     </div>
   )
 }

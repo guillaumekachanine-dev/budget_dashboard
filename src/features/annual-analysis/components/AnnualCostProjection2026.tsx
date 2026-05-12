@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { CalendarDays, ChevronRight, LayoutGrid, X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Tooltip } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
@@ -12,6 +12,10 @@ import {
 } from '@/features/annual-analysis/api/getAnnualProjectionOverview2026'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { VIZ_PALETTE, BUCKET_LABELS } from '@/features/annual-analysis/components/_constants'
+import {
+  assertNoNonExpenseBucketsInExpenseTotal,
+  isExpenseBucket,
+} from '@/features/annual-analysis/components/_constants'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, getCategoryColor } from '@/lib/utils'
 
@@ -190,6 +194,7 @@ function AnnualCostProjectionCard({
   const [showListModal, setShowListModal] = useState(false)
   const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
   const selectedDetailsAnchorRef = useRef<HTMLDivElement | null>(null)
+  const wasDetailsVisibleRef = useRef(false)
   const { data: categories = [] } = useCategories()
 
   const categoryIconById = useMemo(
@@ -216,9 +221,22 @@ function AnnualCostProjectionCard({
   )
 
   const parentGroups = useMemo(
-    () => buildParentProjectionGroups(rows),
+    () => buildParentProjectionGroups(rows.filter((row) => isExpenseBucket(row.budgetBucket))),
     [rows],
   )
+
+  useEffect(() => {
+    const includedBuckets = rows.map((row) => row.budgetBucket)
+    const expenseRows = rows.filter((row) => isExpenseBucket(row.budgetBucket))
+    const projectedExpenseTotal = expenseRows.reduce((sum, row) => sum + row.projectedAnnualAmount, 0)
+    assertNoNonExpenseBucketsInExpenseTotal(expenseRows.map((row) => row.budgetBucket), 'AnnualCostProjection2026:category-view')
+    if (import.meta.env.DEV) {
+      console.log('[Budgets Slide 3][Audit dépenses] rawData', rows)
+      console.log('[Budgets Slide 3][Audit dépenses] buckets included in expenses', [...new Set(expenseRows.map((row) => row.budgetBucket))])
+      console.log('[Budgets Slide 3][Audit dépenses] expenseTotal', projectedExpenseTotal)
+      console.log('[Budgets Slide 3][Audit dépenses] all buckets in payload', [...new Set(includedBuckets)])
+    }
+  }, [rows])
 
   const top5 = useMemo(() => parentGroups.slice(0, 5), [parentGroups])
 
@@ -289,23 +307,33 @@ function AnnualCostProjectionCard({
       ? selectedRow !== null
       : selectedOverviewBar !== null
 
-    if (!hasVisibleDetails) return
+    if (!hasVisibleDetails) {
+      wasDetailsVisibleRef.current = false
+      return
+    }
+    if (wasDetailsVisibleRef.current) return
+
+    wasDetailsVisibleRef.current = true
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
 
+    let timeoutId: number | undefined
     const rafId = window.requestAnimationFrame(() => {
       selectedDetailsAnchorRef.current?.scrollIntoView({
         behavior,
         block: 'end',
       })
 
-      window.setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         const targetTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
         window.scrollTo({ top: targetTop, behavior })
       }, 180)
     })
 
-    return () => window.cancelAnimationFrame(rafId)
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
   }, [selectedOverviewBar, selectedRow, viewMode])
 
   const modeToggle = (
@@ -381,7 +409,6 @@ function AnnualCostProjectionCard({
               tick={{ fontSize: 12, fill: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
             />
             <YAxis hide domain={[0, overviewDomainMax]} />
-            <Tooltip content={<OverviewStackedTooltip overview={annualOverview} />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
             <Bar
               dataKey="depensesContraintes"
               stackId="stack"
@@ -645,39 +672,6 @@ function DetailRow({
   )
 }
 
-function OverviewStackedTooltip({
-  active,
-  label,
-  overview,
-}: {
-  active?: boolean
-  label?: string
-  overview: AnnualProjectionOverview2026 | null
-}) {
-  if (!active || !overview) return null
-
-  const isExpenses = label === 'Dépenses'
-
-  return (
-    <div style={stackedTooltipCardStyle}>
-      <p style={stackedTooltipTitleStyle}>{label}</p>
-      {isExpenses ? (
-        <div style={{ display: 'grid', gap: 4 }}>
-          <DetailRow label="Dépenses contraintes" value={fmtCurrencyMaybe(overview.projectedCoreExpensesAmount)} />
-          <DetailRow label="Dépenses flexibles" value={fmtCurrencyMaybe(overview.projectedFlexibleExpensesAmount)} />
-          <DetailRow label="Total dépenses projetées" value={fmtCurrencyMaybe(overview.projectedTotalExpensesAmount)} />
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 4 }}>
-          <DetailRow label="Revenus hors épargne" value={fmtCurrencyMaybe(overview.projectedRevenueAfterSavingsAmount)} />
-          <DetailRow label="Épargne projetée" value={fmtCurrencyMaybe(overview.projectedSavingsAmount)} />
-          <DetailRow label="Revenus annuels projetés" value={fmtCurrencyMaybe(overview.projectedRevenueAmount)} />
-        </div>
-      )}
-    </div>
-  )
-}
-
 function KpiCell({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
@@ -702,20 +696,18 @@ function ProjectionListModal({
   onOpenParentDetails: (parentKey: string) => void
   onClose: () => void
 }) {
-  const totalProjected = rows.reduce((sum, row) => sum + row.projectedAnnualAmount, 0)
-  const currentMonthLabel = getCurrentMonthLabelFr()
+  const hiddenParentKeys = new Set(['revenus', 'epargne', 'épargne', 'transferts'])
+  const visibleRows = rows.filter((row) => !hiddenParentKeys.has(parentKeyFromName(row.parentName)))
+  const totalProjected = visibleRows.reduce((sum, row) => sum + row.projectedAnnualAmount, 0)
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
-      <div style={modalSheetStyle} onClick={(e) => e.stopPropagation()}>
+    <div style={listModalOverlayCenteredStyle} onClick={onClose}>
+      <div style={listModalCenteredStyle} onClick={(e) => e.stopPropagation()}>
         <div style={listModalHeaderStyle}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--neutral-0)' }}>
               Détails par catégorie
             </h3>
-            <p style={{ margin: '2px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              {`Projection théorique VS projection affinée (${currentMonthLabel})`}
-            </p>
           </div>
           <button
             type="button"
@@ -736,7 +728,7 @@ function ProjectionListModal({
         </div>
 
         <div style={{ display: 'grid', gap: 0 }}>
-          {rows.map((row) => {
+          {visibleRows.map((row) => {
             const overBudget = row.projectedVsBudgetPct > 0
             return (
               <button
@@ -751,7 +743,7 @@ function ProjectionListModal({
                   gridTemplateColumns: 'minmax(0,1fr) auto',
                   alignItems: 'center',
                   gap: 10,
-                  padding: '9px 0',
+                  padding: '7px 0',
                   borderBottom: '1px solid var(--neutral-100)',
                   cursor: 'pointer',
                   textAlign: 'left',
@@ -781,14 +773,14 @@ function ProjectionListModal({
                   <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
                     {fmtCurrency(row.projectedAnnualAmount)}
                   </span>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--negative)' : 'var(--positive)' }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
                     {fmtPctSigned(row.projectedVsBudgetPct)}
                   </span>
                 </div>
               </button>
             )
           })}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0 2px' }}>
+          <div style={{ ...listModalTotalRowStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0 2px' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total projeté</span>
             <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
               {fmtCurrency(totalProjected)}
@@ -811,6 +803,10 @@ function ParentCategoryDetailsModal({
   categoryIconById: Map<string, string | null>
   onClose: () => void
 }) {
+  const visibleChildren = group.children.filter((child) => (
+    parentKeyFromName(child.categoryName) !== parentKeyFromName(group.parentName)
+  ))
+
   return (
     <div style={parentDetailOverlayStyle} onClick={onClose}>
       <div style={parentDetailModalStyle} onClick={(e) => e.stopPropagation()}>
@@ -842,7 +838,7 @@ function ParentCategoryDetailsModal({
         </div>
 
         <div style={{ display: 'grid', gap: 0 }}>
-          {group.children.map((child) => {
+          {visibleChildren.map((child) => {
             const overBudget = child.projectedVsBudgetPct > 0
             return (
               <div
@@ -852,7 +848,7 @@ function ParentCategoryDetailsModal({
                   gridTemplateColumns: 'minmax(0,1fr) auto',
                   alignItems: 'center',
                   gap: 10,
-                  padding: '9px 0',
+                  padding: '7px 0',
                   borderBottom: '1px solid var(--neutral-100)',
                 }}
               >
@@ -880,7 +876,7 @@ function ParentCategoryDetailsModal({
                   <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
                     {fmtCurrency(child.projectedAnnualAmount)}
                   </span>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--negative)' : 'var(--positive)' }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
                     {fmtPctSigned(child.projectedVsBudgetPct)}
                   </span>
                 </div>
@@ -1083,33 +1079,15 @@ const kpiLineStyle: CSSProperties = {
   gap: 'var(--space-3)',
 }
 
-const stackedTooltipCardStyle: CSSProperties = {
-  minWidth: 220,
-  background: 'var(--neutral-0)',
-  borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--neutral-200)',
-  boxShadow: 'var(--shadow-md)',
-  padding: '8px 10px',
-}
-
-const stackedTooltipTitleStyle: CSSProperties = {
-  margin: '0 0 6px',
-  fontSize: 11,
-  fontWeight: 700,
-  color: 'var(--neutral-800)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-}
-
 const listModalHeaderStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  marginBottom: 'var(--space-4)',
+  alignItems: 'center',
+  marginBottom: 'var(--space-3)',
   marginLeft: 'calc(var(--space-5) * -1)',
   marginRight: 'calc(var(--space-5) * -1)',
   marginTop: 'calc(var(--space-5) * -1)',
-  padding: 'var(--space-4) var(--space-5)',
+  padding: 'var(--space-3) var(--space-5)',
   background: 'linear-gradient(135deg, var(--primary-600) 0%, var(--primary-500) 64%, var(--viz-a) 100%)',
 }
 
@@ -1160,23 +1138,32 @@ const categoryInlineControlsStyle: CSSProperties = {
   gap: 8,
 }
 
-const modalOverlayStyle: CSSProperties = {
+const listModalOverlayCenteredStyle: CSSProperties = {
   position: 'fixed',
   inset: 0,
   background: 'rgba(0,0,0,0.38)',
   zIndex: 1000,
-  display: 'flex',
-  alignItems: 'flex-end',
+  display: 'grid',
+  placeItems: 'center',
+  padding: 'var(--space-4)',
 }
 
-const modalSheetStyle: CSSProperties = {
+const listModalCenteredStyle: CSSProperties = {
   background: 'var(--neutral-0)',
-  borderRadius: '20px 20px 0 0',
-  width: '100%',
-  maxHeight: '75vh',
+  borderRadius: 'var(--radius-xl)',
+  width: 'min(560px, 100%)',
+  maxHeight: '84vh',
   overflowY: 'auto',
+  boxShadow: 'var(--shadow-lg)',
   padding: 'var(--space-5)',
-  paddingBottom: 'calc(var(--space-5) + env(safe-area-inset-bottom, 0px))',
+}
+
+const listModalTotalRowStyle: CSSProperties = {
+  marginTop: 'var(--space-1)',
+  paddingLeft: 36,
+  paddingRight: 'var(--space-2)',
+  borderRadius: 'var(--radius-md)',
+  background: 'color-mix(in oklab, var(--neutral-200) 32%, var(--neutral-0) 68%)',
 }
 
 const parentDetailOverlayStyle: CSSProperties = {

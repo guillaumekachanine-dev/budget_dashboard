@@ -982,7 +982,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
               setPickerMode('none')
               setPickerClosing('none')
             }}
-            iconTreatment="croppedCircle"
+            iconTreatment="default"
             onSelect={handleCategorySelect}
           />
 
@@ -1001,7 +1001,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
               setPickerClosing('none')
               setFlipSubId(null)
             }}
-            iconTreatment="croppedCircle"
+            iconTreatment="default"
             onSelect={handleSubCategorySelect}
           />
 

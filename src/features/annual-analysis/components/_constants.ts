@@ -28,6 +28,45 @@ export const BUCKET_LABELS: Record<string, string> = {
   hors_pilotage:        'Hors pilotage',
 }
 
+export const EXPENSE_BUCKETS = [
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+] as const
+
+export const NON_EXPENSE_BUCKETS = [
+  'revenu',
+  'epargne',
+  'hors_pilotage',
+  'cagnotte_projet',
+] as const
+
+export type ExpenseBucket = typeof EXPENSE_BUCKETS[number]
+
+export function isExpenseBucket(bucket: string | null | undefined): bucket is ExpenseBucket {
+  if (!bucket) return false
+  return (EXPENSE_BUCKETS as readonly string[]).includes(bucket)
+}
+
+export function assertNoNonExpenseBucketsInExpenseTotal(
+  buckets: Array<string | null | undefined>,
+  source: string,
+): void {
+  if (!import.meta.env.DEV) return
+  const invalidBuckets = [...new Set(
+    buckets
+      .map((bucket) => (bucket ?? '').trim())
+      .filter((bucket) => bucket.length > 0 && !isExpenseBucket(bucket)),
+  )]
+  if (invalidBuckets.length > 0) {
+    console.warn('[Budget Guard] Non-expense buckets included in expense calculation', {
+      source,
+      invalidBuckets,
+    })
+  }
+}
+
 export const PILOTAGE_BUCKET_ORDER = [
   'socle_fixe',
   'variable_essentielle',

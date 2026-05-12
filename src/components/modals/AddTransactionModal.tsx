@@ -1211,7 +1211,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               setPickerMode('none')
               setPickerClosing('none')
             }}
-            iconTreatment="croppedCircle"
+            iconTreatment="default"
             onSelect={handleCategorySelect}
           />
 
@@ -1229,7 +1229,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               setPickerClosing('none')
               setFlipSubId(null)
             }}
-            iconTreatment="croppedCircle"
+            iconTreatment="default"
             onSelect={handleSubCategorySelect}
             getItemDisplayLabel={(item) => {
               if (values.transactionType === 'income' && item.name.trim().toLowerCase() === 'remboursement') {

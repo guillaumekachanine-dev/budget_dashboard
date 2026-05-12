@@ -20,7 +20,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel } from '@/lib/utils'
 import { budgetDb } from '@/lib/supabaseBudget'
-import type { Transaction } from '@/lib/types'
+import type { FlowType, Transaction } from '@/lib/types'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { getBudgetPeriods } from '@/features/budget/api/getBudgetPeriods'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -183,6 +183,24 @@ function pad2(value: number): string {
 
 function monthKey(periodYear: number, periodMonth: number): string {
   return `${periodYear}-${pad2(periodMonth)}`
+}
+
+function normalizeCategoryToken(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getSavingsSubCategoryRank(name: string): number {
+  const token = normalizeCategoryToken(name)
+  if (token.includes('virement') && token.includes('epargne')) return 0
+  if (token.includes('investissement')) return 1
+  if (token.includes('placement')) return 2
+  if (token.includes('projet')) return 3
+  if (token.includes('interet')) return 4
+  return 99
 }
 
 function buildHistoryWindow(periodYear: number, periodMonth: number, monthsBack: number): HistoryWindowMonth[] {
@@ -600,6 +618,7 @@ export function Budgets() {
   const [slideThreePeriod, setSlideThreePeriod] = useState('2026')
   const [selectedYtdSlideView, setSelectedYtdSlideView] = useState<BudgetYtdSlideView>('kpi')
   const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
+  const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
   const {
     data: budgetPayload,
   } = useBudgetPagePayload({
@@ -660,10 +679,6 @@ export function Budgets() {
     () => (Array.isArray(budgetPayload?.by_category) ? budgetPayload.by_category : []),
     [budgetPayload],
   )
-  const payloadHistory = useMemo(
-    () => (Array.isArray(budgetPayload?.history_last_6m) ? budgetPayload.history_last_6m : []),
-    [budgetPayload],
-  )
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const categoryDonutRef = useRef<HTMLDivElement | null>(null)
   const blockDonutRef = useRef<HTMLDivElement | null>(null)
@@ -677,6 +692,7 @@ export function Budgets() {
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const projectionSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const smoothScrollFrameRef = useRef<number | null>(null)
+  const topTravelSnapTimeoutRef = useRef<number | null>(null)
   const shouldFocusCategoriesSectionRef = useRef(false)
   const shouldFocusBlocksSectionRef = useRef(false)
   const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === 'undefined' ? 1024 : window.innerWidth))
@@ -753,8 +769,15 @@ export function Budgets() {
     smoothScrollFrameRef.current = null
   }, [])
 
+  const cancelTopTravelSnap = useCallback(() => {
+    if (topTravelSnapTimeoutRef.current == null) return
+    window.clearTimeout(topTravelSnapTimeoutRef.current)
+    topTravelSnapTimeoutRef.current = null
+  }, [])
+
   const scrollViewportToTop = useCallback(() => {
     cancelSmoothScroll()
+    cancelTopTravelSnap()
     const scroller = document.scrollingElement as HTMLElement | null
     if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     document.documentElement.scrollTop = 0
@@ -768,7 +791,7 @@ export function Budgets() {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       })
     })
-  }, [cancelSmoothScroll])
+  }, [cancelSmoothScroll, cancelTopTravelSnap])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -820,11 +843,20 @@ export function Budgets() {
   }, [activeSlide, resolveTopOffset, smoothScrollToY])
 
   const scrollToTopSection = useCallback(() => {
-    const target = topSectionRef.current
-    if (!target) return
-    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
-    smoothScrollToY(Math.max(0, y))
-  }, [resolveTopOffset, smoothScrollToY])
+    const scroller = document.scrollingElement as HTMLElement | null
+    const startY = scroller?.scrollTop ?? window.scrollY
+    if (startY <= 1) {
+      scrollViewportToTop()
+      return
+    }
+    cancelTopTravelSnap()
+    const duration = Math.max(900, Math.min(1550, Math.round(startY * 0.65)))
+    smoothScrollToY(0, duration)
+    topTravelSnapTimeoutRef.current = window.setTimeout(() => {
+      scrollViewportToTop()
+      topTravelSnapTimeoutRef.current = null
+    }, duration + 90)
+  }, [cancelTopTravelSnap, scrollViewportToTop, smoothScrollToY])
 
   const scrollToCategoriesSectionTop = useCallback(() => {
     const target = categoriesSectionRef.current
@@ -866,7 +898,10 @@ export function Budgets() {
     return true
   }, [cancelSmoothScroll])
 
-  useEffect(() => () => cancelSmoothScroll(), [cancelSmoothScroll])
+  useEffect(() => () => {
+    cancelSmoothScroll()
+    cancelTopTravelSnap()
+  }, [cancelSmoothScroll, cancelTopTravelSnap])
 
   useEffect(() => {
     const categoryElement = categoryDonutRef.current
@@ -1097,10 +1132,34 @@ export function Budgets() {
     }))
   }, [budgetPayload, payloadByCategory])
 
-  const { data: categories = [], isFetched: categoriesFetched } = useCategories('expense')
-  const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
-  const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
+  const { data: categories = [], isFetched: categoriesFetched } = useCategories()
+  const expenseCategories = useMemo(() => categories.filter((c) => c.flow_type === 'expense'), [categories])
+  const rootExpenseCategories = useMemo(() => expenseCategories.filter((c) => c.parent_id === null), [expenseCategories])
+  const rootNavigableCategories = useMemo(
+    () => categories.filter((c) => c.parent_id === null && (c.flow_type === 'expense' || c.flow_type === 'savings')),
+    [categories],
+  )
+  const childCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const expenseCategoryIdSet = useMemo(() => new Set(expenseCategories.map((c) => c.id)), [expenseCategories])
+  const savingsCategoryIds = useMemo(
+    () => categories.filter((c) => c.flow_type === 'savings').map((c) => c.id),
+    [categories],
+  )
+  const epargneRootCategory = useMemo(
+    () => categories.find((c) => c.parent_id === null && c.flow_type === 'savings' && normalizeCategoryToken(c.name) === 'epargne') ?? null,
+    [categories],
+  )
+  const epargneSubCategories = useMemo(() => {
+    if (!epargneRootCategory) return []
+    return childCategories
+      .filter((c) => c.parent_id === epargneRootCategory.id)
+      .sort((a, b) => {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+        return a.name.localeCompare(b.name, 'fr')
+      })
+  }, [childCategories, epargneRootCategory])
   const slideThreeBlockOptions = useMemo(
     () => BUCKET_ORDER
       .filter((bucketKey) => bucketKey !== 'hors_pilotage')
@@ -1160,38 +1219,117 @@ export function Budgets() {
   const selectedCategoryIds = useMemo(() => {
     if (selectedCat === 'all') return undefined
     const ids = [selectedCat]
-    expenseSubCategories.forEach((c) => {
+    childCategories.forEach((c) => {
       if (c.parent_id === selectedCat) ids.push(c.id)
     })
     return ids
-  }, [expenseSubCategories, selectedCat])
+  }, [childCategories, selectedCat])
+
+  const selectedRootCategoryId = useMemo(() => {
+    if (selectedCat === 'all') return null
+    let current = categoryById.get(selectedCat) ?? null
+    if (!current) return selectedCat
+    while (current?.parent_id) {
+      current = categoryById.get(current.parent_id) ?? null
+    }
+    return current?.id ?? selectedCat
+  }, [categoryById, selectedCat])
+
+  const selectedRootCategory = useMemo(
+    () => (selectedRootCategoryId ? categoryById.get(selectedRootCategoryId) ?? null : null),
+    [categoryById, selectedRootCategoryId],
+  )
+
+  const isSavingsCategoryMode = useMemo(() => {
+    if (selectedCat === 'all') return false
+    if (!selectedRootCategory) return false
+    if (selectedRootCategory.flow_type === 'savings') return true
+    return normalizeCategoryToken(selectedRootCategory.name) === 'epargne'
+  }, [selectedCat, selectedRootCategory])
+
+  const selectedCategoryFlowType: FlowType = isSavingsCategoryMode ? 'savings' : 'expense'
   const historyWindowMonths = useMemo(
     () => buildHistoryWindow(selectedPeriodYear, selectedPeriodMonth, 6),
     [selectedPeriodYear, selectedPeriodMonth],
   )
-  const selectedCategoryHistoryIds = useMemo(
-    () => selectedCategoryIds ?? (selectedCat !== 'all' ? [selectedCat] : []),
-    [selectedCategoryIds, selectedCat],
-  )
+  const historyRange = useMemo(() => {
+    if (!historyWindowMonths.length) return null
+    const first = historyWindowMonths[0]
+    const last = historyWindowMonths[historyWindowMonths.length - 1]
+    const endDateObj = new Date(last.periodYear, last.periodMonth, 0)
+    const endDate = `${endDateObj.getFullYear()}-${pad2(endDateObj.getMonth() + 1)}-${pad2(endDateObj.getDate())}`
+    return {
+      startDate: first.monthStart,
+      endDate,
+    }
+  }, [historyWindowMonths])
+  const selectedCategoryHistoryIds = useMemo(() => {
+    if (selectedCategoryIds) return selectedCategoryIds
+    if (selectedCat !== 'all') return [selectedCat]
+
+    const excludedRootNames = new Set(['revenus', 'transferts', 'epargne'])
+    const childrenCountByParentId = new Map<string, number>()
+    for (const category of categories) {
+      if (!category.parent_id) continue
+      childrenCountByParentId.set(category.parent_id, (childrenCountByParentId.get(category.parent_id) ?? 0) + 1)
+    }
+
+    const allowedRootIds = new Set(
+      rootExpenseCategories
+        .filter((root) => !excludedRootNames.has(normalizeCategoryToken(root.name)))
+        .map((root) => root.id),
+    )
+
+    return categories
+      .filter((category) => {
+        if (category.parent_id) return allowedRootIds.has(category.parent_id)
+        return allowedRootIds.has(category.id) && (childrenCountByParentId.get(category.id) ?? 0) === 0
+      })
+      .map((category) => category.id)
+  }, [selectedCategoryIds, selectedCat, categories, rootExpenseCategories])
 
   const { data: periodTxns } = useTransactions({
     ...range,
-    flowType: 'expense',
+    flowType: selectedCategoryFlowType,
     categoryIds: selectedCategoryIds,
+  })
+
+  const { data: periodSavingsTxns = [] } = useTransactions({
+    ...range,
+    flowType: 'savings',
+    categoryIds: savingsCategoryIds.length > 0 ? savingsCategoryIds : undefined,
+    debugSource: 'Budgets:periodSavings',
+  }, {
+    enabled: savingsCategoryIds.length > 0,
+  })
+
+  const { data: historySavingsTxns = [] } = useTransactions({
+    startDate: historyRange?.startDate,
+    endDate: historyRange?.endDate,
+    flowType: 'savings',
+    categoryIds: savingsCategoryIds.length > 0 ? savingsCategoryIds : undefined,
+    debugSource: 'Budgets:historySavings',
+  }, {
+    enabled: Boolean(historyRange) && savingsCategoryIds.length > 0,
   })
 
   const subCategoryModalIds = useMemo(() => {
     if (!selectedSubCategory) return undefined
     const ids = [selectedSubCategory.id]
-    expenseSubCategories.forEach((c) => {
+    childCategories.forEach((c) => {
       if (c.parent_id === selectedSubCategory.id) ids.push(c.id)
     })
     return ids
-  }, [selectedSubCategory, expenseSubCategories])
+  }, [selectedSubCategory, childCategories])
+
+  const selectedSubCategoryFlowType: FlowType = useMemo(() => {
+    if (!selectedSubCategory) return 'expense'
+    return categoryById.get(selectedSubCategory.id)?.flow_type === 'savings' ? 'savings' : 'expense'
+  }, [categoryById, selectedSubCategory])
 
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
-    flowType: 'expense',
+    flowType: selectedSubCategoryFlowType,
     categoryIds: subCategoryModalIds,
     debugSource: 'Budgets:subCategoryTransactions',
   }, {
@@ -1200,9 +1338,13 @@ export function Budgets() {
 
   const totalMonthlyBudget = useMemo(() => {
     if (!summaries?.length) return 0
-    if (selectedCat === 'all') return summaries.reduce((s, b) => s + b.budget_amount, 0)
+    if (selectedCat === 'all') {
+      return summaries.reduce((sum, summary) => (
+        expenseCategoryIdSet.has(summary.category.id) ? sum + summary.budget_amount : sum
+      ), 0)
+    }
     return summaries.find((s) => s.category.id === selectedCat)?.budget_amount ?? 0
-  }, [summaries, selectedCat])
+  }, [summaries, selectedCat, expenseCategoryIdSet])
 
   const selectedPeriodSpent = useMemo(() => {
     if (selectedCat === 'all') {
@@ -1233,7 +1375,7 @@ export function Budgets() {
   }, [categoryBudgetLines, selectedCat, totalMonthlyBudget])
   const { data: categoryHistoryRaw = [] } = useQuery({
     queryKey: ['budgets', 'category-history', selectedCat, selectedPeriodYear, selectedPeriodMonth, selectedCategoryHistoryIds],
-    enabled: selectedCat !== 'all' && selectedCategoryHistoryIds.length > 0,
+    enabled: selectedCategoryHistoryIds.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
       if (!historyWindowMonths.length || selectedCategoryHistoryIds.length === 0) return []
@@ -1244,7 +1386,7 @@ export function Budgets() {
       const { data, error } = await budgetDb
         .from('analytics_monthly_category_metrics')
         .select('period_year, period_month, amount_total, category_id')
-        .eq('flow_type', 'expense')
+        .eq('flow_type', selectedCategoryFlowType)
         .in('category_id', selectedCategoryHistoryIds)
         .gte('month_start', startMonth)
         .lte('month_start', endMonth)
@@ -1279,28 +1421,6 @@ export function Budgets() {
     [summaries],
   )
 
-  const globalMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
-    const base = payloadHistory.map((row) => {
-      const monthIndex = Math.max(0, Math.min(11, Number(row.period_month) - 1))
-      const amount = Number(row.actual_total ?? 0)
-      const budget = Number(row.budget_total ?? 0)
-      const isCurrent = Number(row.period_year) === selectedPeriodYear && Number(row.period_month) === selectedPeriodMonth
-
-      return {
-        month: MONTH_LABELS_SHORT[monthIndex],
-        amount,
-        budget,
-        isCurrent,
-      }
-    })
-
-    return base.map((row, idx) => {
-      if (idx === 0) return { ...row, evolutionPct: null }
-      const prev = base[idx - 1].amount
-      if (prev <= 0) return { ...row, evolutionPct: null }
-      return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
-    })
-  }, [payloadHistory, selectedPeriodYear, selectedPeriodMonth])
   const categoryMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const actualByMonthKey = new Map<string, number>()
 
@@ -1329,7 +1449,7 @@ export function Budgets() {
       return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
     })
   }, [categoryHistoryRaw, historyWindowMonths, categoryMonthlyBudget, selectedPeriodYear, selectedPeriodMonth])
-  const monthlyHistory = selectedCat === 'all' ? globalMonthlyHistory : categoryMonthlyHistory
+  const monthlyHistory = categoryMonthlyHistory
 
   const realPieData = useMemo<PieDatum[]>(() => {
     if (!budgetPayload) return []
@@ -1391,10 +1511,15 @@ export function Budgets() {
     () => buildSegmentCallouts(pieData, pieTotal, categoryDonutSize, { maxVisible: 5, cyRatio: 0.46, outerRadius: 124 }),
     [pieData, pieTotal, categoryDonutSize],
   )
+  const budgetAmountByCategoryFromPayload = useMemo(
+    () => new Map(payloadByCategory.map((row) => [row.category_id, Number(row.budget_amount ?? 0)])),
+    [payloadByCategory],
+  )
   const listSubCategoryRows = useMemo<SubCategoryTrendItem[]>(() => {
     if (selectedCat === 'all') return []
     const txs = periodTxns ?? []
-    if (!expenseSubCategories.length) return []
+    if (!childCategories.length) return []
+    const isEpargneCategoryPage = Boolean(epargneRootCategory && selectedCat === epargneRootCategory.id)
 
     const totalsBySubCategory = txs.reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
@@ -1402,9 +1527,11 @@ export function Budgets() {
       return acc
     }, new Map<string, number>())
 
-    const visibleSubCategories = expenseSubCategories.filter((subCat) => subCat.parent_id === selectedCat)
+    const visibleSubCategories = isEpargneCategoryPage
+      ? epargneSubCategories
+      : childCategories.filter((subCat) => subCat.parent_id === selectedCat)
 
-    return visibleSubCategories
+    const rows = visibleSubCategories
       .map((subCat) => ({
         id: subCat.id,
         name: subCat.name,
@@ -1415,14 +1542,25 @@ export function Budgets() {
         threeMonthAvg: 0,
         trend: 'equal' as SubCatTrend,
       }))
-      .filter((row) => row.currentMonthAmount > 0 || (budgetByCategoryId.get(row.id) ?? 0) > 0)
-      .sort((a, b) => b.currentMonthAmount - a.currentMonthAmount)
-  }, [periodTxns, expenseSubCategories, selectedCat, categoryById, budgetByCategoryId])
+
+    const filteredRows = isEpargneCategoryPage
+      ? rows
+      : rows.filter((row) => row.currentMonthAmount > 0 || (budgetByCategoryId.get(row.id) ?? 0) > 0)
+
+    return filteredRows.sort((a, b) => {
+      if (isEpargneCategoryPage) {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+      }
+      return b.currentMonthAmount - a.currentMonthAmount
+    })
+  }, [periodTxns, childCategories, epargneSubCategories, epargneRootCategory, selectedCat, categoryById, budgetByCategoryId])
 
   const categoryBarRows = useMemo<CategoryBarRow[]>(() => {
     if (selectedCat === 'all') return []
+    const isEpargneCategoryPage = Boolean(epargneRootCategory && selectedCat === epargneRootCategory.id)
 
-    const rows = listSubCategoryRows
+    const baseRows = listSubCategoryRows
       .map((row) => {
         const budgetAmount = budgetByCategoryId.get(row.id) ?? 0
         const actualAmount = row.currentMonthAmount
@@ -1435,11 +1573,18 @@ export function Budgets() {
           displayAmount: actualAmount,
         } satisfies CategoryBarRow
       })
-      .filter((row) => row.actualAmount > 0 || row.budgetAmount > 0)
-      .sort((a, b) => b.displayAmount - a.displayAmount)
+    const filteredRows = isEpargneCategoryPage
+      ? baseRows
+      : baseRows.filter((row) => row.actualAmount > 0 || row.budgetAmount > 0)
 
-    return rows
-  }, [selectedCat, listSubCategoryRows, budgetByCategoryId])
+    return filteredRows.sort((a, b) => {
+      if (isEpargneCategoryPage) {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+      }
+      return b.displayAmount - a.displayAmount
+    })
+  }, [selectedCat, listSubCategoryRows, budgetByCategoryId, epargneRootCategory])
   const subCategoryRowById = useMemo(
     () => new Map(listSubCategoryRows.map((row) => [row.id, row])),
     [listSubCategoryRows],
@@ -1452,6 +1597,26 @@ export function Budgets() {
       return acc
     }, new Map<string, number>())
   }, [periodTxns])
+
+  const periodSavingsByCategory = useMemo(() => {
+    return periodSavingsTxns.reduce<Map<string, number>>((acc, tx) => {
+      if (!tx.category_id) return acc
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+  }, [periodSavingsTxns])
+
+  const historySavingsByMonthKey = useMemo(() => {
+    return historySavingsTxns.reduce<Map<string, number>>((acc, tx) => {
+      const date = tx.transaction_date?.slice(0, 10)
+      if (!date) return acc
+      const parsed = new Date(`${date}T00:00:00`)
+      if (Number.isNaN(parsed.getTime())) return acc
+      const key = monthKey(parsed.getFullYear(), parsed.getMonth() + 1)
+      acc.set(key, (acc.get(key) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+  }, [historySavingsTxns])
 
 	  const blockRows = useMemo<BudgetBlockRow[]>(() => {
 	    const initial = new Map<BudgetBlockId, BudgetBlockRow>()
@@ -1486,6 +1651,29 @@ export function Budgets() {
                 budgetAmount: Number(row.budget_amount ?? 0),
                 actualAmount: Number(row.actual_amount ?? 0),
               }))
+
+            if (primaryBlockId === 'epargne') {
+              const savingsLineSource = epargneSubCategories.length > 0
+                ? epargneSubCategories
+                : target.lines
+                  .map((line) => categoryById.get(line.id))
+                  .filter((line): line is NonNullable<typeof line> => Boolean(line))
+                  .sort((a, b) => {
+                    const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+                    if (rankDiff !== 0) return rankDiff
+                    return a.name.localeCompare(b.name, 'fr')
+                  })
+
+              target.lines = savingsLineSource.map((subCategory) => ({
+                id: subCategory.id,
+                categoryName: subCategory.name,
+                parentCategoryName: subCategory.parent_id ? categoryById.get(subCategory.parent_id)?.name ?? null : null,
+                budgetAmount: budgetAmountByCategoryFromPayload.get(subCategory.id) ?? 0,
+                actualAmount: periodSavingsByCategory.get(subCategory.id) ?? 0,
+              }))
+              target.budgetAmount = target.lines.reduce((sum, line) => sum + line.budgetAmount, 0)
+              target.actualAmount = target.lines.reduce((sum, line) => sum + line.actualAmount, 0)
+            }
           }
 	      }
 	    }
@@ -1528,7 +1716,7 @@ export function Budgets() {
           return amountB - amountA
         }),
       }))
-  }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
+  }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, periodSavingsByCategory, dataDisplayMode, epargneSubCategories, categoryById, budgetAmountByCategoryFromPayload])
 
   const blockPieData = useMemo<PieDatum[]>(
     () =>
@@ -1669,7 +1857,7 @@ export function Budgets() {
     && (selectedYtdSlideView === 'monthly_flows_table' || selectedYtdSlideView === 'monthly_flows_chart')
   const slideThreeLockedPeriodLabel = '2026 YTD'
   const ytdSlideHeading = selectedYtdSlideView === 'kpi'
-    ? 'Indicateurs clé'
+    ? ''
     : selectedYtdSlideView === 'history'
       ? 'Historique'
       : selectedYtdSlideView === 'monthly_flows_table'
@@ -1731,6 +1919,7 @@ export function Budgets() {
   useEffect(() => {
     if (isSlideThreeMetricsMode) return
     setShowYtdSlideViewMenu(false)
+    setShowSlideThreePeriodMenu(false)
   }, [isSlideThreeMetricsMode])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1842,6 +2031,25 @@ export function Budgets() {
   const blockPageHistory = useMemo(() => {
     if (!selectedBlockPage) return []
 
+    if (selectedBlockPage.id === 'epargne') {
+      const base = historyWindowMonths.map((monthRow) => {
+        const amount = historySavingsByMonthKey.get(monthRow.key) ?? 0
+        return {
+          month: monthRow.monthLabel,
+          amount,
+          budget: Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0)),
+          isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
+        }
+      })
+
+      return base.map((row, idx) => {
+        if (idx === 0) return { ...row, evolutionPct: null }
+        const prev = base[idx - 1].amount
+        if (prev <= 0) return { ...row, evolutionPct: null }
+        return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
+      })
+    }
+
     const budgetRatio = totalMonthlyBudget > 0 ? selectedBlockPage.budgetAmount / totalMonthlyBudget : 0
     const actualRatio = selectedPeriodSpent > 0 ? selectedBlockPage.actualAmount / selectedPeriodSpent : 0
 
@@ -1850,7 +2058,7 @@ export function Budgets() {
       amount: Math.max(0, row.amount * actualRatio),
       budget: Math.max(0, row.budget * budgetRatio),
     }))
-  }, [monthlyHistory, selectedBlockPage, selectedPeriodSpent, totalMonthlyBudget])
+  }, [historySavingsByMonthKey, historyWindowMonths, monthlyHistory, selectedBlockPage, selectedPeriodMonth, selectedPeriodSpent, selectedPeriodYear, totalMonthlyBudget])
   const blockPageSixMonthAverage = useMemo(() => {
     if (!blockPageHistory.length) return 0
     return blockPageHistory.reduce((sum, row) => sum + row.amount, 0) / blockPageHistory.length
@@ -2126,7 +2334,10 @@ export function Budgets() {
                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
-                    onClick={() => setShowYtdSlideViewMenu((current) => !current)}
+                    onClick={() => {
+                      setShowYtdSlideViewMenu((current) => !current)
+                      setShowSlideThreePeriodMenu(false)
+                    }}
                     aria-label="Choisir le contenu de la slide Analyse"
                     aria-haspopup="menu"
                     aria-expanded={showYtdSlideViewMenu}
@@ -2154,7 +2365,17 @@ export function Budgets() {
                     </span>
                     <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showYtdSlideViewMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
                   </button>
-                  <label
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSlideThreeMonthlyFlowsView) return
+                      setShowSlideThreePeriodMenu((current) => !current)
+                      setShowYtdSlideViewMenu(false)
+                    }}
+                    aria-label="Choisir une période"
+                    aria-haspopup="menu"
+                    aria-expanded={showSlideThreePeriodMenu}
+                    disabled={isSlideThreeMonthlyFlowsView}
                     style={{
                       border: '1px solid var(--neutral-200)',
                       background: isSlideThreeMonthlyFlowsView ? 'var(--neutral-100)' : 'var(--neutral-0)',
@@ -2193,90 +2414,125 @@ export function Budgets() {
                         {slideThreeLockedPeriodLabel}
                       </span>
                     ) : (
-                      <>
-                        <select
-                          aria-label="Choisir une période"
-                          value={slideThreePeriod}
-                          onChange={(event) => setSlideThreePeriod(event.target.value)}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: 'var(--neutral-700)',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            fontFamily: 'inherit',
-                            lineHeight: 1.1,
-                            width: '100%',
-                            textAlign: 'center',
-                            textAlignLast: 'center',
-                            outline: 'none',
-                            appearance: 'none',
-                            WebkitAppearance: 'none',
-                            MozAppearance: 'none',
-                            cursor: 'pointer',
-                            paddingRight: 12,
-                            paddingLeft: 8,
-                            WebkitTextSizeAdjust: '100%',
-                          }}
-                        >
-                          {slideThreePeriods.map((periodOption) => (
-                            <option key={periodOption} value={periodOption}>{periodOption}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
-                      </>
+                      <span
+                        style={{
+                          color: 'var(--neutral-700)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          lineHeight: 1.1,
+                          width: '100%',
+                          textAlign: 'center',
+                          paddingRight: 12,
+                          paddingLeft: 8,
+                          WebkitTextSizeAdjust: '100%',
+                        }}
+                      >
+                        {slideThreePeriod}
+                      </span>
                     )}
-                  </label>
+                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showSlideThreePeriodMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
+                  </button>
                 </div>
-                {showYtdSlideViewMenu ? (
+                {(showYtdSlideViewMenu || showSlideThreePeriodMenu) ? (
                   <>
                     <div
-                      onClick={() => setShowYtdSlideViewMenu(false)}
+                      onClick={() => {
+                        setShowYtdSlideViewMenu(false)
+                        setShowSlideThreePeriodMenu(false)
+                      }}
                       style={{ position: 'fixed', inset: 0, zIndex: 120 }}
                     />
-                    <div
-                      role="menu"
-                      aria-label="Choisir un contenu pour la slide Analyse"
-                      style={{
-                        position: 'absolute',
-                        top: 'calc(100% + var(--space-2))',
-                        right: 'var(--space-5)',
-                        zIndex: 130,
-                        minWidth: 196,
-                        background: 'var(--neutral-0)',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 'var(--radius-lg)',
-                        boxShadow: 'var(--shadow-card)',
-                        padding: 'var(--space-2)',
-                        display: 'grid',
-                        gap: 2,
-                      }}
-                    >
-                      {ytdSlideViewOptions.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedYtdSlideView(option.id)
-                            setShowYtdSlideViewMenu(false)
-                          }}
-                          style={{
-                            width: '100%',
-                            border: 'none',
-                            borderRadius: 'var(--radius-sm)',
-                            background: selectedYtdSlideView === option.id ? 'var(--primary-50)' : 'transparent',
-                            color: selectedYtdSlideView === option.id ? 'var(--primary-700)' : 'var(--neutral-800)',
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: selectedYtdSlideView === option.id ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
-                            textAlign: 'left',
-                            padding: 'var(--space-2) var(--space-3)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
+                    {showYtdSlideViewMenu ? (
+                      <div
+                        role="menu"
+                        aria-label="Choisir un contenu pour la slide Analyse"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + var(--space-2))',
+                          left: 0,
+                          zIndex: 130,
+                          minWidth: 196,
+                          background: 'var(--neutral-0)',
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-lg)',
+                          boxShadow: 'var(--shadow-card)',
+                          padding: 'var(--space-2)',
+                          display: 'grid',
+                          gap: 2,
+                        }}
+                      >
+                        {ytdSlideViewOptions.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedYtdSlideView(option.id)
+                              setShowYtdSlideViewMenu(false)
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderRadius: 'var(--radius-sm)',
+                              background: selectedYtdSlideView === option.id ? 'var(--primary-50)' : 'transparent',
+                              color: selectedYtdSlideView === option.id ? 'var(--primary-700)' : 'var(--neutral-800)',
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: selectedYtdSlideView === option.id ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                              textAlign: 'left',
+                              padding: 'var(--space-2) var(--space-3)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {showSlideThreePeriodMenu && !isSlideThreeMonthlyFlowsView ? (
+                      <div
+                        role="menu"
+                        aria-label="Choisir une période pour la slide Analyse"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + var(--space-2))',
+                          right: 0,
+                          zIndex: 130,
+                          minWidth: 196,
+                          background: 'var(--neutral-0)',
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-lg)',
+                          boxShadow: 'var(--shadow-card)',
+                          padding: 'var(--space-2)',
+                          display: 'grid',
+                          gap: 2,
+                        }}
+                      >
+                        {slideThreePeriods.map((periodOption) => (
+                          <button
+                            key={periodOption}
+                            type="button"
+                            onClick={() => {
+                              setSlideThreePeriod(periodOption)
+                              setShowSlideThreePeriodMenu(false)
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderRadius: 'var(--radius-sm)',
+                              background: slideThreePeriod === periodOption ? 'var(--primary-50)' : 'transparent',
+                              color: slideThreePeriod === periodOption ? 'var(--primary-700)' : 'var(--neutral-800)',
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: slideThreePeriod === periodOption ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                              textAlign: 'left',
+                              padding: 'var(--space-2) var(--space-3)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {periodOption}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -3191,7 +3447,7 @@ export function Budgets() {
                       <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
                         {isSlideThreeMonthlyFlowsView && slideThreeMonthlyBudget != null
                           ? ` - Budget ${Math.round(slideThreeMonthlyBudget).toLocaleString('fr-FR')}€`
-                          : ` - ${ytdSlideHeading}`}
+                          : ytdSlideHeading ? ` - ${ytdSlideHeading}` : ''}
                       </span>
                     </h3>
                   </div>
@@ -3535,7 +3791,7 @@ export function Budgets() {
               <h3 ref={projectionSectionTitleRef} style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Projection coûts annuels
               </h3>
-              <AnnualProjectionSectionConnected scopeSelection={slideThreeScopeSelection} />
+              <AnnualProjectionSectionConnected />
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
@@ -3835,7 +4091,7 @@ export function Budgets() {
                           </button>
                         )
                       })()}
-                      {rootExpenseCategories.map((category) => {
+                      {rootNavigableCategories.map((category) => {
                         const selected = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === category.id
                         return (
                           <button
@@ -3945,7 +4201,7 @@ export function Budgets() {
                       </span>
                     </button>
 
-                    {rootExpenseCategories.map((cat) => (
+                    {rootNavigableCategories.map((cat) => (
                       <button
                         key={cat.id}
                         type="button"

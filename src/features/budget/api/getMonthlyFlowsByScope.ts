@@ -1,5 +1,10 @@
 import { budgetDb } from '@/lib/supabaseBudget'
 import { MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
+import {
+  EXPENSE_BUCKETS,
+  assertNoNonExpenseBucketsInExpenseTotal,
+  isExpenseBucket,
+} from '@/features/annual-analysis/components/_constants'
 
 export type MonthlyFlowsScopeRow = {
   month: number
@@ -36,20 +41,35 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
   const { kind, id, year } = params
   const cutoff = getCurrentMonthCutoff(year)
 
-  // Totaux mensuels globaux → pour le calcul de "part"
+  const startDate = `${year}-01-01`
+  const endDateExclusive = `${year + 1}-01-01`
+
+  // Totaux mensuels dépenses strictes (whitelist) → pour le calcul de "part"
   const metricsRes = await budgetDb
-    .from('analytics_monthly_metrics')
-    .select('period_month, expense_total')
-    .eq('period_year', year)
-    .order('period_month', { ascending: true })
+    .from('v_monthly_bucket_actuals_clean')
+    .select('month_start, budget_bucket, expense_amount, net_amount')
+    .gte('month_start', startDate)
+    .lt('month_start', endDateExclusive)
+    .in('budget_bucket', [...EXPENSE_BUCKETS])
+    .order('month_start', { ascending: true })
 
   if (metricsRes.error) throw new Error(`getMonthlyFlowsByScope (metrics): ${metricsRes.error.message}`)
 
   const expenseTotalByMonth = new Map<number, number>()
+  const includedBucketsInExpenseTotal: string[] = []
   for (const row of metricsRes.data ?? []) {
-    const month = Number(row.period_month)
+    const month = Number(String(row.month_start ?? '').slice(5, 7))
     if (!Number.isFinite(month) || month <= 0) continue
-    expenseTotalByMonth.set(month, Number(row.expense_total ?? 0))
+    const bucket = String(row.budget_bucket ?? '')
+    includedBucketsInExpenseTotal.push(bucket)
+    if (!isExpenseBucket(bucket)) continue
+    expenseTotalByMonth.set(month, (expenseTotalByMonth.get(month) ?? 0) + Number(row.expense_amount ?? row.net_amount ?? 0))
+  }
+  assertNoNonExpenseBucketsInExpenseTotal(includedBucketsInExpenseTotal, 'getMonthlyFlowsByScope:expenseTotalByMonth')
+  if (import.meta.env.DEV) {
+    console.log('[Budgets Slide 3][Audit dépenses] rawData', metricsRes.data ?? [])
+    console.log('[Budgets Slide 3][Audit dépenses] buckets included in expenses', [...new Set(includedBucketsInExpenseTotal)])
+    console.log('[Budgets Slide 3][Audit dépenses] expenseTotal', Object.fromEntries(expenseTotalByMonth.entries()))
   }
 
   if (kind === 'categorie') {
@@ -121,22 +141,40 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
   }
 
   // kind === 'bloc'
-  const bucketRes = await budgetDb
-    .from('budget_bucket_budget_vs_actual_by_month')
-    .select('period_month, target_budget_bucket_eur, actual_budget_bucket_eur')
-    .eq('period_year', year)
-    .eq('budget_bucket', id)
-    .order('period_month', { ascending: true })
-
-  if (bucketRes.error) throw new Error(`getMonthlyFlowsByScope (bucket): ${bucketRes.error.message}`)
-
   const actualByMonth = new Map<number, number>()
   const budgetByMonth = new Map<number, number>()
-  for (const row of bucketRes.data ?? []) {
+  const [bucketActualsRes, bucketBudgetsRes] = await Promise.all([
+    budgetDb
+      .from('v_monthly_bucket_actuals_clean')
+      .select('month_start, budget_bucket, expense_amount, revenue_amount, net_amount')
+      .gte('month_start', startDate)
+      .lt('month_start', endDateExclusive)
+      .eq('budget_bucket', id)
+      .order('month_start', { ascending: true }),
+    budgetDb
+      .from('v_monthly_bucket_budgets_clean' as never)
+      .select('period_month, budget_bucket, budget_amount')
+      .eq('period_year', year)
+      .eq('budget_bucket', id)
+      .order('period_month', { ascending: true }),
+  ])
+
+  if (bucketActualsRes.error) throw new Error(`getMonthlyFlowsByScope (bucket actuals): ${bucketActualsRes.error.message}`)
+  if (bucketBudgetsRes.error) throw new Error(`getMonthlyFlowsByScope (bucket budgets): ${bucketBudgetsRes.error.message}`)
+
+  for (const row of bucketActualsRes.data ?? []) {
+    const month = Number(String(row.month_start ?? '').slice(5, 7))
+    if (!Number.isFinite(month) || month <= 0) continue
+    const value = id === 'revenu'
+      ? Number(row.revenue_amount ?? row.net_amount ?? 0)
+      : Number(row.expense_amount ?? row.net_amount ?? 0)
+    actualByMonth.set(month, value)
+  }
+
+  for (const row of (bucketBudgetsRes.data ?? []) as Array<{ period_month: number | null; budget_amount: number | null }>) {
     const month = Number(row.period_month)
     if (!Number.isFinite(month) || month <= 0) continue
-    actualByMonth.set(month, Math.abs(Number(row.actual_budget_bucket_eur ?? 0)))
-    budgetByMonth.set(month, Math.abs(Number(row.target_budget_bucket_eur ?? 0)))
+    budgetByMonth.set(month, Number(row.budget_amount ?? 0))
   }
 
   return buildResult(actualByMonth, budgetByMonth, expenseTotalByMonth, cutoff)
