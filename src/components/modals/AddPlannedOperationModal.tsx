@@ -387,9 +387,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     )
   }, [values])
 
-  const modalTopOffset = isMobileViewport
-    ? 'calc(var(--safe-top-offset) + var(--space-2))'
-    : undefined
   const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
 
   const closeAndReset = useCallback(() => {
@@ -696,7 +693,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 141, maxHeight: '81dvh', top: modalTopOffset }}
+            style={{ zIndex: 141, maxHeight: '81dvh' }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex max-h-[81dvh] flex-col">

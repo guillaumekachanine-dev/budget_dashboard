@@ -1971,15 +1971,23 @@ export function Budgets() {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'flex-start',
-            paddingTop: 'calc(var(--safe-top) + 84px)',
+            paddingTop: 'calc(var(--safe-top) + 68px)',
+            paddingLeft: 'var(--page-gutter)',
+            paddingRight: 'var(--page-gutter)',
           }}
           onClick={() => setShowHeaderPeriodMenu(false)}
         >
-          <div
+          <motion.div
             role="menu"
             aria-label="Choisir une période Budgets"
+            initial={{ opacity: 0, y: -8, scaleY: 0.9 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1 }}
+            exit={{ opacity: 0, y: -8, scaleY: 0.9 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             style={{
-              width: 'min(360px, calc(100vw - 2 * var(--page-gutter)))',
+              width: 'fit-content',
+              minWidth: 0,
+              maxWidth: 'calc(100vw - 2 * var(--page-gutter))',
               maxHeight: 'min(68vh, 520px)',
               overflowY: 'auto',
               background: 'var(--neutral-0)',
@@ -1989,6 +1997,7 @@ export function Budgets() {
               padding: 'var(--space-2)',
               display: 'grid',
               gap: 2,
+              transformOrigin: 'top center',
             }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -2012,6 +2021,7 @@ export function Budgets() {
                     fontSize: 'var(--font-size-sm)',
                     fontWeight: option.active ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
                     textAlign: 'left',
+                    whiteSpace: 'nowrap',
                     padding: 'var(--space-2) var(--space-3)',
                     cursor: 'pointer',
                   }}
@@ -2020,7 +2030,7 @@ export function Budgets() {
                 </button>
               </div>
             ))}
-          </div>
+          </motion.div>
         </div>
       ) : null}
 

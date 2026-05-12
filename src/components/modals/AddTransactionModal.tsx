@@ -719,9 +719,6 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
 
-  const modalTopOffset = isMobileViewport
-    ? 'calc(var(--safe-top-offset) + var(--space-2))'
-    : undefined
   const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
 
   const closeAndReset = useCallback(() => {
@@ -962,7 +959,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 101, maxHeight: '81dvh', top: modalTopOffset }}
+            style={{ zIndex: 101, maxHeight: '81dvh' }}
             onClick={(event) => event.stopPropagation()}
           >
             <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[81dvh] flex-col">
