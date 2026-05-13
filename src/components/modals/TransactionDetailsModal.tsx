@@ -448,11 +448,30 @@ export function TransactionDetailsModal({
                       justifyContent: 'center',
                     }}
                   >
-                    <CategoryIcon
-                      iconKey={details.headerIconKey ?? null}
-                      label={details.subCategoryName !== '—' ? details.subCategoryName : details.categoryName}
-                      size={38}
-                    />
+                    <div
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 'var(--radius-full)',
+                        overflow: 'hidden',
+                        background: 'var(--neutral-0)',
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.42)',
+                      }}
+                    >
+                      <CategoryIcon
+                        iconKey={details.headerIconKey ?? null}
+                        label={details.subCategoryName !== '—' ? details.subCategoryName : details.categoryName}
+                        size={42}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          transform: 'scale(1.12)',
+                          transformOrigin: 'center',
+                        }}
+                      />
+                    </div>
                   </div>
 
                   <div

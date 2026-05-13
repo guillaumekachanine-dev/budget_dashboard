@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -54,7 +54,11 @@ type BudgetYtdSlideView = 'kpi' | 'history' | 'monthly_flows_table' | 'monthly_f
 
 interface MonthlyBucket {
   month: string
+  monthStart: string
   amount: number
+  chartAmount?: number
+  isScaleOverflow?: boolean
+  isScaleBreakMonth?: boolean
   budget: number
   evolutionPct: number | null
   isCurrent: boolean
@@ -71,6 +75,7 @@ type BudgetBlockId = 'socle_fixe' | 'variable_essentielle' | 'discretionnaire' |
 const REVENUE_BLOCK_PAGE_ID = 'revenu' as const
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
+const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 
 interface BudgetBlockLineItem {
   id: string
@@ -107,6 +112,15 @@ interface CategoryBarRow {
   actualAmount: number
   budgetAmount: number
   displayAmount: number
+}
+
+interface RevenueSourceDonutDatum {
+  id: string
+  name: string
+  parentName: string | null
+  value: number
+  transactionCount: number
+  color: string
 }
 
 interface PieSegmentCallout {
@@ -148,17 +162,16 @@ function formatPercentSigned(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
+function formatThousandsTick(value: number): string {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return '0'
+  return `${Math.round(numeric / 1000)}k`
+}
+
 function formatTxDateDayMonth(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '--/--'
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-}
-
-function formatTxDateFrench(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function formatMonthYearFrench(monthStart: string | null | undefined): string {
@@ -442,7 +455,7 @@ function buildSegmentCallouts(
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
   if (!active || !payload?.length) return null
-  const amount = Number(payload[0]?.value ?? 0)
+  const amount = Number(payload[0]?.payload?.amount ?? payload[0]?.value ?? 0)
   const budget = Number(payload[0]?.payload?.budget ?? 0)
   const gapPct = budget > 0 ? ((amount - budget) / budget) * 100 : null
   return (
@@ -609,6 +622,9 @@ export function Budgets() {
   const [subCategoryToReopen, setSubCategoryToReopen] = useState<SubCategoryTrendItem | null>(null)
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
+  const [revenueGraphSlide, setRevenueGraphSlide] = useState(0)
+  const [revenueSourceView, setRevenueSourceView] = useState<'list' | 'donut'>('list')
+  const [selectedRevenueSourceId, setSelectedRevenueSourceId] = useState<string | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const [slideThreeScopeSelection, setSlideThreeScopeSelection] = useState<MetricsScopeSelection>({
     kind: 'categorie',
@@ -1436,6 +1452,7 @@ export function Budgets() {
       const amount = actualByMonthKey.get(monthRow.key) ?? 0
       return {
         month: monthRow.monthLabel,
+        monthStart: monthRow.monthStart,
         amount,
         budget: categoryMonthlyBudget,
         isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
@@ -1757,7 +1774,6 @@ export function Budgets() {
   const revenueSurplusPct = monthlyCommitmentsTarget > 0
     ? ((selectedMonthRevenueAmount - monthlyCommitmentsTarget) / monthlyCommitmentsTarget) * 100
     : null
-  const revenueSurplusAmount = selectedMonthRevenueAmount - monthlyCommitmentsTarget
   const isRevenueAboveTarget = selectedMonthRevenueAmount > monthlyCommitmentsTarget && monthlyCommitmentsTarget > 0
   const selectedBlock = useMemo(
     () => (selectedBlockId ? blockRows.find((row) => row.id === selectedBlockId) ?? null : null),
@@ -1768,16 +1784,33 @@ export function Budgets() {
     [selectedBlockPageId, blockRows],
   )
   const isRevenueBlockPage = selectedBlockPageId === REVENUE_BLOCK_PAGE_ID
+  const revenueGraphSlideCount = 3
+  const revenueSlideTitles = [
+    'Historique des revenus mensuels 25-26',
+    'Historique des opérations 25-26',
+    'Dernières opérations YTD',
+  ] as const
+  const revenueActiveSlideTitle = revenueSlideTitles[revenueGraphSlide] ?? revenueSlideTitles[0]
   const revenuePageColor = 'var(--color-success)'
+  const revenueTableHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
+  const revenueListHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
+  const categoryListHeaderBackground = `color-mix(in oklab, ${accentFromLabel(selectedCatInfo?.name)} 22%, var(--neutral-0) 78%)`
+  const blockListHeaderBackground = `color-mix(in oklab, ${selectedBlockPage?.color ?? 'var(--primary-500)'} 22%, var(--neutral-0) 78%)`
   const revenueMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const series = [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => a.month_start.localeCompare(b.month_start))
     const base = series.map((row) => {
       const date = new Date(`${row.month_start}T00:00:00`)
       const periodYear = Number.isNaN(date.getTime()) ? selectedPeriodYear : date.getFullYear()
       const periodMonth = Number.isNaN(date.getTime()) ? selectedPeriodMonth : date.getMonth() + 1
+      const amount = Number(row.revenue_amount ?? 0)
+      const isScaleOverflow = amount > REVENUE_HISTORY_Y_AXIS_MAX
       return {
         month: MONTH_LABELS_SHORT[Math.max(0, Math.min(11, periodMonth - 1))] ?? '--',
-        amount: Number(row.revenue_amount ?? 0),
+        monthStart: row.month_start,
+        amount,
+        chartAmount: Math.min(amount, REVENUE_HISTORY_Y_AXIS_MAX),
+        isScaleOverflow,
+        isScaleBreakMonth: isScaleOverflow && periodYear === 2025 && periodMonth === 1,
         budget: 0,
         isCurrent: periodYear === selectedPeriodYear && periodMonth === selectedPeriodMonth,
       }
@@ -1794,6 +1827,60 @@ export function Budgets() {
     () => (revenueAnalytics?.bySource ?? []).reduce((max, row) => Math.max(max, Number(row.total_amount ?? 0)), 0),
     [revenueAnalytics],
   )
+  const revenueSourceGreenPalette = useMemo(
+    () => ([
+      '#0C5D39',
+      '#167A4B',
+      '#1F955B',
+      '#2DB26E',
+      '#4BC684',
+      '#6FD69D',
+      '#94E3B7',
+      '#B9EED1',
+    ]),
+    [],
+  )
+  const revenueSourceDonutData = useMemo<RevenueSourceDonutDatum[]>(
+    () => (revenueAnalytics?.bySource ?? [])
+      .map((source, index) => {
+        const value = Number(source.total_amount ?? 0)
+        return {
+          id: `${source.source_name}-${source.parent_source_name ?? 'none'}-${index}`,
+          name: source.source_name,
+          parentName: source.parent_source_name ?? null,
+          value,
+          transactionCount: Number(source.transaction_count ?? 0),
+          color: revenueSourceGreenPalette[index % revenueSourceGreenPalette.length],
+        }
+      })
+      .filter((item) => item.value > 0),
+    [revenueAnalytics, revenueSourceGreenPalette],
+  )
+  const selectedRevenueSource = useMemo(() => {
+    if (!revenueSourceDonutData.length) return null
+    if (!selectedRevenueSourceId) return null
+    return revenueSourceDonutData.find((row) => row.id === selectedRevenueSourceId) ?? null
+  }, [revenueSourceDonutData, selectedRevenueSourceId])
+  const revenueSourceDonutTotal = useMemo(
+    () => revenueSourceDonutData.reduce((sum, row) => sum + row.value, 0),
+    [revenueSourceDonutData],
+  )
+
+  useEffect(() => {
+    if (isRevenueBlockPage) return
+    setRevenueGraphSlide(0)
+    setRevenueSourceView('list')
+  }, [isRevenueBlockPage])
+
+  useEffect(() => {
+    if (!isRevenueBlockPage) return
+    if (!revenueSourceDonutData.length) {
+      setSelectedRevenueSourceId(null)
+      return
+    }
+    if (selectedRevenueSourceId && revenueSourceDonutData.some((row) => row.id === selectedRevenueSourceId)) return
+    setSelectedRevenueSourceId(null)
+  }, [isRevenueBlockPage, revenueSourceDonutData, selectedRevenueSourceId])
 
   const headerPeriodOptions = useMemo(() => {
     const monthOptions = availableBudgetPeriods
@@ -2036,6 +2123,7 @@ export function Budgets() {
         const amount = historySavingsByMonthKey.get(monthRow.key) ?? 0
         return {
           month: monthRow.monthLabel,
+          monthStart: monthRow.monthStart,
           amount,
           budget: Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0)),
           isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
@@ -2578,11 +2666,8 @@ export function Budgets() {
                   </button>
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
                     <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      {selectedBlockPage.label}
+                      {`Socle ${selectedBlockPage.label}`}
                     </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - Bloc
-                    </span>
                   </div>
                 </div>
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -2615,7 +2700,7 @@ export function Budgets() {
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={blockPageHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+              <BarChart data={blockPageHistory} barCategoryGap="18%" margin={{ top: 8, right: 44, left: -8, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
@@ -2645,10 +2730,10 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: blockListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)' }}>
               Répartition par sous-catégories
             </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {selectedBlockPage.lines.length === 0 ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune sous-catégorie active sur cette période
@@ -2751,27 +2836,21 @@ export function Budgets() {
                   </button>
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
                     <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      Revenus
+                      Socle revenus
                     </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - Socle revenus
-                    </span>
                   </div>
                 </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {`${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
-                </span>
               </div>
 
               <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois sélectionné</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois en cours</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
                     {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 2025-2026</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 25-26</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
                     {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
                   </span>
@@ -2789,24 +2868,195 @@ export function Budgets() {
       ) : null}
 
       {isRevenueBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                    const item = payload
-                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
-                  }} />
-                  {revenueMonthlyHistory.map((entry, i) => <Cell key={`revenue-history-${i}`} fill={revenuePageColor} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              {revenueActiveSlideTitle}
+            </p>
+            <div style={{ height: 220, minHeight: 220, overflow: 'hidden' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  width: `${revenueGraphSlideCount * 100}%`,
+                  transform: `translateX(-${(100 / revenueGraphSlideCount) * revenueGraphSlide}%)`,
+                  transition: 'transform 300ms ease',
+                }}
+              >
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 18, right: 30, left: -8, bottom: 4 }}>
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 11, fill: 'var(--neutral-500)', dx: -6 }}
+                        tickFormatter={(value) => formatThousandsTick(Number(value))}
+                        domain={[0, REVENUE_HISTORY_Y_AXIS_MAX]}
+                        ticks={[0, 5000, 10000, 15000]}
+                        width={44}
+                      />
+                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                      <ReferenceLine
+                        y={REVENUE_HISTORY_Y_AXIS_MAX}
+                        stroke="var(--neutral-300)"
+                        strokeDasharray="3 4"
+                        ifOverflow="extendDomain"
+                      />
+                      <Bar
+                        dataKey="chartAmount"
+                        radius={[8, 8, 0, 0]}
+                        maxBarSize={46}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                          const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                          const item = payload
+                          if (!item || x == null || y == null || width == null) return null
+
+                          if (item.isScaleBreakMonth) {
+                            const xPos = Number(x)
+                            const yPos = Number(y)
+                            const w = Number(width)
+                            const capWidth = Math.max(12, w - 10)
+                            const capX = xPos + (w - capWidth) / 2
+                            const capY = yPos + 3
+                            return (
+                              <g>
+                                <rect
+                                  x={capX}
+                                  y={capY}
+                                  width={capWidth}
+                                  height={7}
+                                  rx={3}
+                                  fill="rgba(255,255,255,0.16)"
+                                  stroke="var(--color-warning)"
+                                  strokeWidth={1.5}
+                                  strokeDasharray="2 2"
+                                />
+                              </g>
+                            )
+                          }
+
+                          const xCenter = Number(x) + Number(width) / 2
+                          if (item.isCurrent || item.isScaleOverflow) return null
+                          return (
+                            <text
+                              x={xCenter}
+                              y={Number(y) - 6}
+                              textAnchor="middle"
+                              fill="var(--neutral-900)"
+                              fontSize={12}
+                              fontWeight={700}
+                            >
+                              {formatCurrencyFloored(item.amount)}
+                            </text>
+                          )
+                        }} />
+                        {revenueMonthlyHistory.map((entry, i) => (
+                          <Cell
+                            key={`revenue-history-${i}`}
+                            fill={revenuePageColor}
+                            fillOpacity={entry.isCurrent ? 1 : 0.62}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <div style={{ height: '100%', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 92px 62px', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: revenueTableHeaderBackground, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+                      <span>Mois</span>
+                      <span style={{ justifySelf: 'start', paddingLeft: 'var(--space-2)' }}>Montant</span>
+                      <span style={{ justifySelf: 'center', textAlign: 'center', width: '100%' }}>Entrées</span>
+                    </div>
+                    <div style={{ minHeight: 0, overflowY: 'auto' }}>
+                      {revenueHistoryRows.length ? revenueHistoryRows.map((row) => (
+                        <div key={row.month_start} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 92px 62px', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
+                            {formatMonthYearFrench(row.month_start)}
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700, justifySelf: 'start', paddingLeft: 'var(--space-2)' }}>
+                            {formatCurrencyFloored(row.revenue_amount)}
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', justifySelf: 'center', textAlign: 'center', width: '100%' }}>
+                            {row.transaction_count.toLocaleString('fr-FR')}
+                          </span>
+                        </div>
+                      )) : (
+                        <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <div style={{ height: '100%', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: revenueTableHeaderBackground, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+                      <span>Date</span>
+                      <span style={{ paddingLeft: 'var(--space-1)' }}>Libellé / catégorie</span>
+                      <span>Montant</span>
+                    </div>
+                    <div style={{ minHeight: 0, overflowY: 'auto' }}>
+                      {revenueAnalytics?.lastTransactions.length ? revenueAnalytics.lastTransactions.map((tx) => (
+                        <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                          <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                            {formatTxDateDayMonth(tx.transaction_date)}
+                          </span>
+                          <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {tx.label || '—'}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {tx.category_name ?? '—'}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                            {formatCurrencyFloored(tx.pilotage_amount)}
+                          </span>
+                        </div>
+                      )) : (
+                        <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
+              {Array.from({ length: revenueGraphSlideCount }).map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setRevenueGraphSlide(idx)}
+                  aria-label={`Aller à la slide revenus ${idx + 1}`}
+                  style={{
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    padding: 0,
+                    background: 'transparent',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-base)',
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: idx === revenueGraphSlide ? 14 : 8,
+                      height: idx === revenueGraphSlide ? 14 : 8,
+                      borderRadius: 'var(--radius-full)',
+                      background: idx === revenueGraphSlide ? 'var(--primary-500)' : 'var(--neutral-300)',
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
 
           <div
@@ -2821,10 +3071,68 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Sources de revenus
-            </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 34, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', background: revenueListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-1) var(--space-2)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', lineHeight: 1.2, color: 'var(--neutral-900)', fontWeight: 700 }}>
+                Sources de revenus
+              </p>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  border: '1px solid var(--neutral-200)',
+                  background: 'var(--neutral-100)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: 2,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setRevenueSourceView('list')}
+                  aria-label="Afficher les sources en liste"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    minWidth: 26,
+                    minHeight: 26,
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    background: revenueSourceView === 'list' ? 'var(--neutral-0)' : 'transparent',
+                    color: revenueSourceView === 'list' ? 'var(--primary-500)' : 'var(--neutral-500)',
+                    boxShadow: revenueSourceView === 'list' ? 'var(--shadow-card)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <LayoutGrid size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevenueSourceView('donut')}
+                  aria-label="Afficher les sources en donut"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    minWidth: 26,
+                    minHeight: 26,
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    background: revenueSourceView === 'donut' ? 'var(--neutral-0)' : 'transparent',
+                    color: revenueSourceView === 'donut' ? 'var(--primary-500)' : 'var(--neutral-500)',
+                    boxShadow: revenueSourceView === 'donut' ? 'var(--shadow-card)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <CalendarDays size={13} />
+                </button>
+              </div>
+            </div>
+            <div style={{ minHeight: 0, overflowY: revenueSourceView === 'list' ? 'auto' : 'hidden', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
               {revenueAnalyticsLoading ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Chargement des revenus…
@@ -2837,15 +3145,91 @@ export function Budgets() {
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune source de revenus active sur cette période
                 </div>
+              ) : revenueSourceView === 'donut' ? (
+                <div style={{ minHeight: 0, height: '100%', display: 'grid', gridTemplateRows: '204px minmax(0,1fr)', gap: 'var(--space-2)' }}>
+                  <div style={{ minHeight: 204, height: 204, position: 'relative', display: 'grid', placeItems: 'center' }}>
+                    {selectedRevenueSource ? (
+                      <div style={{ position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)', maxWidth: '92%', borderRadius: 'var(--radius-md)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: '4px 8px', display: 'grid', justifyItems: 'center', gap: 1, zIndex: 1 }}>
+                        <span style={{ fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                          {selectedRevenueSource.name}
+                        </span>
+                        <span style={{ fontSize: 11, lineHeight: 1.2, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          {formatCurrencyFloored(selectedRevenueSource.value)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div style={{ width: '100%', height: 204, maxWidth: 272 }}>
+                      <ResponsiveContainer width="100%" height={204}>
+                        <PieChart>
+                          <Pie
+                            data={revenueSourceDonutData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="56%"
+                            innerRadius={50}
+                            outerRadius={84}
+                            paddingAngle={2}
+                            onClick={(slice: unknown) => {
+                              const payload = extractPiePayload(slice) as Partial<RevenueSourceDonutDatum> | null
+                              if (!payload?.id) return
+                              setSelectedRevenueSourceId(payload.id)
+                            }}
+                          >
+                            {revenueSourceDonutData.map((entry) => (
+                              <Cell
+                                key={entry.id}
+                                fill={entry.color}
+                                fillOpacity={selectedRevenueSourceId && selectedRevenueSourceId !== entry.id ? 0.55 : 0.96}
+                                stroke={selectedRevenueSourceId === entry.id ? 'var(--neutral-900)' : 'var(--neutral-0)'}
+                                strokeWidth={selectedRevenueSourceId === entry.id ? 2 : 1}
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 6, alignContent: 'start' }}>
+                    {revenueSourceDonutData.map((entry) => (
+                        <button
+                          key={`${entry.id}-legend`}
+                          type="button"
+                          onClick={() => setSelectedRevenueSourceId(entry.id)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            display: 'grid',
+                            gridTemplateColumns: '10px minmax(0,1fr)',
+                            gap: 6,
+                            alignItems: 'center',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            opacity: selectedRevenueSourceId && selectedRevenueSourceId !== entry.id ? 0.66 : 1,
+                          }}
+                        >
+                          <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: entry.color, border: '1px solid color-mix(in oklab, var(--neutral-900) 18%, transparent)' }} />
+                          <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
+                            {`${entry.name} (${revenueSourceDonutTotal > 0 ? Math.round((entry.value / revenueSourceDonutTotal) * 100) : 0}%)`}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
               ) : (
-                revenueAnalytics.bySource.map((source) => {
+                revenueAnalytics.bySource.map((source, sourceIndex) => {
                   const displayedAmount = Number(source.total_amount ?? 0)
                   const barWidth = revenueSourceMaxAmount > 0 ? (displayedAmount / revenueSourceMaxAmount) * 100 : 0
+                  const normalizedSourceName = normalizeCategoryToken(source.source_name)
+                  const matchedCategory = categories.find((category) => normalizeCategoryToken(category.name) === normalizedSourceName) ?? null
+                  const iconKey = matchedCategory?.icon_key ?? null
+                  const sourceColor = revenueSourceGreenPalette[sourceIndex % revenueSourceGreenPalette.length]
                   return (
                     <div
                       key={`${source.source_name}-${source.parent_source_name ?? 'none'}`}
                       style={{
-                        padding: '3px 2px',
+                        padding: '5px 2px',
                         display: 'grid',
                         gridTemplateColumns: 'minmax(0,132px) minmax(0,1fr)',
                         alignItems: 'center',
@@ -2853,12 +3237,15 @@ export function Budgets() {
                         textAlign: 'left',
                       }}
                     >
-                      <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                        <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
-                          {source.source_name}
-                        </span>
-                        <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {source.parent_source_name ?? '—'}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                        <CategoryIcon iconKey={iconKey} label={source.source_name} size={16} />
+                        <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                          <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
+                            {source.source_name}
+                          </span>
+                          <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {source.parent_source_name ?? '—'}
+                          </span>
                         </span>
                       </span>
                       <span style={{ display: 'grid', gap: 2 }}>
@@ -2869,12 +3256,12 @@ export function Budgets() {
                               height: '100%',
                               display: 'block',
                               borderRadius: 'var(--radius-full)',
-                              background: revenuePageColor,
+                              background: sourceColor,
                             }}
                           />
                         </span>
-                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {`${formatCurrencyFloored(displayedAmount)} · ${source.transaction_count} op · moy ${formatCurrencyFloored(source.avg_amount)}`}
+                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {`${formatCurrencyFloored(displayedAmount)} - ${source.transaction_count} op`}
                         </span>
                       </span>
                     </div>
@@ -2883,71 +3270,7 @@ export function Budgets() {
               )}
             </div>
           </div>
-
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Historique mensuel 2025-2026
-            </p>
-            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
-                <span>Mois</span>
-                <span>Montant</span>
-                <span>Entrées</span>
-              </div>
-              <div style={{ maxHeight: 184, overflowY: 'auto' }}>
-                {revenueHistoryRows.length ? revenueHistoryRows.map((row) => (
-                  <div key={row.month_start} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
-                      {formatMonthYearFrench(row.month_start)}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatCurrencyFloored(row.revenue_amount)}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                      {row.transaction_count.toLocaleString('fr-FR')}
-                    </span>
-                  </div>
-                )) : (
-                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Dernières entrées
-            </p>
-            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
-                <span>Date</span>
-                <span>Libellé / catégorie</span>
-                <span>Montant</span>
-              </div>
-              <div style={{ maxHeight: 208, overflowY: 'auto' }}>
-                {revenueAnalytics?.lastTransactions.length ? revenueAnalytics.lastTransactions.map((tx) => (
-                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      {formatTxDateFrench(tx.transaction_date)}
-                    </span>
-                    <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.label || '—'}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.category_name ?? '—'}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatCurrencyFloored(tx.pilotage_amount)}
-                    </span>
-                  </div>
-                )) : (
-                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
-                )}
-              </div>
-            </div>
-          </div>
+        
         </motion.section>
       ) : null}
 
@@ -2994,7 +3317,7 @@ export function Budgets() {
                   </div>
                 </div>
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
+                  {categoryRanking ? `rang ${categoryRanking.index}/${categoryRanking.total}` : '—'}
                 </span>
               </div>
 
@@ -3023,7 +3346,7 @@ export function Budgets() {
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 44, left: -8, bottom: 4 }}>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
@@ -3053,10 +3376,10 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: categoryListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)' }}>
               Répartition par sous-catégories
             </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {categoryBarRows.length === 0 ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune sous-catégorie active sur cette période
@@ -3606,6 +3929,18 @@ export function Budgets() {
 		                const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
 		                const variance = budgetAmount - actualAmount
 		                const isOverBudget = variance < 0
+                  const isSavingsBlock = row.id === 'epargne'
+                  const isSavingsPositive = isSavingsBlock && actualAmount > 0
+                  const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+                  const leftMetricLabel = isSavingsBlock ? 'Épargné' : 'Consommé'
+                  const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
+                  const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+                  const rightMetricColor = isSavingsBlock
+                    ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
+                    : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+                  const rightMetricText = isSavingsBlock
+                    ? `Reste ${formatCurrencyFloored(variance)}`
+                    : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
                   const blockIconSrc = BLOCK_ICON_SRC[row.id]
 		                return (
 		                  <button
@@ -3655,11 +3990,11 @@ export function Budgets() {
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                          {formatCurrencyFloored(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: leftMetricColor, fontFamily: 'var(--font-mono)', fontWeight: isSavingsPositive ? 700 : 400 }}>
+                          {leftMetricLabel} {formatCurrencyFloored(actualAmount).replace(/\s+€/, '€')} <span style={{ color: leftMetricPctColor }}>({progressPct}%)</span>
                         </p>
-		                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-		                          {isOverBudget ? `Dépassement ${formatCurrencyFloored(Math.abs(variance))}` : `Restant ${formatCurrencyFloored(variance)}`}
+		                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: rightMetricColor, fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+		                          {rightMetricText}
 		                        </p>
 		                      </div>
 		                    </div>
@@ -3752,11 +4087,6 @@ export function Budgets() {
                             : `Cible ${formatCurrencyFloored(monthlyCommitmentsTarget)}`}
                         </p>
                       </div>
-                      <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                        {isRevenueAboveTarget
-                          ? `+${formatCurrencyFloored(Math.max(0, revenueSurplusAmount))} vs cible`
-                          : `${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
-                      </p>
                     </div>
                   </button>
 		              </div>

@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, LayoutGrid, X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
   type CategoryAnnualCostProjection2026,
 } from '@/features/annual-analysis/api/getCategoryAnnualCostProjection2026'
 import { useCategoryAnnualCostProjection2026 } from '@/features/annual-analysis/hooks/useCategoryAnnualCostProjection2026'
-import {
-  type AnnualProjectionOverview2026,
-} from '@/features/annual-analysis/api/getAnnualProjectionOverview2026'
-import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
-import { VIZ_PALETTE, BUCKET_LABELS } from '@/features/annual-analysis/components/_constants'
+import { VIZ_PALETTE, BUCKET_LABELS, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 import {
   assertNoNonExpenseBucketsInExpenseTotal,
   isExpenseBucket,
@@ -45,13 +41,12 @@ type ParentProjectionGroup = {
   children: CategoryAnnualCostProjection2026[]
 }
 
-type OverviewStackBarRow = {
-  name: 'Dépenses' | 'Revenus'
-  depensesContraintes: number
-  depensesFlexibles: number
-  revenusHorsEpargne: number
-  epargne: number
-  total: number
+type BlockDeltaBarRow = {
+  blockKey: string
+  name: string
+  deltaAmount: number
+  color: string
+  isSelected: boolean
 }
 
 type AnnualProjectionSectionConnectedProps = {
@@ -64,27 +59,12 @@ const fmtPctSigned = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(
 const fmtPctSignedRounded = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value)}%`
 
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
-
-function fmtCurrencyMaybe(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  return fmtCurrency(value)
-}
-
-function fmtPctMaybe(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  const valueAsPct = Math.abs(value) <= 1 ? value * 100 : value
-  return `${valueAsPct.toFixed(1)}%`
-}
-
-function nonNegative(value: number | null | undefined): number {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, value)
-}
-
-function getCurrentMonthLabelFr(): string {
-  const label = new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(new Date())
-  if (!label) return 'mois courant'
-  return label.charAt(0).toUpperCase() + label.slice(1)
+const BLOCK_DELTA_COLORS: Record<string, string> = {
+  socle_fixe: 'var(--primary-500)',
+  variable_essentielle: 'var(--viz-a)',
+  discretionnaire: 'var(--viz-c)',
+  provision: 'var(--color-warning)',
+  epargne: 'var(--color-success)',
 }
 
 function parentKeyFromName(name: string): string {
@@ -148,9 +128,8 @@ export function AnnualProjectionSectionConnected({
   scopeSelection,
 }: AnnualProjectionSectionConnectedProps) {
   const { data: rows, isLoading: isLoadingCategories } = useCategoryAnnualCostProjection2026(scopeSelection, 2026)
-  const { data: annualOverview, isLoading: isLoadingOverview } = useAnnualProjectionOverview2026(2026)
 
-  if (isLoadingCategories || isLoadingOverview) {
+  if (isLoadingCategories) {
     return (
       <div style={emptyStateStyle}>
         Chargement de la projection…
@@ -177,21 +156,19 @@ export function AnnualProjectionSectionConnected({
     )
   }
 
-  return <AnnualCostProjectionCard rows={rows} annualOverview={annualOverview} bare />
+  return <AnnualCostProjectionCard rows={rows} bare />
 }
 
 function AnnualCostProjectionCard({
   rows,
-  annualOverview,
   bare = false,
 }: {
   rows: CategoryAnnualCostProjection2026[]
-  annualOverview: AnnualProjectionOverview2026 | null
   bare?: boolean
 }) {
   const [viewMode, setViewMode] = useState<ProjectionViewMode>('category')
   const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null)
-  const [selectedOverviewBar, setSelectedOverviewBar] = useState<'Dépenses' | 'Revenus' | null>(null)
+  const [selectedDeltaBlockKey, setSelectedDeltaBlockKey] = useState<string | null>(null)
   const [showListModal, setShowListModal] = useState(false)
   const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
   const selectedDetailsAnchorRef = useRef<HTMLDivElement | null>(null)
@@ -260,38 +237,30 @@ function AnnualCostProjectionCard({
     [top5, selectedParentKey],
   )
 
-  const overviewChartData = useMemo<OverviewStackBarRow[]>(() => {
-    const coreExpenses = nonNegative(annualOverview?.projectedCoreExpensesAmount)
-    const flexibleExpenses = nonNegative(annualOverview?.projectedFlexibleExpensesAmount)
-    const totalExpenses = nonNegative(annualOverview?.projectedTotalExpensesAmount)
-    const revenueAfterSavings = nonNegative(annualOverview?.projectedRevenueAfterSavingsAmount)
-    const savings = nonNegative(annualOverview?.projectedSavingsAmount)
-    const totalRevenue = nonNegative(annualOverview?.projectedRevenueAmount)
+  const blockDeltaData = useMemo<BlockDeltaBarRow[]>(() => {
+    const sumsByBlock = new Map<string, number>(PILOTAGE_BUCKET_ORDER.map((bucket) => [bucket, 0]))
 
-    return [
-      {
-        name: 'Dépenses',
-        depensesContraintes: coreExpenses,
-        depensesFlexibles: flexibleExpenses,
-        revenusHorsEpargne: 0,
-        epargne: 0,
-        total: totalExpenses,
-      },
-      {
-        name: 'Revenus',
-        depensesContraintes: 0,
-        depensesFlexibles: 0,
-        revenusHorsEpargne: revenueAfterSavings,
-        epargne: savings,
-        total: totalRevenue,
-      },
-    ]
-  }, [annualOverview])
+    for (const row of rows) {
+      const bucket = (row.budgetBucket ?? '').trim()
+      if (!sumsByBlock.has(bucket)) continue
+      sumsByBlock.set(bucket, (sumsByBlock.get(bucket) ?? 0) + Number(row.projectedVsBudgetAmount ?? 0))
+    }
 
-  const overviewDomainMax = useMemo(() => {
-    const maxTotal = Math.max(...overviewChartData.map((row) => row.total), 1)
-    return maxTotal * 1.15
-  }, [overviewChartData])
+    return PILOTAGE_BUCKET_ORDER.map((bucket) => ({
+      blockKey: bucket,
+      name: BUCKET_LABELS[bucket] ?? bucket,
+      deltaAmount: sumsByBlock.get(bucket) ?? 0,
+      color: BLOCK_DELTA_COLORS[bucket] ?? 'var(--neutral-500)',
+      isSelected: selectedDeltaBlockKey === bucket,
+    }))
+  }, [rows, selectedDeltaBlockKey])
+
+  const deltaAxisMax = useMemo(() => {
+    const maxAbs = Math.max(...blockDeltaData.map((row) => Math.abs(row.deltaAmount)), 0)
+    if (maxAbs <= 0) return 1_000
+    const step = 1_000
+    return Math.ceil((maxAbs * 1.15) / step) * step
+  }, [blockDeltaData])
 
   const selectedRow = useMemo(
     () => parentGroups.find((group) => group.parentKey === selectedParentKey) ?? null,
@@ -304,9 +273,7 @@ function AnnualCostProjectionCard({
   )
 
   useEffect(() => {
-    const hasVisibleDetails = viewMode === 'category'
-      ? selectedRow !== null
-      : selectedOverviewBar !== null
+    const hasVisibleDetails = viewMode === 'category' && selectedRow !== null
 
     if (!hasVisibleDetails) {
       wasDetailsVisibleRef.current = false
@@ -335,7 +302,7 @@ function AnnualCostProjectionCard({
       window.cancelAnimationFrame(rafId)
       if (timeoutId) window.clearTimeout(timeoutId)
     }
-  }, [selectedOverviewBar, selectedRow, viewMode])
+  }, [selectedDeltaBlockKey, selectedRow, viewMode])
 
   const modeToggle = (
     <div style={switchStyle} role="tablist" aria-label="Mode de projection">
@@ -367,10 +334,10 @@ function AnnualCostProjectionCard({
   )
 
   const chart = (
-    <div style={{ height: 260, width: '100%' }}>
+    <div style={{ height: 292, width: '100%' }}>
       {viewMode === 'category' ? (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={categoryData} margin={{ top: 50, right: 0, left: 0, bottom: 40 }}>
+          <BarChart data={categoryData} margin={{ top: 42, right: 0, left: 0, bottom: 28 }}>
             <XAxis
               dataKey="name"
               axisLine={false}
@@ -400,76 +367,73 @@ function AnnualCostProjectionCard({
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      ) : annualOverview ? (
+      ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={overviewChartData} margin={{ top: 36, right: 8, left: 8, bottom: 6 }} barCategoryGap="34%">
+          <BarChart data={blockDeltaData} margin={{ top: 30, right: 8, left: 8, bottom: 10 }} barCategoryGap="34%">
             <XAxis
               dataKey="name"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+              tick={{ fontSize: 11, fill: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
             />
-            <YAxis hide domain={[0, overviewDomainMax]} />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={68}
+              tick={{ fontSize: 11, fill: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}
+              tickFormatter={(value) => fmtCurrency(Number(value))}
+              domain={[-deltaAxisMax, deltaAxisMax]}
+            />
+            <ReferenceLine y={0} stroke="var(--neutral-400)" strokeWidth={1.2} />
             <Bar
-              dataKey="depensesContraintes"
-              stackId="stack"
-              fill="var(--primary-700)"
-              radius={[8, 8, 0, 0]}
+              dataKey="deltaAmount"
               maxBarSize={44}
               cursor="pointer"
               onClick={(_: unknown, index: number) => {
-                const clicked = overviewChartData[index]?.name ?? null
-                setSelectedOverviewBar((prev) => (prev === clicked ? null : clicked))
-              }}
-            />
-            <Bar
-              dataKey="depensesFlexibles"
-              stackId="stack"
-              fill="var(--viz-c)"
-              maxBarSize={44}
-              cursor="pointer"
-              onClick={(_: unknown, index: number) => {
-                const clicked = overviewChartData[index]?.name ?? null
-                setSelectedOverviewBar((prev) => (prev === clicked ? null : clicked))
-              }}
-            />
-            <Bar
-              dataKey="revenusHorsEpargne"
-              stackId="stack"
-              fill="var(--color-success)"
-              radius={[8, 8, 0, 0]}
-              maxBarSize={44}
-              cursor="pointer"
-              onClick={(_: unknown, index: number) => {
-                const clicked = overviewChartData[index]?.name ?? null
-                setSelectedOverviewBar((prev) => (prev === clicked ? null : clicked))
-              }}
-            />
-            <Bar
-              dataKey="epargne"
-              stackId="stack"
-              fill="var(--color-warning)"
-              maxBarSize={44}
-              cursor="pointer"
-              onClick={(_: unknown, index: number) => {
-                const clicked = overviewChartData[index]?.name ?? null
-                setSelectedOverviewBar((prev) => (prev === clicked ? null : clicked))
+                const clicked = blockDeltaData[index]?.blockKey ?? null
+                setSelectedDeltaBlockKey((prev) => (prev === clicked ? null : clicked))
               }}
             >
+              {blockDeltaData.map((row) => (
+                <Cell
+                  key={`delta-${row.blockKey}`}
+                  fill={row.color}
+                  fillOpacity={row.isSelected || !selectedDeltaBlockKey ? 0.96 : 0.62}
+                  stroke={row.isSelected ? 'var(--neutral-900)' : row.color}
+                  strokeWidth={row.isSelected ? 1.5 : 0}
+                />
+              ))}
               <LabelList
-                dataKey="total"
-                position="top"
-                offset={8}
-                formatter={(val: number) => fmtCurrency(val)}
-                style={{ fontSize: 10, fontWeight: 700, fill: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}
+                dataKey="deltaAmount"
+                content={(props: unknown) => {
+                  const { x, y, width, height, value } = (props ?? {}) as {
+                    x?: number
+                    y?: number
+                    width?: number
+                    height?: number
+                    value?: number
+                  }
+                  if (x == null || y == null || width == null || height == null || value == null) return null
+                  const numericValue = Number(value)
+                  const posY = numericValue >= 0 ? (y - 7) : (y + height + 12)
+                  return (
+                    <text
+                      x={x + width / 2}
+                      y={posY}
+                      textAnchor="middle"
+                      fill="var(--neutral-700)"
+                      fontSize={10}
+                      fontWeight={700}
+                      fontFamily="var(--font-mono)"
+                    >
+                      {fmtCurrency(numericValue)}
+                    </text>
+                  )
+                }}
               />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      ) : (
-        <div style={emptyStateStyle}>
-          Vue annuelle indisponible.
-        </div>
       )}
     </div>
   )
@@ -477,13 +441,6 @@ function AnnualCostProjectionCard({
   const selectedCard = selectedRow && viewMode === 'category'
     ? <ProjectionDetailsCard row={selectedRow} />
     : null
-
-  const selectedOverviewCard = annualOverview && selectedOverviewBar && viewMode === 'year' ? (
-    <OverviewDetailsCard
-      label={selectedOverviewBar}
-      overview={annualOverview}
-    />
-  ) : null
 
   const categoryHeaderControls = viewMode === 'category' ? (
     <div style={categoryInlineControlsStyle}>
@@ -494,7 +451,7 @@ function AnnualCostProjectionCard({
       </button>
     </div>
   ) : (
-    <div />
+    <span style={top5LabelStyle}>Projection delta budget/réel fin 2026</span>
   )
 
   const chartTopControls = (
@@ -503,19 +460,6 @@ function AnnualCostProjectionCard({
       {modeToggle}
     </div>
   )
-
-  const overviewKpiLine = viewMode === 'year' ? (
-    <div style={kpiLineStyle}>
-      <KpiCell
-        label="Dépenses / revenus"
-        value={fmtPctMaybe(annualOverview?.projectedExpensesToRevenuePct)}
-      />
-      <KpiCell
-        label="Épargne / revenus"
-        value={fmtPctMaybe(annualOverview?.projectedSavingsToRevenuePct)}
-      />
-    </div>
-  ) : null
 
   const modal = showListModal ? (
     <ProjectionListModal
@@ -540,8 +484,7 @@ function AnnualCostProjectionCard({
       <>
         {chartTopControls}
         {chart}
-        {overviewKpiLine}
-        <div ref={selectedDetailsAnchorRef}>{selectedCard ?? selectedOverviewCard}</div>
+        <div ref={selectedDetailsAnchorRef}>{selectedCard}</div>
         {modal}
         {detailsModal}
       </>
@@ -556,15 +499,14 @@ function AnnualCostProjectionCard({
             <div>
               <h3 style={cardTitleStyle}>Projection coûts annuels</h3>
               <p style={cardSubStyle}>
-                {viewMode === 'category' ? 'top 5 catégories projetées' : 'dépenses vs revenus projetés'}
+                {viewMode === 'category' ? 'top 5 catégories projetées' : 'Projection delta budget/réel fin 2026'}
               </p>
             </div>
             {modeToggle}
           </div>
-          <div style={{ marginTop: 'var(--space-4)' }}>{chartTopControls}</div>
-          <div style={{ marginTop: 'var(--space-3)' }}>{chart}</div>
-          {overviewKpiLine}
-          <div ref={selectedDetailsAnchorRef}>{selectedCard ?? selectedOverviewCard}</div>
+          <div style={{ marginTop: 'var(--space-2)' }}>{chartTopControls}</div>
+          <div style={{ marginTop: 'var(--space-2)' }}>{chart}</div>
+          <div ref={selectedDetailsAnchorRef}>{selectedCard}</div>
         </div>
       </div>
       {modal}
@@ -573,48 +515,10 @@ function AnnualCostProjectionCard({
   )
 }
 
-function OverviewDetailsCard({
-  label,
-  overview,
-}: {
-  label: 'Dépenses' | 'Revenus'
-  overview: AnnualProjectionOverview2026
-}) {
-  const isExpenses = label === 'Dépenses'
-  return (
-    <div style={selectedCardStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--neutral-800)' }}>
-          {label}
-        </span>
-        <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-          {`${overview.monthsElapsed} mois passés · ${overview.remainingMonths} restants`}
-        </span>
-      </div>
-      {isExpenses ? (
-        <div style={{ display: 'grid', gap: 6 }}>
-          <DetailRow label="Dépenses contraintes" value={fmtCurrencyMaybe(overview.projectedCoreExpensesAmount)} />
-          <DetailRow label="Dépenses flexibles" value={fmtCurrencyMaybe(overview.projectedFlexibleExpensesAmount)} />
-          <DetailRow label="Total dépenses projetées" value={fmtCurrencyMaybe(overview.projectedTotalExpensesAmount)} />
-          <DetailRow label="Dépenses / revenus" value={fmtPctMaybe(overview.projectedExpensesToRevenuePct)} />
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 6 }}>
-          <DetailRow label="Revenus hors épargne" value={fmtCurrencyMaybe(overview.projectedRevenueAfterSavingsAmount)} />
-          <DetailRow label="Épargne projetée" value={fmtCurrencyMaybe(overview.projectedSavingsAmount)} />
-          <DetailRow label="Revenus annuels projetés" value={fmtCurrencyMaybe(overview.projectedRevenueAmount)} />
-          <DetailRow label="Épargne / revenus" value={fmtPctMaybe(overview.projectedSavingsToRevenuePct)} />
-        </div>
-      )}
-    </div>
-  )
-}
-
 function ProjectionDetailsCard({ row }: { row: ParentProjectionGroup }) {
   const theoreticalProjection = row.budgetAnnualAmount
 
   const riskOverBudget = row.projectedVsBudgetPct > 0
-  const currentMonthLabel = getCurrentMonthLabelFr()
 
   return (
     <div style={{ ...selectedCardStyle, borderColor: riskOverBudget ? 'rgba(252,90,90,0.25)' : 'rgba(46,212,122,0.28)' }}>
@@ -638,14 +542,13 @@ function ProjectionDetailsCard({ row }: { row: ParentProjectionGroup }) {
       </div>
 
       <div style={{ display: 'grid', gap: 5 }}>
-        <DetailRow label="Réel YTD" value={fmtCurrency(row.actualYtdAmount)} />
+        <DetailRow label="consommé YTD" value={fmtCurrency(row.actualYtdAmount)} />
         <DetailRow label="Moy. mensuelle YTD" value={fmtCurrency(row.avgMonthlyYtdAmount)} />
         <DetailRow label="Mois restants" value={`${row.remainingMonths}`} />
-        <DetailRow label="Projection théorique" value={fmtCurrency(theoreticalProjection)} />
-        <DetailRow label={`Projection affinée YTD (${currentMonthLabel})`} value={fmtCurrency(row.projectedAnnualAmount)} />
-        <DetailRow label="Budget annuel" value={fmtCurrency(row.budgetAnnualAmount)} />
+        <DetailRow label="budget annuel théorique" value={fmtCurrency(theoreticalProjection)} />
+        <DetailRow label="projection closing 2026 (mai)" value={fmtCurrency(row.projectedAnnualAmount)} />
         <DetailRow
-          label="Écart projeté"
+          label="Ecart budget/projection"
           value={`${fmtCurrency(row.projectedVsBudgetAmount)} (${fmtPctSigned(row.projectedVsBudgetPct)})`}
           valueColor={riskOverBudget ? 'var(--negative)' : 'var(--positive)'}
         />
@@ -667,19 +570,6 @@ function DetailRow({
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
       <span style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{label}</span>
       <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: valueColor ?? 'var(--neutral-900)' }}>
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function KpiCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-      <span style={{ fontSize: 10, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-        {label}
-      </span>
-      <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
         {value}
       </span>
     </div>
@@ -734,16 +624,16 @@ function ProjectionListModal({
           gridTemplateColumns: 'minmax(0,1fr) auto',
           alignItems: 'center',
           columnGap: 10,
-          padding: '8px 0',
+          padding: '5px 0',
           borderBottom: '1px solid var(--neutral-150)',
           background: 'var(--neutral-50)',
-          marginBottom: 2,
+          marginBottom: 1,
         }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Catégorie / budget annuel théorique
+            Catégorie / budget annuel
           </span>
           <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            Atterrissage 2026 projeté
+            Projection 2026
           </span>
         </div>
 
@@ -1098,17 +988,6 @@ const switchButtonActiveStyle: CSSProperties = {
   boxShadow: 'var(--shadow-sm)',
 }
 
-const kpiLineStyle: CSSProperties = {
-  marginTop: 'var(--space-1)',
-  padding: 'var(--space-3)',
-  borderRadius: 'var(--radius-lg)',
-  border: '1px solid var(--neutral-150)',
-  background: 'color-mix(in oklab, var(--neutral-200) 34%, var(--neutral-0) 66%)',
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 'var(--space-3)',
-}
-
 const listModalHeaderStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -1122,7 +1001,7 @@ const listModalHeaderStyle: CSSProperties = {
 }
 
 const selectedCardStyle: CSSProperties = {
-  marginTop: 'var(--space-3)',
+  marginTop: 'var(--space-2)',
   padding: 'var(--space-3)',
   background: 'var(--neutral-50)',
   borderRadius: 'var(--radius-lg)',

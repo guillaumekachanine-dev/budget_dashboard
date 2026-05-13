@@ -51,6 +51,7 @@ type AmountInputProps = {
   focused: boolean
   error?: string
   inputRef: React.RefObject<HTMLInputElement | null>
+  onSubmitEditing: () => void
   onFocus: () => void
   onBlur: () => void
   onChange: (next: string) => void
@@ -224,7 +225,7 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
-function AmountInput({ value, focused, error, inputRef, onFocus, onBlur, onChange }: AmountInputProps) {
+function AmountInput({ value, focused, error, inputRef, onSubmitEditing, onFocus, onBlur, onChange }: AmountInputProps) {
   return (
     <section
       className="relative px-[var(--space-6)]"
@@ -241,9 +242,15 @@ function AmountInput({ value, focused, error, inputRef, onFocus, onBlur, onChang
           id="transaction-amount"
           type="text"
           inputMode="decimal"
+          enterKeyHint="next"
           autoComplete="off"
           autoFocus
           value={value}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            onSubmitEditing()
+          }}
           onFocus={onFocus}
           onBlur={onBlur}
           onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ''))}
@@ -529,6 +536,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
+  const descriptionRef = useRef<HTMLInputElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
 
   const {
@@ -720,6 +728,17 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
 
   const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+
+  const focusDescriptionInput = useCallback(() => {
+    amountRef.current?.blur()
+    window.setTimeout(() => {
+      descriptionRef.current?.focus()
+    }, 40)
+  }, [])
+
+  const closeDescriptionInput = useCallback(() => {
+    descriptionRef.current?.blur()
+  }, [])
 
   const closeAndReset = useCallback(() => {
     reset(createDefaultFormValues())
@@ -1088,6 +1107,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   focused={amountFocused}
                   error={errors.amount?.message}
                   inputRef={amountRef}
+                  onSubmitEditing={focusDescriptionInput}
                   onFocus={() => {
                     setAmountFocused(true)
                     setValue('amount', toAmountInputValue(values.amount))
@@ -1108,9 +1128,16 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
 
                 <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
                   <Input
+                    ref={descriptionRef}
                     id="transaction-description"
                     type="text"
+                    enterKeyHint="done"
                     value={values.description}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      closeDescriptionInput()
+                    }}
                     onChange={(event) => setValue('description', event.target.value)}
                     placeholder="libellé de l'opération"
                     aria-label="Libellé de l'opération"

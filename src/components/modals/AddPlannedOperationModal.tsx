@@ -257,6 +257,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
   const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
+  const labelRef = useRef<HTMLInputElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
 
   const flowTypeForCategoryQuery = values.flowType === 'transfer' ? 'transfer' : values.flowType
@@ -388,6 +389,17 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
   }, [values])
 
   const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+
+  const focusLabelInput = useCallback(() => {
+    amountRef.current?.blur()
+    window.setTimeout(() => {
+      labelRef.current?.focus()
+    }, 40)
+  }, [])
+
+  const closeLabelInput = useCallback(() => {
+    labelRef.current?.blur()
+  }, [])
 
   const closeAndReset = useCallback(() => {
     setValues(createDefaultFormValues())
@@ -806,9 +818,15 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                       id="planned-operation-amount"
                       type="text"
                       inputMode="decimal"
+                      enterKeyHint="next"
                       autoComplete="off"
                       autoFocus
                       value={amountDisplay}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        focusLabelInput()
+                      }}
                       onFocus={() => {
                         setAmountFocused(true)
                         setValues((current) => ({ ...current, amount: toAmountInputValue(current.amount) }))
@@ -841,9 +859,16 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
 
                 <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
                   <Input
+                    ref={labelRef}
                     id="planned-operation-label"
                     type="text"
+                    enterKeyHint="done"
                     value={values.label}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      closeLabelInput()
+                    }}
                     onChange={(event) => {
                       setValues((current) => ({ ...current, label: event.target.value }))
                       clearFieldError('label')

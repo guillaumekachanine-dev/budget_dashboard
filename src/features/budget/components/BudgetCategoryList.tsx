@@ -7,6 +7,7 @@ import {
   formatCurrency,
   sortBudgetLinesForDisplay,
 } from '@/features/budget/utils/budgetSelectors'
+import { formatCurrencyFloored } from '@/lib/utils'
 
 interface BudgetCategoryListProps {
   lines: BudgetLineWithCategory[]
@@ -86,6 +87,20 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
             const resolvedIconKey = line.category_icon_key ?? (line.category_id ? (categoryIconKeyById.get(line.category_id) ?? null) : null)
             const normalizedCategoryName = normalizeCategoryLabel(line.parent_category_name ?? line.category_name)
             const displayIconKey = normalizedCategoryName === 'epargne' ? 'epargne' : resolvedIconKey
+            const isSavingsCategory = normalizedCategoryName === 'epargne'
+            const isSavingsPositive = isSavingsCategory && actualAmount > 0
+            const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+            const leftMetricLabel = isSavingsCategory ? 'Épargné' : 'Consommé'
+            const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
+            const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+            const rightMetricColor = isSavingsCategory
+              ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
+              : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+            const rightMetricText = hasActuals
+              ? (isSavingsCategory
+                ? `Reste ${formatCurrencyFloored(variance)}`
+                : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`))
+              : 'Pas encore de consommé'
 
             return (
               <div
@@ -125,13 +140,11 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                      {formatCurrency(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({actualPct}%)</span>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: leftMetricColor, fontFamily: 'var(--font-mono)', fontWeight: isSavingsPositive ? 700 : 400 }}>
+                      {leftMetricLabel} {formatCurrency(actualAmount).replace(/\s+€/, '€')} <span style={{ color: leftMetricPctColor }}>({actualPct}%)</span>
                     </p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-                      {hasActuals
-                        ? (isOverBudget ? `Dépassement ${formatCurrency(Math.abs(variance))}` : `Restant ${formatCurrency(variance)}`)
-                        : 'Pas encore de consommé'}
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: rightMetricColor, fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+                      {rightMetricText}
                     </p>
                   </div>
                 </div>
