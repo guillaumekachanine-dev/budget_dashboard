@@ -4,10 +4,11 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyRounded as fmt, getCategoryColor } from '@/lib/utils'
-import type { ComparedCategoryMetric } from '@/features/annual-analysis/types.compared'
+import type { ComparedCategoryMetric, YtdCategoryRow } from '@/features/annual-analysis/types.compared'
 
 type Props = {
   metrics: ComparedCategoryMetric[]
+  categoryRows: YtdCategoryRow[]
 }
 
 const MAX_VISIBLE = 7
@@ -43,6 +44,8 @@ type DonutEntry = {
   name: string
   value: number
   color: string
+  iconKey: string | null
+  rank: number
 }
 
 function normalizeCategoryLabel(value: string): string {
@@ -54,8 +57,9 @@ function normalizeCategoryLabel(value: string): string {
     .trim()
 }
 
-export function ComparedCategoryBars({ metrics }: Props) {
+export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [expandedCategoryName, setExpandedCategoryName] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<CategoryViewMode>('bars')
   const { data: categories = [] } = useCategories('expense')
   const categoryVisualByName = useMemo(() => {
@@ -92,21 +96,42 @@ export function ComparedCategoryBars({ metrics }: Props) {
         total2025: metric.total_2025,
         total2026: metric.total_2026,
         color: visual?.color ?? getCategoryColor(null, index),
+        iconKey: visual?.iconKey ?? metric.parent_category_name,
       }
     })
   ), [metrics, categoryVisualByName])
   const donut2025 = useMemo<DonutEntry[]>(
-    () => categorySeries
-      .filter((entry) => entry.total2025 > 0)
-      .map((entry) => ({ id: entry.name, name: entry.name, value: entry.total2025, color: entry.color }))
-      .sort((a, b) => b.value - a.value),
+    () => {
+      const sorted = categorySeries
+        .filter((entry) => entry.total2025 > 0)
+        .map((entry) => ({
+          id: entry.name,
+          name: entry.name,
+          value: entry.total2025,
+          color: entry.color,
+          iconKey: entry.iconKey,
+        }))
+        .sort((a, b) => b.value - a.value)
+
+      return sorted.map((entry, index) => ({ ...entry, rank: index + 1 }))
+    },
     [categorySeries],
   )
   const donut2026 = useMemo<DonutEntry[]>(
-    () => categorySeries
-      .filter((entry) => entry.total2026 > 0)
-      .map((entry) => ({ id: entry.name, name: entry.name, value: entry.total2026, color: entry.color }))
-      .sort((a, b) => b.value - a.value),
+    () => {
+      const sorted = categorySeries
+        .filter((entry) => entry.total2026 > 0)
+        .map((entry) => ({
+          id: entry.name,
+          name: entry.name,
+          value: entry.total2026,
+          color: entry.color,
+          iconKey: entry.iconKey,
+        }))
+        .sort((a, b) => b.value - a.value)
+
+      return sorted.map((entry, index) => ({ ...entry, rank: index + 1 }))
+    },
     [categorySeries],
   )
   const total2025 = useMemo(
@@ -117,6 +142,39 @@ export function ComparedCategoryBars({ metrics }: Props) {
     () => donut2026.reduce((sum, entry) => sum + entry.value, 0),
     [donut2026],
   )
+  const subcategoriesByParent = useMemo(() => {
+    const grouped = new Map<string, Map<string, { name: string; amount2025: number; amount2026: number }>>()
+
+    for (const row of categoryRows) {
+      const parentName = row.parent_category_name ?? row.category_name
+      const parentKey = normalizeCategoryLabel(parentName)
+      const subKey = normalizeCategoryLabel(row.category_name)
+
+      let parentMap = grouped.get(parentKey)
+      if (!parentMap) {
+        parentMap = new Map()
+        grouped.set(parentKey, parentMap)
+      }
+
+      const current = parentMap.get(subKey) ?? { name: row.category_name, amount2025: 0, amount2026: 0 }
+      if (row.period_year === 2025) current.amount2025 += Number(row.amount_total ?? 0)
+      if (row.period_year === 2026) current.amount2026 += Number(row.amount_total ?? 0)
+      parentMap.set(subKey, current)
+    }
+
+    const out = new Map<string, Array<{ name: string; amount2025: number; amount2026: number; deltaPct: number | null }>>()
+    for (const [parentKey, subMap] of grouped.entries()) {
+      const rows = [...subMap.values()]
+        .map((entry) => ({
+          ...entry,
+          deltaPct: entry.amount2025 > 0 ? ((entry.amount2026 - entry.amount2025) / entry.amount2025) * 100 : null,
+        }))
+        .sort((a, b) => b.amount2026 - a.amount2026)
+      out.set(parentKey, rows)
+    }
+
+    return out
+  }, [categoryRows])
 
   if (metrics.length === 0) return null
 
@@ -182,6 +240,9 @@ export function ComparedCategoryBars({ metrics }: Props) {
                 maxVal={maxVal}
                 visual={categoryVisualByName.get(normalizeCategoryLabel(m.parent_category_name))}
                 colorIndex={index}
+                subcategoryRows={subcategoriesByParent.get(normalizeCategoryLabel(m.parent_category_name)) ?? []}
+                isExpanded={expandedCategoryName === m.parent_category_name}
+                onToggle={() => setExpandedCategoryName((prev) => (prev === m.parent_category_name ? null : m.parent_category_name))}
               />
             ))}
           </div>
@@ -230,7 +291,6 @@ function DonutCard({
   const [selectedId, setSelectedId] = useState<string | null>(data[0]?.id ?? null)
   const topFive = useMemo(() => data.slice(0, 5), [data])
   const selected = useMemo(() => data.find((entry) => entry.id === selectedId) ?? null, [data, selectedId])
-  const selectedPct = selected && total > 0 ? (selected.value / total) * 100 : null
 
   return (
     <div style={{
@@ -276,9 +336,8 @@ function DonutCard({
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number) => fmt(value)}
-              labelFormatter={(label) => String(label)}
-              contentStyle={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--neutral-200)', boxShadow: 'var(--shadow-sm)' }}
+              content={<DonutTooltip total={total} />}
+              wrapperStyle={{ zIndex: 2600, pointerEvents: 'none' }}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -304,7 +363,7 @@ function DonutCard({
               {selected.name}
             </p>
             <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', lineHeight: 1.2, fontFamily: 'var(--font-mono)' }}>
-              {fmt(selected.value)}{selectedPct != null ? ` (${Math.round(selectedPct)}%)` : ''}
+              {fmt(selected.value)}
             </p>
           </div>
         ) : (
@@ -328,7 +387,7 @@ function DonutCard({
                 display: 'grid',
                 gridTemplateColumns: '8px minmax(0,1fr) auto',
                 alignItems: 'center',
-                gap: 6,
+                gap: 4,
                 textAlign: 'left',
                 cursor: 'pointer',
                 opacity: selectedId == null || active ? 1 : 0.58,
@@ -349,16 +408,63 @@ function DonutCard({
   )
 }
 
+function DonutTooltip({ active, payload, total }: {
+  active?: boolean
+  payload?: Array<{ payload?: DonutEntry }>
+  total: number
+}) {
+  if (!active || !payload?.length) return null
+  const entry = payload[0]?.payload
+  if (!entry) return null
+
+  const pct = total > 0 ? Math.round((entry.value / total) * 100) : 0
+
+  return (
+    <div style={{
+      background: 'var(--neutral-0)',
+      border: '1px solid var(--neutral-200)',
+      borderRadius: 'var(--radius-md)',
+      boxShadow: '0 10px 26px rgba(28, 28, 58, 0.18)',
+      padding: '6px 8px',
+      display: 'grid',
+      gap: 3,
+      minWidth: 150,
+      zIndex: 2600,
+    }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', columnGap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <CategoryIcon iconKey={entry.iconKey ?? entry.name} label={entry.name} size={12} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {entry.name}
+          </span>
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+          {entry.rank}/12
+        </span>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', lineHeight: 1.15 }}>
+        {fmt(entry.value)} - {pct}%
+      </div>
+    </div>
+  )
+}
+
 function CategoryRow({
   metric,
   maxVal,
   visual,
   colorIndex,
+  subcategoryRows,
+  isExpanded,
+  onToggle,
 }: {
   metric: ComparedCategoryMetric
   maxVal: number
   visual?: { iconKey: string | null; color: string }
   colorIndex: number
+  subcategoryRows: Array<{ name: string; amount2025: number; amount2026: number; deltaPct: number | null }>
+  isExpanded: boolean
+  onToggle: () => void
 }) {
   const { parent_category_name, total_2025, total_2026, delta_eur, delta_pct } = metric
   const pct2025 = maxVal > 0 ? (total_2025 / maxVal) * 100 : 0
@@ -372,52 +478,105 @@ function CategoryRow({
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <CategoryIcon
-            iconKey={visual?.iconKey ?? parent_category_name}
-            label={parent_category_name}
-            size={14}
-            style={{ flexShrink: 0 }}
-          />
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {parent_category_name}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-            {fmt(total_2025)}
-          </span>
-          <span style={{ fontSize: 9, color: 'var(--neutral-300)' }}>→</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>
-            {fmt(total_2026)}
-          </span>
-          {delta_pct != null && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, color: deltaColor,
-              background: delta_eur === 0
-                ? 'var(--neutral-100)'
-                : isUp
-                  ? 'color-mix(in oklab, var(--color-error) 10%, var(--neutral-0) 90%)'
-                  : 'color-mix(in oklab, var(--color-success) 10%, var(--neutral-0) 90%)',
-              borderRadius: 'var(--radius-full)',
-              padding: '1px 5px',
-            }}>
-              {isUp ? '+' : ''}{delta_pct.toFixed(1)}%
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        style={{ border: 'none', background: 'transparent', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <CategoryIcon
+              iconKey={visual?.iconKey ?? parent_category_name}
+              label={parent_category_name}
+              size={14}
+              style={{ flexShrink: 0 }}
+            />
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {parent_category_name}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
+              {fmt(total_2025)}
             </span>
-          )}
+            <span style={{ fontSize: 9, color: 'var(--neutral-300)' }}>→</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>
+              {fmt(total_2026)}
+            </span>
+            {delta_pct != null && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: deltaColor,
+                background: delta_eur === 0
+                  ? 'var(--neutral-100)'
+                  : isUp
+                    ? 'color-mix(in oklab, var(--color-error) 10%, var(--neutral-0) 90%)'
+                    : 'color-mix(in oklab, var(--color-success) 10%, var(--neutral-0) 90%)',
+                borderRadius: 'var(--radius-full)',
+                padding: '1px 5px',
+              }}>
+                {isUp ? '+' : ''}{delta_pct.toFixed(1)}%
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Double barre */}
-      <div style={{ display: 'grid', gap: 2 }}>
-        <div style={{ height: 5, borderRadius: 3, background: 'var(--neutral-100)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pct2025}%`, background: 'var(--neutral-300)', borderRadius: 3, transition: 'width 0.4s ease' }} />
+        {/* Double barre */}
+        <div style={{ display: 'grid', gap: 2 }}>
+          <div style={{ height: 5, borderRadius: 3, background: 'var(--neutral-100)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct2025}%`, background: 'var(--neutral-300)', borderRadius: 3, transition: 'width 0.4s ease' }} />
+          </div>
+          <div style={{ height: 5, borderRadius: 3, background: 'var(--neutral-100)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct2026}%`, background: bar2026Color, borderRadius: 3, transition: 'width 0.4s ease' }} />
+          </div>
         </div>
-        <div style={{ height: 5, borderRadius: 3, background: 'var(--neutral-100)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pct2026}%`, background: bar2026Color, borderRadius: 3, transition: 'width 0.4s ease' }} />
+      </button>
+
+      {isExpanded ? (
+        <div style={{
+          marginTop: 'var(--space-2)',
+          background: 'var(--neutral-50)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid color-mix(in oklab, var(--neutral-300) 32%, var(--neutral-0) 68%)',
+          padding: '8px 10px',
+          display: 'grid',
+          gap: 4,
+        }}>
+          {subcategoryRows.map((row) => {
+            const subDeltaColor = row.deltaPct == null
+              ? 'var(--neutral-300)'
+              : row.deltaPct > 0
+                ? 'var(--color-error)'
+                : 'var(--color-success)'
+
+            return (
+              <div
+                key={`${parent_category_name}-${row.name}`}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0,1fr) auto auto auto',
+                  alignItems: 'center',
+                  columnGap: 8,
+                  minHeight: 16,
+                }}
+              >
+                <span style={{ fontSize: 10, lineHeight: 1.05, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.name}
+                </span>
+                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: 'var(--neutral-400)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {row.amount2025 > 0 ? fmt(row.amount2025) : '—'}
+                </span>
+                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                  {row.amount2026 > 0 ? fmt(row.amount2026) : '—'}
+                </span>
+                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: subDeltaColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                  {row.deltaPct == null ? '—' : `${row.deltaPct > 0 ? '+' : ''}${row.deltaPct.toFixed(1)}%`}
+                </span>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }

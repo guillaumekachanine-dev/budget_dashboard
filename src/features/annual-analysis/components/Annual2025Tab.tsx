@@ -2,11 +2,10 @@ import { motion } from 'framer-motion'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { AnnualOverviewHero } from './AnnualOverviewHero'
 import { AnnualKeyInsightsGrid } from './AnnualKeyInsightsGrid'
-import { AnnualSpendingStructureSection } from './AnnualSpendingStructureSection'
 import { ComparedAnalysisSection } from './ComparedAnalysisSection'
 
 export function Annual2025Tab() {
-  const { loading, error, annualTotals, yearlyBuckets, yearlyParentCategories } =
+  const { loading, error, annualTotals } =
     useAnnual2025Analysis()
 
   if (loading) {
@@ -35,12 +34,6 @@ export function Annual2025Tab() {
       <AnnualKeyInsightsGrid />
 
       <ComparedAnalysisSection />
-
-      {yearlyBuckets.length > 0 || yearlyParentCategories.length > 0 ? (
-        <AnnualSpendingStructureSection
-          buckets={yearlyBuckets}
-        />
-      ) : null}
     </motion.div>
   )
 }

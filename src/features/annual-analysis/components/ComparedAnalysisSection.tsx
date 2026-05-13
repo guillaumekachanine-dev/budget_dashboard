@@ -8,6 +8,7 @@ export function ComparedAnalysisSection() {
   const {
     loading, error,
     fluxMetrics, categoryMetrics, bucketMetrics,
+    categoryRows,
     flows2025, flows2026,
     projectedExpense2025, projectedExpense2026,
     medianMonthly2025, medianMonthly2026, remainingMonths,
@@ -52,9 +53,9 @@ export function ComparedAnalysisSection() {
               remainingMonths={remainingMonths}
             />
 
-            <ComparedBucketChart metrics={bucketMetrics} />
+            <ComparedBucketChart metrics={bucketMetrics} fluxMetrics={fluxMetrics} />
 
-            <ComparedCategoryBars metrics={categoryMetrics} />
+            <ComparedCategoryBars metrics={categoryMetrics} categoryRows={categoryRows} />
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Toolti
 import { BarChart3, ChevronRight, Rows3, X } from 'lucide-react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
-import type { ComparedBucketMetric } from '@/features/annual-analysis/types.compared'
+import type { ComparedBucketMetric, ComparedFluxMetric } from '@/features/annual-analysis/types.compared'
 import {
   getComparedBucketCategoryBreakdown,
   type BucketCategoryBreakdownRow,
@@ -38,8 +38,8 @@ const BUCKET_HEADER_COLORS: Record<string, string> = {
 
 // ─── Labels courts pour l'axe X ──────────────────────────────────────────────
 const BUCKET_SHORT: Record<string, string> = {
-  socle_fixe:           'Socle fixe',
-  variable_essentielle: 'Var. essen.',
+  socle_fixe:           'Fixe',
+  variable_essentielle: 'Variable',
   provision:            'Provisions',
   discretionnaire:      'Discrétion.',
   epargne:              'Épargne',
@@ -57,11 +57,14 @@ const ALLOCATION_COLORS: Record<string, string> = {
   socle_fixe: '#5B57F5',
   variable_essentielle: '#2ED47A',
   discretionnaire: '#FC5A5A',
-  provision: '#6C63FF',
+  provision: '#00B8D9',
   epargne: '#FFAB2E',
 }
 
-type Props = { metrics: ComparedBucketMetric[] }
+type Props = {
+  metrics: ComparedBucketMetric[]
+  fluxMetrics: ComparedFluxMetric[]
+}
 
 function formatVariation(value: number): string {
   const sign = value > 0 ? '+' : ''
@@ -74,7 +77,7 @@ function formatTightEuro(value: number): string {
 
 // ─── Component principal ──────────────────────────────────────────────────────
 
-export function ComparedBucketChart({ metrics }: Props) {
+export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
   const [viewMode,      setViewMode]      = useState<ViewMode>('bars')
   const [clickedBucket, setClickedBucket] = useState<string | null>(null)
   const [clickedCoord,  setClickedCoord]  = useState<{ x: number; y: number } | null>(null)
@@ -82,8 +85,37 @@ export function ComparedBucketChart({ metrics }: Props) {
   const [detailLoading, setDetailLoading] = useState(false)
   const [showDetail,    setShowDetail]    = useState(false)
 
+  const variableFluxMetric = fluxMetrics.find((metric) => metric.label === 'Variable') ?? null
+  const savingsFluxMetric = fluxMetrics.find((metric) => metric.label === 'Capacité épar.') ?? null
+
   const data: ChartEntry[] = [...PILOTAGE_BUCKET_ORDER].map((key) => {
-    const m = metrics.find((m) => m.bucket === key)
+    let m = metrics.find((metric) => metric.bucket === key) ?? null
+    const isMissingOrZero = !m || (Math.abs(m.actual_2025) + Math.abs(m.actual_2026) < 1)
+
+    if (isMissingOrZero && key === 'variable_essentielle' && variableFluxMetric) {
+      m = {
+        bucket: key,
+        actual_2025: variableFluxMetric.value_2025,
+        actual_2026: variableFluxMetric.value_2026,
+        target_2026: 0,
+        delta_eur: variableFluxMetric.delta_eur,
+        delta_pct: variableFluxMetric.delta_pct,
+        consumption_ratio_2026: 0,
+      }
+    }
+
+    if (isMissingOrZero && key === 'epargne' && savingsFluxMetric) {
+      m = {
+        bucket: key,
+        actual_2025: savingsFluxMetric.value_2025,
+        actual_2026: savingsFluxMetric.value_2026,
+        target_2026: 0,
+        delta_eur: savingsFluxMetric.delta_eur,
+        delta_pct: savingsFluxMetric.delta_pct,
+        consumption_ratio_2026: 0,
+      }
+    }
+
     return {
       name:   BUCKET_SHORT[key] ?? (BUCKET_LABELS[key] ?? key),
       bucket: key,
@@ -426,13 +458,13 @@ function ClickedTooltip({
 
       {/* Ligne Var. */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto auto 1fr',
+        display: 'flex',
         alignItems: 'center',
-        columnGap: 5,
+        justifyContent: 'space-between',
         marginBottom: 8,
         paddingTop: 5,
         borderTop: '1px solid var(--neutral-100)',
+        gap: 8,
       }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)', flexShrink: 0 }}>Var.</span>
         <span style={{
@@ -443,18 +475,10 @@ function ClickedTooltip({
           borderRadius: 'var(--radius-full)',
           padding: '2px 6px',
           flexShrink: 0,
+          marginLeft: 'auto',
         }}>
           {delta === 0 ? '—' : isUp ? '▲' : '▼'}{' '}
           {deltaPct != null ? `${Math.abs(deltaPct).toFixed(1)}%` : ''}
-        </span>
-        <span style={{
-          fontSize: 10, fontWeight: 600,
-          fontFamily: 'var(--font-mono)',
-          color: deltaColor,
-          justifySelf: 'end',
-          textAlign: 'right',
-        }}>
-          {delta !== 0 ? `${delta > 0 ? '+' : ''}${formatTightEuro(delta)}` : '—'}
         </span>
       </div>
 
@@ -515,63 +539,61 @@ function AllocationLineView({
   const renderYearStrip = (year: '2025' | '2026') => {
     const total = year === '2026' ? total2026 : total2025
     return (
-      <div style={{
-        width: '100%',
-        height: 20,
-        borderRadius: 'var(--radius-full)',
-        background: 'var(--neutral-100)',
-        overflow: 'hidden',
-        display: 'flex',
-        position: 'relative',
-      }}>
-        {rows.map((row, index) => {
-          const value = year === '2026' ? row.v2026 : row.v2025
-          const widthPct = total > 0 ? (value / total) * 100 : 0
-          return (
-            <div
-              key={`${year}-${row.bucket}`}
-              title={`${row.label} — ${formatEuroShare(value, total)}`}
-              style={{
-                height: '100%',
-                width: `${widthPct}%`,
-                background: row.color,
-                minWidth: value > 0 ? 2 : 0,
-                borderRight: index < rows.length - 1 ? '1px solid rgba(255,255,255,0.72)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <span style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: '#fff',
-                fontFamily: 'var(--font-mono)',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                opacity: widthPct >= 7 ? 0.95 : 0.6,
-              }}>
-                {formatBlockShare(value, total)}
-              </span>
-            </div>
-          )
-        })}
+      <div style={{ display: 'grid', gap: 4 }}>
         <span style={{
-          position: 'absolute',
-          left: 8,
-          top: '50%',
-          transform: 'translateY(-50%)',
           fontSize: 10,
           fontWeight: 700,
-          color: '#fff',
+          color: 'var(--neutral-700)',
           fontFamily: 'var(--font-mono)',
           letterSpacing: '0.04em',
           lineHeight: 1,
-          pointerEvents: 'none',
+          textAlign: 'left',
         }}>
           {year}
         </span>
+        <div style={{
+          width: '100%',
+          height: 20,
+          borderRadius: 'var(--radius-full)',
+          background: 'var(--neutral-100)',
+          overflow: 'hidden',
+          display: 'flex',
+          position: 'relative',
+        }}>
+          {rows.map((row, index) => {
+            const value = year === '2026' ? row.v2026 : row.v2025
+            const widthPct = total > 0 ? (value / total) * 100 : 0
+            return (
+              <div
+                key={`${year}-${row.bucket}`}
+                title={`${row.label} — ${formatEuroShare(value, total)}`}
+                style={{
+                  height: '100%',
+                  width: `${widthPct}%`,
+                  background: row.color,
+                  minWidth: value > 0 ? 2 : 0,
+                  borderRight: index < rows.length - 1 ? '1px solid rgba(255,255,255,0.72)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: '#fff',
+                  fontFamily: 'var(--font-mono)',
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                  opacity: widthPct >= 7 ? 0.95 : 0.6,
+                }}>
+                  {formatBlockShare(value, total)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -579,12 +601,15 @@ function AllocationLineView({
   return (
     <div style={{
       display: 'grid',
-      gridTemplateRows: 'auto 1fr auto',
+      gridTemplateRows: 'auto 1fr',
       height,
       gap: 'var(--space-4)',
       padding: '2px 0',
     }}>
-      {renderYearStrip('2026')}
+      <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+        {renderYearStrip('2026')}
+        {renderYearStrip('2025')}
+      </div>
 
       <div style={{
         display: 'grid',
@@ -636,8 +661,6 @@ function AllocationLineView({
           </div>
         ))}
       </div>
-
-      {renderYearStrip('2025')}
     </div>
   )
 }
@@ -659,6 +682,7 @@ function BucketDetailModal({
     [categories],
   )
   const sorted = (rows ?? []).filter((r) => r.amount_2025 > 0 || r.amount_2026 > 0)
+  const detailGridTemplate = 'minmax(0, 6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)'
 
   return (
     <>
@@ -683,7 +707,7 @@ function BucketDetailModal({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: 'min(580px, 100%)',
+            width: 'min(720px, 96vw)',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-xl)',
             boxShadow: '0 24px 60px rgba(0,0,0,0.30)',
@@ -728,7 +752,7 @@ function BucketDetailModal({
           {/* Sous-headers colonnes */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0,1fr) 96px 82px 96px',
+            gridTemplateColumns: detailGridTemplate,
             padding: '8px var(--space-5)',
             background: 'var(--neutral-50)',
             borderBottom: '1px solid var(--neutral-150)',
@@ -767,7 +791,7 @@ function BucketDetailModal({
                     key={`${row.category_id ?? ''}__${row.parent_category_name}__${row.category_name}`}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'minmax(0,1fr) 96px 82px 96px',
+                      gridTemplateColumns: detailGridTemplate,
                       alignItems: 'center',
                       padding: '10px var(--space-5)',
                       borderBottom: isLast ? 'none' : '1px solid var(--neutral-100)',
@@ -781,10 +805,9 @@ function BucketDetailModal({
                         fontWeight: 600,
                         color: 'var(--neutral-800)',
                         lineHeight: 1.2,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
+                        whiteSpace: 'normal',
+                        overflow: 'visible',
+                        wordBreak: 'break-word',
                       }}>
                         {row.category_name}
                       </span>

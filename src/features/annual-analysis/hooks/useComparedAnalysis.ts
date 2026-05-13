@@ -18,6 +18,18 @@ const STALE = 15 * 60_000
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function normalizeComparedBucketKey(bucket: string): string {
+  const key = bucket.trim().toLowerCase()
+
+  if (key.includes('variable')) return 'variable_essentielle'
+  if (key.includes('socle') || key.includes('fixe')) return 'socle_fixe'
+  if (key.includes('epargne') || key.includes('cagnotte') || key.includes('savings')) return 'epargne'
+  if (key.includes('discretion')) return 'discretionnaire'
+  if (key.includes('provision')) return 'provision'
+
+  return key
+}
+
 /** Médiane d'un tableau de nombres (robuste aux valeurs atypiques) */
 function median(values: number[]): number | null {
   if (values.length === 0) return null
@@ -122,14 +134,19 @@ function buildCategoryMetrics(rows: YtdCategoryRow[]): ComparedCategoryMetric[] 
 
 // ─── Métriques buckets comparées ─────────────────────────────────────────────
 
-function buildBucketMetrics(rows: YtdBucketRow[]): ComparedBucketMetric[] {
+function buildBucketMetrics(
+  rows: YtdBucketRow[],
+  flows2025: YtdFlowSummary | null,
+  flows2026: YtdFlowSummary | null,
+): ComparedBucketMetric[] {
   const map = new Map<string, {
     actual_2025: number; actual_2026: number
     target_2026: number; ratio_2026_sum: number; ratio_2026_count: number
   }>()
 
   for (const row of rows) {
-    const entry = map.get(row.budget_bucket) ?? {
+    const normalizedBucket = normalizeComparedBucketKey(row.budget_bucket)
+    const entry = map.get(normalizedBucket) ?? {
       actual_2025: 0, actual_2026: 0,
       target_2026: 0, ratio_2026_sum: 0, ratio_2026_count: 0,
     }
@@ -140,8 +157,33 @@ function buildBucketMetrics(rows: YtdBucketRow[]): ComparedBucketMetric[] {
       entry.ratio_2026_sum += row.consumption_ratio
       entry.ratio_2026_count += 1
     }
-    map.set(row.budget_bucket, entry)
+    map.set(normalizedBucket, entry)
   }
+
+  const ensureDerivedBucket = (bucket: string, actual2025: number, actual2026: number) => {
+    const existing = map.get(bucket)
+    const existingMagnitude = existing ? Math.abs(existing.actual_2025) + Math.abs(existing.actual_2026) : 0
+    if (existingMagnitude >= 1) return
+
+    map.set(bucket, {
+      actual_2025: actual2025,
+      actual_2026: actual2026,
+      target_2026: existing?.target_2026 ?? 0,
+      ratio_2026_sum: existing?.ratio_2026_sum ?? 0,
+      ratio_2026_count: existing?.ratio_2026_count ?? 0,
+    })
+  }
+
+  ensureDerivedBucket(
+    'variable_essentielle',
+    flows2025?.variable_expense_total ?? 0,
+    flows2026?.variable_expense_total ?? 0,
+  )
+  ensureDerivedBucket(
+    'epargne',
+    flows2025?.savings_total ?? 0,
+    flows2026?.savings_total ?? 0,
+  )
 
   return [...map.entries()]
     .map(([bucket, d]) => ({
@@ -196,7 +238,7 @@ export function useComparedAnalysis(): ComparedAnalysis {
 
   const fluxMetrics     = buildFluxMetrics(flows2025, flows2026)
   const categoryMetrics = buildCategoryMetrics(categoryRows)
-  const bucketMetrics   = buildBucketMetrics(bucketRows)
+  const bucketMetrics   = buildBucketMetrics(bucketRows, flows2025, flows2026)
 
   const nbMonths       = COMPARED_MONTHS.length
   const remainingMonths = 12 - nbMonths  // mois non encore écoulés dans l'année
