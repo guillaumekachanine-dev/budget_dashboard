@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, LayoutGrid, X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine, ReferenceDot } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
@@ -14,6 +14,11 @@ import {
 } from '@/features/annual-analysis/components/_constants'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, getCategoryColor } from '@/lib/utils'
+import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
+import blockVariableIcon from '@/assets/icons/blocks/variable.png'
+import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
+import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
+import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
 
 type ProjectionViewMode = 'category' | 'year'
 
@@ -46,7 +51,28 @@ type BlockDeltaBarRow = {
   name: string
   deltaAmount: number
   color: string
+  iconSrc: string | null
+  isTotal: boolean
   isSelected: boolean
+}
+
+type DeltaBlockCategoryRow = {
+  categoryId: string
+  categoryName: string
+  iconKey: string | null
+  deltaAmount: number
+}
+
+type DeltaBlockSummaryRow = {
+  blockKey: string
+  name: string
+  color: string
+  iconSrc: string | null
+  categoryCount: number
+  budgetYtdAmount: number
+  projectedAmount: number
+  deltaAmount: number
+  categories: DeltaBlockCategoryRow[]
 }
 
 type AnnualProjectionSectionConnectedProps = {
@@ -65,6 +91,13 @@ const BLOCK_DELTA_COLORS: Record<string, string> = {
   discretionnaire: 'var(--viz-c)',
   provision: 'var(--color-warning)',
   epargne: 'var(--color-success)',
+}
+const BLOCK_ICON_BY_BUCKET: Record<string, string> = {
+  socle_fixe: blockFixeIcon,
+  variable_essentielle: blockVariableIcon,
+  discretionnaire: blockDiscretionnaireIcon,
+  provision: blockProvisionsIcon,
+  epargne: blockEpargneIcon,
 }
 
 function parentKeyFromName(name: string): string {
@@ -169,6 +202,7 @@ function AnnualCostProjectionCard({
   const [viewMode, setViewMode] = useState<ProjectionViewMode>('category')
   const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null)
   const [selectedDeltaBlockKey, setSelectedDeltaBlockKey] = useState<string | null>(null)
+  const [openedDeltaBreakdownBlockKey, setOpenedDeltaBreakdownBlockKey] = useState<string | null>(null)
   const [showListModal, setShowListModal] = useState(false)
   const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
   const selectedDetailsAnchorRef = useRef<HTMLDivElement | null>(null)
@@ -246,21 +280,95 @@ function AnnualCostProjectionCard({
       sumsByBlock.set(bucket, (sumsByBlock.get(bucket) ?? 0) + Number(row.projectedVsBudgetAmount ?? 0))
     }
 
-    return PILOTAGE_BUCKET_ORDER.map((bucket) => ({
+    const rowsByBlock = PILOTAGE_BUCKET_ORDER.map((bucket) => ({
       blockKey: bucket,
       name: BUCKET_LABELS[bucket] ?? bucket,
       deltaAmount: sumsByBlock.get(bucket) ?? 0,
       color: BLOCK_DELTA_COLORS[bucket] ?? 'var(--neutral-500)',
+      iconSrc: BLOCK_ICON_BY_BUCKET[bucket] ?? null,
+      isTotal: false,
       isSelected: selectedDeltaBlockKey === bucket,
     }))
+    const totalDeltaAmount = rowsByBlock.reduce((sum, row) => sum + row.deltaAmount, 0)
+
+    return [
+      ...rowsByBlock,
+      {
+        blockKey: 'total',
+        name: 'Total',
+        deltaAmount: totalDeltaAmount,
+        color: 'var(--neutral-0)',
+        iconSrc: null,
+        isTotal: true,
+        isSelected: selectedDeltaBlockKey === 'total',
+      },
+    ]
   }, [rows, selectedDeltaBlockKey])
 
   const deltaAxisMax = useMemo(() => {
     const maxAbs = Math.max(...blockDeltaData.map((row) => Math.abs(row.deltaAmount)), 0)
     if (maxAbs <= 0) return 1_000
     const step = 1_000
-    return Math.ceil((maxAbs * 1.15) / step) * step
+    return Math.ceil((maxAbs * 1.05) / step) * step
   }, [blockDeltaData])
+
+  const deltaBlockSummaryRows = useMemo<DeltaBlockSummaryRow[]>(() => {
+    const seed = new Map(
+      PILOTAGE_BUCKET_ORDER.map((bucket) => [
+        bucket,
+        {
+          blockKey: bucket,
+          name: BUCKET_LABELS[bucket] ?? bucket,
+          color: BLOCK_DELTA_COLORS[bucket] ?? 'var(--neutral-500)',
+          iconSrc: BLOCK_ICON_BY_BUCKET[bucket] ?? null,
+          budgetYtdAmount: 0,
+          projectedAmount: 0,
+          deltaAmount: 0,
+          categories: new Map<string, DeltaBlockCategoryRow>(),
+        },
+      ]),
+    )
+
+    for (const row of rows) {
+      const bucket = (row.budgetBucket ?? '').trim()
+      if (!(PILOTAGE_BUCKET_ORDER as readonly string[]).includes(bucket)) continue
+      const group = seed.get(bucket as (typeof PILOTAGE_BUCKET_ORDER)[number])
+      if (!group) continue
+
+      group.budgetYtdAmount += Number(row.budgetYtdAmount ?? 0)
+      group.projectedAmount += Number(row.projectedAnnualAmount ?? 0)
+      group.deltaAmount += Number(row.projectedVsBudgetAmount ?? 0)
+
+      const existingCategory = group.categories.get(row.categoryId)
+      if (existingCategory) {
+        existingCategory.deltaAmount += Number(row.projectedVsBudgetAmount ?? 0)
+      } else {
+        group.categories.set(row.categoryId, {
+          categoryId: row.categoryId,
+          categoryName: row.categoryName,
+          iconKey: categoryIconById.get(row.categoryId) ?? null,
+          deltaAmount: Number(row.projectedVsBudgetAmount ?? 0),
+        })
+      }
+    }
+
+    return PILOTAGE_BUCKET_ORDER.map((bucket) => {
+      const group = seed.get(bucket)!
+      const categories = [...group.categories.values()].sort((a, b) => Math.abs(b.deltaAmount) - Math.abs(a.deltaAmount))
+
+      return {
+        blockKey: group.blockKey,
+        name: group.name,
+        color: group.color,
+        iconSrc: group.iconSrc,
+        categoryCount: categories.length,
+        budgetYtdAmount: group.budgetYtdAmount,
+        projectedAmount: group.projectedAmount,
+        deltaAmount: group.deltaAmount,
+        categories,
+      }
+    })
+  }, [categoryIconById, rows])
 
   const selectedRow = useMemo(
     () => parentGroups.find((group) => group.parentKey === selectedParentKey) ?? null,
@@ -273,12 +381,11 @@ function AnnualCostProjectionCard({
   )
 
   useEffect(() => {
-    const hasVisibleDetails = viewMode === 'category' && selectedRow !== null
-
-    if (!hasVisibleDetails) {
+    if (selectedRow == null) {
       wasDetailsVisibleRef.current = false
       return
     }
+    if (viewMode !== 'category') return
     if (wasDetailsVisibleRef.current) return
 
     wasDetailsVisibleRef.current = true
@@ -302,7 +409,7 @@ function AnnualCostProjectionCard({
       window.cancelAnimationFrame(rafId)
       if (timeoutId) window.clearTimeout(timeoutId)
     }
-  }, [selectedDeltaBlockKey, selectedRow, viewMode])
+  }, [selectedRow, viewMode])
 
   const modeToggle = (
     <div style={switchStyle} role="tablist" aria-label="Mode de projection">
@@ -369,25 +476,54 @@ function AnnualCostProjectionCard({
         </ResponsiveContainer>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={blockDeltaData} margin={{ top: 30, right: 8, left: 8, bottom: 10 }} barCategoryGap="34%">
+          <BarChart data={blockDeltaData} margin={{ top: 48, right: 0, left: 0, bottom: 28 }} barCategoryGap="18%">
             <XAxis
               dataKey="name"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 11, fill: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+              tick={false}
             />
             <YAxis
-              axisLine={false}
-              tickLine={false}
-              width={68}
-              tick={{ fontSize: 11, fill: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}
-              tickFormatter={(value) => fmtCurrency(Number(value))}
+              hide
               domain={[-deltaAxisMax, deltaAxisMax]}
             />
-            <ReferenceLine y={0} stroke="var(--neutral-400)" strokeWidth={1.2} />
+            <ReferenceLine
+              y={0}
+              stroke="var(--neutral-400)"
+              strokeWidth={1.2}
+            />
+            {blockDeltaData
+              .filter((row) => !row.isTotal && row.iconSrc)
+              .map((row) => (
+                <ReferenceDot
+                  key={`axis-icon-${row.blockKey}`}
+                  x={row.name}
+                  y={0}
+                  ifOverflow="visible"
+                  isFront
+                  shape={(props: unknown) => {
+                    const { cx, cy } = (props ?? {}) as { cx?: number; cy?: number }
+                    if (cx == null || cy == null || !row.iconSrc) return <g />
+                    const iconSize = 18
+                    const iconY = row.deltaAmount >= 0 ? (cy + 3) : (cy - iconSize - 3)
+                    return (
+                      <image
+                        href={row.iconSrc}
+                        xlinkHref={row.iconSrc}
+                        x={cx - iconSize / 2}
+                        y={iconY}
+                        width={iconSize}
+                        height={iconSize}
+                        preserveAspectRatio="xMidYMid meet"
+                      />
+                    )
+                  }}
+                />
+              ))}
             <Bar
               dataKey="deltaAmount"
-              maxBarSize={44}
+              barSize={32}
+              maxBarSize={32}
               cursor="pointer"
               onClick={(_: unknown, index: number) => {
                 const clicked = blockDeltaData[index]?.blockKey ?? null
@@ -397,10 +533,10 @@ function AnnualCostProjectionCard({
               {blockDeltaData.map((row) => (
                 <Cell
                   key={`delta-${row.blockKey}`}
-                  fill={row.color}
-                  fillOpacity={row.isSelected || !selectedDeltaBlockKey ? 0.96 : 0.62}
-                  stroke={row.isSelected ? 'var(--neutral-900)' : row.color}
-                  strokeWidth={row.isSelected ? 1.5 : 0}
+                  fill={row.isTotal ? 'var(--neutral-0)' : row.color}
+                  fillOpacity={row.isTotal ? 1 : (row.isSelected || !selectedDeltaBlockKey ? 0.96 : 0.62)}
+                  stroke={row.isTotal ? 'var(--color-warning)' : (row.isSelected ? 'var(--neutral-900)' : row.color)}
+                  strokeWidth={row.isTotal ? (row.isSelected ? 3 : 2.3) : (row.isSelected ? 1.5 : 0)}
                 />
               ))}
               <LabelList
@@ -415,7 +551,7 @@ function AnnualCostProjectionCard({
                   }
                   if (x == null || y == null || width == null || height == null || value == null) return null
                   const numericValue = Number(value)
-                  const posY = numericValue >= 0 ? (y - 7) : (y + height + 12)
+                  const posY = numericValue >= 0 ? (y - 10) : (y + height + 15)
                   return (
                     <text
                       x={x + width / 2}
@@ -441,6 +577,12 @@ function AnnualCostProjectionCard({
   const selectedCard = selectedRow && viewMode === 'category'
     ? <ProjectionDetailsCard row={selectedRow} />
     : null
+  const yearSummaryCard = viewMode === 'year' ? (
+    <DeltaBlockSummaryCard
+      rows={deltaBlockSummaryRows}
+      onOpenBlockDetails={(blockKey) => setOpenedDeltaBreakdownBlockKey(blockKey)}
+    />
+  ) : null
 
   const categoryHeaderControls = viewMode === 'category' ? (
     <div style={categoryInlineControlsStyle}>
@@ -451,7 +593,7 @@ function AnnualCostProjectionCard({
       </button>
     </div>
   ) : (
-    <span style={top5LabelStyle}>Projection delta budget/réel fin 2026</span>
+    <span style={top5LabelStyle}>Projection écart fin 2026</span>
   )
 
   const chartTopControls = (
@@ -478,15 +620,24 @@ function AnnualCostProjectionCard({
       onClose={() => setOpenedParentKey(null)}
     />
   ) : null
+  const deltaBreakdownModal = openedDeltaBreakdownBlockKey
+    ? (
+      <DeltaBreakdownModal
+        row={deltaBlockSummaryRows.find((entry) => entry.blockKey === openedDeltaBreakdownBlockKey) ?? null}
+        onClose={() => setOpenedDeltaBreakdownBlockKey(null)}
+      />
+    )
+    : null
 
   if (bare) {
     return (
       <>
         {chartTopControls}
         {chart}
-        <div ref={selectedDetailsAnchorRef}>{selectedCard}</div>
+        <div ref={selectedDetailsAnchorRef}>{selectedCard ?? yearSummaryCard}</div>
         {modal}
         {detailsModal}
+        {deltaBreakdownModal}
       </>
     )
   }
@@ -499,19 +650,252 @@ function AnnualCostProjectionCard({
             <div>
               <h3 style={cardTitleStyle}>Projection coûts annuels</h3>
               <p style={cardSubStyle}>
-                {viewMode === 'category' ? 'top 5 catégories projetées' : 'Projection delta budget/réel fin 2026'}
+                {viewMode === 'category' ? 'top 5 catégories projetées' : 'Projection écart fin 2026'}
               </p>
             </div>
             {modeToggle}
           </div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chartTopControls}</div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chart}</div>
-          <div ref={selectedDetailsAnchorRef}>{selectedCard}</div>
+          <div ref={selectedDetailsAnchorRef}>{selectedCard ?? yearSummaryCard}</div>
         </div>
       </div>
       {modal}
       {detailsModal}
+      {deltaBreakdownModal}
     </section>
+  )
+}
+
+function DeltaBlockSummaryCard({
+  rows,
+  onOpenBlockDetails,
+}: {
+  rows: DeltaBlockSummaryRow[]
+  onOpenBlockDetails: (blockKey: string) => void
+}) {
+  const totalDeltaAmount = rows.reduce((sum, row) => sum + row.deltaAmount, 0)
+  const totalDeltaPositive = totalDeltaAmount > 0
+
+  return (
+    <div style={selectedCardStyle}>
+      <div
+        style={{
+          display: 'grid',
+          gap: 0,
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '16px minmax(0,1fr) 82px 24px',
+            alignItems: 'center',
+            columnGap: 7,
+            padding: '1px 0 4px',
+          }}
+        >
+          <span style={{ gridColumn: '1 / 3', fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>
+            Ecart net projeté 2026
+          </span>
+          <span
+            style={{
+              gridColumn: '3 / 5',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 'var(--radius-sm)',
+              padding: '2px 7px',
+              width: 82,
+              background: totalDeltaPositive ? 'rgba(252,90,90,0.14)' : 'rgba(46,212,122,0.14)',
+              border: `1px solid ${totalDeltaPositive ? 'rgba(252,90,90,0.24)' : 'rgba(46,212,122,0.24)'}`,
+              color: totalDeltaPositive ? 'var(--negative)' : 'var(--positive)',
+              fontSize: 10,
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+              justifySelf: 'end',
+            }}
+          >
+            {fmtCurrency(totalDeltaAmount)}
+          </span>
+        </div>
+
+        {rows.map((row) => {
+          const isOverBudget = row.deltaAmount > 0
+          const pillColor = isOverBudget ? 'var(--negative)' : 'var(--positive)'
+          const categoriesLabel = `${row.categoryCount} cat.`
+
+          return (
+            <div
+              key={row.blockKey}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '16px minmax(0,1fr) 82px 24px',
+                alignItems: 'center',
+                columnGap: 7,
+                padding: '3px 0',
+              }}
+            >
+              <img
+                src={row.iconSrc ?? blockFixeIcon}
+                alt={`Bloc ${row.name}`}
+                width={15}
+                height={15}
+                style={{ width: 15, height: 15, objectFit: 'contain' }}
+              />
+
+              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.name}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap' }}>
+                  {categoriesLabel}
+                </span>
+              </div>
+
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  color: pillColor,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  whiteSpace: 'nowrap',
+                  width: 82,
+                }}
+              >
+                {fmtCurrency(row.deltaAmount)}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => onOpenBlockDetails(row.blockKey)}
+                aria-label={`Ouvrir le détail du bloc ${row.name}`}
+                style={deltaExpandButtonStyle}
+              >
+                +
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DeltaBreakdownModal({
+  row,
+  onClose,
+}: {
+  row: DeltaBlockSummaryRow | null
+  onClose: () => void
+}) {
+  if (!row) return null
+  const netDeltaAmount = row.categories.reduce((sum, category) => sum + category.deltaAmount, 0)
+
+  return (
+    <div style={parentDetailOverlayStyle} onClick={onClose}>
+      <div style={parentDetailModalStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={{ ...listModalHeaderStyle, background: row.color }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--neutral-0)' }}>
+              {row.name}
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+              Détail des écarts par poste
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.18)',
+              border: '1px solid rgba(255,255,255,0.24)',
+              borderRadius: 'var(--radius-full)',
+              cursor: 'pointer',
+              color: 'var(--neutral-0)',
+              padding: 4,
+              lineHeight: 0,
+            }}
+            aria-label={`Fermer le détail du bloc ${row.name}`}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gap: 0 }}>
+          {row.categories.map((category) => {
+            const isOverBudget = category.deltaAmount > 0
+            return (
+              <div
+                key={category.categoryId}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '16px minmax(0,1fr) auto',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 0',
+                  borderBottom: '1px solid var(--neutral-100)',
+                }}
+              >
+                <CategoryIcon
+                  iconKey={category.iconKey}
+                  label={category.categoryName}
+                  size={14}
+                  style={{ width: 14, height: 14, objectFit: 'contain', display: 'block' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {category.categoryName}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    color: isOverBudget ? 'var(--negative)' : 'var(--positive)',
+                  }}
+                >
+                  {fmtCurrency(category.deltaAmount)}
+                </span>
+              </div>
+            )
+          })}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '16px minmax(0,1fr) auto',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 0 2px',
+            }}
+          >
+            <span aria-hidden="true" />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#B06A00',
+                textTransform: 'uppercase',
+              }}
+            >
+              ÉCART NET PROJETÉ
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 700,
+                color: '#B06A00',
+              }}
+            >
+              {fmtCurrency(netDeltaAmount)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1022,6 +1406,24 @@ const listButtonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
+}
+
+const deltaExpandButtonStyle: CSSProperties = {
+  width: 24,
+  height: 24,
+  minWidth: 24,
+  minHeight: 24,
+  borderRadius: 'var(--radius-full)',
+  border: '1px solid var(--neutral-300)',
+  background: 'var(--neutral-0)',
+  color: 'var(--neutral-700)',
+  fontSize: 16,
+  lineHeight: 1,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
 }
 
 const top5LabelStyle: CSSProperties = {
