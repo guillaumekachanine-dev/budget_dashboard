@@ -409,8 +409,8 @@ async function fetchDatasetForMonths(months: number[]): Promise<{
 
   const [analyticsRes, periodsRes, bucketVsActualRes, monthlyBucketActualsRes, monthlyBucketBudgetsRes] = await Promise.all([
     budgetDb
-      .from('analytics_monthly_category_metrics')
-      .select('period_month, category_id, amount_total')
+      .from('v_monthly_category_actuals_clean' as never)
+      .select('period_month, category_id, actual_amount')
       .eq('period_year', YEAR_2026)
       .in('period_month', months),
     budgetDb
@@ -456,7 +456,10 @@ async function fetchDatasetForMonths(months: number[]): Promise<{
   }
 
   return {
-    analyticsRows: (analyticsRes.data ?? []) as AnalyticsRow[],
+    analyticsRows: (analyticsRes.data ?? []).map((r) => {
+      const row = r as Record<string, unknown>
+      return { period_month: Number(row.period_month), category_id: String(row.category_id ?? ''), amount_total: row.actual_amount } as AnalyticsRow
+    }),
     periodRows,
     budgetRows,
     bucketRows: (bucketVsActualRes.data ?? []) as BucketBudgetVsActualRow[],

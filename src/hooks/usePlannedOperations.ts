@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
+import { QK } from '@/lib/queryKeys'
 import type {
   PlannedOperation,
   PlannedOperationFlowItem,
@@ -229,7 +230,7 @@ export function useAddPlannedOperation() {
       return data
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['planned-operations'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.PLANNED_OPERATIONS] })
     },
   })
 }

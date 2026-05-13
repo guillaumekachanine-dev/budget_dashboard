@@ -1,3 +1,1 @@
-import { supabase } from '@/lib/supabase'
-
-export const budgetDb = supabase.schema('budget_dashboard')
+export { supabase as budgetDb } from '@/lib/supabase'

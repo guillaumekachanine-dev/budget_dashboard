@@ -1,56 +1,24 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type {
-  AnnualTotalsPayload,
-  MonthlyProfilePoint,
-  Top5CategoryItem,
-} from '@/features/annual-analysis/types'
-import { useCategories } from '@/hooks/useCategories'
-import { budgetDb } from '@/lib/supabaseBudget'
-import type { Category } from '@/lib/types'
-import { formatCurrencyRounded as formatCurrency, getCategoryColor } from '@/lib/utils'
+import { formatCurrencyRounded as formatCurrency } from '@/lib/utils'
+import { getComparedYtdFlows } from '@/features/annual-analysis/api/getComparedYtdFlows'
+import type { YtdFlowRow } from '@/features/annual-analysis/types.compared'
 
-type Props = {
-  annualTotals: AnnualTotalsPayload | null
-  monthlyProfile: MonthlyProfilePoint[]
-  top5ParentCategories: Top5CategoryItem[]
-  top5LeafCategories: Top5CategoryItem[]
-}
-
-type Annual2026YtdMetricRow = {
-  period_month: number | null
-  amount_total: number | null
-  category_id: string | null
-  category_name: string | null
-  parent_category_id: string | null
-  parent_category_name: string | null
-}
-
-type RankedKpiRow = {
-  id: string
-  name: string
-  amount: number
-  sharePct: number | null
-  color: string
-}
-
-type Ytd2026KpiData = {
-  topParent: RankedKpiRow | null
-  topLeaf: RankedKpiRow | null
-  avgMonthlyExpense: number | null
-  medianMonthlyExpense: number | null
-  totalYtdExpense: number | null
+type YtdSummary = {
+  income: number
+  savings: number
+  expense: number
+  avgMonthly: number
+  savingsRatePct: number
+  expenseRatePct: number
 }
 
 type CardFaceData = {
   title: string
-  name?: string
   amount: number | null
-  detail?: string
-  delta?: number | null   // % écart 2026 vs 2025 (positif = hausse des dépenses)
+  amountColor?: string
+  secondaryText?: string
   tone: KpiBlueTone
-  emphasizeName?: boolean
-  nameAccent?: string
 }
 
 type KpiBlueTone = 'mist' | 'sky' | 'ocean' | 'ink'
@@ -98,289 +66,111 @@ const KPI_BLUE_CAMAIEU: Record<
   },
 }
 
-function asFiniteNumber(value: unknown): number | null {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue : null
-}
-
-function computeMedian(values: number[]): number | null {
-  if (values.length === 0) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const middle = Math.floor(sorted.length / 2)
-  if (sorted.length % 2 === 0) return (sorted[middle - 1] + sorted[middle]) / 2
-  return sorted[middle]
-}
-
-function normalizeToken(value: string | null | undefined): string {
-  if (!value) return ''
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
-function formatSharePercentInt(share: number | null | undefined): string {
-  if (share == null || !Number.isFinite(share)) return '—'
-  const normalizedPct = share <= 1 ? share * 100 : share
-  return `${Math.round(normalizedPct)}%`
-}
-
-
-
-async function getAnnual2025YtdMetricRows(): Promise<Annual2026YtdMetricRow[]> {
-  const { data, error } = await budgetDb
-    .from('analytics_monthly_category_metrics')
-    .select('period_month, amount_total, category_id, category_name, parent_category_id, parent_category_name')
-    .eq('period_year', 2025)
-    .eq('flow_type', 'expense')
-    .in('period_month', [1, 2, 3, 4])
-    .order('period_month', { ascending: true })
-
-  if (error) throw new Error(`getAnnual2025YtdMetricRows failed: ${error.message}`)
-  return (data ?? []) as Annual2026YtdMetricRow[]
-}
-
-async function getAnnual2026YtdMetricRows(): Promise<Annual2026YtdMetricRow[]> {
-  const { data, error } = await budgetDb
-    .from('analytics_monthly_category_metrics')
-    .select('period_month, amount_total, category_id, category_name, parent_category_id, parent_category_name')
-    .eq('period_year', 2026)
-    .eq('flow_type', 'expense')
-    .order('period_month', { ascending: true })
-
-  if (error) throw new Error(`getAnnual2026YtdMetricRows failed: ${error.message}`)
-  return (data ?? []) as Annual2026YtdMetricRow[]
-}
-
-function buildAnnual2026YtdKpis(rows: Annual2026YtdMetricRow[], categories: Category[]): Ytd2026KpiData {
-  if (!rows.length) {
-    return {
-      topParent: null,
-      topLeaf: null,
-      avgMonthlyExpense: null,
-      medianMonthlyExpense: null,
-      totalYtdExpense: null,
-    }
+function buildYtdSummaries(rows: YtdFlowRow[]): { ytd2025: YtdSummary; ytd2026: YtdSummary } {
+  const acc: Record<number, { income: number; savings: number; expense: number; months: Set<number> }> = {
+    2025: { income: 0, savings: 0, expense: 0, months: new Set() },
+    2026: { income: 0, savings: 0, expense: 0, months: new Set() },
   }
-
-  const categoryById = new Map(categories.map((category) => [category.id, category]))
-  const monthTotals = new Map<number, number>()
-  const parentTotals = new Map<string, { id: string; name: string; amount: number }>()
-  const leafTotals = new Map<string, { id: string; name: string; parentId: string | null; parentName: string | null; amount: number }>()
 
   for (const row of rows) {
-    const categoryId = row.category_id?.trim() ?? ''
-    const amount = Math.abs(asFiniteNumber(row.amount_total) ?? 0)
-    const month = Number(row.period_month ?? 0)
-    if (!categoryId || amount <= 0 || month <= 0) continue
+    const y = row.period_year
+    if (!acc[y]) continue
+    acc[y].income += row.income_total
+    acc[y].savings += row.savings_capacity_observed
+    acc[y].expense += row.expense_total
+    acc[y].months.add(row.period_month)
+  }
 
-    const categoryMeta = categoryById.get(categoryId)
-    const isLeaf = categoryMeta
-      ? categoryMeta.parent_id != null
-      : Boolean(row.parent_category_id && row.parent_category_id !== categoryId)
-    if (!isLeaf) continue
-
-    monthTotals.set(month, (monthTotals.get(month) ?? 0) + amount)
-
-    const parentId = categoryMeta?.parent_id ?? row.parent_category_id ?? null
-    const parentName = parentId
-      ? (categoryById.get(parentId)?.name ?? row.parent_category_name ?? 'Catégorie')
-      : (row.parent_category_name ?? 'Catégorie')
-    const parentKey = parentId ?? normalizeToken(parentName) ?? 'unknown_parent'
-    const parentEntry = parentTotals.get(parentKey) ?? { id: parentId ?? parentKey, name: parentName, amount: 0 }
-    parentEntry.amount += amount
-    parentTotals.set(parentKey, parentEntry)
-
-    const leafEntry = leafTotals.get(categoryId) ?? {
-      id: categoryId,
-      name: categoryMeta?.name ?? row.category_name ?? 'Sous-catégorie',
-      parentId,
-      parentName: parentName ?? null,
-      amount: 0,
+  const build = (y: number): YtdSummary => {
+    const a = acc[y]
+    const monthCount = a.months.size || 1
+    return {
+      income: a.income,
+      savings: a.savings,
+      expense: a.expense,
+      avgMonthly: a.expense / monthCount,
+      savingsRatePct: a.income > 0 ? Math.round((a.savings / a.income) * 100) : 0,
+      expenseRatePct: a.income > 0 ? Math.round((a.expense / a.income) * 100) : 0,
     }
-    leafEntry.amount += amount
-    leafTotals.set(categoryId, leafEntry)
   }
 
-  const totalYtd = [...monthTotals.values()].reduce((sum, value) => sum + value, 0)
-  const monthValues = [...monthTotals.values()]
-  const avgMonthlyExpense = monthValues.length > 0 ? totalYtd / monthValues.length : null
-  const medianMonthlyExpense = computeMedian(monthValues)
-
-  const topParentEntry = [...parentTotals.values()].sort((a, b) => b.amount - a.amount)[0]
-  const topLeafEntry = [...leafTotals.values()].sort((a, b) => b.amount - a.amount)[0]
-
-  const topParent: RankedKpiRow | null = topParentEntry
-      ? {
-        id: topParentEntry.id,
-        name: topParentEntry.name,
-        amount: topParentEntry.amount,
-        sharePct: totalYtd > 0 ? topParentEntry.amount / totalYtd : null,
-        color: getCategoryColor(categoryById.get(topParentEntry.id)?.color_token ?? null, 0),
-      }
-    : null
-
-  const topLeafCategory = topLeafEntry ? categoryById.get(topLeafEntry.id) ?? null : null
-  const topLeaf: RankedKpiRow | null = topLeafEntry
-      ? {
-        id: topLeafEntry.id,
-        name: topLeafEntry.name,
-        amount: topLeafEntry.amount,
-        sharePct: totalYtd > 0 ? topLeafEntry.amount / totalYtd : null,
-        color: getCategoryColor(topLeafCategory?.color_token ?? null, 1),
-      }
-    : null
-
-  return {
-    topParent,
-    topLeaf,
-    avgMonthlyExpense,
-    medianMonthlyExpense,
-    totalYtdExpense: totalYtd > 0 ? totalYtd : null,
-  }
+  return { ytd2025: build(2025), ytd2026: build(2026) }
 }
 
-export function AnnualKeyInsightsGrid({
-  annualTotals: _annualTotals,
-  monthlyProfile: _monthlyProfile,
-  top5ParentCategories: _top5ParentCategories,
-  top5LeafCategories: _top5LeafCategories,
-}: Props) {
-  const { data: categories = [] } = useCategories()
+const CARD_IDS = ['revenus', 'epargne', 'depenses', 'moy-depenses'] as const
+type CardId = (typeof CARD_IDS)[number]
+
+export function AnnualKeyInsightsGrid() {
   const [selectedYear, setSelectedYear] = useState<2025 | 2026>(2025)
   const [flippedByCard, setFlippedByCard] = useState<Record<string, boolean>>({})
 
-  const { data: ytd2025Rows = [] } = useQuery({
-    queryKey: ['annual-2025-ytd-kpi-cards'],
-    queryFn: getAnnual2025YtdMetricRows,
+  const { data: flowRows = [] } = useQuery({
+    queryKey: ['compared-ytd-flows-kpi-cards'],
+    queryFn: getComparedYtdFlows,
     staleTime: 15 * 60_000,
   })
 
-  const { data: ytd2026Rows = [] } = useQuery({
-    queryKey: ['annual-2026-ytd-kpi-cards'],
-    queryFn: getAnnual2026YtdMetricRows,
-    staleTime: 15 * 60_000,
-  })
+  const { ytd2025, ytd2026 } = useMemo(() => buildYtdSummaries(flowRows), [flowRows])
 
-  const ytd2025 = useMemo(() => buildAnnual2026YtdKpis(ytd2025Rows, categories), [ytd2025Rows, categories])
-  const ytd2026 = useMemo(() => buildAnnual2026YtdKpis(ytd2026Rows, categories), [ytd2026Rows, categories])
+  const handleYearSelect = (year: 2025 | 2026) => {
+    setSelectedYear(year)
+    setFlippedByCard(Object.fromEntries(CARD_IDS.map((id) => [id, year === 2026])))
+  }
 
-  // Front (2025): how does 2025 compare to 2026 — ref=2026
-  const avgFrontDelta = (ytd2025.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense !== 0)
-    ? ((ytd2025.avgMonthlyExpense - ytd2026.avgMonthlyExpense) / ytd2026.avgMonthlyExpense) * 100
-    : null
-  // Back (2026): how does 2026 compare to 2025 — ref=2025
-  const avgBackDelta = (ytd2025.avgMonthlyExpense != null && ytd2026.avgMonthlyExpense != null && ytd2025.avgMonthlyExpense !== 0)
-    ? ((ytd2026.avgMonthlyExpense - ytd2025.avgMonthlyExpense) / ytd2025.avgMonthlyExpense) * 100
-    : null
-
-  const totalFrontDelta = (ytd2025.totalYtdExpense != null && ytd2026.totalYtdExpense != null && ytd2026.totalYtdExpense !== 0)
-    ? ((ytd2025.totalYtdExpense - ytd2026.totalYtdExpense) / ytd2026.totalYtdExpense) * 100
-    : null
-  const totalBackDelta = (ytd2025.totalYtdExpense != null && ytd2026.totalYtdExpense != null && ytd2025.totalYtdExpense !== 0)
-    ? ((ytd2026.totalYtdExpense - ytd2025.totalYtdExpense) / ytd2025.totalYtdExpense) * 100
-    : null
-
-  const frontCards: Array<{ id: string; face: CardFaceData }> = [
+  const frontCards: Array<{ id: CardId; face: CardFaceData }> = [
     {
-      id: 'top-parent',
-      face: {
-        title: 'Catégorie #1',
-        name: ytd2025.topParent?.name ?? '—',
-        amount: ytd2025.topParent?.amount ?? null,
-        detail: `${formatSharePercentInt(ytd2025.topParent?.sharePct)} du budget`,
-        tone: 'mist',
-        emphasizeName: true,
-        nameAccent: 'var(--primary-700)',
-      },
+      id: 'revenus',
+      face: { title: 'Revenus', amount: ytd2025.income, amountColor: 'var(--primary-600)', tone: 'mist' },
     },
     {
-      id: 'top-leaf',
+      id: 'epargne',
       face: {
-        title: 'Poste #1',
-        name: ytd2025.topLeaf?.name ?? '—',
-        amount: ytd2025.topLeaf?.amount ?? null,
-        detail: `${formatSharePercentInt(ytd2025.topLeaf?.sharePct)} du budget`,
+        title: 'Épargne',
+        amount: ytd2025.savings,
+        amountColor: '#1A9E56',
+        secondaryText: `${ytd2025.savingsRatePct}% des revenus`,
         tone: 'sky',
-        emphasizeName: true,
-        nameAccent: 'var(--color-error)',
       },
     },
     {
-      id: 'avg-month',
+      id: 'depenses',
       face: {
-        title: 'Moyenne/mois',
-        name: 'Dépenses',
-        amount: ytd2025.avgMonthlyExpense,
-        delta: avgFrontDelta,
+        title: 'Dépenses',
+        amount: ytd2025.expense,
+        amountColor: '#D93B3B',
+        secondaryText: `${ytd2025.expenseRatePct}% des revenus`,
         tone: 'ocean',
       },
     },
     {
-      id: 'total-ytd',
-      face: {
-        title: 'Total YTD',
-        name: 'Dépenses',
-        amount: ytd2025.totalYtdExpense,
-        delta: totalFrontDelta,
-        tone: 'ink',
-      },
+      id: 'moy-depenses',
+      face: { title: 'Moy. dépenses', amount: ytd2025.avgMonthly, amountColor: '#B8720A', secondaryText: 'par mois', tone: 'ink' },
     },
   ]
 
-  const backById: Record<string, CardFaceData> = {
-    'top-parent': {
-      title: 'Catégorie #1 YTD',
-      name: ytd2026.topParent?.name ?? '—',
-      amount: ytd2026.topParent?.amount ?? null,
-      detail: `${formatSharePercentInt(ytd2026.topParent?.sharePct)} du budget`,
-      tone: 'mist',
-      emphasizeName: true,
-      nameAccent: 'var(--primary-700)',
-    },
-    'top-leaf': {
-      title: 'Poste #1 YTD',
-      name: ytd2026.topLeaf?.name ?? '—',
-      amount: ytd2026.topLeaf?.amount ?? null,
-      detail: `${formatSharePercentInt(ytd2026.topLeaf?.sharePct)} du budget`,
+  const backById: Record<CardId, CardFaceData> = {
+    revenus: { title: 'Revenus', amount: ytd2026.income, amountColor: 'var(--primary-600)', tone: 'mist' },
+    epargne: {
+      title: 'Épargne',
+      amount: ytd2026.savings,
+      amountColor: '#1A9E56',
+      secondaryText: `${ytd2026.savingsRatePct}% des revenus`,
       tone: 'sky',
-      emphasizeName: true,
-      nameAccent: 'var(--color-error)',
     },
-    'avg-month': {
-      title: 'Moy/mois YTD',
-      name: 'Dépenses',
-      amount: ytd2026.avgMonthlyExpense,
-      delta: avgBackDelta,
+    depenses: {
+      title: 'Dépenses',
+      amount: ytd2026.expense,
+      amountColor: '#D93B3B',
+      secondaryText: `${ytd2026.expenseRatePct}% des revenus`,
       tone: 'ocean',
     },
-    'total-ytd': {
-      title: 'Total YTD',
-      name: 'Dépenses',
-      amount: ytd2026.totalYtdExpense,
-      delta: totalBackDelta,
-      tone: 'ink',
-    },
-  }
-
-  // Handle year selection - flip all cards to match selected year
-  const handleYearSelect = (year: 2025 | 2026) => {
-    setSelectedYear(year)
-    // Set all cards to match the selected year
-    setFlippedByCard({
-      'top-parent': year === 2026,
-      'top-leaf': year === 2026,
-      'avg-month': year === 2026,
-      'total-ytd': year === 2026,
-    })
+    'moy-depenses': { title: 'Moy. dépenses', amount: ytd2026.avgMonthly, amountColor: '#B8720A', secondaryText: 'par mois', tone: 'ink' },
   }
 
   return (
     <section style={{ marginTop: 'var(--space-3)' }}>
 
-      {/* ── Period banner – pills on left, date on right ── */}
+      {/* ── Period banner ── */}
       <div style={{
         background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 85%, #000 15%) 0%, color-mix(in oklab, var(--color-warning) 68%, #000 32%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
         padding: '8px var(--space-5)',
@@ -390,21 +180,10 @@ export function AnnualKeyInsightsGrid({
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
-        {/* Left: year pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <YearPill
-            year={2025}
-            selected={selectedYear === 2025}
-            onSelect={() => handleYearSelect(2025)}
-          />
-          <YearPill
-            year={2026}
-            selected={selectedYear === 2026}
-            onSelect={() => handleYearSelect(2026)}
-          />
+          <YearPill year={2025} selected={selectedYear === 2025} onSelect={() => handleYearSelect(2025)} />
+          <YearPill year={2026} selected={selectedYear === 2026} onSelect={() => handleYearSelect(2026)} />
         </div>
-
-        {/* Right: period info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             fontSize: 11,
@@ -444,7 +223,7 @@ export function AnnualKeyInsightsGrid({
               back={backById[id] ?? face}
               flipped={Boolean(flippedByCard[id])}
               onToggle={() => {
-                setFlippedByCard((previous) => ({ ...previous, [id]: !previous[id] }))
+                setFlippedByCard((prev) => ({ ...prev, [id]: !prev[id] }))
               }}
             />
           ))}
@@ -463,9 +242,7 @@ function YearPill({
   selected: boolean
   onSelect: () => void
 }) {
-  const isOrange = year === 2025
-  const backgroundColor = isOrange ? '#FFAB2E' : '#002FA7'
-  const opacity = selected ? 1 : 0.4
+  const backgroundColor = year === 2025 ? '#FFAB2E' : '#002FA7'
 
   return (
     <button
@@ -481,7 +258,7 @@ function YearPill({
         fontWeight: 'var(--font-weight-bold)',
         cursor: 'pointer',
         transition: 'opacity 200ms ease-in-out',
-        opacity,
+        opacity: selected ? 1 : 0.4,
         letterSpacing: '0.05em',
       }}
     >
@@ -489,7 +266,6 @@ function YearPill({
     </button>
   )
 }
-
 
 function FlipInsightCard({
   front,
@@ -522,7 +298,7 @@ function FlipInsightCard({
         style={{
           position: 'relative',
           display: 'block',
-          minHeight: 124,
+          minHeight: 118,
           transformStyle: 'preserve-3d',
           transition: `transform ${flipDurationMs}ms cubic-bezier(0.23, 0.91, 0.3, 1)`,
           transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
@@ -550,7 +326,6 @@ function CardFace({
   isBack: boolean
   flipDurationMs: number
 }) {
-  const hasName = Boolean(face.name)
   const yearText = isBack ? '2026' : '2025'
   const yearBadgeColor = isBack ? '#002FA7' : '#FF9A00'
   const yearTransitionDelay = visible ? Math.round(flipDurationMs * 0.34) : 0
@@ -565,23 +340,20 @@ function CardFace({
       padding: 0,
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      minHeight: 124,
+      minHeight: 118,
       minWidth: 0,
       boxSizing: 'border-box',
       overflow: 'hidden',
     }}>
+      {/* Header: title left, year pill right */}
       <span style={{
-        margin: 0,
         width: '100%',
         minHeight: 28,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        position: 'relative',
-        padding: '5px 44px 4px 10px',
-        borderRadius: 0,
+        justifyContent: 'space-between',
+        gap: 6,
+        padding: '5px 8px 4px 10px',
         background: tone.headerBackground,
         boxShadow: `
           inset 0 1px 0 rgba(255,255,255,0.58),
@@ -589,130 +361,82 @@ function CardFace({
           0 4px 10px rgba(13,13,31,0.1)
         `,
         borderBottom: `1px solid ${tone.headerBorder}`,
-        fontSize: 10,
-        fontWeight: 800,
-        color: 'var(--neutral-900)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        textAlign: 'center',
-        lineHeight: 1.2,
+        flexShrink: 0,
       }}>
-        <span
-          style={{
-            position: 'absolute',
-            right: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            minWidth: 34,
-            height: 16,
-            borderRadius: 999,
-            padding: '0 8px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: yearBadgeColor,
-            color: '#FFFFFF',
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: '0.06em',
-            lineHeight: 1,
-            boxShadow: '0 1px 4px rgba(13,13,31,0.18), inset 0 1px 0 rgba(255,255,255,0.2)',
-            opacity: visible ? 1 : 0,
-            transition: `opacity 110ms ease ${yearTransitionDelay}ms`,
-          }}
-        >
-          {yearText}
-        </span>
-        <span
-          style={{
-            width: '100%',
-            textAlign: 'left',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+        <span style={{
+          fontSize: 10,
+          fontWeight: 800,
+          color: 'var(--neutral-900)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          lineHeight: 1.2,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          textAlign: 'left',
+          flex: 1,
+        }}>
           {face.title}
         </span>
+        <span style={{
+          minWidth: 34,
+          height: 16,
+          borderRadius: 999,
+          padding: '0 8px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: yearBadgeColor,
+          color: '#FFFFFF',
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          lineHeight: 1,
+          boxShadow: '0 1px 4px rgba(13,13,31,0.18), inset 0 1px 0 rgba(255,255,255,0.2)',
+          opacity: visible ? 1 : 0,
+          transition: `opacity 110ms ease ${yearTransitionDelay}ms`,
+          flexShrink: 0,
+        }}>
+          {yearText}
+        </span>
       </span>
 
-      {hasName ? (
-        <span style={{
-          marginTop: 8,
-          display: 'grid',
-          justifyItems: 'center',
-          minHeight: 19,
-          alignContent: 'start',
-          padding: '0 10px',
-        }}>
-          <span style={{
-            margin: 0,
-            fontSize: face.emphasizeName ? 12 : 10,
-            color: face.nameAccent ?? 'var(--neutral-700)',
-            fontWeight: face.emphasizeName ? 800 : 'var(--font-weight-semibold)',
-            lineHeight: face.emphasizeName ? 1.15 : 1.05,
-            textAlign: 'center',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>
-          {face.name}
-          </span>
-        </span>
-      ) : null}
-
+      {/* Body: amount bold centered + secondary text below */}
       <span style={{
-        margin: hasName ? '4px 0 0' : '16px 0 0',
-        textAlign: 'center',
-        fontSize: 'var(--font-size-base)',
-        fontWeight: 'var(--font-weight-bold)',
-        color: 'var(--neutral-900)',
-        fontFamily: 'var(--font-mono)',
-        whiteSpace: 'nowrap',
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '10px 10px 12px',
+        gap: 4,
       }}>
-        {face.amount != null ? formatCurrency(face.amount) : '—'}
-      </span>
-
-      {face.detail ? (
         <span style={{
-          margin: '5px 0 0',
-          display: 'inline-flex',
-          alignItems: 'center',
-          fontSize: 9,
-          fontWeight: 700,
+          textAlign: 'center',
+          fontSize: 'var(--font-size-base)',
+          fontWeight: 800,
+          color: face.amountColor ?? 'var(--neutral-900)',
           fontFamily: 'var(--font-mono)',
-          color: 'var(--neutral-600)',
-          background: 'rgba(255,255,255,0.92)',
-          borderRadius: 'var(--radius-full)',
-          padding: '2px 7px',
-          letterSpacing: '0.02em',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
           whiteSpace: 'nowrap',
+          letterSpacing: '-0.01em',
+          lineHeight: 1.15,
         }}>
-          {face.detail}
+          {face.amount != null ? formatCurrency(face.amount) : '—'}
         </span>
-      ) : null}
 
-      {face.delta != null ? (
-        <span style={{
-          margin: '5px 0 0',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 3,
-          fontSize: 9,
-          fontWeight: 700,
-          fontFamily: 'var(--font-mono)',
-          color: face.delta > 0 ? '#C0392B' : '#1A7A4A',
-          background: 'rgba(255,255,255,0.92)',
-          borderRadius: 'var(--radius-full)',
-          padding: '2px 7px',
-          letterSpacing: '0.02em',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
-        }}>
-          {face.delta > 0 ? '▲' : '▼'} {face.delta > 0 ? '+' : ''}{face.delta.toFixed(1)}%
-        </span>
-      ) : null}
+        {face.secondaryText ? (
+          <span style={{
+            textAlign: 'center',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--neutral-700)',
+            whiteSpace: 'nowrap',
+            lineHeight: 1.3,
+          }}>
+            {face.secondaryText}
+          </span>
+        ) : null}
+      </span>
     </span>
   )
 }

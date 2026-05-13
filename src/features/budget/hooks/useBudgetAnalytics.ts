@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
+import { QK } from '@/lib/queryKeys'
 import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
 import { getMonthlyVariableCategories } from '@/features/budget/api/getMonthlyVariableCategories'
 import { getVariableCategorySummary } from '@/features/budget/api/getVariableCategorySummary'
@@ -67,7 +67,7 @@ export function useBudgetAnalytics(options: UseBudgetAnalyticsOptions = {}): Use
   const [refreshing, setRefreshing] = useState(false)
 
   const query = useQuery({
-    queryKey: ['budget-analytics', userId, year],
+    queryKey: [QK.BUDGET_ANALYTICS, userId, year],
     queryFn: () => fetchBudgetAnalyticsData(year),
     enabled: !!userId && !authLoading && autoLoad,
     staleTime: 5 * 60_000,
@@ -81,8 +81,7 @@ export function useBudgetAnalytics(options: UseBudgetAnalyticsOptions = {}): Use
     if (!userId) return
     setRefreshing(true)
     try {
-      await refreshBudgetAnalytics(userId)
-      await queryClient.invalidateQueries({ queryKey: ['budget-analytics', userId, year] })
+      await queryClient.invalidateQueries({ queryKey: [QK.BUDGET_ANALYTICS, userId, year] })
     } finally {
       setRefreshing(false)
     }

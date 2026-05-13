@@ -1400,15 +1400,14 @@ export function Budgets() {
       const endMonth = historyWindowMonths[historyWindowMonths.length - 1].monthStart
 
       const { data, error } = await budgetDb
-        .from('analytics_monthly_category_metrics')
-        .select('period_year, period_month, amount_total, category_id')
-        .eq('flow_type', selectedCategoryFlowType)
+        .from('v_monthly_category_actuals_clean' as never)
+        .select('period_year, period_month, actual_amount, category_id')
         .in('category_id', selectedCategoryHistoryIds)
         .gte('month_start', startMonth)
         .lte('month_start', endMonth)
 
       if (error) throw new Error(`category history query failed: ${error.message}`)
-      return (data ?? []) as Array<{ period_year: number; period_month: number; amount_total: number | null }>
+      return (data ?? []) as Array<{ period_year: number; period_month: number; actual_amount: number | null }>
     },
   })
   const categoryRanking = useMemo(() => {
@@ -1445,7 +1444,7 @@ export function Budgets() {
       const periodMonth = Number(row.period_month)
       if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) continue
       const key = monthKey(periodYear, periodMonth)
-      actualByMonthKey.set(key, (actualByMonthKey.get(key) ?? 0) + Number(row.amount_total ?? 0))
+      actualByMonthKey.set(key, (actualByMonthKey.get(key) ?? 0) + Number(row.actual_amount ?? 0))
     }
 
     const base = historyWindowMonths.map((monthRow) => {

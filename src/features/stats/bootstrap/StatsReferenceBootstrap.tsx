@@ -1,34 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
-import { isStatsReferenceSnapshotStale } from '@/features/stats/store/statsReferenceStore'
-
-type StatsReferenceBootstrapOptions = {
-  userId: string | null
-  enabled: boolean
-}
-
-export function useStatsReferenceBootstrap({ userId, enabled }: StatsReferenceBootstrapOptions) {
-  const { snapshot, loading, hydrateStatsReferenceData, storeUserId } = useStatsReferenceData()
-  const attemptedUsersRef = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!enabled || !userId) return
-    if (loading) return
-
-    const hasFreshSnapshotForUser = storeUserId === userId
-      && snapshot !== null
-      && !isStatsReferenceSnapshotStale(snapshot)
-
-    if (hasFreshSnapshotForUser) return
-    if (attemptedUsersRef.current.has(userId)) return
-
-    attemptedUsersRef.current.add(userId)
-
-    void hydrateStatsReferenceData({ userId }).catch(() => {})
-  }, [enabled, hydrateStatsReferenceData, loading, snapshot, storeUserId, userId])
-
-  useEffect(() => {
-    if (userId) return
-    attemptedUsersRef.current.clear()
-  }, [userId])
+// Stats reference data is now fetched automatically by React Query when
+// useStatsReferenceData() is mounted. No explicit bootstrap needed.
+export function useStatsReferenceBootstrap(_opts: { userId: string | null; enabled: boolean }) {
+  // no-op
 }

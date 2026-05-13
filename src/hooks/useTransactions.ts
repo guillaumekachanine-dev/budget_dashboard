@@ -1,16 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
-import { supabase } from '@/lib/supabase'
-import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { FlowType, Transaction } from '@/lib/types'
-
-async function refreshAndHydrate() {
-  const { data } = await supabase.auth.getSession()
-  const userId = data.session?.user?.id
-  if (userId) await refreshBudgetAnalytics(userId).catch(() => {})
-  await hydrateStatsReferenceData({ force: true }).catch(() => {})
-}
+import { QK } from '@/lib/queryKeys'
 
 interface TransactionFilters {
   accountId?: string | null
@@ -119,7 +110,7 @@ export function useCurrentMonthTransactions(year: number, month: number) {
 // ne sont pas re-fetchées inutilement.
 function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQueryClient>, accountId: string) {
   void queryClient.invalidateQueries({
-    queryKey: ['transactions'],
+    queryKey: [QK.TRANSACTIONS],
     predicate: (query) => {
       const filters = query.queryKey[1] as Record<string, unknown> | undefined
       if (!filters || typeof filters !== 'object') return true
@@ -139,8 +130,10 @@ export function useAddTransaction() {
     },
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void refreshAndHydrate()
+      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
     },
   })
 }
@@ -162,10 +155,12 @@ export function useUpdateTransaction() {
       if (updated?.account_id) {
         invalidateTransactionsForAccount(queryClient, updated.account_id)
       } else {
-        void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+        void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void refreshAndHydrate()
+      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
     },
   })
 }
@@ -179,9 +174,11 @@ export function useDeleteTransaction() {
     },
     onSuccess: () => {
       // account_id inconnu après delete — invalidation large inévitable
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void refreshAndHydrate()
+      void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
     },
   })
 }

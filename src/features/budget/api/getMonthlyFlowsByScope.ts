@@ -76,11 +76,10 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
     // Actuals : somme des sous-catégories via parent_category_id
     const [actualsRes, periodsRes] = await Promise.all([
       budgetDb
-        .from('analytics_monthly_category_metrics')
-        .select('period_month, amount_total')
+        .from('v_monthly_category_actuals_clean' as never)
+        .select('period_month, actual_amount')
         .eq('period_year', year)
         .eq('parent_category_id', id)
-        .eq('flow_type', 'expense')
         .order('period_month', { ascending: true }),
       budgetDb
         .from('budget_periods')
@@ -94,10 +93,11 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
 
     // Actuals agrégés par mois (somme des sous-catégories)
     const actualByMonth = new Map<number, number>()
-    for (const row of actualsRes.data ?? []) {
+    const actualRows = (actualsRes.data ?? []) as Array<Record<string, unknown>>
+    for (const row of actualRows) {
       const month = Number(row.period_month)
       if (!Number.isFinite(month) || month <= 0) continue
-      actualByMonth.set(month, (actualByMonth.get(month) ?? 0) + Number(row.amount_total ?? 0))
+      actualByMonth.set(month, (actualByMonth.get(month) ?? 0) + Number(row.actual_amount ?? 0))
     }
 
     // Budget : sous-catégories de ce parent

@@ -20,7 +20,6 @@ import { SavingsInsightsSection } from '@/features/savings/components/SavingsIns
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { InvestmentPerformanceSection } from '@/features/stats/components/InvestmentPerformanceSection'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 import { EmptyState, StatsSection, YearToggle } from '@/features/stats/components/ui'
 
@@ -76,11 +75,8 @@ export function Stats() {
   }, [])
 
   const handleRefresh = useCallback(() => {
-    void (async () => {
-      if (storeUserId) await refreshBudgetAnalytics(storeUserId).catch(() => {})
-      await hydrateStatsReferenceData({ force: true }).catch(() => {})
-    })()
-  }, [hydrateStatsReferenceData, storeUserId])
+    void hydrateStatsReferenceData({ force: true }).catch(() => {})
+  }, [hydrateStatsReferenceData])
 
   const isPeriodOptionActive = useCallback((option: { period_year: number; period_month: number }, selected: StatsSelectedPeriod | null) => {
     if (!selected) return false

@@ -14,7 +14,7 @@ const MONTHLY_EVOLUTION_COLUMNS = [
 
 export async function getMonthlyEvolution2026(): Promise<MonthlyEvolutionRow[]> {
   const { data, error } = await budgetDb
-    .from('analytics_monthly_metrics')
+    .from('v_monthly_metrics_clean' as never)
     .select(MONTHLY_EVOLUTION_COLUMNS)
     .eq('period_year', 2026)
     .order('period_month', { ascending: true })

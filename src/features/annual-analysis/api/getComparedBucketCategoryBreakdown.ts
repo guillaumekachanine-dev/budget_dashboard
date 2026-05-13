@@ -32,24 +32,24 @@ export async function getComparedBucketCategoryBreakdown(
 
   // ② Récupérer les montants YTD pour ces catégories
   const { data, error } = await budgetDb
-    .from('analytics_monthly_category_metrics')
-    .select('period_year, category_id, category_name, parent_category_name, amount_total')
+    .from('v_monthly_category_actuals_clean' as never)
+    .select('period_year, category_id, category_name, parent_category_name, actual_amount')
     .in('period_year', [...COMPARED_YEARS])
     .in('period_month', [...COMPARED_MONTHS])
     .in('category_id', categoryIds)
-    .eq('flow_type', 'expense')
 
   if (error) throw new Error(`getComparedBucketCategoryBreakdown (metrics): ${error.message}`)
 
   // ③ Agréger par (parent_category_name, category_name) et année
   const map = new Map<string, BucketCategoryBreakdownRow>()
 
-  for (const row of data ?? []) {
+  const rows = (data ?? []) as Array<Record<string, unknown>>
+  for (const row of rows) {
     const catId      = row.category_id ? String(row.category_id) : null
-    const catName    = String(row.category_name    ?? '')
+    const catName    = String(row.category_name ?? '')
     const parentName = row.parent_category_name ? String(row.parent_category_name) : null
     const key        = `${catId ?? ''}__${parentName ?? ''}__${catName}`
-    const amount     = Number(row.amount_total ?? 0)
+    const amount     = Number(row.actual_amount ?? 0)
 
     const entry = map.get(key) ?? { category_id: catId, category_name: catName, parent_category_name: parentName, amount_2025: 0, amount_2026: 0 }
     if (Number(row.period_year) === 2025) entry.amount_2025 += amount

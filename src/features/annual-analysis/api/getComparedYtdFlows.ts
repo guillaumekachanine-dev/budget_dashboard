@@ -8,7 +8,7 @@ import { COMPARED_MONTHS, COMPARED_YEARS } from '@/features/annual-analysis/type
  */
 export async function getComparedYtdFlows(): Promise<YtdFlowRow[]> {
   const { data, error } = await budgetDb
-    .from('analytics_monthly_metrics')
+    .from('v_monthly_metrics_clean' as never)
     .select(
       'period_year, period_month, expense_total, income_total, fixed_expense_total, variable_expense_total, savings_capacity_observed',
     )
@@ -19,7 +19,8 @@ export async function getComparedYtdFlows(): Promise<YtdFlowRow[]> {
 
   if (error) throw new Error(`getComparedYtdFlows: ${error.message}`)
 
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []) as Array<Record<string, unknown>>
+  return rows.map((row) => ({
     period_year:               Number(row.period_year),
     period_month:              Number(row.period_month),
     expense_total:             Number(row.expense_total ?? 0),

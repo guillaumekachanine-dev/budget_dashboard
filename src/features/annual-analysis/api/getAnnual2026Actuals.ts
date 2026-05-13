@@ -9,10 +9,9 @@ export interface CategoryYtdActual {
 export async function getAnnual2026Actuals(year: number): Promise<CategoryYtdActual[]> {
   const [metricsRes, catsRes] = await Promise.all([
     budgetDb
-      .from('analytics_monthly_category_metrics')
-      .select('period_month, parent_category_id, amount_total')
+      .from('v_monthly_category_actuals_clean' as never)
+      .select('period_month, parent_category_id, actual_amount')
       .eq('period_year', year)
-      .eq('flow_type', 'expense')
       .order('period_month', { ascending: true }),
     budgetDb
       .from('categories')
@@ -29,13 +28,14 @@ export async function getAnnual2026Actuals(year: number): Promise<CategoryYtdAct
 
   const aggregate = new Map<string, { total: number; months: Set<number> }>()
 
-  for (const row of metricsRes.data ?? []) {
-    const id = row.parent_category_id as string | null
+  const metricsRows = (metricsRes.data ?? []) as Array<Record<string, unknown>>
+  for (const row of metricsRows) {
+    const id = typeof row.parent_category_id === 'string' ? row.parent_category_id : null
     if (!id) continue
     const name = nameById.get(id)
     if (!name) continue
     const existing = aggregate.get(name) ?? { total: 0, months: new Set<number>() }
-    existing.total += Math.abs(Number(row.amount_total ?? 0))
+    existing.total += Math.abs(Number(row.actual_amount ?? 0))
     existing.months.add(Number(row.period_month))
     aggregate.set(name, existing)
   }

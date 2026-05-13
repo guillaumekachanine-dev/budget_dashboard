@@ -11,7 +11,6 @@ const MONTHLY_METRICS_COLUMNS = [
   'expense_total',
   'income_total',
   'savings_capacity_observed',
-  'refreshed_at',
 ].join(', ')
 
 const CATEGORY_METRICS_COLUMNS = [
@@ -19,12 +18,12 @@ const CATEGORY_METRICS_COLUMNS = [
   'category_name',
   'parent_category_id',
   'parent_category_name',
-  'amount_total',
+  'actual_amount',
 ].join(', ')
 
 export async function getActualsForBudgetPeriod(year: number, month: number): Promise<BudgetActualsForPeriod> {
   const monthlyMetricsPromise = budgetDb
-    .from('analytics_monthly_metrics')
+    .from('v_monthly_metrics_clean' as never)
     .select(MONTHLY_METRICS_COLUMNS)
     .eq('period_year', year)
     .eq('period_month', month)
@@ -32,12 +31,11 @@ export async function getActualsForBudgetPeriod(year: number, month: number): Pr
     .maybeSingle()
 
   const categoryMetricsPromise = budgetDb
-    .from('analytics_monthly_category_metrics')
+    .from('v_monthly_category_actuals_clean' as never)
     .select(CATEGORY_METRICS_COLUMNS)
     .eq('period_year', year)
     .eq('period_month', month)
-    .eq('flow_type', 'expense')
-    .order('amount_total', { ascending: false })
+    .order('actual_amount', { ascending: false })
 
   const [{ data: monthlyMetricsData, error: monthlyError }, { data: categoryMetricsData, error: categoryError }] = await Promise.all([
     monthlyMetricsPromise,
@@ -58,7 +56,7 @@ export async function getActualsForBudgetPeriod(year: number, month: number): Pr
     category_name: string | null
     parent_category_id: string | null
     parent_category_name: string | null
-    amount_total: number
+    actual_amount: number
   }>
 
   const categoryActuals = categoryRows.map((row) => ({
@@ -66,7 +64,7 @@ export async function getActualsForBudgetPeriod(year: number, month: number): Pr
     category_name: row.category_name,
     parent_category_id: row.parent_category_id,
     parent_category_name: row.parent_category_name,
-    amount_total: Number(row.amount_total ?? 0),
+    amount_total: Number(row.actual_amount ?? 0),
   })) as BudgetActualCategoryMetric[]
 
   const categoryTotal = categoryActuals.reduce((sum, row) => sum + row.amount_total, 0)

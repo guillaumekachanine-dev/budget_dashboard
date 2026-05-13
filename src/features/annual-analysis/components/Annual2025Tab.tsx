@@ -6,7 +6,7 @@ import { AnnualSpendingStructureSection } from './AnnualSpendingStructureSection
 import { ComparedAnalysisSection } from './ComparedAnalysisSection'
 
 export function Annual2025Tab() {
-  const { loading, error, annualTotals, yearlyBuckets, yearlyParentCategories, monthlyProfile, top5ParentCategories, top5LeafCategories } =
+  const { loading, error, annualTotals, yearlyBuckets, yearlyParentCategories } =
     useAnnual2025Analysis()
 
   if (loading) {
@@ -32,12 +32,7 @@ export function Annual2025Tab() {
         )}
       </div>
 
-      <AnnualKeyInsightsGrid
-        annualTotals={annualTotals}
-        monthlyProfile={monthlyProfile}
-        top5ParentCategories={top5ParentCategories}
-        top5LeafCategories={top5LeafCategories}
-      />
+      <AnnualKeyInsightsGrid />
 
       <ComparedAnalysisSection />
 
