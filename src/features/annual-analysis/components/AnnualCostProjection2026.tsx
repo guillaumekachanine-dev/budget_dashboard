@@ -60,6 +60,7 @@ type DeltaBlockCategoryRow = {
   categoryId: string
   categoryName: string
   iconKey: string | null
+  budgetYtdAmount: number
   deltaAmount: number
 }
 
@@ -80,6 +81,7 @@ type AnnualProjectionSectionConnectedProps = {
 }
 
 const fmtCurrency = (n: number) => formatCurrencyFloored(n)
+const fmtSignedCurrency = (n: number) => `${n > 0 ? '+' : ''}${fmtCurrency(n)}`
 
 const fmtPctSigned = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 const fmtPctSignedRounded = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value)}%`
@@ -206,6 +208,7 @@ function AnnualCostProjectionCard({
   const [showListModal, setShowListModal] = useState(false)
   const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
   const selectedDetailsAnchorRef = useRef<HTMLDivElement | null>(null)
+  const deltaTooltipRef = useRef<HTMLDivElement | null>(null)
   const wasDetailsVisibleRef = useRef(false)
   const { data: categories = [] } = useCategories()
 
@@ -341,12 +344,14 @@ function AnnualCostProjectionCard({
 
       const existingCategory = group.categories.get(row.categoryId)
       if (existingCategory) {
+        existingCategory.budgetYtdAmount += Number(row.budgetYtdAmount ?? 0)
         existingCategory.deltaAmount += Number(row.projectedVsBudgetAmount ?? 0)
       } else {
         group.categories.set(row.categoryId, {
           categoryId: row.categoryId,
           categoryName: row.categoryName,
           iconKey: categoryIconById.get(row.categoryId) ?? null,
+          budgetYtdAmount: Number(row.budgetYtdAmount ?? 0),
           deltaAmount: Number(row.projectedVsBudgetAmount ?? 0),
         })
       }
@@ -369,6 +374,87 @@ function AnnualCostProjectionCard({
       }
     })
   }, [categoryIconById, rows])
+  const totalDeltaBreakdownRow = useMemo<DeltaBlockSummaryRow>(() => {
+    const categoriesById = new Map<string, DeltaBlockCategoryRow>()
+    let totalBudgetYtdAmount = 0
+    let totalProjectedAmount = 0
+    let totalDeltaAmount = 0
+
+    for (const block of deltaBlockSummaryRows) {
+      totalBudgetYtdAmount += block.budgetYtdAmount
+      totalProjectedAmount += block.projectedAmount
+      totalDeltaAmount += block.deltaAmount
+
+      for (const category of block.categories) {
+        const existing = categoriesById.get(category.categoryId)
+        if (existing) {
+          existing.budgetYtdAmount += category.budgetYtdAmount
+          existing.deltaAmount += category.deltaAmount
+        } else {
+          categoriesById.set(category.categoryId, { ...category })
+        }
+      }
+    }
+
+    return {
+      blockKey: 'total',
+      name: 'Total',
+      color: '#B06A00',
+      iconSrc: null,
+      categoryCount: categoriesById.size,
+      budgetYtdAmount: totalBudgetYtdAmount,
+      projectedAmount: totalProjectedAmount,
+      deltaAmount: totalDeltaAmount,
+      categories: [...categoriesById.values()].sort((a, b) => Math.abs(b.deltaAmount) - Math.abs(a.deltaAmount)),
+    }
+  }, [deltaBlockSummaryRows])
+
+  const selectedDeltaTooltip = useMemo(() => {
+    if (!selectedDeltaBlockKey) return null
+    const index = blockDeltaData.findIndex((row) => row.blockKey === selectedDeltaBlockKey)
+    if (index < 0) return null
+
+    if (selectedDeltaBlockKey === 'total') {
+      const pct = totalDeltaBreakdownRow.budgetYtdAmount > 0
+        ? (totalDeltaBreakdownRow.deltaAmount / totalDeltaBreakdownRow.budgetYtdAmount) * 100
+        : 0
+      return {
+        index,
+        name: totalDeltaBreakdownRow.name,
+        amount: totalDeltaBreakdownRow.deltaAmount,
+        pct,
+        blockKey: selectedDeltaBlockKey,
+      }
+    }
+
+    const block = deltaBlockSummaryRows.find((row) => row.blockKey === selectedDeltaBlockKey)
+    if (!block) return null
+    const pct = block.budgetYtdAmount > 0 ? (block.deltaAmount / block.budgetYtdAmount) * 100 : 0
+
+    return {
+      index,
+      name: block.name,
+      amount: block.deltaAmount,
+      pct,
+      blockKey: selectedDeltaBlockKey,
+    }
+  }, [blockDeltaData, deltaBlockSummaryRows, selectedDeltaBlockKey, totalDeltaBreakdownRow])
+
+  useEffect(() => {
+    if (!selectedDeltaTooltip) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (deltaTooltipRef.current?.contains(target)) return
+      setSelectedDeltaBlockKey(null)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [selectedDeltaTooltip])
 
   const selectedRow = useMemo(
     () => parentGroups.find((group) => group.parentKey === selectedParentKey) ?? null,
@@ -441,7 +527,7 @@ function AnnualCostProjectionCard({
   )
 
   const chart = (
-    <div style={{ height: 292, width: '100%' }}>
+    <div style={{ height: 292, width: '100%', position: 'relative' }}>
       {viewMode === 'category' ? (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={categoryData} margin={{ top: 42, right: 0, left: 0, bottom: 28 }}>
@@ -475,8 +561,9 @@ function AnnualCostProjectionCard({
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={blockDeltaData} margin={{ top: 48, right: 0, left: 0, bottom: 28 }} barCategoryGap="18%">
+        <>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={blockDeltaData} margin={{ top: 48, right: 0, left: 0, bottom: 28 }} barCategoryGap="18%">
             <XAxis
               dataKey="name"
               axisLine={false}
@@ -504,7 +591,7 @@ function AnnualCostProjectionCard({
                   shape={(props: unknown) => {
                     const { cx, cy } = (props ?? {}) as { cx?: number; cy?: number }
                     if (cx == null || cy == null || !row.iconSrc) return <g />
-                    const iconSize = 18
+                    const iconSize = 24
                     const iconY = row.deltaAmount >= 0 ? (cy + 3) : (cy - iconSize - 3)
                     return (
                       <image
@@ -524,6 +611,7 @@ function AnnualCostProjectionCard({
               dataKey="deltaAmount"
               barSize={32}
               maxBarSize={32}
+              radius={4}
               cursor="pointer"
               onClick={(_: unknown, index: number) => {
                 const clicked = blockDeltaData[index]?.blockKey ?? null
@@ -551,31 +639,110 @@ function AnnualCostProjectionCard({
                   }
                   if (x == null || y == null || width == null || height == null || value == null) return null
                   const numericValue = Number(value)
-                  const posY = numericValue >= 0 ? (y - 10) : (y + height + 15)
+                  const barTop = Math.min(y, y + height)
+                  const barBottom = Math.max(y, y + height)
+                  const posY = numericValue >= 0 ? (barTop - 10) : (barBottom + 12)
                   return (
                     <text
                       x={x + width / 2}
                       y={posY}
                       textAnchor="middle"
-                      fill="var(--neutral-700)"
+                      fill={(props as { payload?: BlockDeltaBarRow })?.payload?.isTotal ? '#B06A00' : 'var(--neutral-700)'}
                       fontSize={10}
                       fontWeight={700}
                       fontFamily="var(--font-mono)"
                     >
-                      {fmtCurrency(numericValue)}
+                      {fmtSignedCurrency(numericValue)}
+                    </text>
+                  )
+                }}
+              />
+              <LabelList
+                dataKey="deltaAmount"
+                content={(props: unknown) => {
+                  const { x, y, width, height, payload } = (props ?? {}) as {
+                    x?: number
+                    y?: number
+                    width?: number
+                    height?: number
+                    payload?: BlockDeltaBarRow
+                  }
+                  if (x == null || y == null || width == null || height == null || !payload?.isTotal) return null
+                  const centerX = x + width / 2
+                  const barTop = Math.min(y, y + height)
+                  const barBottom = Math.max(y, y + height)
+                  const letters = ['T', 'O', 'T', 'A', 'L']
+                  const usableHeight = Math.max(34, barBottom - barTop - 6)
+                  const rowStep = usableHeight / (letters.length + 1)
+                  const firstY = barTop + rowStep
+                  const fontSize = Math.max(8, Math.min(11, rowStep * 0.72))
+
+                  return (
+                    <text
+                      x={centerX}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="#B06A00"
+                      fontSize={fontSize}
+                      fontWeight={700}
+                      fontFamily="var(--font-mono)"
+                      style={{ letterSpacing: '0.02em' }}
+                    >
+                      {letters.map((letter, index) => (
+                        <tspan key={`${letter}-${index}`} x={centerX} y={firstY + index * rowStep}>
+                          {letter}
+                        </tspan>
+                      ))}
                     </text>
                   )
                 }}
               />
             </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+            </BarChart>
+          </ResponsiveContainer>
+          {selectedDeltaTooltip ? (
+            <div style={deltaTooltipLayerStyle}>
+              <div
+                ref={deltaTooltipRef}
+                style={{
+                  ...deltaTooltipCardStyle,
+                  left: `clamp(92px, ${((selectedDeltaTooltip.index + 0.5) / blockDeltaData.length) * 100}%, calc(100% - 92px))`,
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)' }}>
+                  {`Socle ${selectedDeltaTooltip.name}`}
+                </span>
+
+                <div style={deltaTooltipRowStyle}>
+                  <span style={deltaTooltipLabelStyle}>écart (€)</span>
+                  <span style={deltaTooltipValueStyle}>{fmtSignedCurrency(selectedDeltaTooltip.amount)}</span>
+                </div>
+
+                <div style={deltaTooltipRowStyle}>
+                  <span style={deltaTooltipLabelStyle}>écart (%)</span>
+                  <span style={deltaTooltipValueStyle}>{fmtPctSigned(selectedDeltaTooltip.pct)}</span>
+                </div>
+
+                <button
+                  type="button"
+                  style={deltaTooltipButtonStyle}
+                  onClick={() => setOpenedDeltaBreakdownBlockKey(selectedDeltaTooltip.blockKey)}
+                >
+                  détails
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )
 
   const selectedCard = selectedRow && viewMode === 'category'
     ? <ProjectionDetailsCard row={selectedRow} />
+    : null
+  const categoryPlaceholderCard = viewMode === 'category' && !selectedCard
+    ? <ProjectionDetailsPlaceholderCard />
     : null
   const yearSummaryCard = viewMode === 'year' ? (
     <DeltaBlockSummaryCard
@@ -623,7 +790,11 @@ function AnnualCostProjectionCard({
   const deltaBreakdownModal = openedDeltaBreakdownBlockKey
     ? (
       <DeltaBreakdownModal
-        row={deltaBlockSummaryRows.find((entry) => entry.blockKey === openedDeltaBreakdownBlockKey) ?? null}
+        row={
+          openedDeltaBreakdownBlockKey === 'total'
+            ? totalDeltaBreakdownRow
+            : (deltaBlockSummaryRows.find((entry) => entry.blockKey === openedDeltaBreakdownBlockKey) ?? null)
+        }
         onClose={() => setOpenedDeltaBreakdownBlockKey(null)}
       />
     )
@@ -634,7 +805,7 @@ function AnnualCostProjectionCard({
       <>
         {chartTopControls}
         {chart}
-        <div ref={selectedDetailsAnchorRef}>{selectedCard ?? yearSummaryCard}</div>
+        <div ref={selectedDetailsAnchorRef}>{selectedCard ?? categoryPlaceholderCard ?? yearSummaryCard}</div>
         {modal}
         {detailsModal}
         {deltaBreakdownModal}
@@ -657,7 +828,7 @@ function AnnualCostProjectionCard({
           </div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chartTopControls}</div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chart}</div>
-          <div ref={selectedDetailsAnchorRef}>{selectedCard ?? yearSummaryCard}</div>
+          <div ref={selectedDetailsAnchorRef}>{selectedCard ?? categoryPlaceholderCard ?? yearSummaryCard}</div>
         </div>
       </div>
       {modal}
@@ -716,14 +887,14 @@ function DeltaBlockSummaryCard({
               justifySelf: 'end',
             }}
           >
-            {fmtCurrency(totalDeltaAmount)}
+            {fmtSignedCurrency(totalDeltaAmount)}
           </span>
         </div>
 
         {rows.map((row) => {
           const isOverBudget = row.deltaAmount > 0
           const pillColor = isOverBudget ? 'var(--negative)' : 'var(--positive)'
-          const categoriesLabel = `${row.categoryCount} cat.`
+          const categoriesLabel = `${row.categoryCount} catégories`
 
           return (
             <div
@@ -766,7 +937,7 @@ function DeltaBlockSummaryCard({
                   width: 82,
                 }}
               >
-                {fmtCurrency(row.deltaAmount)}
+                {fmtSignedCurrency(row.deltaAmount)}
               </span>
 
               <button
@@ -785,6 +956,18 @@ function DeltaBlockSummaryCard({
   )
 }
 
+function ProjectionDetailsPlaceholderCard() {
+  return (
+    <div style={{ ...selectedCardStyle, minHeight: 152 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--neutral-800)' }}>
+          détails
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function DeltaBreakdownModal({
   row,
   onClose,
@@ -794,6 +977,8 @@ function DeltaBreakdownModal({
 }) {
   if (!row) return null
   const netDeltaAmount = row.categories.reduce((sum, category) => sum + category.deltaAmount, 0)
+  const blockBudgetYtdAmount = row.categories.reduce((sum, category) => sum + category.budgetYtdAmount, 0)
+  const blockAverageDeltaPct = blockBudgetYtdAmount > 0 ? (netDeltaAmount / blockBudgetYtdAmount) * 100 : 0
 
   return (
     <div style={parentDetailOverlayStyle} onClick={onClose}>
@@ -828,12 +1013,15 @@ function DeltaBreakdownModal({
         <div style={{ display: 'grid', gap: 0 }}>
           {row.categories.map((category) => {
             const isOverBudget = category.deltaAmount > 0
+            const deltaPct = category.budgetYtdAmount > 0
+              ? (category.deltaAmount / category.budgetYtdAmount) * 100
+              : 0
             return (
               <div
                 key={category.categoryId}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '16px minmax(0,1fr) auto',
+                  gridTemplateColumns: '16px minmax(0,1fr) 92px 64px',
                   alignItems: 'center',
                   gap: 8,
                   padding: '6px 0',
@@ -854,10 +1042,27 @@ function DeltaBreakdownModal({
                     fontSize: 11,
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 700,
-                    color: isOverBudget ? 'var(--negative)' : 'var(--positive)',
+                    color: 'var(--neutral-900)',
+                    width: 92,
+                    textAlign: 'right',
+                    justifySelf: 'end',
                   }}
                 >
-                  {fmtCurrency(category.deltaAmount)}
+                  {fmtSignedCurrency(category.deltaAmount)}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 400,
+                    color: isOverBudget ? 'var(--negative)' : 'var(--positive)',
+                    whiteSpace: 'nowrap',
+                    width: 64,
+                    textAlign: 'right',
+                    justifySelf: 'end',
+                  }}
+                >
+                  {fmtPctSigned(deltaPct)}
                 </span>
               </div>
             )
@@ -865,10 +1070,12 @@ function DeltaBreakdownModal({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '16px minmax(0,1fr) auto',
+              gridTemplateColumns: '16px minmax(0,1fr) 92px 64px',
               alignItems: 'center',
               gap: 8,
               padding: '8px 0 2px',
+              background: 'color-mix(in oklab, var(--neutral-200) 32%, var(--neutral-0) 68%)',
+              borderRadius: 'var(--radius-sm)',
             }}
           >
             <span aria-hidden="true" />
@@ -888,9 +1095,25 @@ function DeltaBreakdownModal({
                 fontFamily: 'var(--font-mono)',
                 fontWeight: 700,
                 color: '#B06A00',
+                width: 92,
+                textAlign: 'right',
+                justifySelf: 'end',
               }}
             >
-              {fmtCurrency(netDeltaAmount)}
+              {fmtSignedCurrency(netDeltaAmount)}
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 400,
+                color: blockAverageDeltaPct > 0 ? 'var(--negative)' : 'var(--positive)',
+                width: 64,
+                textAlign: 'right',
+                justifySelf: 'end',
+              }}
+            >
+              {fmtPctSigned(blockAverageDeltaPct)}
             </span>
           </div>
         </div>
@@ -1424,6 +1647,61 @@ const deltaExpandButtonStyle: CSSProperties = {
   justifyContent: 'center',
   cursor: 'pointer',
   padding: 0,
+}
+
+const deltaTooltipLayerStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  pointerEvents: 'none',
+  zIndex: 5,
+}
+
+const deltaTooltipCardStyle: CSSProperties = {
+  position: 'absolute',
+  top: 8,
+  transform: 'translateX(-50%)',
+  width: 168,
+  display: 'grid',
+  gap: 5,
+  background: 'var(--neutral-0)',
+  border: '1px solid var(--neutral-200)',
+  borderRadius: 'var(--radius-md)',
+  boxShadow: 'var(--shadow-card)',
+  padding: '8px',
+  pointerEvents: 'auto',
+}
+
+const deltaTooltipRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0,1fr) auto',
+  alignItems: 'baseline',
+  gap: 8,
+}
+
+const deltaTooltipLabelStyle: CSSProperties = {
+  fontSize: 10,
+  color: 'var(--neutral-500)',
+}
+
+const deltaTooltipValueStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 500,
+  fontFamily: 'var(--font-mono)',
+  color: 'var(--neutral-900)',
+}
+
+const deltaTooltipButtonStyle: CSSProperties = {
+  marginTop: 3,
+  width: '100%',
+  border: '1px solid rgba(0,0,0,0.35)',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--neutral-50)',
+  color: 'var(--neutral-800)',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '6px 8px',
+  cursor: 'pointer',
+  textTransform: 'lowercase',
 }
 
 const top5LabelStyle: CSSProperties = {
