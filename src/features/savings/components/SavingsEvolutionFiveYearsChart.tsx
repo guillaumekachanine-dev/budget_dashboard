@@ -809,7 +809,7 @@ export function SavingsEvolutionFiveYearsChart() {
           </ResponsiveContainer>
 
           {selectedOperationBubble ? (() => {
-            const { event, color } = selectedOperationBubble
+            const { event } = selectedOperationBubble
             const seriesEntry = styledSeries.find((s) => s.key === event.account_key)
             const displayLabel = seriesEntry?.shortLabel ?? event.account_label
             const yearRow = chartRows.find((r) => r.year === event.year)
