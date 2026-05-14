@@ -820,17 +820,6 @@ export function SavingsEvolutionFiveYearsChart() {
               : event.amount < 0
                 ? 'Retrait'
                 : 'Virement'
-            const natureBgColor = event.nature === 'intérêts'
-              ? 'rgba(4,120,87,0.09)'
-              : event.amount < 0
-                ? 'rgba(220,38,38,0.09)'
-                : `${color}16`
-            const natureTextColor = event.nature === 'intérêts'
-              ? '#047857'
-              : event.amount < 0
-                ? '#DC2626'
-                : color
-
             return (
               <div
                 onClick={(e) => e.stopPropagation()}
@@ -879,7 +868,7 @@ export function SavingsEvolutionFiveYearsChart() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Nature</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: natureTextColor }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
                       {natureLabel}
                     </span>
                   </div>
@@ -911,10 +900,10 @@ export function SavingsEvolutionFiveYearsChart() {
                     style={{
                       width: '100%',
                       height: 24,
-                      border: `1.5px solid ${color}`,
-                      borderRadius: 'var(--radius-md)',
+                      border: '1.5px solid var(--primary)',
+                      borderRadius: 'var(--radius-sm)',
                       background: 'transparent',
-                      color,
+                      color: 'var(--primary)',
                       fontSize: 11,
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -924,7 +913,7 @@ export function SavingsEvolutionFiveYearsChart() {
                       gap: 4,
                       transition: 'background 150ms ease',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = `${color}0e` }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(91,87,245,0.06)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                   >
                     Détails <span aria-hidden="true">›</span>
