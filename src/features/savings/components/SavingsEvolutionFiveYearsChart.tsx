@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CartesianGrid,
+  Customized,
   Line,
   LineChart,
   ReferenceLine,
@@ -275,6 +276,20 @@ export function SavingsEvolutionFiveYearsChart() {
     }
     return map
   }, [rows, styledSeries])
+  const yAxisMax = useMemo(() => {
+    if (chartRows.length === 0 || styledSeries.length === 0) return undefined
+    let max = 0
+    for (const row of chartRows) {
+      for (const s of styledSeries) {
+        const v = Number(row[s.key] ?? 0)
+        if (Number.isFinite(v) && v > max) max = v
+      }
+    }
+    if (max === 0) return undefined
+    const exp = 10 ** Math.floor(Math.log10(max))
+    return Math.ceil(max / exp) * exp
+  }, [chartRows, styledSeries])
+
   const selectedYearMetrics = useMemo(() => {
     const year = selectedYearBubble?.year ?? selectedYear ?? selectedYearRow?.year ?? null
     if (!year) return null
@@ -321,46 +336,21 @@ export function SavingsEvolutionFiveYearsChart() {
     dotProps: { cx?: number; cy?: number; payload?: { year?: string } },
   ) => {
     const year = String(dotProps.payload?.year ?? '')
-    const markerEvent = operationEventByAccountYear.get(`${seriesEntry.key}::${year}`)
-
     const cx = Number(dotProps.cx ?? 0)
     const cy = Number(dotProps.cy ?? 0)
-
-    const handleClick = (event: React.MouseEvent<SVGElement>) => {
-      event.stopPropagation()
-      setSelectedYear(year)
-      setSelectedYearBubble(null)
-      if (markerEvent) {
-        setSelectedOperationBubble({
-          event: markerEvent,
-          color: seriesEntry.color,
-          x: cx,
-          y: cy,
-        })
-      } else {
-        setSelectedOperationBubble(null)
-      }
-    }
-
     return (
-      <g onClick={handleClick} style={{ cursor: 'pointer' }}>
-        <circle
-          cx={cx}
-          cy={cy}
-          r={2.8}
-          fill={seriesEntry.color}
-        />
-        {markerEvent ? (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={5}
-            fill="var(--neutral-0)"
-            stroke={seriesEntry.color}
-            strokeWidth={2.5}
-          />
-        ) : null}
-      </g>
+      <circle
+        key={`dot-${seriesEntry.key}-${year}`}
+        cx={cx} cy={cy} r={2.5}
+        fill={seriesEntry.color}
+        style={{ cursor: 'pointer' }}
+        onClick={(event) => {
+          event.stopPropagation()
+          setSelectedYear(year)
+          setSelectedOperationBubble(null)
+          setSelectedYearBubble(null)
+        }}
+      />
     )
   }
 
@@ -421,6 +411,96 @@ export function SavingsEvolutionFiveYearsChart() {
     )
   }
 
+  const renderOperationAnnotations = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (chartProps: any) => {  // Recharts passes internal chart state (xAxisMap, yAxisMap) — no public type
+      const xAxis = chartProps.xAxisMap?.[0]
+      const yAxis = chartProps.yAxisMap?.[0]
+      if (!xAxis?.scale || !yAxis?.scale) return null
+
+      const xScale = xAxis.scale as (v: string) => number | undefined
+
+      // Point scale: derive step from first two consecutive year ticks
+      const firstYear = chartRows[0]?.year
+      const secondYear = chartRows[1]?.year
+      if (!firstYear || !secondYear) return null
+      const x0 = xScale(firstYear)
+      const x1 = xScale(secondYear)
+      if (x0 === undefined || x1 === undefined) return null
+      const step = x1 - x0
+
+      const GAP = 4
+      const TRI_H = 6
+      const TRI_HW = 4.5
+
+      return (
+        <g>
+          {visibleOperationEvents.map((event) => {
+            const seriesEntry = styledSeries.find((s) => s.key === event.account_key)
+            if (!seriesEntry) return null
+
+            const opDate = new Date(event.transaction_date)
+            if (Number.isNaN(opDate.getTime())) return null
+
+            const opMonth = opDate.getMonth() + 1
+            const currYearX = xScale(event.year)
+            if (currYearX === undefined) return null
+            const prevYearX = currYearX - step
+            const xPos = prevYearX + (opMonth / 12) * step
+
+            const yearIndex = chartRows.findIndex((row) => row.year === event.year)
+            const currRow = chartRows[yearIndex]
+            const prevRow = yearIndex > 0 ? chartRows[yearIndex - 1] : null
+            const currValue = Number(currRow?.[event.account_key])
+            const prevValue = prevRow != null ? Number(prevRow[event.account_key] ?? currValue) : currValue
+            if (!Number.isFinite(currValue)) return null
+
+            const interpValue = Number.isFinite(prevValue)
+              ? prevValue + (opMonth / 12) * (currValue - prevValue)
+              : currValue
+            const yPos = yAxis.scale!(interpValue)
+            if (yPos === undefined) return null
+
+            const isSelected = selectedOperationBubble?.event.account_key === event.account_key
+              && selectedOperationBubble.event.year === event.year
+
+            const tipX = xPos
+            const tipY = yPos - GAP
+            const pts = `${tipX},${tipY} ${xPos - TRI_HW},${tipY - TRI_H} ${xPos + TRI_HW},${tipY - TRI_H}`
+
+            return (
+              <g
+                key={event.id}
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedYear(event.year)
+                  setSelectedYearBubble(null)
+                  setSelectedOperationBubble({ event, color: seriesEntry.color, x: xPos, y: yPos })
+                }}
+              >
+                <rect
+                  x={xPos - 11} y={tipY - TRI_H - 4}
+                  width={22} height={TRI_H + GAP + 8}
+                  fill="transparent"
+                />
+                <polygon
+                  points={pts}
+                  fill={isSelected ? seriesEntry.color : 'var(--neutral-0)'}
+                  stroke={seriesEntry.color}
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                />
+              </g>
+            )
+          })}
+        </g>
+      )
+    },
+    [visibleOperationEvents, styledSeries, chartRows, selectedOperationBubble,
+      setSelectedYear, setSelectedYearBubble, setSelectedOperationBubble],
+  )
+
   if (isLoading) {
     return (
       <StatsSection>
@@ -468,6 +548,11 @@ export function SavingsEvolutionFiveYearsChart() {
   return (
     <StatsSection>
       <div
+        onClick={() => {
+          setSelectedOperationBubble(null)
+          setSelectedYearBubble(null)
+          setIsPeriodMenuOpen(false)
+        }}
         style={{
           border: '1px solid var(--neutral-150)',
           borderRadius: 'var(--radius-xl)',
@@ -698,6 +783,7 @@ export function SavingsEvolutionFiveYearsChart() {
                 width={24}
                 orientation="left"
                 tick={renderYAxisTick}
+                domain={[0, yAxisMax ?? 'auto']}
               />
               {selectedYear ? (
                 <ReferenceLine x={selectedYear} stroke="var(--neutral-400)" strokeDasharray="2 3" />
@@ -713,8 +799,10 @@ export function SavingsEvolutionFiveYearsChart() {
                   dot={renderInteractiveDot(entry)}
                   activeDot={false}
                   connectNulls
+                  isAnimationActive={false}
                 />
               ))}
+              <Customized component={renderOperationAnnotations} />
             </LineChart>
           </ResponsiveContainer>
 
@@ -842,62 +930,50 @@ export function SavingsEvolutionFiveYearsChart() {
             </span>
           </div>
 
-          {listRows.map((row) => {
-            const active = isSeriesActive(row.key)
-            return (
-              <button
-                key={row.key}
-                type="button"
-                onClick={() => toggleSeries(row.key)}
-                style={{
-                  border: 'none',
-                  borderRadius: 0,
-                  background: active ? 'var(--neutral-0)' : 'var(--neutral-50)',
-                  padding: '4px 2px',
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 2fr) repeat(4, minmax(0, 1fr))',
-                  alignItems: 'center',
-                  columnGap: 8,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  lineHeight: 1.1,
-                }}
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <img
-                    src={row.iconSrc}
-                    alt=""
-                    aria-hidden="true"
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      flexShrink: 0,
-                      filter: active ? 'none' : 'grayscale(1)',
-                      opacity: active ? 1 : 0.55,
-                    }}
-                  />
-                  <span style={{ fontSize: 11, color: active ? 'var(--neutral-800)' : 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {row.listLabel}
-                  </span>
-                </div>
+          {listRows.map((row) => (
+            <div
+              key={row.key}
+              style={{
+                padding: '4px 2px',
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 2fr) repeat(4, minmax(0, 1fr))',
+                alignItems: 'center',
+                columnGap: 8,
+                lineHeight: 1.1,
+              }}
+            >
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <img
+                  src={row.iconSrc}
+                  alt=""
+                  aria-hidden="true"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.listLabel}
+                </span>
+              </div>
 
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  {formatSignedCurrency(row.performanceAmount)}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  {row.variationVsPreviousYear}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  {row.operationsCount === 0 ? '-' : row.operationsCount}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  {formatCurrency(row.currentAmount)}
-                </span>
-              </button>
-            )
-          })}
+              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {formatSignedCurrency(row.performanceAmount)}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {row.variationVsPreviousYear}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {row.operationsCount === 0 ? '-' : row.operationsCount}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {formatCurrency(row.currentAmount)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </StatsSection>
