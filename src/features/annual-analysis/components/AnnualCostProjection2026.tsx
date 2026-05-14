@@ -14,11 +14,11 @@ import {
 } from '@/features/annual-analysis/components/_constants'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, getCategoryColor } from '@/lib/utils'
-import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
-import blockVariableIcon from '@/assets/icons/blocks/variable.png'
-import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
-import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
-import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
+import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
+import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
+import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
+import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
+import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 
 type ProjectionViewMode = 'category' | 'year'
 

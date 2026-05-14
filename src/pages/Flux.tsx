@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, Fragment } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
@@ -12,14 +12,14 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
-import categoriesHeaderIcon from '@/assets/icons/app/categories1.png'
+import categoriesHeaderIcon from '@/assets/icons/app/categories1.webp'
 import type {
   FlowType,
   PlannedOperationFlowItem,
   Transaction,
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
+import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
@@ -704,6 +704,9 @@ function FilterDropdown({
 export function Flux() {
   const { user } = useAuth()
   const [search, setSearch] = useState('')
+  // useDeferredValue defers the expensive filteredTransactions recomputation until
+  // the browser is idle — keeps the input responsive on every keystroke
+  const deferredSearch = useDeferredValue(search)
   const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('all')
   const [period, setPeriod] = useState<PeriodFilter>('month')
@@ -847,22 +850,22 @@ export function Flux() {
     if (accountFilter === 'joint') list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
     if (accountFilter === 'perso') list = list.filter((t) => !(t.account?.name?.toLowerCase().includes('joint') ?? false))
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase()
       list = list.filter((t) => getTxLabel(t).toLowerCase().includes(q))
     }
 
     return list
-  }, [txns, excludeRecurring, budgetFilter, accountFilter, search])
+  }, [txns, excludeRecurring, budgetFilter, accountFilter, deferredSearch])
 
   const generalPlannedRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = deferredSearch.trim().toLowerCase()
     return plannedGeneralDoneOperations.filter((operation) => {
       if (!q) return true
       const text = (operation.label ?? operation.category_name ?? '').toLowerCase()
       return text.includes(q)
     })
-  }, [plannedGeneralDoneOperations, search])
+  }, [plannedGeneralDoneOperations, deferredSearch])
 
   const plannedOperationsForList = useMemo(() => {
     let list = plannedModeOperations
@@ -870,8 +873,8 @@ export function Flux() {
     if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
     if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase()
       list = list.filter((operation) => {
         const text = `${operation.label ?? ''} ${operation.category_name ?? ''}`.toLowerCase()
         return text.includes(q)
@@ -879,7 +882,7 @@ export function Flux() {
     }
 
     return [...list].sort((a, b) => toDateKey(a.planned_date).localeCompare(toDateKey(b.planned_date)))
-  }, [plannedModeOperations, plannedModalityFilter, search])
+  }, [plannedModeOperations, plannedModalityFilter, deferredSearch])
 
   const plannedDoneSection = useMemo(
     () => plannedOperationsForList.filter((operation) => operation.planned_status === 'done'),

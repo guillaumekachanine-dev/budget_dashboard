@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
 import { useStatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
@@ -12,6 +11,10 @@ const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: modu
 const Budgets = lazy(() => import('@/pages/Budgets').then((module) => ({ default: module.Budgets })))
 const Stats = lazy(() => import('@/pages/Stats').then((module) => ({ default: module.Stats })))
 const Login = lazy(() => import('@/pages/Login').then((module) => ({ default: module.Login })))
+// Lazy-loaded to keep react-hook-form out of the initial bundle (modal is rarely opened on first load)
+const AddTransactionModal = lazy(() =>
+  import('@/components/modals/AddTransactionModal').then((m) => ({ default: m.AddTransactionModal }))
+)
 
 function RouteFallback() {
   return (

@@ -38,11 +38,11 @@ import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBud
 import type { PlannedOperationItem } from '@/features/home/types'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT, PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
-import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
-import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
-import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
-import percolIcon from "@/assets/icons/accounts/amundi_epargne.png";
-import cryptoIcon from "@/assets/icons/accounts/bitcoin.png";
+import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
+import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
+import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
+import percolIcon from "@/assets/icons/accounts/amundi_epargne.webp";
+import cryptoIcon from "@/assets/icons/accounts/bitcoin.webp";
 
 function formatPlannedDateShort(isoDate?: string | null): string {
   if (!isoDate) return '--/--'
