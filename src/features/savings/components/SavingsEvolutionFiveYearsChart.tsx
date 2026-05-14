@@ -469,8 +469,7 @@ export function SavingsEvolutionFiveYearsChart() {
             const yPos = yAxis.scale!(interpValue)
             if (yPos === undefined) return null
 
-            const isSelected = selectedOperationBubble?.event.account_key === event.account_key
-              && selectedOperationBubble.event.year === event.year
+            const isSelected = selectedOperationBubble?.event.id === event.id
 
             const tipX = xPos
             const tipY = yPos - GAP

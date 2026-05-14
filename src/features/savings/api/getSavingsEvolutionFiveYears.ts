@@ -20,9 +20,17 @@ type SnapshotRow = {
   balance_eur: number | null
   total_saved_eur: number | null
   operations_count: number | null
-  notable_date: string | null
-  notable_nature: string | null
-  notable_amount_eur: number | null
+}
+
+type OperationsViewRow = {
+  transaction_id: string
+  transaction_date: string
+  destination_account_id: string | null
+  destination_account_name: string | null
+  amount: string | number | null
+  normalized_label: string | null
+  category_name: string | null
+  direction: string | null
 }
 
 const MAX_SERIES = 6
@@ -30,7 +38,7 @@ const MAX_SERIES = 6
 const LIVRET_LINE_COLORS = ['#2ED47A', '#3CD985', '#59E09A', '#1EB866'] as const
 const PLACEMENT_LINE_COLORS = ['#FFAB2E', '#FFBC59', '#F7C789', '#E89E3B'] as const
 
-function normalizeLabel(value: string): string {
+function normalizeLabelStr(value: string): string {
   return value
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
@@ -45,7 +53,7 @@ function hasWord(normalized: string, word: string): boolean {
 }
 
 function resolveSavingsFamily(name: string, accountType: string | null): SavingsFamily | null {
-  const normalized = normalizeLabel(name)
+  const normalized = normalizeLabelStr(name)
 
   const isPer = hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')
   const isPercol = hasWord(normalized, 'percol') || hasWord(normalized, 'perco') || hasWord(normalized, 'peg') || normalized.includes('capgemini')
@@ -58,6 +66,7 @@ function resolveSavingsFamily(name: string, accountType: string | null): Savings
     || normalized.includes('crypto')
     || normalized.includes('amundi')
     || hasWord(normalized, 'cto')
+    || hasWord(normalized, 'bitcoin')
   ) {
     return 'placements'
   }
@@ -73,11 +82,21 @@ function resolveSavingsFamily(name: string, accountType: string | null): Savings
   return null
 }
 
-function toFrontendNature(raw: string | null): 'virement' | 'intérêts' | null {
-  if (!raw) return null
-  if (raw === 'virement' || raw === 'abondement_entreprise') return 'virement'
-  if (raw === 'intérêts' || raw === 'dividendes') return 'intérêts'
-  return null
+function toNatureFromView(
+  normalizedLabel: string | null,
+  categoryName: string | null,
+): 'virement' | 'intérêts' {
+  const lbl = normalizeLabelStr(normalizedLabel ?? '')
+  const cat = normalizeLabelStr(categoryName ?? '')
+  if (
+    cat.includes('interet')
+    || lbl.includes('interet')
+    || cat.includes('dividende')
+    || lbl.includes('dividende')
+  ) {
+    return 'intérêts'
+  }
+  return 'virement'
 }
 
 function toIsoDate(value: Date): string {
@@ -159,18 +178,23 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
   const endDate = toIsoDate(now)
 
   try {
-    const [accountsResult, snapshotsResult] = await Promise.all([
+    const [accountsResult, snapshotsResult, operationsResult] = await Promise.all([
       budgetDb
         .from('accounts')
         .select('id,name,account_type,opening_balance')
         .eq('include_in_dashboard', true),
       budgetDb
         .from('savings_balance_snapshots')
-        .select('account_id,snapshot_date,balance_eur,total_saved_eur,operations_count,notable_date,notable_nature,notable_amount_eur')
+        .select('account_id,snapshot_date,balance_eur,total_saved_eur,operations_count')
         .not('balance_eur', 'is', null)
         .gte('snapshot_date', startDate)
         .lte('snapshot_date', endDate)
         .order('snapshot_date', { ascending: true }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (budgetDb as any)
+        .from('v_savings_transfers_enriched')
+        .select('transaction_id,transaction_date,destination_account_id,destination_account_name,amount,normalized_label,category_name,direction')
+        .order('transaction_date', { ascending: true }),
     ])
 
     if (accountsResult.error) {
@@ -179,26 +203,39 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     if (snapshotsResult.error) {
       throw new Error(`getSavingsEvolutionFiveYears snapshots: ${snapshotsResult.error.message}`)
     }
+    if (operationsResult.error) {
+      throw new Error(`getSavingsEvolutionFiveYears operations: ${operationsResult.error.message}`)
+    }
 
     const accounts = ((accountsResult.data ?? []) as unknown as AccountRow[])
       .map((a) => ({ ...a, family: resolveSavingsFamily(a.name, a.account_type) }))
       .filter((a): a is AccountRow & { family: SavingsFamily } => a.family != null)
 
     const snapshots = (snapshotsResult.data ?? []) as unknown as SnapshotRow[]
+    const allOperations = (operationsResult.data ?? []) as unknown as OperationsViewRow[]
 
-    if (accounts.length === 0 || snapshots.length === 0) {
+    if (accounts.length === 0) {
       return buildFallbackPayload(endYear)
     }
 
-    // Latest balance per account (snapshots ordered ASC → last write wins)
+    // Latest balance per account from snapshots (ordered ASC → last write wins)
     const latestBalanceByAccount = new Map<string, number>()
     for (const snap of snapshots) {
       latestBalanceByAccount.set(snap.account_id, Number(snap.balance_eur ?? 0))
     }
 
+    // Include accounts with snapshot balance OR positive opening_balance (e.g. Bitcoin)
     const selectedAccounts = accounts
-      .filter((a) => (latestBalanceByAccount.get(a.id) ?? 0) > 0)
-      .sort((a, b) => (latestBalanceByAccount.get(b.id) ?? 0) - (latestBalanceByAccount.get(a.id) ?? 0))
+      .filter((a) => {
+        const snapshotBal = latestBalanceByAccount.get(a.id) ?? 0
+        const openingBal = a.opening_balance ?? 0
+        return Math.max(snapshotBal, openingBal) > 0
+      })
+      .sort((a, b) => {
+        const balA = Math.max(latestBalanceByAccount.get(a.id) ?? 0, a.opening_balance ?? 0)
+        const balB = Math.max(latestBalanceByAccount.get(b.id) ?? 0, b.opening_balance ?? 0)
+        return balB - balA
+      })
       .slice(0, MAX_SERIES)
 
     if (selectedAccounts.length === 0) {
@@ -207,14 +244,11 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
 
     const selectedAccountIds = new Set(selectedAccounts.map((a) => a.id))
 
-    // For each (account_id × year): latest snapshot (ordered ASC → last write wins per year)
+    // For each (account_id × year): latest snapshot balance (ordered ASC → last write wins per year)
     type YearSnap = {
       balance_eur: number
       total_saved_eur: number
       operations_count: number
-      notable_date: string | null
-      notable_nature: string | null
-      notable_amount_eur: number
     }
     const snapByAccountYear = new Map<string, YearSnap>()
 
@@ -225,9 +259,6 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
         balance_eur: Number(snap.balance_eur ?? 0),
         total_saved_eur: Number(snap.total_saved_eur ?? 0),
         operations_count: Number(snap.operations_count ?? 0),
-        notable_date: snap.notable_date,
-        notable_nature: snap.notable_nature,
-        notable_amount_eur: Number(snap.notable_amount_eur ?? 0),
       })
     }
 
@@ -249,9 +280,16 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     for (const account of selectedAccounts) {
       for (let y = startYear; y <= endYear; y++) {
         const snap = snapByAccountYear.get(`${account.id}::${y}`)
-        if (!snap) continue
-        const row = yearlyPoints.get(String(y))
-        if (row) row[account.id] = Math.max(0, Math.round(snap.balance_eur))
+        if (snap) {
+          const row = yearlyPoints.get(String(y))
+          if (row) row[account.id] = Math.max(0, Math.round(snap.balance_eur))
+        }
+      }
+      // Accounts with no snapshots (e.g. Bitcoin): use opening_balance for current year
+      const hasAnySnapshot = snapshots.some((s) => s.account_id === account.id)
+      if (!hasAnySnapshot && (account.opening_balance ?? 0) > 0) {
+        const currentYearRow = yearlyPoints.get(String(endYear))
+        if (currentYearRow) currentYearRow[account.id] = Math.round(account.opening_balance!)
       }
     }
 
@@ -263,15 +301,13 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
           const v = Number(raw)
           out[s.key] = Number.isFinite(v) ? v : 0
         }
-        // Clé absente → Recharts traite le point comme null (connectNulls bridge par-dessus)
+        // Key absent → Recharts treats the point as null (connectNulls bridges over it)
       }
       return out
     })
 
-    // Metrics + operation events
+    // Yearly metrics from snapshots (operations count + total saved per account × year)
     const yearlyMetricsPayload: SavingsEvolutionFiveYearsPayload['yearly_account_metrics'] = {}
-    const operationEvents: SavingsEvolutionFiveYearsPayload['operation_events'] = []
-
     for (const account of selectedAccounts) {
       for (let y = startYear; y <= endYear; y++) {
         const key = `${account.id}::${y}`
@@ -280,21 +316,33 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
           operations_count: snap?.operations_count ?? 0,
           total_saved_amount: Math.round(snap?.total_saved_eur ?? 0),
         }
-        if (snap?.notable_date) {
-          const nature = toFrontendNature(snap.notable_nature)
-          if (nature && snap.notable_amount_eur > 0) {
-            operationEvents.push({
-              id: `${account.id}-${y}-${snap.notable_date}`,
-              account_key: account.id,
-              account_label: account.name,
-              year: String(y),
-              transaction_date: snap.notable_date,
-              amount: Math.round(snap.notable_amount_eur),
-              nature,
-            })
-          }
-        }
       }
+    }
+
+    // Operation events: ALL operations from v_savings_transfers_enriched for selected accounts
+    const operationEvents: SavingsEvolutionFiveYearsPayload['operation_events'] = []
+    for (const op of allOperations) {
+      if (!op.destination_account_id) continue
+      if (!selectedAccountIds.has(op.destination_account_id)) continue
+
+      const rawAmount = Math.round(Number(op.amount ?? 0))
+      if (rawAmount === 0) continue
+
+      const nature = toNatureFromView(op.normalized_label, op.category_name)
+      // Withdrawals (direction='expense') are stored as positive but represent outflows
+      const amount = op.direction === 'expense' ? -rawAmount : rawAmount
+      const year = op.transaction_date.slice(0, 4)
+      const account = selectedAccounts.find((a) => a.id === op.destination_account_id)
+
+      operationEvents.push({
+        id: op.transaction_id,
+        account_key: op.destination_account_id,
+        account_label: account?.name ?? op.destination_account_name ?? '',
+        year,
+        transaction_date: op.transaction_date,
+        amount,
+        nature,
+      })
     }
 
     return {
