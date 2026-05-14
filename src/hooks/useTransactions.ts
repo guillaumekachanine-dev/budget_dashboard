@@ -120,6 +120,40 @@ function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQuer
   })
 }
 
+// Invalide tous les caches analytics dérivés des transactions.
+// N'invalide PAS les tables de config statiques (categories, budget_periods, bucket_map)
+// ni les données 2025 figées (annual-2025-analysis).
+// React Query ne re-fetchera que les queries dont le subscriber est monté.
+function invalidateAllAnalyticsCaches(queryClient: ReturnType<typeof useQueryClient>) {
+  const keys = [
+    QK.ACCOUNTS,
+    QK.BUDGET_PAYLOAD,
+    QK.BUDGET_ANALYTICS,
+    QK.BUDGET_REVENUE_ANALYTICS,
+    QK.BUDGETS,                          // useBudgets — calcule le dépensé depuis transactions
+    QK.SAVINGS,                          // épargne (summary, analytics, financial-security)
+    QK.STATS,                            // investment-performance, optimization-capacity
+    QK.STATS_REFERENCE,                  // budget vs actual mensuel
+    QK.ANNUAL_2026_ANALYSIS,
+    QK.ANNUAL_PROJECTION_OVERVIEW_2026,
+    QK.CATEGORY_ANNUAL_COST_PROJECTION_2026,
+    QK.CATEGORY_ROLLING_12M_STATS,
+    QK.COMPARED_YTD_FLOWS,
+    QK.COMPARED_YTD_FLOWS_KPI_CARDS,
+    QK.COMPARED_CATEGORY_SUMMARY,
+    QK.COMPARED_BUCKET_SUMMARY,
+    QK.MONTHLY_FLOWS_BY_SCOPE,
+    QK.MONTHLY_FLOWS_ANALYSIS_CARD,
+    QK.BUDGET_METRICS_PERIOD_DATASET,
+    QK.BUDGET_METRICS_YEAR_DATASET,
+    QK.BUDGET_METRICS_CATEGORIES,
+  ] as const
+
+  for (const key of keys) {
+    void queryClient.invalidateQueries({ queryKey: [key] })
+  }
+}
+
 export function useAddTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -130,10 +164,8 @@ export function useAddTransaction() {
     },
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
-      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
-      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
-      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }
@@ -157,10 +189,8 @@ export function useUpdateTransaction() {
       } else {
         void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
-      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
-      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
-      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }
@@ -175,10 +205,8 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       // account_id inconnu après delete — invalidation large inévitable
       void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
-      void queryClient.invalidateQueries({ queryKey: [QK.ACCOUNTS] })
-      void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
-      void queryClient.invalidateQueries({ queryKey: [QK.STATS_REFERENCE] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }

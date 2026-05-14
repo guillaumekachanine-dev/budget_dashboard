@@ -37,6 +37,7 @@ async function fetchBudgetSummaries(year: number, month: number): Promise<Catego
       .from('transactions')
       .select('category_id, amount')
       .eq('flow_type', 'expense')
+      .eq('is_hidden', false)
       .in('category_id', categoryIds)
       .gte('transaction_date', start)
       .lte('transaction_date', end)
