@@ -108,7 +108,7 @@ function resolveSeriesColor(label: string, fallbackColor: string): string {
   if (normalized.includes('livret a')) return '#1D4ED8'
   if (hasWord(normalized, 'ldds')) return '#D946EF'
   if (hasWord(normalized, 'lep')) return '#0D9488'
-  if (hasWord(normalized, 'pea')) return '#F97316'
+  if (hasWord(normalized, 'pea')) return '#10b981'
   if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return '#7C3AED'
   if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return '#DC2626'
   if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return '#CA8A04'
@@ -168,11 +168,6 @@ function formatOperationDate(value: string): string {
     month: '2-digit',
     year: 'numeric',
   }).format(date)
-}
-
-function resolveChartLabel(shortLabel: string): string {
-  if (shortLabel === 'Livret A') return 'L.A.'
-  return shortLabel.slice(0, 4)
 }
 
 function formatYAxisCompact(value: number): string {
@@ -393,7 +388,7 @@ export function SavingsEvolutionFiveYearsChart() {
             setSelectedYearBubble({ year, x, y: y + 8 })
           }}
         >
-          {year.slice(-2)}
+          {year}
         </text>
       </g>
     )
@@ -403,6 +398,7 @@ export function SavingsEvolutionFiveYearsChart() {
     const x = Number(tickProps.x ?? 0)
     const y = Number(tickProps.y ?? 0)
     const value = Number(tickProps.payload?.value ?? 0)
+    if (value === 0) return <g />
     return (
       <g transform={`translate(${x},${y})`}>
         <text
@@ -506,54 +502,6 @@ export function SavingsEvolutionFiveYearsChart() {
     },
     [visibleOperationEvents, styledSeries, chartRows, selectedOperationBubble,
       setSelectedYear, setSelectedYearBubble, setSelectedOperationBubble],
-  )
-
-  const renderSeriesLabels = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (chartProps: any) => {
-      const xAxis = chartProps.xAxisMap?.[0]
-      const yAxis = chartProps.yAxisMap?.[0]
-      if (!xAxis?.scale || !yAxis?.scale) return null
-      const xScale = xAxis.scale as (v: string) => number | undefined
-
-      const firstYear = chartRows[0]?.year
-      const lastYear = chartRows[chartRows.length - 1]?.year
-
-      return (
-        <g>
-          {visibleSeries.map((entry) => {
-            for (const row of chartRows) {
-              const val = Number(row[entry.key])
-              if (!Number.isFinite(val) || val <= 0) continue
-              const cx = xScale(String(row.year))
-              const cy = yAxis.scale!(val)
-              if (cx === undefined || cy === undefined) continue
-              const isFirst = String(row.year) === firstYear
-              const isLast = String(row.year) === lastYear
-              const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle'
-              const xOff = isFirst ? 4 : isLast ? -4 : 0
-              return (
-                <text
-                  key={`chart-label-${entry.key}`}
-                  x={cx + xOff}
-                  y={cy - 9}
-                  textAnchor={anchor}
-                  fill={entry.color}
-                  fontSize={9}
-                  fontWeight={700}
-                  letterSpacing="0.03em"
-                  style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'var(--font-mono)' }}
-                >
-                  {resolveChartLabel(entry.shortLabel)}
-                </text>
-              )
-            }
-            return null
-          })}
-        </g>
-      )
-    },
-    [visibleSeries, chartRows],
   )
 
   if (isLoading) {
@@ -857,61 +805,139 @@ export function SavingsEvolutionFiveYearsChart() {
                 />
               ))}
               <Customized component={renderOperationAnnotations} />
-              <Customized component={renderSeriesLabels} />
             </LineChart>
           </ResponsiveContainer>
 
-          {selectedOperationBubble ? (
-            <div
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'absolute',
-                left: selectedOperationBubble.x,
-                top: selectedOperationBubble.y,
-                transform: 'translate(-50%, calc(-100% - 10px))',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-200)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
-                padding: '10px 12px',
-                minWidth: 162,
-                zIndex: 18,
-              }}
-            >
-              <p
+          {selectedOperationBubble ? (() => {
+            const { event, color } = selectedOperationBubble
+            const yearRow = chartRows.find((r) => r.year === event.year)
+            const portfolioBalance = Number(yearRow?.[event.account_key] ?? 0)
+            const isPositiveAmount = event.amount >= 0
+            const natureLabel = event.nature === 'intérêts'
+              ? 'Intérêts'
+              : event.amount < 0
+                ? 'Retrait'
+                : 'Virement'
+            const natureBgColor = event.nature === 'intérêts'
+              ? 'rgba(4,120,87,0.09)'
+              : event.amount < 0
+                ? 'rgba(220,38,38,0.09)'
+                : `${color}16`
+            const natureTextColor = event.nature === 'intérêts'
+              ? '#047857'
+              : event.amount < 0
+                ? '#DC2626'
+                : color
+
+            return (
+              <div
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                  margin: '0 0 8px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--neutral-800)',
-                  lineHeight: 1.3,
+                  position: 'absolute',
+                  left: selectedOperationBubble.x,
+                  top: selectedOperationBubble.y,
+                  transform: 'translate(-50%, calc(-100% - 10px))',
+                  background: 'var(--neutral-0)',
+                  border: '1px solid var(--neutral-200)',
+                  borderRadius: 'var(--radius-lg)',
+                  boxShadow: '0 6px 24px rgba(0,0,0,0.11)',
+                  minWidth: 188,
+                  zIndex: 18,
+                  overflow: 'hidden',
                 }}
               >
-                {selectedOperationBubble.event.account_label}
-              </p>
+                {/* Header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px 9px',
+                  gap: 8,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
+                    {event.account_label}
+                  </span>
+                  {portfolioBalance > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      {formatCurrency(portfolioBalance)}
+                    </span>
+                  )}
+                </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>Date</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                  {formatOperationDate(selectedOperationBubble.event.transaction_date)}
-                </span>
-              </div>
+                {/* Divider */}
+                <div style={{ height: 1, background: 'var(--neutral-150)' }} />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>Nature</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                  {selectedOperationBubble.event.nature}
-                </span>
-              </div>
+                {/* Rows */}
+                <div style={{ padding: '8px 12px 10px', display: 'grid', gap: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Date</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                      {formatOperationDate(event.transaction_date)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Nature</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: natureTextColor,
+                      background: natureBgColor,
+                      borderRadius: 'var(--radius-full)',
+                      padding: '2px 8px',
+                    }}>
+                      {natureLabel}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Montant</span>
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: isPositiveAmount ? '#047857' : '#DC2626',
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                      {formatSignedCurrency(event.amount)}
+                    </span>
+                  </div>
+                </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>Montant</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                  {formatSignedCurrency(selectedOperationBubble.event.amount)}
-                </span>
+                {/* Divider */}
+                <div style={{ height: 1, background: 'var(--neutral-150)' }} />
+
+                {/* Détails button */}
+                <div style={{ padding: '8px 12px' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedPortfolioKey(event.account_key)
+                      setSelectedOperationBubble(null)
+                    }}
+                    style={{
+                      width: '100%',
+                      height: 30,
+                      border: `1.5px solid ${color}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: 'transparent',
+                      color,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      transition: 'background 150ms ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = `${color}0e` }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    Détails <span aria-hidden="true">›</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : null}
+            )
+          })() : null}
 
           {selectedYearBubble && selectedYearMetrics ? (
             <div
