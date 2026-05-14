@@ -868,30 +868,23 @@ export function SavingsEvolutionFiveYearsChart() {
                 <div style={{ height: 1, background: 'var(--neutral-150)' }} />
 
                 {/* Rows */}
-                <div style={{ padding: '8px 12px 10px', display: 'grid', gap: 5 }}>
+                <div style={{ padding: '7px 12px 9px', display: 'grid', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Date</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
                       {formatOperationDate(event.transaction_date)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Nature</span>
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: natureTextColor,
-                      background: natureBgColor,
-                      borderRadius: 'var(--radius-full)',
-                      padding: '2px 8px',
-                    }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: natureTextColor }}>
                       {natureLabel}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Montant</span>
                     <span style={{
-                      fontSize: 13,
+                      fontSize: 10,
                       fontWeight: 700,
                       color: isPositiveAmount ? '#047857' : '#DC2626',
                       fontFamily: 'var(--font-mono)',
@@ -905,7 +898,7 @@ export function SavingsEvolutionFiveYearsChart() {
                 <div style={{ height: 1, background: 'var(--neutral-150)' }} />
 
                 {/* Détails button */}
-                <div style={{ padding: '8px 12px' }}>
+                <div style={{ padding: '6px 12px 8px' }}>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -915,7 +908,7 @@ export function SavingsEvolutionFiveYearsChart() {
                     }}
                     style={{
                       width: '100%',
-                      height: 30,
+                      height: 24,
                       border: `1.5px solid ${color}`,
                       borderRadius: 'var(--radius-md)',
                       background: 'transparent',
