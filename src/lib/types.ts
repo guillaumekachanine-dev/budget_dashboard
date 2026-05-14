@@ -542,6 +542,7 @@ export type Database = {
       category_budget_bucket_map: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       import_batches: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      savings_balance_snapshots: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
     }
     Views: {
       budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
