@@ -4,7 +4,7 @@ import { ComparedCategoryBars } from './ComparedCategoryBars'
 import { ComparedVelocityCard } from './ComparedVelocityCard'
 import { ComparedMonthlyChart } from './ComparedMonthlyChart'
 
-export function ComparedAnalysisSection() {
+export function ComparedAnalysisSection({ hideMonthlyChart = false }: { hideMonthlyChart?: boolean } = {}) {
   const {
     loading, error,
     fluxMetrics, categoryMetrics, bucketMetrics,
@@ -15,21 +15,8 @@ export function ComparedAnalysisSection() {
   } = useComparedAnalysis()
 
   return (
-    <section style={{ padding: '0 var(--space-6)' }}>
+    <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip' }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
-
-        {/* En-tête de section */}
-        <div style={{ marginBottom: 'var(--space-4)' }}>
-          <h3 style={{
-            margin: 0,
-            fontSize: 'var(--font-size-lg)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: 'var(--neutral-900)',
-          }}>
-            Analyse comparée
-          </h3>
-        </div>
-
         {/* États loading / error */}
         {loading && <SectionSkeleton />}
         {!loading && error && <SectionError message={error} />}
@@ -37,11 +24,17 @@ export function ComparedAnalysisSection() {
         {/* Contenu */}
         {!loading && !error && (
           <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-            <ComparedMonthlyChart
-              flows2025={flows2025}
-              flows2026={flows2026}
-              fluxMetrics={fluxMetrics}
-            />
+            {!hideMonthlyChart ? (
+              <ComparedMonthlyChart
+                flows2025={flows2025}
+                flows2026={flows2026}
+                fluxMetrics={fluxMetrics}
+              />
+            ) : null}
+
+            <ComparedBucketChart metrics={bucketMetrics} fluxMetrics={fluxMetrics} />
+
+            <ComparedCategoryBars metrics={categoryMetrics} categoryRows={categoryRows} />
 
             <ComparedVelocityCard
               expense2025={flows2025?.expense_total ?? 0}
@@ -52,10 +45,6 @@ export function ComparedAnalysisSection() {
               medianMonthly2026={medianMonthly2026}
               remainingMonths={remainingMonths}
             />
-
-            <ComparedBucketChart metrics={bucketMetrics} fluxMetrics={fluxMetrics} />
-
-            <ComparedCategoryBars metrics={categoryMetrics} categoryRows={categoryRows} />
           </div>
         )}
       </div>

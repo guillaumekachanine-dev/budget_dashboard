@@ -5,7 +5,7 @@ type Props = {
   metrics: ComparedFluxMetric[]
 }
 
-const FLUX_KEYS = ['Revenus', 'Dépenses', 'Cashflow net', 'Capacité épar.']
+const FLUX_KEYS = ['Revenus', 'Dépenses', 'Cashflow net', 'Épargne réalisée']
 
 export function ComparedFluxKpis({ metrics }: Props) {
   const shown = metrics.filter((m) => FLUX_KEYS.includes(m.label))

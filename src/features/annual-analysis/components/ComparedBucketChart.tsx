@@ -1,7 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts'
 import { BarChart3, ChevronRight, Rows3, X } from 'lucide-react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
+import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
+import blockVariableIcon from '@/assets/icons/blocks/variable.png'
+import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
+import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
+import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
 import { BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
 import type { ComparedBucketMetric, ComparedFluxMetric } from '@/features/annual-analysis/types.compared'
 import {
@@ -24,7 +29,9 @@ type ViewMode = 'bars' | 'allocation'
 // ─── Couleurs unifiées ────────────────────────────────────────────────────────
 const COLOR_2025 = 'rgba(255,171,46,0.38)'
 const COLOR_2026 = '#B8860B'
-const CONTENT_HEIGHT = 260
+const BLOCK_SECTION_FIXED_HEIGHT = 438
+const CONTENT_HEIGHT = 320
+const VERTICAL_AXIS_MAX = 10000
 
 // ─── Couleurs d'accent par bloc ───────────────────────────────────────────────
 const BUCKET_HEADER_COLORS: Record<string, string> = {
@@ -61,6 +68,14 @@ const ALLOCATION_COLORS: Record<string, string> = {
   epargne: '#FFAB2E',
 }
 
+const BLOCK_ICON_BY_BUCKET: Record<string, string | null> = {
+  socle_fixe: blockFixeIcon,
+  variable_essentielle: blockVariableIcon,
+  discretionnaire: blockDiscretionnaireIcon,
+  provision: blockProvisionsIcon,
+  epargne: blockEpargneIcon,
+}
+
 type Props = {
   metrics: ComparedBucketMetric[]
   fluxMetrics: ComparedFluxMetric[]
@@ -75,6 +90,105 @@ function formatTightEuro(value: number): string {
   return fmt(value).replace(/[\u00A0\u202F ]+€$/u, '€')
 }
 
+type CappedBarShapeProps = {
+  fill?: string
+  height?: number
+  payload?: ChartEntry
+  value?: number
+  width?: number
+  x?: number
+  y?: number
+}
+
+function CappedBarShape({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  fill = '#999',
+  payload,
+  value,
+}: CappedBarShapeProps) {
+  if (width <= 0 || height <= 0) return null
+
+  // Clamp the rendered bar body inside the visible chart area.
+  const top = Math.max(y, 0)
+  const clippedHeight = Math.max(0, height - (top - y))
+
+  const shouldShowBreak =
+    payload?.bucket === 'epargne' &&
+    typeof value === 'number' &&
+    value > VERTICAL_AXIS_MAX &&
+    clippedHeight >= 8
+
+  const slashY = top + 4
+  const arrowX = x + 3
+  const arrowTipY = top + 1
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={top}
+        width={width}
+        height={clippedHeight}
+        rx={3}
+        ry={3}
+        fill={fill}
+      />
+      {shouldShowBreak ? (
+        <>
+          <line
+            x1={arrowX}
+            y1={arrowTipY + 8}
+            x2={arrowX}
+            y2={arrowTipY + 2}
+            stroke="rgba(255,255,255,0.95)"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={arrowX}
+            y1={arrowTipY + 2}
+            x2={arrowX - 2}
+            y2={arrowTipY + 4}
+            stroke="rgba(255,255,255,0.95)"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={arrowX}
+            y1={arrowTipY + 2}
+            x2={arrowX + 2}
+            y2={arrowTipY + 4}
+            stroke="rgba(255,255,255,0.95)"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={x + width * 0.16}
+            y1={slashY + 4}
+            x2={x + width * 0.44}
+            y2={slashY}
+            stroke="rgba(255,255,255,0.95)"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+          <line
+            x1={x + width * 0.56}
+            y1={slashY + 4}
+            x2={x + width * 0.84}
+            y2={slashY}
+            stroke="rgba(255,255,255,0.95)"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        </>
+      ) : null}
+    </g>
+  )
+}
+
 // ─── Component principal ──────────────────────────────────────────────────────
 
 export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
@@ -86,7 +200,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
   const [showDetail,    setShowDetail]    = useState(false)
 
   const variableFluxMetric = fluxMetrics.find((metric) => metric.label === 'Variable') ?? null
-  const savingsFluxMetric = fluxMetrics.find((metric) => metric.label === 'Capacité épar.') ?? null
+  const savingsFluxMetric = fluxMetrics.find((metric) => metric.label === 'Épargne réalisée') ?? null
 
   const data: ChartEntry[] = [...PILOTAGE_BUCKET_ORDER].map((key) => {
     let m = metrics.find((metric) => metric.bucket === key) ?? null
@@ -157,15 +271,25 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
     }
   }
 
-  const headerLegend = viewMode === 'bars'
-    ? [
-        { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
-        { label: '2026', color: COLOR_2026, border: COLOR_2026 },
-      ]
-    : [
-        { label: '2025', color: 'var(--neutral-300)', border: 'transparent' },
-        { label: '2026', color: 'var(--neutral-700)', border: 'transparent' },
-      ]
+  const headerLegend = [
+    { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
+    { label: '2026', color: COLOR_2026, border: COLOR_2026 },
+  ]
+
+  const openDetailForBucket = async (bucket: string) => {
+    setClickedBucket(bucket)
+    setDetailLoading(true)
+    setShowDetail(true)
+    try {
+      const rows = await getComparedBucketCategoryBreakdown(bucket)
+      setDetailData(rows)
+    } catch (e) {
+      console.error(e)
+      setDetailData([])
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   // ── Clic sur une barre : mémorise le bucket + la coordonnée SVG ───────────
   const handleChartClick = (chartData: {
@@ -190,17 +314,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
   // ── Ouvrir la modale de détail sous-catégories ────────────────────────────
   const openDetail = async () => {
     if (!clickedBucket) return
-    setDetailLoading(true)
-    setShowDetail(true)
-    try {
-      const rows = await getComparedBucketCategoryBreakdown(clickedBucket)
-      setDetailData(rows)
-    } catch (e) {
-      console.error(e)
-      setDetailData([])
-    } finally {
-      setDetailLoading(false)
-    }
+    await openDetailForBucket(clickedBucket)
   }
 
   const closeAll = () => {
@@ -225,6 +339,9 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
         boxShadow: 'var(--shadow-card)',
         border: '1px solid var(--neutral-150)',
         padding: 'var(--space-5)',
+        height: BLOCK_SECTION_FIXED_HEIGHT,
+        display: 'grid',
+        gridTemplateRows: 'auto 1fr',
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
@@ -232,14 +349,38 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
               Dépenses YTD par bloc
             </p>
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              {headerLegend.map(({ label, color, border }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: color, border: `1px solid ${border}` }} />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-                </div>
-              ))}
-            </div>
+            {viewMode === 'bars' ? (
+              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                {headerLegend.map(({ label, color, border }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: color, border: `1px solid ${border}` }} />
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { void openDetailForBucket(clickedBucket ?? 'socle_fixe') }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  width: 'fit-content',
+                  padding: '4px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1.5px solid #5B57F5',
+                  background: 'transparent',
+                  color: '#5B57F5',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Détails
+                <ChevronRight size={11} strokeWidth={2.5} />
+              </button>
+            )}
           </div>
 
           <div
@@ -294,17 +435,25 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
           </div>
         </div>
 
-        <div style={{ position: 'relative', height: CONTENT_HEIGHT }}>
+        <div style={{
+          position: 'relative',
+          height: '100%',
+          marginTop: 'var(--space-2)',
+          minHeight: 0,
+          display: 'flex',
+          alignItems: 'flex-end',
+          paddingBottom: 'var(--space-2)',
+        }}>
           {viewMode === 'bars' ? (
             <>
               {/* Wrapper relatif : permet de positionner le tooltip custom en absolu */}
-              <div style={{ position: 'relative', height: '100%' }}>
+              <div style={{ position: 'relative', height: CONTENT_HEIGHT, width: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={data}
-                    barCategoryGap="22%"
-                    barGap={3}
-                    margin={{ top: 4, right: 4, left: -22, bottom: 0 }}
+                    barCategoryGap="16%"
+                    barGap={2}
+                    margin={{ top: 12, right: 4, left: -22, bottom: 0 }}
                     onClick={handleChartClick}
                     style={{ cursor: 'pointer' }}
                   >
@@ -321,6 +470,8 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
                       axisLine={false}
                       tickLine={false}
                       width={38}
+                      domain={[0, VERTICAL_AXIS_MAX]}
+                      allowDataOverflow
                       tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                     />
                     {/* Tooltip hover masqué quand un bloc est sélectionné */}
@@ -331,8 +482,22 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
                       itemStyle={{ fontSize: 11 }}
                       wrapperStyle={{ opacity: clickedBucket ? 0 : 1, pointerEvents: 'none', transition: 'opacity 100ms' }}
                     />
-                    <Bar dataKey="v2025" name="v2025" fill={COLOR_2025} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="v2026" name="v2026" fill={COLOR_2026} radius={[3, 3, 0, 0]} />
+                    <Bar
+                      dataKey="v2025"
+                      name="v2025"
+                      fill={COLOR_2025}
+                      radius={[3, 3, 0, 0]}
+                      maxBarSize={16}
+                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
+                    />
+                    <Bar
+                      dataKey="v2026"
+                      name="v2026"
+                      fill={COLOR_2026}
+                      radius={[3, 3, 0, 0]}
+                      maxBarSize={16}
+                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
 
@@ -354,6 +519,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
               total2025={allocationTotal2025}
               total2026={allocationTotal2026}
               height={CONTENT_HEIGHT}
+              onBucketFocus={setClickedBucket}
             />
           )}
         </div>
@@ -524,6 +690,7 @@ function AllocationLineView({
   total2025,
   total2026,
   height,
+  onBucketFocus,
 }: {
   rows: Array<{
     bucket: string
@@ -535,11 +702,49 @@ function AllocationLineView({
   total2025: number
   total2026: number
   height: number
+  onBucketFocus?: (bucket: string) => void
 }) {
+  const RIGHT_COLUMNS_WIDTH = '34%'
+  const RIGHT_COLUMNS_TEMPLATE = '1fr 0.8fr 1fr'
+  const DELTA_COLUMN_SHIFT_X = '8px'
+  const YEAR_2026_COLUMN_SHIFT_X = '16px'
+
+  const [highlightedBucket, setHighlightedBucket] = useState<string | null>(null)
+  const highlightTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (highlightTimerRef.current != null) {
+      window.clearTimeout(highlightTimerRef.current)
+    }
+  }, [])
+
+  const flashBucket = (bucket: string) => {
+    onBucketFocus?.(bucket)
+    setHighlightedBucket(bucket)
+    if (highlightTimerRef.current != null) {
+      window.clearTimeout(highlightTimerRef.current)
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedBucket((current) => (current === bucket ? null : current))
+    }, 1600)
+  }
+
+  const formatDeltaPct = (v2025: number, v2026: number) => {
+    if (v2025 <= 0) return null
+    return ((v2026 - v2025) / v2025) * 100
+  }
+
   const renderYearStrip = (year: '2025' | '2026') => {
     const total = year === '2026' ? total2026 : total2025
     return (
-      <div style={{ display: 'grid', gap: 4 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '30px minmax(0,1fr)',
+          alignItems: 'center',
+          columnGap: 8,
+        }}
+      >
         <span style={{
           fontSize: 10,
           fontWeight: 700,
@@ -552,7 +757,8 @@ function AllocationLineView({
           {year}
         </span>
         <div style={{
-          width: '100%',
+          width: 'calc(100% + 64px)',
+          marginRight: '-64px',
           height: 20,
           borderRadius: 'var(--radius-full)',
           background: 'var(--neutral-100)',
@@ -563,6 +769,8 @@ function AllocationLineView({
           {rows.map((row, index) => {
             const value = year === '2026' ? row.v2026 : row.v2025
             const widthPct = total > 0 ? (value / total) * 100 : 0
+            const isHighlighted = highlightedBucket === row.bucket
+            const isDimmed = highlightedBucket != null && !isHighlighted
             return (
               <div
                 key={`${year}-${row.bucket}`}
@@ -577,6 +785,12 @@ function AllocationLineView({
                   alignItems: 'center',
                   justifyContent: 'center',
                   overflow: 'hidden',
+                  opacity: isDimmed ? 0.35 : 1,
+                  boxShadow: isHighlighted
+                    ? 'inset 0 0 0 1px rgba(255,255,255,0.95), 0 0 0 2px rgba(91,87,245,0.32)'
+                    : 'none',
+                  transform: isHighlighted ? 'translateY(-1px) scaleY(1.06)' : 'none',
+                  transition: 'opacity 170ms ease, transform 170ms ease, box-shadow 170ms ease',
                 }}
               >
                 <span style={{
@@ -606,7 +820,7 @@ function AllocationLineView({
       gap: 'var(--space-4)',
       padding: '2px 0',
     }}>
-      <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'grid', gap: 'var(--space-6)', marginTop: '-10px' }}>
         {renderYearStrip('2026')}
         {renderYearStrip('2025')}
       </div>
@@ -614,52 +828,171 @@ function AllocationLineView({
       <div style={{
         display: 'grid',
         alignContent: 'space-evenly',
-        rowGap: 'var(--space-3)',
+        rowGap: 'var(--space-2)',
       }}>
-        {rows.map((row) => (
+        <div
+          aria-hidden="true"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `minmax(0,1fr) minmax(0,${RIGHT_COLUMNS_WIDTH})`,
+            columnGap: 'var(--space-1)',
+            alignItems: 'center',
+            marginTop: 6,
+            marginBottom: -2,
+          }}
+        >
+          <span />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: RIGHT_COLUMNS_TEMPLATE,
+              alignItems: 'center',
+              justifyItems: 'center',
+              width: '100%',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--neutral-400)',
+                textAlign: 'center',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.04em',
+              }}
+            >
+              2025
+            </span>
+            <span />
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--neutral-500)',
+                textAlign: 'center',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.04em',
+                transform: `translateX(${YEAR_2026_COLUMN_SHIFT_X})`,
+              }}
+            >
+              2026
+            </span>
+          </div>
+        </div>
+        {rows.map((row) => {
+          const isHighlighted = highlightedBucket === row.bucket
+          const deltaPct = formatDeltaPct(row.v2025, row.v2026)
+          const isUp = (deltaPct ?? 0) > 0
+          const deltaColor = deltaPct == null
+            ? 'var(--neutral-400)'
+            : isUp ? '#C0392B' : '#1A7A4A'
+          const deltaBg = deltaPct == null
+            ? 'var(--neutral-100)'
+            : isUp ? 'rgba(252,90,90,0.10)' : 'rgba(46,212,122,0.12)'
+          return (
           <div
             key={`row-${row.bucket}`}
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(0,1fr) 120px 120px',
+              gridTemplateColumns: `minmax(0,1fr) minmax(0,${RIGHT_COLUMNS_WIDTH})`,
               columnGap: 'var(--space-1)',
               alignItems: 'center',
+              background: isHighlighted ? 'rgba(91,87,245,0.08)' : 'transparent',
+              borderRadius: 'var(--radius-md)',
+              transition: 'background-color 170ms ease',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <span
-                aria-hidden="true"
-                style={{ width: 14, height: 14, borderRadius: 4, background: row.color, flexShrink: 0 }}
+              <img
+                src={BLOCK_ICON_BY_BUCKET[row.bucket] ?? blockFixeIcon}
+                alt=""
+                width={14}
+                height={14}
+                style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0, objectFit: 'cover' }}
               />
               <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-700)', minWidth: 0, whiteSpace: 'nowrap' }}>
                 {row.label}
               </span>
             </div>
-            <span style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: 'var(--neutral-400)',
-              textAlign: 'right',
-              fontFamily: 'var(--font-mono)',
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap',
-              transform: 'translateX(16px)',
-            }}>
-              {formatTightEuro(row.v2025)}
-            </span>
-            <span style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: 'var(--neutral-900)',
-              textAlign: 'right',
-              fontFamily: 'var(--font-mono)',
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap',
-            }}>
-              {formatTightEuro(row.v2026)}
-            </span>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: RIGHT_COLUMNS_TEMPLATE,
+                alignItems: 'center',
+                justifyItems: 'center',
+                width: '100%',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => flashBucket(row.bucket)}
+                aria-label={`Mettre en évidence ${row.label} sur la barre 2025`}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: 'var(--neutral-400)',
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {formatTightEuro(row.v2025)}
+                </span>
+              </button>
+              <span
+                aria-label={deltaPct == null ? `Écart indisponible pour ${row.label}` : `Écart ${Math.round(deltaPct)} pour cent pour ${row.label}`}
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  color: deltaColor,
+                  background: deltaBg,
+                  borderRadius: 'var(--radius-full)',
+                  padding: '1px 5px',
+                  minWidth: 40,
+                  textAlign: 'center',
+                  lineHeight: 1.1,
+                  whiteSpace: 'nowrap',
+                  transform: `translateX(${DELTA_COLUMN_SHIFT_X})`,
+                }}
+              >
+                {deltaPct == null ? '—' : `${deltaPct > 0 ? '+' : ''}${Math.round(deltaPct)}%`}
+              </span>
+              <button
+                type="button"
+                onClick={() => flashBucket(row.bucket)}
+                aria-label={`Mettre en évidence ${row.label} sur la barre 2026`}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: 'var(--neutral-900)',
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap',
+                  transform: `translateX(${YEAR_2026_COLUMN_SHIFT_X})`,
+                }}>
+                  {formatTightEuro(row.v2026)}
+                </span>
+              </button>
+            </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

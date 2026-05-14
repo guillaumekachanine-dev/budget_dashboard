@@ -13,7 +13,7 @@ export interface YtdFlowRow {
   income_total:             number
   fixed_expense_total:      number
   variable_expense_total:   number
-  savings_capacity_observed: number
+  savings_realized_total:    number
 }
 
 /** Totaux YTD agrégés pour une année */

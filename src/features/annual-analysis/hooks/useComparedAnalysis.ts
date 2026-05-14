@@ -62,7 +62,7 @@ function buildFlowSummary(
   const income_total           = sumRows(yearRows, 'income_total')
   const fixed_expense_total    = sumRows(yearRows, 'fixed_expense_total')
   const variable_expense_total = sumRows(yearRows, 'variable_expense_total')
-  const savings_total          = sumRows(yearRows, 'savings_capacity_observed')
+  const savings_total          = sumRows(yearRows, 'savings_realized_total')
 
   return {
     year,
@@ -90,7 +90,7 @@ function buildFluxMetrics(
     { label: 'Socle fixe',     key: 'fixed_expense_total',    positive_is: 'down' },
     { label: 'Variable',       key: 'variable_expense_total', positive_is: 'down' },
     { label: 'Cashflow net',   key: 'net_cashflow',           positive_is: 'up' },
-    { label: 'Capacité épar.', key: 'savings_total',          positive_is: 'up' },
+    { label: 'Épargne réalisée', key: 'savings_total',        positive_is: 'up' },
   ]
 
   return metrics.map(({ label, key, positive_is }) => {
@@ -174,12 +174,25 @@ function buildBucketMetrics(
     })
   }
 
+  const syncBucketActualWithFlow = (bucket: string, actual2025: number, actual2026: number) => {
+    const existing = map.get(bucket)
+    map.set(bucket, {
+      actual_2025: actual2025,
+      actual_2026: actual2026,
+      target_2026: existing?.target_2026 ?? 0,
+      ratio_2026_sum: existing?.ratio_2026_sum ?? 0,
+      ratio_2026_count: existing?.ratio_2026_count ?? 0,
+    })
+  }
+
   ensureDerivedBucket(
     'variable_essentielle',
     flows2025?.variable_expense_total ?? 0,
     flows2026?.variable_expense_total ?? 0,
   )
-  ensureDerivedBucket(
+  // Pour "épargne", on impose la même source que les flux (transactions réalisées),
+  // même si la vue bucket expose une valeur différente.
+  syncBucketActualWithFlow(
     'epargne',
     flows2025?.savings_total ?? 0,
     flows2026?.savings_total ?? 0,

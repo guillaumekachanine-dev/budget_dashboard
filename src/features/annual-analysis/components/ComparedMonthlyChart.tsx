@@ -13,11 +13,11 @@ import { formatCurrencyRounded as _fmt } from '@/lib/utils'
 
 /** Supprime l'espace insécable avant le signe € (uniquement pour l'affichage grand format) */
 function fmtCompact(v: number) {
-  return _fmt(v).replace(/[  \s]€/, '€')
+  return _fmt(v).replace(/[\u00A0\u202F\s]€/, '€')
 }
 const fmt = _fmt   // alias normal pour tooltip etc.
 import type { ComparedFluxMetric, YtdFlowSummary } from '@/features/annual-analysis/types.compared'
-import { CHART_TOOLTIP_STYLE, CARD_BASE } from './_constants'
+import { CARD_BASE } from './_constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,11 +34,17 @@ const METRICS: Array<{
 }> = [
   { key: 'expense', label: 'Dépenses', shortLabel: 'Dépenses', color: '#FC5A5A', fluxLabel: 'Dépenses',       key2025: 'exp2025', key2026: 'exp2026' },
   { key: 'income',  label: 'Revenus',  shortLabel: 'Revenus',  color: '#2ED47A', fluxLabel: 'Revenus',        key2025: 'inc2025', key2026: 'inc2026' },
-  { key: 'savings', label: 'Épargne',  shortLabel: 'Épargne',  color: '#FFAB2E', fluxLabel: 'Capacité épar.', key2025: 'sav2025', key2026: 'sav2026' },
+  { key: 'savings', label: 'Épargne',  shortLabel: 'Épargne',  color: '#FFAB2E', fluxLabel: 'Épargne réalisée', key2025: 'sav2025', key2026: 'sav2026' },
   { key: 'net',     label: 'Cashflow', shortLabel: 'Cashflow', color: '#111111', fluxLabel: 'Cashflow net',   key2025: 'net2025', key2026: 'net2026' },
 ]
 
 const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr']
+const MONTH_LABELS_FULL: Record<string, string> = {
+  Jan: 'Janvier',
+  Fév: 'Février',
+  Mar: 'Mars',
+  Avr: 'Avril',
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -46,11 +52,12 @@ type Props = {
   flows2025:   YtdFlowSummary | null
   flows2026:   YtdFlowSummary | null
   fluxMetrics: ComparedFluxMetric[]
+  minHeight?: number
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Props) {
+export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHeight }: Props) {
   const [activeMetric, setActiveMetric] = useState<MetricKey>('expense')
 
   const active     = METRICS.find((m) => m.key === activeMetric) ?? METRICS[0]
@@ -66,8 +73,8 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
       exp2026: r26?.expense_total             ?? null,
       inc2025: r25?.income_total              ?? null,
       inc2026: r26?.income_total              ?? null,
-      sav2025: r25?.savings_capacity_observed ?? null,
-      sav2026: r26?.savings_capacity_observed ?? null,
+      sav2025: r25?.savings_realized_total ?? null,
+      sav2026: r26?.savings_realized_total ?? null,
       net2025: r25 ? r25.income_total - r25.expense_total : null,
       net2026: r26 ? r26.income_total - r26.expense_total : null,
     }
@@ -78,6 +85,8 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
 
   const has2025 = (flows2025?.months?.length ?? 0) > 0
   const has2026 = (flows2026?.months?.length ?? 0) > 0
+  const compactMode = minHeight != null
+  const chartHeight = compactMode ? 176 : 200
 
   // Delta semantics
   const deltaEur   = activeFlux?.delta_eur ?? 0
@@ -91,7 +100,6 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
       ? 'rgba(46,212,122,0.12)'
       : 'rgba(252,90,90,0.10)'
   const arrow = deltaEur === 0 ? '—' : deltaEur > 0 ? '▲' : '▼'
-  const deltaSign = deltaEur === 0 ? '—' : deltaEur > 0 ? '+' : '-'
 
   const renderMetricIcon = (key: MetricKey) => {
     if (key === 'expense') {
@@ -111,7 +119,7 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
   }
 
   return (
-    <div style={CARD_BASE}>
+    <div style={{ ...CARD_BASE, minHeight, padding: compactMode ? 'var(--space-4)' : CARD_BASE.padding }}>
       {/* Header */}
       <div style={{ marginBottom: 'var(--space-4)', display: 'grid', gap: 'var(--space-2)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
@@ -230,7 +238,7 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
       </div>
 
       {/* Chart */}
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={chartHeight}>
         <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
           <defs>
             <linearGradient id={gradId25} x1="0" y1="0" x2="0" y2="1">
@@ -258,8 +266,8 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
             tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
           />
           <Tooltip
-            contentStyle={CHART_TOOLTIP_STYLE}
-            formatter={(value: number, name: string) => [fmt(value), name === '2025' ? '2025' : '2026']}
+            trigger="click"
+            content={<MonthlyFluxTooltip metricLabel={active.label} accentColor={active.color} />}
             cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }}
           />
 
@@ -297,38 +305,69 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
       {/* ── Active metric KPI — inline, no nested card ── */}
       {activeFlux != null && (
         <div style={{
-          marginTop: 'var(--space-2)',
-          paddingTop: 'var(--space-2)',
-          borderTop: `1px solid color-mix(in oklab, ${active.color} 20%, var(--neutral-100) 80%)`,
+          marginTop: 'var(--space-3)',
         }}>
-          {/* Metric name */}
-          <p style={{
-            margin: '0 0 var(--space-2)',
-            fontSize: 11,
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.10em',
-            color: active.color,
-            textAlign: 'center',
-          }}>
-            {active.label}
-          </p>
-
-          {/* 2025 | delta | 2026 */}
+          {/* Top line: 2025 | flux name | 2026 */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr auto 1fr',
             alignItems: 'center',
             gap: 'var(--space-2)',
+            marginBottom: 2,
+          }}>
+            <p style={{
+              margin: 0,
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--neutral-400)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              textAlign: 'center',
+            }}>
+              2025
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: 10,
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: active.color,
+              textAlign: 'center',
+            }}>
+              {active.label}
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--neutral-400)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              textAlign: 'center',
+            }}>
+              2026
+            </p>
+          </div>
+
+          <div style={{
+            borderTop: `1px solid color-mix(in oklab, ${active.color} 20%, var(--neutral-100) 80%)`,
+            marginBottom: 1,
+          }} />
+
+          {/* Amounts + delta below divider */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto 1fr',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 5,
           }}>
             {/* 2025 */}
-            <div style={{ textAlign: 'center', transform: 'translateY(-4px)' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                2025
-              </p>
+            <div style={{ textAlign: 'center' }}>
               <p style={{
                 margin: 0,
-                fontSize: 17,
+                fontSize: 12,
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--neutral-600)',
@@ -344,46 +383,27 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 104,
-                height: 24,
+                padding: '0 8px',
+                minWidth: 74,
+                height: 22,
                 borderRadius: 'var(--radius-full)',
                 background: deltaBg,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 800,
                 color: deltaColor,
                 fontFamily: 'var(--font-mono)',
                 lineHeight: 1,
               }}>
-                <span style={{ width: 12, textAlign: 'center', display: 'inline-block' }}>{arrow}</span>
-                <span>{deltaPct != null ? `${Math.abs(deltaPct).toFixed(1)}%` : '—'}</span>
-              </span>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 104,
-                height: 24,
-                borderRadius: 'var(--radius-full)',
-                background: deltaBg,
-                fontSize: 11,
-                fontWeight: 800,
-                fontFamily: 'var(--font-mono)',
-                color: deltaColor,
-                lineHeight: 1,
-              }}>
-                <span style={{ width: 12, textAlign: 'center', display: 'inline-block' }}>{deltaSign}</span>
-                <span>{fmtCompact(Math.abs(deltaEur))}</span>
+                <span style={{ width: 10, textAlign: 'center', display: 'inline-block' }}>{arrow}</span>
+                <span>{deltaPct != null ? `${Math.round(Math.abs(deltaPct))}%` : '—'}</span>
               </span>
             </div>
 
             {/* 2026 */}
-            <div style={{ textAlign: 'center', transform: 'translateY(-4px)' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                2026
-              </p>
+            <div style={{ textAlign: 'center' }}>
               <p style={{
                 margin: 0,
-                fontSize: 17,
+                fontSize: 12,
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--neutral-600)',
@@ -395,6 +415,98 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics }: Prop
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+type MonthlyFluxTooltipProps = {
+  active?: boolean
+  payload?: Array<{ name?: string; value?: number }>
+  label?: string
+  metricLabel: string
+  accentColor: string
+}
+
+function MonthlyFluxTooltip({
+  active,
+  payload,
+  label,
+  metricLabel,
+  accentColor,
+}: MonthlyFluxTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null
+
+  const v2025 = payload.find((item) => item.name === '2025')?.value ?? null
+  const v2026 = payload.find((item) => item.name === '2026')?.value ?? null
+  const delta = v2025 != null && v2026 != null ? v2026 - v2025 : null
+  const deltaPct = v2025 != null && v2026 != null && v2025 !== 0
+    ? ((v2026 - v2025) / v2025) * 100
+    : null
+  const isUp = (delta ?? 0) > 0
+  const deltaColor = delta == null || delta === 0 ? 'var(--neutral-400)' : isUp ? '#C0392B' : '#1A7A4A'
+  const deltaBg = delta == null || delta === 0 ? 'var(--neutral-100)' : isUp ? 'rgba(252,90,90,0.10)' : 'rgba(46,212,122,0.12)'
+  const fullMonth = (label && MONTH_LABELS_FULL[label]) ? MONTH_LABELS_FULL[label] : (label ?? '')
+
+  return (
+    <div style={{
+      background: 'var(--neutral-0)',
+      border: '1px solid var(--neutral-200)',
+      borderRadius: 'var(--radius-lg)',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
+      padding: '10px 12px',
+      minWidth: 164,
+      pointerEvents: 'none',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <p style={{
+          margin: '0 0 8px',
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--neutral-800)',
+          lineHeight: 1.3,
+        }}>
+          {fullMonth} · {metricLabel}
+        </p>
+        <span style={{ fontSize: 11, color: 'var(--neutral-400)', lineHeight: 1 }}>×</span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>2025</span>
+        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-500)' }}>
+          {v2025 != null ? fmt(v2025) : '—'}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>2026</span>
+        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+          {v2026 != null ? fmt(v2026) : '—'}
+        </span>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingTop: 5,
+        borderTop: '1px solid var(--neutral-100)',
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)', flexShrink: 0 }}>Var.</span>
+        <span style={{
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: 'var(--font-mono)',
+          color: deltaColor,
+          background: deltaBg,
+          borderRadius: 'var(--radius-full)',
+          padding: '2px 6px',
+          marginLeft: 'auto',
+          flexShrink: 0,
+        }}>
+          {delta == null || delta === 0 ? '—' : isUp ? '▲' : '▼'} {deltaPct != null ? `${Math.abs(deltaPct).toFixed(1)}%` : ''}
+        </span>
+      </div>
     </div>
   )
 }
