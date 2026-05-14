@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import {
   CartesianGrid,
   Customized,
@@ -12,6 +13,7 @@ import {
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
 import { EmptyState, SkeletonCard, StatsSection } from '@/features/stats/components/ui'
 import type { SavingsEvolutionFiveYearsSeries, SavingsEvolutionOperationEvent } from '@/features/savings/types'
+import { SavingsPortfolioModal } from '@/features/savings/components/SavingsPortfolioModal'
 import amundiEpargneIcon from '@/assets/icons/accounts/amundi_epargne.webp'
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
 import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
@@ -31,7 +33,7 @@ type StyledSeries = SavingsEvolutionFiveYearsSeries & {
 }
 
 type PeriodOption = {
-  label: '2 yrs' | '3 yrs' | '5yrs'
+  label: '2 ans' | '3 ans' | '5 ans'
   years: 2 | 3 | 5
 }
 
@@ -60,9 +62,9 @@ const LEGEND_ORDER: Record<string, number> = {
 }
 
 const PERIOD_OPTIONS: PeriodOption[] = [
-  { label: '2 yrs', years: 2 },
-  { label: '3 yrs', years: 3 },
-  { label: '5yrs', years: 5 },
+  { label: '2 ans', years: 2 },
+  { label: '3 ans', years: 3 },
+  { label: '5 ans', years: 5 },
 ]
 
 const PCT_INTEGER = new Intl.NumberFormat('fr-FR', {
@@ -91,7 +93,7 @@ function hasWord(normalized: string, word: string): boolean {
 function resolveLegendLabel(label: string): string {
   const normalized = normalizeLabel(label)
 
-  if (normalized.includes('livret a')) return 'Liv.A'
+  if (normalized.includes('livret a')) return 'Livret A'
   if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return 'PEG'
   if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return 'PER'
   if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return 'BTC'
@@ -168,6 +170,11 @@ function formatOperationDate(value: string): string {
   }).format(date)
 }
 
+function resolveChartLabel(shortLabel: string): string {
+  if (shortLabel === 'Livret A') return 'L.A.'
+  return shortLabel.slice(0, 4)
+}
+
 function formatYAxisCompact(value: number): string {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '0'
@@ -189,6 +196,7 @@ export function SavingsEvolutionFiveYearsChart() {
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
   const [selectedOperationBubble, setSelectedOperationBubble] = useState<OperationBubbleState | null>(null)
   const [selectedYearBubble, setSelectedYearBubble] = useState<YearBubbleState | null>(null)
+  const [selectedPortfolioKey, setSelectedPortfolioKey] = useState<string | null>(null)
   const rows = useMemo(() => data?.rows ?? [], [data?.rows])
   const series = useMemo(() => data?.series ?? [], [data?.series])
   const yearlyAccountMetrics = useMemo(() => data?.yearly_account_metrics ?? {}, [data?.yearly_account_metrics])
@@ -501,6 +509,54 @@ export function SavingsEvolutionFiveYearsChart() {
       setSelectedYear, setSelectedYearBubble, setSelectedOperationBubble],
   )
 
+  const renderSeriesLabels = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (chartProps: any) => {
+      const xAxis = chartProps.xAxisMap?.[0]
+      const yAxis = chartProps.yAxisMap?.[0]
+      if (!xAxis?.scale || !yAxis?.scale) return null
+      const xScale = xAxis.scale as (v: string) => number | undefined
+
+      const firstYear = chartRows[0]?.year
+      const lastYear = chartRows[chartRows.length - 1]?.year
+
+      return (
+        <g>
+          {visibleSeries.map((entry) => {
+            for (const row of chartRows) {
+              const val = Number(row[entry.key])
+              if (!Number.isFinite(val) || val <= 0) continue
+              const cx = xScale(String(row.year))
+              const cy = yAxis.scale!(val)
+              if (cx === undefined || cy === undefined) continue
+              const isFirst = String(row.year) === firstYear
+              const isLast = String(row.year) === lastYear
+              const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle'
+              const xOff = isFirst ? 4 : isLast ? -4 : 0
+              return (
+                <text
+                  key={`chart-label-${entry.key}`}
+                  x={cx + xOff}
+                  y={cy - 9}
+                  textAnchor={anchor}
+                  fill={entry.color}
+                  fontSize={9}
+                  fontWeight={700}
+                  letterSpacing="0.03em"
+                  style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'var(--font-mono)' }}
+                >
+                  {resolveChartLabel(entry.shortLabel)}
+                </text>
+              )
+            }
+            return null
+          })}
+        </g>
+      )
+    },
+    [visibleSeries, chartRows],
+  )
+
   if (isLoading) {
     return (
       <StatsSection>
@@ -601,7 +657,7 @@ export function SavingsEvolutionFiveYearsChart() {
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={isPeriodMenuOpen}
-                onClick={() => setIsPeriodMenuOpen((prev) => !prev)}
+                onClick={(e) => { e.stopPropagation(); setIsPeriodMenuOpen((prev) => !prev) }}
                 style={{
                   height: 24,
                   minWidth: 92,
@@ -649,7 +705,8 @@ export function SavingsEvolutionFiveYearsChart() {
                         type="button"
                         role="menuitemradio"
                         aria-checked={selected}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           setSelectedPeriodYears(option.years)
                           setIsPeriodMenuOpen(false)
                         }}
@@ -658,7 +715,7 @@ export function SavingsEvolutionFiveYearsChart() {
                           height: 28,
                           padding: '0 10px',
                           border: 'none',
-                          borderTop: option.label === '2 yrs' ? 'none' : '1px solid var(--neutral-150)',
+                          borderTop: option.label === '2 ans' ? 'none' : '1px solid var(--neutral-150)',
                           background: selected ? 'var(--neutral-100)' : 'var(--neutral-0)',
                           color: selected ? 'var(--neutral-900)' : 'var(--neutral-700)',
                           fontSize: 11,
@@ -718,10 +775,8 @@ export function SavingsEvolutionFiveYearsChart() {
                     gap: 6,
                     whiteSpace: 'nowrap',
                     borderRadius: 'var(--radius-full)',
-                    border: `1px solid ${active ? 'color-mix(in oklab, var(--neutral-300) 45%, var(--neutral-0) 55%)' : 'var(--neutral-250)'}`,
-                    background: active
-                      ? 'color-mix(in oklab, var(--neutral-0) 84%, var(--neutral-100) 16%)'
-                      : 'var(--neutral-100)',
+                    border: active ? `1.5px solid ${entry.color}` : '1px solid var(--neutral-250)',
+                    background: 'var(--neutral-0)',
                     minHeight: 24,
                     padding: '4px 8px 4px 5px',
                     width: '100%',
@@ -803,6 +858,7 @@ export function SavingsEvolutionFiveYearsChart() {
                 />
               ))}
               <Customized component={renderOperationAnnotations} />
+              <Customized component={renderSeriesLabels} />
             </LineChart>
           </ResponsiveContainer>
 
@@ -907,9 +963,9 @@ export function SavingsEvolutionFiveYearsChart() {
             aria-hidden="true"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(0, 2fr) repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))',
               alignItems: 'center',
-              padding: '0 2px',
+              padding: '0 2px 8px',
               columnGap: 8,
             }}
           >
@@ -923,9 +979,6 @@ export function SavingsEvolutionFiveYearsChart() {
               var. N-1
             </span>
             <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
-              nbre opé
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
               montant
             </span>
           </div>
@@ -936,13 +989,35 @@ export function SavingsEvolutionFiveYearsChart() {
               style={{
                 padding: '4px 2px',
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0, 2fr) repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))',
                 alignItems: 'center',
                 columnGap: 8,
                 lineHeight: 1.1,
               }}
             >
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedPortfolioKey(row.key)
+                }}
+                aria-label={`Voir le détail de ${row.listLabel}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  minWidth: 0,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '2px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 150ms ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-100)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
                 <img
                   src={row.iconSrc}
                   alt=""
@@ -958,16 +1033,24 @@ export function SavingsEvolutionFiveYearsChart() {
                 <span style={{ fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {row.listLabel}
                 </span>
-              </div>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    fontSize: 9,
+                    color: 'var(--neutral-400)',
+                    flexShrink: 0,
+                    lineHeight: 1,
+                  }}
+                >
+                  ›
+                </span>
+              </button>
 
               <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {formatSignedCurrency(row.performanceAmount)}
               </span>
               <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {row.variationVsPreviousYear}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {row.operationsCount === 0 ? '-' : row.operationsCount}
               </span>
               <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {formatCurrency(row.currentAmount)}
@@ -976,6 +1059,32 @@ export function SavingsEvolutionFiveYearsChart() {
           ))}
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedPortfolioKey ? (() => {
+          const portfolioRow = listRows.find((r) => r.key === selectedPortfolioKey)
+          if (!portfolioRow) return null
+          return (
+            <SavingsPortfolioModal
+              key={selectedPortfolioKey}
+              account={{
+                key: portfolioRow.key,
+                label: portfolioRow.label,
+                color: portfolioRow.color,
+                family: portfolioRow.family,
+                shortLabel: portfolioRow.shortLabel,
+                iconSrc: portfolioRow.iconSrc,
+                listLabel: portfolioRow.listLabel,
+              }}
+              operationEvents={operationEvents}
+              yearlyMetrics={yearlyAccountMetrics}
+              rows={rows}
+              currentAmount={portfolioRow.currentAmount}
+              onClose={() => setSelectedPortfolioKey(null)}
+            />
+          )
+        })() : null}
+      </AnimatePresence>
     </StatsSection>
   )
 }
