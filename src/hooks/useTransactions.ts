@@ -165,6 +165,7 @@ export function useAddTransaction() {
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
       invalidateAllAnalyticsCaches(queryClient)
     },
   })
@@ -190,6 +191,7 @@ export function useUpdateTransaction() {
         void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
       invalidateAllAnalyticsCaches(queryClient)
     },
   })
@@ -206,6 +208,7 @@ export function useDeleteTransaction() {
       // account_id inconnu après delete — invalidation large inévitable
       void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
       invalidateAllAnalyticsCaches(queryClient)
     },
   })

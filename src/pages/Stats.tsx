@@ -10,7 +10,6 @@ import optimisationIcon from '@/assets/icons/app/optimisation.webp'
 import epargneIcon from '@/assets/icons/app/epargne.webp'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
-import { Annual2026Tab } from '@/features/annual-analysis/components/Annual2026Tab'
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
@@ -23,7 +22,7 @@ import { InvestmentPerformanceSection } from '@/features/stats/components/Invest
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 import { EmptyState, StatsSection, YearToggle } from '@/features/stats/components/ui'
 
-type StatsTabId = 'analytics_2026' | 'analytics_2025' | 'performance' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics_2025' | 'performance' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -32,11 +31,10 @@ type StatsTabConfig = {
 type SavingsAnalyticsYear = 2026 | 2025
 
 const STATS_TABS: StatsTabConfig[] = [
-  { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
   { id: 'analytics_2025', label: 'Analytics', iconSrc: analyticsIcon },
-  { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
-  { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
+  { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
+  { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
 ]
 const SAVINGS_ANALYTICS_YEARS: SavingsAnalyticsYear[] = [2026, 2025]
 
@@ -149,7 +147,7 @@ export function Stats() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
         title="Analytics"
-        rightSlot={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? (
+        rightSlot={activeTabId === 'analytics_2025' ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', marginTop: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <button
@@ -235,10 +233,6 @@ export function Stats() {
 
       {activeTab.id === 'analytics_2025' ? (
         <Annual2025Tab />
-      ) : null}
-
-      {activeTab.id === 'analytics_2026' ? (
-        <Annual2026Tab />
       ) : null}
 
       {activeTab.id === 'performance' ? (

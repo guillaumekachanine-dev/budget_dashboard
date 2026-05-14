@@ -36,10 +36,12 @@ export function SavingsInsightsSection({ year }: SavingsInsightsSectionProps) {
 
   if (isLoading) {
     return (
-      <StatsSection style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))' }}>
-        {Array.from({ length: 6 }).map((_, index) => (
-          <SkeletonCard key={`savings-insight-skeleton-${index + 1}`} heightClass="h-20" lines={1} />
-        ))}
+      <StatsSection>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: 'var(--space-2)' }}>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SkeletonCard key={`savings-insight-skeleton-${index + 1}`} heightClass="h-20" lines={1} />
+          ))}
+        </div>
       </StatsSection>
     )
   }
@@ -158,17 +160,19 @@ export function SavingsInsightsSection({ year }: SavingsInsightsSectionProps) {
   ]
 
   return (
-    <StatsSection style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))' }}>
-      {cards.map((card) => (
-        <InsightCard
-          key={card.title}
-          title={card.title}
-          value={card.value}
-          detail={card.detail}
-          badge={card.badge}
-          tone={card.tone}
-        />
-      ))}
+    <StatsSection>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: 'var(--space-2)' }}>
+        {cards.map((card) => (
+          <InsightCard
+            key={card.title}
+            title={card.title}
+            value={card.value}
+            detail={card.detail}
+            badge={card.badge}
+            tone={card.tone}
+          />
+        ))}
+      </div>
     </StatsSection>
   )
 }

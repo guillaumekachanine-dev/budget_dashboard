@@ -579,6 +579,14 @@ export type Database = {
         }
         Returns: Record<string, unknown>
       }
+      get_trajectory_data: {
+        Args: {
+          p_user_id: string
+          p_year: number
+          p_month: number
+        }
+        Returns: Record<string, unknown>
+      }
       get_financial_security_payload: {
         Args: Record<string, never>
         Returns: Record<string, unknown>

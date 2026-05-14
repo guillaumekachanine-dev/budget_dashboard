@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
 
@@ -49,7 +48,6 @@ export function Annual2026Tab() {
       {/* 1ère partie : Vue d'ensemble - 2026 */}
       {summary && buckets.length > 0 ? (
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-          <Annual2026Hero summary={summary} buckets={buckets} />
           <SectionTitle title="Vue d'ensemble 2026" />
           {categories.length > 0 ? <AnnualProjectionCard categories={categories} /> : null}
         </div>
