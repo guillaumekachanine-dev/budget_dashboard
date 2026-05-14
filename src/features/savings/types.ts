@@ -97,3 +97,21 @@ export type FinancialSecurityPayload = {
   summary: FinancialSecuritySummary | null
   monthly_essentials: FinancialSecurityMonthlyEssential[]
 }
+
+export type SavingsEvolutionFiveYearsSeries = {
+  key: string
+  label: string
+  color: string
+  family: 'livrets' | 'placements'
+}
+
+export type SavingsEvolutionFiveYearsRow = {
+  year: string
+  [seriesKey: string]: number | string
+}
+
+export type SavingsEvolutionFiveYearsPayload = {
+  rows: SavingsEvolutionFiveYearsRow[]
+  series: SavingsEvolutionFiveYearsSeries[]
+  isFallback: boolean
+}

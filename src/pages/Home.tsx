@@ -43,7 +43,7 @@ import { Annual2026Hero } from '@/features/annual-analysis/components/Annual2026
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
-import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
+import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
 import percolIcon from "@/assets/icons/accounts/amundi_epargne.webp";
 import cryptoIcon from "@/assets/icons/accounts/bitcoin.webp";
 
@@ -517,7 +517,7 @@ export function Home() {
           const categoryTxns = txns
             .filter(t => t.category_id === r.category.id && t.transaction_date <= trajectoryCutoffIso)
             .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-          
+
           let cumul = 0
           for (const t of categoryTxns) {
             cumul += Number(t.amount)
@@ -1920,7 +1920,7 @@ export function Home() {
                           <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                             {driftRows.map((row) => {
                               const drift = Number(row.driftPct ?? 0)
-                              
+
                               return (
                                 <button
                                   key={row.id}
@@ -1951,10 +1951,10 @@ export function Home() {
                                   }}
                                 >
                                   {/* Date de dépassement */}
-                                  <span style={{ 
-                                    fontSize: 10, 
-                                    color: 'var(--neutral-400)', 
-                                    fontFamily: 'var(--font-mono)', 
+                                  <span style={{
+                                    fontSize: 10,
+                                    color: 'var(--neutral-400)',
+                                    fontFamily: 'var(--font-mono)',
                                     flexShrink: 0,
                                     width: 32,
                                     textAlign: 'left'
@@ -1968,27 +1968,27 @@ export function Home() {
                                   </span>
 
                                   {/* Nom de catégorie */}
-                                  <span style={{ 
-                                    flex: 1, 
-                                    minWidth: 0, 
-                                    overflow: 'hidden', 
-                                    textOverflow: 'ellipsis', 
-                                    whiteSpace: 'nowrap', 
-                                    fontSize: 12, 
-                                    fontWeight: 'var(--font-weight-regular)', 
-                                    color: 'var(--neutral-800)' 
+                                  <span style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    fontSize: 12,
+                                    fontWeight: 'var(--font-weight-regular)',
+                                    color: 'var(--neutral-800)'
                                   }}>
                                     {`${row.name} - ${formatCurrencyFloored(row.spent)}`}
                                   </span>
 
                                   {/* Drift Percentage */}
-                                  <span style={{ 
-                                    fontSize: 12, 
-                                    fontWeight: 'var(--font-weight-semibold)', 
-                                    color: 'var(--color-error)', 
-                                    fontFamily: 'var(--font-mono)', 
-                                    whiteSpace: 'nowrap', 
-                                    flexShrink: 0 
+                                  <span style={{
+                                    fontSize: 12,
+                                    fontWeight: 'var(--font-weight-semibold)',
+                                    color: 'var(--color-error)',
+                                    fontFamily: 'var(--font-mono)',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0
                                   }}>
                                     +{drift.toFixed(0)}%
                                   </span>

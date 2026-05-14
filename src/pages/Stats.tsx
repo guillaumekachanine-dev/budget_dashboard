@@ -15,6 +15,8 @@ import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnua
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
 import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
+import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
+import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsInsightsSection } from '@/features/savings/components/SavingsInsightsSection'
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
@@ -37,6 +39,47 @@ const STATS_TABS: StatsTabConfig[] = [
   { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
 ]
 const SAVINGS_ANALYTICS_YEARS: SavingsAnalyticsYear[] = [2026, 2025]
+
+function StatsMajorSectionHeading({ title }: { title: string }) {
+  return (
+    <StatsSection>
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <div
+          aria-hidden="true"
+          style={{
+            height: 2,
+            width: '100%',
+            background: 'var(--neutral-900)',
+            borderRadius: 'var(--radius-full)',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: '8px solid transparent',
+              borderBottom: '8px solid transparent',
+              borderLeft: '14px solid var(--neutral-900)',
+              flexShrink: 0,
+            }}
+          />
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-lg)',
+              fontWeight: 'var(--font-weight-bold)',
+              color: 'var(--neutral-900)',
+            }}
+          >
+            {title}
+          </h3>
+        </div>
+      </div>
+    </StatsSection>
+  )
+}
 
 export function Stats() {
   const {
@@ -264,6 +307,9 @@ export function Stats() {
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
           <SavingsHeroCard />
+          <StatsMajorSectionHeading title="Détails de l'épargne" />
+          <SavingsAllocationDonut />
+          <SavingsEvolutionFiveYearsChart />
           <StatsSection>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <YearToggle
