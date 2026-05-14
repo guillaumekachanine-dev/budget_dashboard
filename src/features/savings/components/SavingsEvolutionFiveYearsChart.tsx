@@ -810,6 +810,8 @@ export function SavingsEvolutionFiveYearsChart() {
 
           {selectedOperationBubble ? (() => {
             const { event, color } = selectedOperationBubble
+            const seriesEntry = styledSeries.find((s) => s.key === event.account_key)
+            const displayLabel = seriesEntry?.shortLabel ?? event.account_label
             const yearRow = chartRows.find((r) => r.year === event.year)
             const portfolioBalance = Number(yearRow?.[event.account_key] ?? 0)
             const isPositiveAmount = event.amount >= 0
@@ -841,7 +843,7 @@ export function SavingsEvolutionFiveYearsChart() {
                   border: '1px solid var(--neutral-200)',
                   borderRadius: 'var(--radius-lg)',
                   boxShadow: '0 6px 24px rgba(0,0,0,0.11)',
-                  minWidth: 188,
+                  minWidth: 158,
                   zIndex: 18,
                   overflow: 'hidden',
                 }}
@@ -855,7 +857,7 @@ export function SavingsEvolutionFiveYearsChart() {
                   gap: 8,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-                    {event.account_label}
+                    {displayLabel}
                   </span>
                   {portfolioBalance > 0 && (
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
