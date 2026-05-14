@@ -7,6 +7,7 @@ import { ComparedMonthlyChart } from './ComparedMonthlyChart'
 import { ComparedBucketChart } from './ComparedBucketChart'
 import { ComparedCategoryBars } from './ComparedCategoryBars'
 import { ComparedVelocityCard } from './ComparedVelocityCard'
+import { ComparedInsightStrip, type InsightData } from './ComparedInsightStrip'
 
 const FLUX_SLIDE_FRAME_HEIGHT = 336
 const REPARTITION_SLIDE_FRAME_HEIGHT = 438
@@ -14,6 +15,94 @@ const MAJOR_SECTION_GAP = 'var(--space-6)'
 const SECTION_BORDER_WIDTH = '4px'
 const KLEIN_BLUE = '#002FA7'
 const DEEP_YELLOW = '#B8860B'
+
+// ─── Insight data ─────────────────────────────────────────────────────────────
+
+const FLUX_INSIGHTS: readonly [InsightData, InsightData] = [
+  {
+    id: 'f1-epargne-ciseau',
+    badge: '−87%',
+    title: "Épargne -87% : les dépenses n'ont pas bougé",
+    subtitle: 'Revenus -55%, plancher opérationnel déjà atteint',
+    level: 'alert',
+    modal: {
+      title: 'Ciseau revenus / épargne',
+      lead: "Les revenus Jan–Avr ont chuté de 54,5% (42 141€ → 19 158€). Les dépenses courantes hors épargne n'ont progressé que de +9,3% (10 820€ → 11 823€). La quasi-totalité du choc a été absorbée par l'épargne seule : 33 500€ → 4 243€ (-87%). Il n'y a pas de dérive des dépenses à corriger — le levier est exclusivement du côté des revenus.",
+      body: "Ce pattern révèle que le plancher opérationnel est déjà proche de sa limite structurelle : difficile de dépenser moins sans impact réel sur le quotidien. La capacité d'épargne est directement et quasi-exclusivement corrélée au volume des revenus perçus. Toute amélioration de l'épargne passe donc par une augmentation des revenus, non par une réduction des dépenses.",
+      metrics: [
+        { label: 'Revenus 2025', value: '42 141 €', delta: 'Jan–Avr' },
+        { label: 'Revenus 2026', value: '19 158 €', delta: '−54,5%', highlight: true },
+        { label: 'Épargne 2025', value: '33 500 €', delta: 'Jan–Avr' },
+        { label: 'Épargne 2026', value: '4 243 €', delta: '−87,3%', highlight: true },
+        { label: 'Dépenses hors épargne 2025', value: '10 820 €' },
+        { label: 'Dépenses hors épargne 2026', value: '11 823 €', delta: '+9,3% seulement' },
+      ],
+    },
+  },
+  {
+    id: 'f3-revenus-double-vitesse',
+    badge: '−81%',
+    title: 'Revenus hors-jan : −81%, pas −54%',
+    subtitle: 'Deux dynamiques opposées derrière la moyenne',
+    level: 'alert',
+    modal: {
+      title: 'La double vitesse des revenus',
+      lead: "Le recul de −54,5% affiché en agrégé masque deux réalités opposées. Le pic de janvier a reculé de manière gérable : 27 439€ → 16 337€ (−40,4%). Mais les revenus des 3 mois suivants ont quasi-disparu : 14 703€ sur Fév–Avr 2025 → 2 820€ sur Fév–Avr 2026, soit −80,8%.",
+      body: "Ce n'est pas le niveau absolu de revenus qui pose problème, c'est leur concentration sur un seul mois. Hors janvier, les revenus 2026 ne couvrent même pas le plancher opérationnel mensuel (~2 956€/mois), avec à peine 940€/mois sur Fév–Avr. La question structurelle : le modèle repose-t-il intentionnellement sur des revenus ponctuels concentrés, ou y a-t-il un déficit de revenus récurrents à combler ?",
+      metrics: [
+        { label: 'Janvier 2025', value: '27 439 €' },
+        { label: 'Janvier 2026', value: '16 337 €', delta: '−40,4%' },
+        { label: 'Fév–Avr 2025', value: '14 703 €' },
+        { label: 'Fév–Avr 2026', value: '2 820 €', delta: '−80,8%', highlight: true },
+        { label: 'Moy. Fév–Avr 2025', value: '4 901 €/mois' },
+        { label: 'Moy. Fév–Avr 2026', value: '940 €/mois', delta: 'vs plancher 2 956€' },
+      ],
+    },
+  },
+] as const
+
+const REPARTITION_INSIGHTS: readonly [InsightData, InsightData] = [
+  {
+    id: 'r3-achats-divers-illusion',
+    badge: '−29%',
+    title: "Achats divers : trompe-l’œil statistique",
+    subtitle: 'La baisse apparente cache une hausse réelle de +15%',
+    level: 'warning',
+    modal: {
+      title: 'Achats divers : illusion de −29%',
+      lead: "Achats divers affiche 4 122€ → 2 936€ (−28,8%) en apparence. Mais mars 2025 concentrait un achat exceptionnel de 2 213€ qui gonfle la base de référence. Sans cet outlier, la moyenne mensuelle 2025 tombe à 636€/mois — contre 734€/mois en 2026.",
+      body: "La réalité sous-jacente est une hausse de +15% du niveau de base des achats divers, non une baisse. L'amélioration affichée est un pur artefact comptable, pas un changement de comportement. Ce poste mérite une attention particulière en 2026 : si un achat exceptionnel du même ordre survient, le total annuel pourrait dépasser celui de 2025.",
+      metrics: [
+        { label: 'Achats divers 2025', value: '4 122 €', delta: 'dont mars 2 213€' },
+        { label: 'Achats divers 2026', value: '2 936 €', delta: 'apparent −29%' },
+        { label: 'Base 2025 hors mars', value: '1 909 €', delta: '3 mois → 636€/mois' },
+        { label: 'Base 2026 (4 mois)', value: '2 936 €', delta: '734€/mois', highlight: true },
+        { label: 'Δ réel sous-jacent', value: '+15%', highlight: true },
+        { label: 'Outlier mars 2025', value: '2 213 €', delta: 'achat exceptionnel' },
+      ],
+    },
+  },
+  {
+    id: 'r1-transport-x8',
+    badge: '×8',
+    title: 'Transport ×8 en un an',
+    subtitle: '93€ → 745€ YTD — 5e poste opérationnel',
+    level: 'alert',
+    modal: {
+      title: 'Transport : nouveau poste structurel',
+      lead: "Le transport passe de 93€ → 745€ sur Jan–Avr (+701%). La hausse est régulière sur les 4 mois (Jan 147€ / Fév 275€ / Mar 253€ / Avr 71€), ce qui exclut un one-off ponctuel. Ce poste quasi-inexistant en 2025 est devenu le 5e poste opérationnel en volume.",
+      body: "Projeté sur 12 mois au rythme 2026 : ~2 230€/an de nouveau coût structurel, absent du budget 2025. Un changement de mode de déplacement (véhicule, mobilité professionnelle, trajets réguliers) semble sous-jacent. La décrue d'avril (71€) reste à confirmer : normalisation ou simple saisonnalité ?",
+      metrics: [
+        { label: 'Transport Jan–Avr 2025', value: '93 €' },
+        { label: 'Transport Jan–Avr 2026', value: '745 €', delta: '+701%', highlight: true },
+        { label: 'Moy. mensuelle 2025', value: '23 €/mois' },
+        { label: 'Moy. mensuelle 2026', value: '186 €/mois', highlight: true },
+        { label: 'Part budget opérationnel 2025', value: '0,9%' },
+        { label: 'Part budget opérationnel 2026', value: '6,3%', delta: 'projeté 2 230€/an' },
+      ],
+    },
+  },
+] as const
 const MONTH_LABELS_UPPER = [
   'JANVIER',
   'FÉVRIER',
@@ -48,8 +137,25 @@ export function Annual2025Tab() {
       transition={{ duration: 0.2 }}
       style={{ display: 'grid', gap: 'var(--space-6)', paddingBottom: 'calc(var(--space-8) + 56px)', width: '100%', overflowX: 'clip' }}
     >
-      <FluxCarouselSection />
-      <RepartitionCarouselSection />
+      <div style={{ display: 'grid', gap: 0 }}>
+        <FluxCarouselSection />
+        <ComparedInsightStrip
+          insights={FLUX_INSIGHTS}
+          accentColor={KLEIN_BLUE}
+          labelColor="#7EA8FF"
+          stripBg="linear-gradient(135deg, #070C1E 0%, #0A1230 100%)"
+        />
+      </div>
+
+      <div style={{ display: 'grid', gap: 0 }}>
+        <RepartitionCarouselSection />
+        <ComparedInsightStrip
+          insights={REPARTITION_INSIGHTS}
+          accentColor={DEEP_YELLOW}
+          stripBg="linear-gradient(135deg, #1A1206 0%, #221705 100%)"
+        />
+      </div>
+
       <AnnualProjectionSection />
     </motion.div>
   )
