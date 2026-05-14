@@ -110,8 +110,25 @@ export type SavingsEvolutionFiveYearsRow = {
   [seriesKey: string]: number | string
 }
 
+export type SavingsEvolutionYearAccountMetrics = {
+  operations_count: number
+  total_saved_amount: number
+}
+
+export type SavingsEvolutionOperationEvent = {
+  id: string
+  account_key: string
+  account_label: string
+  year: string
+  transaction_date: string
+  amount: number
+  nature: 'virement' | 'intérêts'
+}
+
 export type SavingsEvolutionFiveYearsPayload = {
   rows: SavingsEvolutionFiveYearsRow[]
   series: SavingsEvolutionFiveYearsSeries[]
+  yearly_account_metrics: Record<string, SavingsEvolutionYearAccountMetrics>
+  operation_events: SavingsEvolutionOperationEvent[]
   isFallback: boolean
 }

@@ -8,6 +8,7 @@ import compteJointIcon from '@/assets/icons/accounts/banque_postale_compte_joint
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
 import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
+import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.png'
 
 type SavingsFamily = 'livrets' | 'placements'
 
@@ -179,12 +180,11 @@ function resolveAccountIconSrc(name: string): string {
   if (hasWord(normalized, 'joint')) return compteJointIcon
   if (hasWord(normalized, 'pea')) return peaIcon
   if (hasWord(normalized, 'crypto') || hasWord(normalized, 'bitcoin')) return bitcoinIcon
+  if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return pegCapgeminiIcon
   if (
     hasWord(normalized, 'per')
     || hasWord(normalized, 'perco')
     || hasWord(normalized, 'percol')
-    || hasWord(normalized, 'peg')
-    || normalized.includes('capgemini')
     || normalized.includes('amundi')
   ) return amundiEpargneIcon
   if (normalized.includes('livret') || hasWord(normalized, 'ldds') || hasWord(normalized, 'lep')) return comptePrincipalIcon
@@ -388,35 +388,46 @@ export function SavingsAllocationDonut() {
           Répartition de l'épargne
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px', alignItems: 'start', justifyItems: 'start' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 9,
-                height: 9,
-                borderRadius: '50%',
-                flexShrink: 0,
-                background: 'color-mix(in oklab, var(--color-positive) 76%, var(--neutral-0) 24%)',
-              }}
-            />
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {`LIVRETS - ${formatLegendShare(livretsTotal, totalSavings)}`}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center', minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  background: 'color-mix(in oklab, var(--color-positive) 76%, var(--neutral-0) 24%)',
+                }}
+              />
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                livrets
+              </p>
+            </div>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              {formatLegendShare(livretsTotal, totalSavings)}
             </p>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 9,
-                height: 9,
-                borderRadius: '50%',
-                flexShrink: 0,
-                background: 'color-mix(in oklab, var(--color-warning) 60%, var(--neutral-0) 40%)',
-              }}
-            />
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {`PLACEMENTS - ${formatLegendShare(placementsTotal, totalSavings)}`}
+
+          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center', minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  background: 'color-mix(in oklab, var(--color-warning) 60%, var(--neutral-0) 40%)',
+                }}
+              />
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                Placement
+              </p>
+            </div>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              {formatLegendShare(placementsTotal, totalSavings)}
             </p>
           </div>
         </div>
@@ -505,7 +516,27 @@ export function SavingsAllocationDonut() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'grid', gap: '6px' }}>
+            <div
+              aria-hidden="true"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) 52px 92px',
+                alignItems: 'center',
+                padding: '0 2px',
+              }}
+            >
+              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'left' }}>
+                <span style={{ display: 'inline-block', paddingLeft: 22 }}>portefeuille</span>
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center', transform: 'translateX(6px)' }}>
+                poids
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'right' }}>
+                montant
+              </span>
+            </div>
+
             {slices.map((slice) => {
               const isActive = slice.id === activeSliceId
               return (
@@ -518,36 +549,37 @@ export function SavingsAllocationDonut() {
                     borderRadius: 0,
                     background: isActive ? 'var(--neutral-50)' : 'var(--neutral-0)',
                     padding: '4px 2px',
-                    display: 'flex',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 52px 92px',
                     alignItems: 'center',
-                    gap: 8,
+                    columnGap: 6,
                     cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all var(--transition-base)',
                     lineHeight: 1.1,
                   }}
                 >
-                  <img
-                    src={slice.iconSrc}
-                    alt=""
-                    width={16}
-                    height={16}
-                    aria-hidden="true"
-                    style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }}
-                    loading="lazy"
-                    decoding="async"
-                  />
-
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <img
+                      src={slice.iconSrc}
+                      alt=""
+                      width={16}
+                      height={16}
+                      aria-hidden="true"
+                      style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }}
+                      loading="lazy"
+                      decoding="async"
+                    />
                     <span style={{ fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {slice.name}
                     </span>
-                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap' }}>
-                      {`${Math.round(slice.sharePct)}% du total`}
-                    </span>
                   </div>
 
-                  <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap', transform: 'translateX(6px)' }}>
+                    {`${Math.round(slice.sharePct)}%`}
+                  </span>
+
+                  <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>
                     {formatTightEuro(slice.value)}
                   </span>
                 </button>

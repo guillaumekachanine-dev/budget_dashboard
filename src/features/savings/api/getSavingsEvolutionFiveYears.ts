@@ -24,6 +24,9 @@ type TransactionRow = {
   transaction_date: string | null
   amount: number | null
   direction: string | null
+  raw_label: string | null
+  normalized_label: string | null
+  notes: string | null
 }
 
 const MAX_SERIES = 6
@@ -104,6 +107,20 @@ function monthKeys(startYear: number, endYear: number, endMonth: number): string
   return out
 }
 
+function isInterestOperation(transaction: Pick<TransactionRow, 'raw_label' | 'normalized_label' | 'notes' | 'direction'>): boolean {
+  const merged = [
+    transaction.raw_label ?? '',
+    transaction.normalized_label ?? '',
+    transaction.notes ?? '',
+  ]
+    .join(' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (merged.includes('interet') || merged.includes('interest')) return true
+  return transaction.direction === 'income' && (merged.includes('epargne') || merged.includes('livret'))
+}
+
 function buildFallbackPayload(endYear: number): SavingsEvolutionFiveYearsPayload {
   const years = Array.from({ length: 5 }, (_, index) => String(endYear - 4 + index))
 
@@ -127,9 +144,46 @@ function buildFallbackPayload(endYear: number): SavingsEvolutionFiveYearsPayload
     ...baseRows[index],
   }))
 
+  const yearlyAccountMetrics: SavingsEvolutionFiveYearsPayload['yearly_account_metrics'] = {}
+  const fallbackOperationEvents: SavingsEvolutionFiveYearsPayload['operation_events'] = []
+  years.forEach((year, index) => {
+    const livretATotal = [820, 980, 1120, 1280, 1410][index] ?? 0
+    const lddsTotal = [340, 420, 540, 620, 700][index] ?? 0
+    const peaTotal = [1450, 1610, 1820, 2050, 2380][index] ?? 0
+    const perTotal = [740, 790, 860, 940, 1020][index] ?? 0
+
+    yearlyAccountMetrics[`livret_a::${year}`] = { operations_count: 14, total_saved_amount: livretATotal }
+    yearlyAccountMetrics[`ldds::${year}`] = { operations_count: 9, total_saved_amount: lddsTotal }
+    yearlyAccountMetrics[`pea::${year}`] = { operations_count: 18, total_saved_amount: peaTotal }
+    yearlyAccountMetrics[`per::${year}`] = { operations_count: 11, total_saved_amount: perTotal }
+
+    fallbackOperationEvents.push(
+      {
+        id: `fallback-livret_a-${year}`,
+        account_key: 'livret_a',
+        account_label: 'Livret A',
+        year,
+        transaction_date: `${year}-03-15`,
+        amount: 420,
+        nature: 'intérêts',
+      },
+      {
+        id: `fallback-pea-${year}`,
+        account_key: 'pea',
+        account_label: 'PEA',
+        year,
+        transaction_date: `${year}-09-10`,
+        amount: 950,
+        nature: 'virement',
+      },
+    )
+  })
+
   return {
     rows,
     series,
+    yearly_account_metrics: yearlyAccountMetrics,
+    operation_events: fallbackOperationEvents,
     isFallback: true,
   }
 }
@@ -172,7 +226,7 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
         .in('account_id', accountIds),
       budgetDb
         .from('transactions')
-        .select('account_id,transaction_date,amount,direction')
+        .select('account_id,transaction_date,amount,direction,raw_label,normalized_label,notes')
         .eq('is_hidden', false)
         .in('account_id', accountIds)
         .gte('transaction_date', startDate)
@@ -200,15 +254,38 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
 
     const txNetByAccountMonth = new Map<string, number>()
     const txNetSinceStartByAccount = new Map<string, number>()
+    const yearlyAccountMetrics = new Map<string, { operationsCount: number; totalSavedAmount: number }>()
+    const yearlyOperationEventByAccount = new Map<string, { transactionDate: string; amount: number; nature: 'virement' | 'intérêts' }>()
 
     for (const tx of transactions) {
       if (!tx.account_id || !tx.transaction_date || tx.transaction_date.length < 7) continue
       const delta = signedAmount(tx.direction, tx.amount)
       const monthKey = toYearMonth(tx.transaction_date)
+      const yearKey = tx.transaction_date.slice(0, 4)
       const perMonthKey = `${tx.account_id}::${monthKey}`
+      const perYearKey = `${tx.account_id}::${yearKey}`
 
       txNetByAccountMonth.set(perMonthKey, (txNetByAccountMonth.get(perMonthKey) ?? 0) + delta)
       txNetSinceStartByAccount.set(tx.account_id, (txNetSinceStartByAccount.get(tx.account_id) ?? 0) + delta)
+
+      const previousMetrics = yearlyAccountMetrics.get(perYearKey) ?? { operationsCount: 0, totalSavedAmount: 0 }
+      yearlyAccountMetrics.set(perYearKey, {
+        operationsCount: previousMetrics.operationsCount + 1,
+        totalSavedAmount: previousMetrics.totalSavedAmount + (delta > 0 ? delta : 0),
+      })
+
+      const interestOperation = isInterestOperation(tx)
+      const isSavingsOperation = tx.direction === 'savings' || tx.direction === 'transfer_in' || interestOperation
+      if (isSavingsOperation && delta > 0) {
+        const previousEvent = yearlyOperationEventByAccount.get(perYearKey)
+        if (!previousEvent || tx.transaction_date > previousEvent.transactionDate) {
+          yearlyOperationEventByAccount.set(perYearKey, {
+            transactionDate: tx.transaction_date,
+            amount: Math.round(delta),
+            nature: interestOperation ? 'intérêts' : 'virement',
+          })
+        }
+      }
     }
 
     const selectedAccounts: Array<AccountRow & { family: SavingsFamily; currentBalance: number }> = [...accounts]
@@ -287,9 +364,37 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
       return normalizedRow
     })
 
+    const yearlyMetricsPayload: SavingsEvolutionFiveYearsPayload['yearly_account_metrics'] = {}
+    const operationEvents: SavingsEvolutionFiveYearsPayload['operation_events'] = []
+    for (const account of selectedAccounts) {
+      for (let year = startYear; year <= endYear; year += 1) {
+        const key = `${account.id}::${year}`
+        const source = yearlyAccountMetrics.get(key) ?? { operationsCount: 0, totalSavedAmount: 0 }
+        yearlyMetricsPayload[key] = {
+          operations_count: source.operationsCount,
+          total_saved_amount: Math.round(source.totalSavedAmount),
+        }
+
+        const event = yearlyOperationEventByAccount.get(key)
+        if (event) {
+          operationEvents.push({
+            id: `${account.id}-${year}-${event.transactionDate}`,
+            account_key: account.id,
+            account_label: account.name,
+            year: String(year),
+            transaction_date: event.transactionDate,
+            amount: event.amount,
+            nature: event.nature,
+          })
+        }
+      }
+    }
+
     return {
       rows,
       series,
+      yearly_account_metrics: yearlyMetricsPayload,
+      operation_events: operationEvents,
       isFallback: false,
     }
   } catch {
