@@ -3,7 +3,6 @@ import type { Budget2026OptimizationScenario } from '@/features/annual-analysis/
 import {
   CompactStatGrid,
   DataQualityNotice,
-  HeroMetricCard,
   SectionHeader,
   StatsSection,
   StatusBadge,
@@ -17,20 +16,14 @@ type Props = {
   totalSavings: number
 }
 
-function formatPercentRaw(value: number): string {
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value)} %`
-}
-
 export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSavings }: Props) {
   const [showDetailedScenarios, setShowDetailedScenarios] = useState(false)
   if (scenarios.length === 0) return null
 
-  const totalOptimizableSavings = scenarios.reduce((sum, scenario) => sum + scenario.monthlySaving, 0)
   const totalAnnualPotential = scenarios.reduce((sum, scenario) => sum + scenario.annualSaving, 0)
 
   const annualCurrentSavings = totalSavings * 12
   const projectedAnnualSavings = annualCurrentSavings + totalAnnualPotential
-  const savingsBoostPct = totalSavings > 0 ? (totalOptimizableSavings / totalSavings) * 100 : null
 
   const currentShare = projectedAnnualSavings > 0 ? (annualCurrentSavings / projectedAnnualSavings) * 100 : 0
   const potentialShare = projectedAnnualSavings > 0 ? (totalAnnualPotential / projectedAnnualSavings) * 100 : 0
@@ -39,21 +32,6 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
     <StatsSection>
       <SurfaceCard tone="neutral" padding="var(--space-4)">
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-          <SectionHeader title="Leviers d’optimisation" subtitle="Scénarios par bucket + vision annuelle" />
-
-          <HeroMetricCard
-            title="Potentiel d’optimisation identifié"
-            value={formatEuro(totalOptimizableSavings)}
-            caption="Libérable / mois"
-            tone="premium"
-            detail={savingsBoostPct == null ? 'Boost non calculable' : `+${formatPercentRaw(savingsBoostPct)} vs épargne actuelle`}
-            metrics={[
-              { label: 'Impact sur 12 mois', value: formatEuro(totalAnnualPotential) },
-              { label: 'Épargne planifiée', value: formatEuro(annualCurrentSavings) },
-              { label: 'Projection annuelle', value: formatEuro(projectedAnnualSavings) },
-            ]}
-          />
-
           <button
             type="button"
             onClick={() => setShowDetailedScenarios((current) => !current)}

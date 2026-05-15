@@ -130,7 +130,7 @@ type HeroMetricCardProps = {
   caption?: string
   tone?: Tone
   detail?: ReactNode
-  metrics?: Array<{ label: string; value: string }>
+  metrics?: Array<{ label: string; value: string; valueTone?: Tone }>
   notice?: ReactNode
 }
 
@@ -185,6 +185,7 @@ export function HeroMetricCard({
               key={metric.label}
               label={metric.label}
               value={metric.value}
+              valueTone={metric.valueTone}
               tone="neutral"
               onHero
             />
@@ -202,12 +203,16 @@ type MetricCardProps = {
   value: string
   detail?: string | null
   tone?: Tone
+  valueTone?: Tone
   compact?: boolean
   onHero?: boolean
 }
 
-export function MetricCard({ label, value, detail, tone = 'neutral', compact = false, onHero = false }: MetricCardProps) {
+export function MetricCard({ label, value, detail, tone = 'neutral', valueTone, compact = false, onHero = false }: MetricCardProps) {
   const tokens = toneTokens[tone]
+  const valueColor = onHero
+    ? (valueTone ? toneTokens[valueTone].text : 'var(--neutral-0)')
+    : (valueTone ? toneTokens[valueTone].text : 'var(--neutral-900)')
 
   return (
     <article
@@ -224,7 +229,7 @@ export function MetricCard({ label, value, detail, tone = 'neutral', compact = f
       <p style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: onHero ? 'rgba(255,255,255,0.82)' : 'var(--neutral-500)', fontWeight: 'var(--font-weight-semibold)' }}>
         {label}
       </p>
-      <p style={{ margin: 0, fontSize: compact ? 'var(--font-size-sm)' : 'var(--font-size-md)', color: onHero ? 'var(--neutral-0)' : 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)', overflowWrap: 'anywhere' }}>
+      <p style={{ margin: 0, fontSize: compact ? 'var(--font-size-sm)' : 'var(--font-size-md)', color: valueColor, fontFamily: 'var(--font-mono)', fontWeight: 'var(--font-weight-bold)', overflowWrap: 'anywhere' }}>
         {value}
       </p>
       {detail ? (

@@ -5,7 +5,6 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import analyticsIcon from '@/assets/icons/app/analytics.webp'
-import performanceIcon from '@/assets/icons/app/performance.webp'
 import optimisationIcon from '@/assets/icons/app/optimisation.webp'
 import epargneIcon from '@/assets/icons/app/epargne.webp'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
@@ -19,11 +18,10 @@ import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/Sa
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
-import { InvestmentPerformanceSection } from '@/features/stats/components/InvestmentPerformanceSection'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
-type StatsTabId = 'analytics_2025' | 'performance' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
@@ -33,7 +31,6 @@ const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics_2025', label: 'Analytics', iconSrc: analyticsIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
-  { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
 ]
 function StatsMajorSectionHeading({ title }: { title: string }) {
   return (
@@ -255,6 +252,19 @@ export function Stats() {
           >
             Epargne
           </p>
+        ) : activeTabId === 'optimisation' ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-0)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Optimisation
+          </p>
         ) : (
           <HeaderPeriodMenu
             buttonLabel={monthButtonLabel}
@@ -283,12 +293,6 @@ export function Stats() {
 
       {activeTab.id === 'analytics_2025' ? (
         <Annual2025Tab />
-      ) : null}
-
-      {activeTab.id === 'performance' ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-          <InvestmentPerformanceSection />
-        </motion.section>
       ) : null}
 
       {activeTab.id === 'optimisation' ? (
@@ -393,7 +397,7 @@ export function Stats() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
