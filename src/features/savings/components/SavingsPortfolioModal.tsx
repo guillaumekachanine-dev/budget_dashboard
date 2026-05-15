@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react'
 import { useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Check } from 'lucide-react'
+import { CalendarDays, Check, Compass, PiggyBank, Shield, Target, ArrowDownToLine } from 'lucide-react'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
 import epargneInteretsIcon from '@/assets/icons/categories/epargne_interets.webp'
@@ -67,6 +68,43 @@ function resolvePlafond(label: string): number | null {
 function isLivret(label: string): boolean {
   const n = normalizeStr(label)
   return n.includes('livret') || n.includes('ldds') || n.includes('lep')
+}
+
+type RiskLevel = { label: string; color: string }
+type TrendSignal = { label: string; color: string }
+
+function resolveRisk(label: string): RiskLevel {
+  const n = normalizeStr(label)
+  if (n.includes('livret') || n.includes('ldds') || n.includes('lep')) return { label: 'Nul', color: '#2ED47A' }
+  if (n.includes('per') || n.includes('plan epargne retraite')) return { label: 'Faible', color: '#3B82F6' }
+  if (n.includes('peg') || n.includes('capgemini')) return { label: 'Modéré', color: '#FFAB2E' }
+  if (n.includes('pea')) return { label: 'Modéré', color: '#FFAB2E' }
+  if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return { label: 'Élevé', color: '#FC5A5A' }
+  return { label: 'Modéré', color: '#FFAB2E' }
+}
+
+function resolveTrend(label: string): TrendSignal {
+  const n = normalizeStr(label)
+  if (n.includes('livret a')) return { label: 'Maintenir', color: '#2ED47A' }
+  if (n.includes('ldds')) return { label: 'Maintenir', color: '#2ED47A' }
+  if (n.includes('lep')) return { label: 'Maintenir', color: '#2ED47A' }
+  if (n.includes('pea')) return { label: 'Continuer', color: '#2ED47A' }
+  if (n.includes('per') || n.includes('plan epargne retraite')) return { label: 'Continuer', color: '#2ED47A' }
+  if (n.includes('peg') || n.includes('capgemini')) return { label: 'Surveiller', color: '#FFAB2E' }
+  if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return { label: 'Réduire', color: '#FC5A5A' }
+  return { label: 'Continuer', color: '#2ED47A' }
+}
+
+function resolveObjectif2026(label: string): string {
+  const n = normalizeStr(label)
+  if (n.includes('livret a')) return 'Conserver le plafond'
+  if (n.includes('ldds')) return 'Atteindre 12 000 €'
+  if (n.includes('lep')) return 'Atteindre 10 000 €'
+  if (n.includes('pea')) return '3 600 € · 300 €/mois'
+  if (n.includes('per') || n.includes('plan epargne retraite')) return '4 000 € · TMI 30 %'
+  if (n.includes('peg') || n.includes('capgemini')) return 'Max abondement · 1 200 €'
+  if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return 'HODL — pas de renforcement'
+  return '—'
 }
 
 function resolveAdvice(label: string, family: string, recommendedAction: string | null): string {
@@ -230,6 +268,29 @@ export function SavingsPortfolioModal({
 
     return null
   }, [accountEventsAsc, rows, account.key])
+
+  const activeMonths = useMemo(() => {
+    if (!openedAt) return null
+    const now = new Date()
+    return (now.getFullYear() - openedAt.getFullYear()) * 12 + (now.getMonth() - openedAt.getMonth())
+  }, [openedAt])
+
+  const lastDeposit = useMemo(() => {
+    return [...accountEventsAsc]
+      .reverse()
+      .find((e) => e.amount > 0 && e.nature !== 'intérêts') ?? null
+  }, [accountEventsAsc])
+
+  const amount2026 = useMemo(() => {
+    const total = accountEvents
+      .filter((e) => e.year === '2026' && e.amount > 0 && e.nature !== 'intérêts')
+      .reduce((sum, e) => sum + e.amount, 0)
+    return total > 0 ? total : null
+  }, [accountEvents])
+
+  const risk = resolveRisk(account.label)
+  const trend = resolveTrend(account.label)
+  const objectif2026 = resolveObjectif2026(account.label)
 
   const plafondReachedAt = useMemo(() => {
     if (!plafond || currentAmount < plafond) return null
@@ -536,6 +597,48 @@ export function SavingsPortfolioModal({
               </span>
             </div>
           )}
+        </div>
+
+        {/* Quick indicators grid */}
+        <div style={{ padding: '12px var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <IndicatorCell
+              icon={<CalendarDays size={13} strokeWidth={2} />}
+              label="Date d'ouverture"
+              value={openedAt
+                ? `${fmtMonthYear(openedAt)}${activeMonths != null ? ` (${activeMonths} mois)` : ''}`
+                : '—'}
+            />
+            <IndicatorCell
+              icon={<ArrowDownToLine size={13} strokeWidth={2} />}
+              label="Dernier versement"
+              value={lastDeposit
+                ? `${fmtDate(lastDeposit.transaction_date)} · ${fmtEur(lastDeposit.amount)}`
+                : '—'}
+            />
+            <IndicatorCell
+              icon={<PiggyBank size={13} strokeWidth={2} />}
+              label="Montant placé en 2026"
+              value={amount2026 != null ? fmtEur(amount2026) : '—'}
+            />
+            <IndicatorCell
+              icon={<Target size={13} strokeWidth={2} />}
+              label="Objectif 2026"
+              value={objectif2026}
+            />
+            <IndicatorCell
+              icon={<Shield size={13} strokeWidth={2} />}
+              label="Risque"
+              value={risk.label}
+              valueColor={risk.color}
+            />
+            <IndicatorCell
+              icon={<Compass size={13} strokeWidth={2} />}
+              label="Tendance"
+              value={trend.label}
+              valueColor={trend.color}
+            />
+          </div>
         </div>
 
         {/* Middle section: operations list */}
@@ -858,6 +961,63 @@ function SectionHeading({ label, count, color }: { label: string; count?: number
           {count}
         </span>
       ) : null}
+    </div>
+  )
+}
+
+function IndicatorCell({
+  icon,
+  label,
+  value,
+  valueColor,
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  valueColor?: string
+}) {
+  return (
+    <div
+      style={{
+        background: 'var(--neutral-50)',
+        border: '1px solid var(--neutral-100)',
+        borderRadius: 'var(--radius-md)',
+        padding: '8px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ color: 'var(--neutral-400)', flexShrink: 0, display: 'flex' }}>{icon}</span>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            color: 'var(--neutral-400)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          fontFamily: 'var(--font-mono)',
+          color: valueColor ?? 'var(--neutral-900)',
+          lineHeight: 1.2,
+          wordBreak: 'break-word',
+        }}
+      >
+        {value}
+      </span>
     </div>
   )
 }
