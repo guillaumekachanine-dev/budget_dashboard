@@ -30,13 +30,6 @@ type Props = {
   onClose: () => void
 }
 
-// Legal ceilings
-const PLAFOND_EUR: Record<string, number> = {
-  'livret a': 22950,
-  'ldds': 12000,
-  'lep': 10000,
-}
-
 // Livret A / LDDS historical annual rates
 const LIVRET_RATES: Record<number, number> = {
   2020: 0.5,
@@ -56,14 +49,6 @@ function normalizeStr(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-}
-
-function resolvePlafond(label: string): number | null {
-  const n = normalizeStr(label)
-  for (const [key, eur] of Object.entries(PLAFOND_EUR)) {
-    if (n.includes(key)) return eur
-  }
-  return null
 }
 
 function isLivret(label: string): boolean {
