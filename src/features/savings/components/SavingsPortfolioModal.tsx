@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BarChart2, CalendarDays, Check, Compass, PiggyBank, Shield, Target, ArrowDownToLine, X } from 'lucide-react'
+import { BarChart2, CalendarDays, Compass, PiggyBank, Shield, Target, ArrowDownToLine, X } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
@@ -157,11 +157,6 @@ const EUR = new Intl.NumberFormat('fr-FR', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 })
-const PCT_ONE_DECIMAL = new Intl.NumberFormat('fr-FR', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-})
-
 function fmtEur(v: number): string {
   return EUR.format(v)
 }
@@ -209,8 +204,6 @@ export function SavingsPortfolioModal({
   )
 
   const plafond = resolvePlafond(account.label)
-  const pctOfPlafond = plafond ? (currentAmount / plafond) * 100 : null
-  const fillPct = plafond ? Math.min(100, Math.max(0, (currentAmount / plafond) * 100)) : null
 
   const accountIsLivret = isLivret(account.label)
 
@@ -302,32 +295,7 @@ export function SavingsPortfolioModal({
     [accountEvents],
   )
 
-  const plafondReachedAt = useMemo(() => {
-    if (!plafond || currentAmount < plafond) return null
-
-    let runningBalance = 0
-    for (const event of accountEventsAsc) {
-      runningBalance += Number(event.amount ?? 0)
-      if (runningBalance >= plafond) {
-        const reachedAt = new Date(event.transaction_date)
-        if (!Number.isNaN(reachedAt.getTime())) return reachedAt
-      }
-    }
-
-    const reachedYear = [...rows]
-      .sort((a, b) => Number(a.year) - Number(b.year))
-      .find((row) => Number(row[account.key] ?? 0) >= plafond)?.year
-
-    if (reachedYear && /^\d{4}$/.test(reachedYear)) {
-      return new Date(Number(reachedYear), 11, 1)
-    }
-
-    return null
-  }, [plafond, currentAmount, accountEventsAsc, rows, account.key])
-
   const cappedSurplus = plafond ? Math.max(0, currentAmount - plafond) : 0
-  const isLddsAccount = normalizeStr(account.label).includes('ldds')
-  const showPlafondPct = !(isLddsAccount && cappedSurplus <= 0)
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
 
