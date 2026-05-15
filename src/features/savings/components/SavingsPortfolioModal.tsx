@@ -277,6 +277,7 @@ export function SavingsPortfolioModal({
   const objectif2026 = resolveObjectif2026(account.label)
 
   const [showIndexModal, setShowIndexModal] = useState(false)
+  const [showOperationsModal, setShowOperationsModal] = useState(false)
 
   const totalCashIn = useMemo(
     () => accountEvents
@@ -288,6 +289,7 @@ export function SavingsPortfolioModal({
     () => (totalCashIn > 0 ? currentAmount - totalCashIn : null),
     [currentAmount, totalCashIn],
   )
+  const previewAccountEvents = useMemo(() => accountEvents.slice(0, 3), [accountEvents])
 
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
@@ -483,7 +485,31 @@ export function SavingsPortfolioModal({
           }}
         >
           <section>
-            <SectionHeading label="Opérations" count={accountEvents.length} color={account.color} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <SectionHeading label="Opérations" color={account.color} />
+                <button
+                  type="button"
+                  onClick={() => setShowOperationsModal(true)}
+                  title="Voir la liste complète des opérations"
+                  style={{
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '2px 5px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: 'var(--primary)',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  Liste ({accountEvents.length})
+                </button>
+              </div>
+            </div>
 
             {accountEvents.length === 0 ? (
               <p
@@ -530,7 +556,7 @@ export function SavingsPortfolioModal({
                     ))}
                 </div>
 
-                {accountEvents.map((event, idx) => {
+                {previewAccountEvents.map((event, idx) => {
                   const isInterest = event.nature === 'intérêts'
                   const isPlacementAccount = account.family === 'placements'
                   const natureLabel = isInterest ? 'Intérêts' : (isPlacementAccount ? 'Placement' : 'Virement')
@@ -548,7 +574,7 @@ export function SavingsPortfolioModal({
                         gridTemplateColumns: '1fr 116px 132px',
                         columnGap: '14px',
                         padding: '7px 6px',
-                        borderBottom: idx < accountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
+                        borderBottom: idx < previewAccountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
                         alignItems: 'center',
                         lineHeight: 1,
                       }}
@@ -789,6 +815,233 @@ export function SavingsPortfolioModal({
       </motion.div>
 
       <AnimatePresence>
+        {showOperationsModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowOperationsModal(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 72,
+                background: 'rgba(13,13,31,0.48)',
+              }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Liste complète des opérations ${account.listLabel}`}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 10, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 73,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 'var(--space-3)',
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                style={{
+                  width: 'min(560px, 100%)',
+                  maxHeight: 'min(72dvh, calc(100dvh - 2 * var(--space-3)))',
+                  overflow: 'hidden',
+                  pointerEvents: 'auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--neutral-150)',
+                boxShadow: '0 20px 52px rgba(13,13,31,0.26)',
+                display: 'grid',
+                gridTemplateRows: 'auto 1fr',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                  Liste complète des opérations ({accountEvents.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowOperationsModal(false)}
+                  aria-label="Fermer la liste des opérations"
+                  style={{
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    borderRadius: 'var(--radius-sm)',
+                    width: 28,
+                    height: 28,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--neutral-600)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div style={{ overflowY: 'auto', padding: 'var(--space-3) var(--space-4)' }}>
+                {accountEvents.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-4) 0' }}>
+                    Aucune opération enregistrée
+                  </p>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 116px 132px',
+                        columnGap: '14px',
+                        padding: '0 6px 4px',
+                        borderBottom: '1px solid var(--neutral-100)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {(['Date', 'Nature', 'Montant'] as const).map((label) => (
+                        <span
+                          key={label}
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            color: 'var(--neutral-400)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.07em',
+                            textAlign: 'left',
+                            paddingLeft: label === 'Nature' ? 2 : 0,
+                          }}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+
+                    {accountEvents.map((event, idx) => {
+                      const isInterest = event.nature === 'intérêts'
+                      const isPlacementAccount = account.family === 'placements'
+                      const natureLabel = isInterest ? 'Intérêts' : (isPlacementAccount ? 'Placement' : 'Virement')
+                      const natureIconSrc = isInterest
+                        ? epargneInteretsIcon
+                        : (isPlacementAccount ? epargnePlacementIcon : epargneVirementIcon)
+                      const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
+                      const amountAbs = fmtEur(Math.abs(event.amount))
+
+                      return (
+                        <div
+                          key={`all-${event.id}`}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 116px 132px',
+                            columnGap: '14px',
+                            padding: '7px 6px',
+                            borderBottom: idx < accountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
+                            alignItems: 'center',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: 'var(--neutral-700)',
+                              fontFamily: 'var(--font-mono)',
+                              fontWeight: 500,
+                              lineHeight: 1,
+                            }}
+                          >
+                            {fmtDate(event.transaction_date)}
+                          </span>
+
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 500,
+                              color: 'var(--neutral-900)',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1,
+                              justifySelf: 'start',
+                              display: 'inline-grid',
+                              gridTemplateColumns: '12px auto',
+                              alignItems: 'center',
+                              columnGap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 12,
+                                height: 12,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <img
+                                src={natureIconSrc}
+                                alt=""
+                                aria-hidden="true"
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                }}
+                              />
+                            </span>
+                            {natureLabel}
+                          </span>
+
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              fontFamily: 'var(--font-mono)',
+                              textAlign: 'left',
+                              color: 'var(--neutral-900)',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1,
+                              width: '100%',
+                              display: 'inline-grid',
+                              gridTemplateColumns: '9px auto',
+                              columnGap: 4,
+                              justifyContent: 'start',
+                              alignItems: 'center',
+                              justifySelf: 'start',
+                            }}
+                          >
+                            <span
+                              style={{
+                                color:
+                                  amountSign === '+'
+                                    ? 'var(--color-positive)'
+                                    : amountSign === '-'
+                                      ? 'var(--color-negative)'
+                                      : 'transparent',
+                                textAlign: 'center',
+                              }}
+                            >
+                              {amountSign || '+'}
+                            </span>
+                            <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+
         {showIndexModal && (
           <IndexEvolutionModal
             accountLabel={account.listLabel}
@@ -1243,7 +1496,7 @@ function IndexEvolutionModal({
     if (!dataset || isRateChart || isLivretChart || isPerChart) return null
     if (period === '5y' && dataset.fiveYears) return dataset.fiveYears
     return dataset.default
-  }, [dataset, period, isRateChart, isLivretChart])
+  }, [dataset, period, isRateChart, isLivretChart, isPerChart])
 
   const first = data?.[0]
   const last = data?.[data.length - 1]
