@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { CalendarDays, Check, Compass, PiggyBank, Shield, Target, ArrowDownToLine } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { BarChart2, CalendarDays, Check, Compass, PiggyBank, Shield, Target, ArrowDownToLine, X } from 'lucide-react'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
 import epargneInteretsIcon from '@/assets/icons/categories/epargne_interets.webp'
@@ -291,6 +291,15 @@ export function SavingsPortfolioModal({
   const risk = resolveRisk(account.label)
   const trend = resolveTrend(account.label)
   const objectif2026 = resolveObjectif2026(account.label)
+
+  const [showIndexModal, setShowIndexModal] = useState(false)
+
+  const totalCashIn = useMemo(
+    () => accountEvents
+      .filter((e) => e.amount > 0 && e.nature !== 'intérêts')
+      .reduce((sum, e) => sum + e.amount, 0),
+    [accountEvents],
+  )
 
   const plafondReachedAt = useMemo(() => {
     if (!plafond || currentAmount < plafond) return null
@@ -734,7 +743,7 @@ export function SavingsPortfolioModal({
                 }}
               >
                 <KpiBulletRow
-                  label="Taux moyen depuis ouverture"
+                  label="Variation depuis ouverture"
                   value={
                     accountIsLivret
                       ? (avgRate != null ? `~${avgRate.toFixed(2)} %` : '—')
@@ -744,18 +753,50 @@ export function SavingsPortfolioModal({
                   }
                 />
                 <KpiBulletRow
-                  label="Taux actuel en vigueur"
-                  value={`${LIVRET_CURRENT_RATE.toFixed(2)} %`}
-                />
-                <KpiBulletRow
-                  label={accountIsLivret ? 'Montant des intérêts N-1' : 'Montant de plus-value N-1'}
+                  label="Variation N-1 glissante"
                   value={kpiPreviousYearAmount != null ? fmtSigned(kpiPreviousYearAmount) : '—'}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setShowIndexModal(true)}
+                      title="Voir l'évolution des indices"
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        background: 'var(--neutral-0)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        color: 'var(--primary)',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <BarChart2 size={10} strokeWidth={2} />
+                      Indices
+                    </button>
+                  }
                 />
                 <KpiBulletRow
-                  label={accountIsLivret
-                    ? 'Total des intérêts depuis ouverture'
-                    : 'Total de plus-value depuis ouverture'}
-                  value={totalGain != null ? fmtSigned(totalGain) : '—'}
+                  label="Plus-values YTD"
+                  value={
+                    totalCashIn > 0
+                      ? `${fmtEur(currentAmount)} · mis ${fmtEur(totalCashIn)}`
+                      : '—'
+                  }
+                />
+                <KpiBulletRow
+                  label="Rendement depuis ouverture"
+                  value={totalGain != null && totalGain !== 0
+                    ? `${fmtSigned(totalGain)}${
+                        !accountIsLivret && investAccount?.estimated_gain_vs_total_cash_in_pct != null
+                          ? ` (${investAccount.estimated_gain_vs_total_cash_in_pct >= 0 ? '+' : ''}${investAccount.estimated_gain_vs_total_cash_in_pct.toFixed(1)} %)`
+                          : ''
+                      }`
+                    : '—'}
                 />
               </div>
 
@@ -786,6 +827,16 @@ export function SavingsPortfolioModal({
         </div>
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {showIndexModal && (
+          <IndexEvolutionModal
+            accountLabel={account.listLabel}
+            accountColor={account.color}
+            onClose={() => setShowIndexModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </>
   )
 }
@@ -891,17 +942,71 @@ function IndicatorCell({
   )
 }
 
+// INDEX EVOLUTION MODAL — placeholder, data to be wired later
+function IndexEvolutionModal({
+  accountLabel,
+  accountColor,
+  onClose,
+}: {
+  accountLabel: string
+  accountColor: string
+  onClose: () => void
+}) {
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.6)', backdropFilter: 'blur(3px)' }}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ position: 'fixed', inset: 0, zIndex: 81, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', pointerEvents: 'none' }}
+      >
+        <div style={{ width: 'min(560px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: '0 24px 60px rgba(13,13,31,0.28)', pointerEvents: 'auto', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
+              <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                Évolution des indices · {accountLabel}
+              </h3>
+            </div>
+            <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'var(--neutral-400)', display: 'flex' }}>
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ padding: 'var(--space-5) var(--space-4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 220, background: 'var(--neutral-50)' }}>
+            <BarChart2 size={32} strokeWidth={1.5} color="var(--neutral-300)" />
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-400)', textAlign: 'center' }}>
+              Données à configurer<br />
+              <span style={{ fontWeight: 400 }}>Les données d'indices seront intégrées prochainement.</span>
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  )
+}
+
 function KpiBulletRow({
   label,
   value,
   positive,
+  action,
 }: {
   label: string
   value: string
   positive?: boolean
+  action?: ReactNode
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
       <span
         aria-hidden="true"
         style={{
@@ -912,7 +1017,8 @@ function KpiBulletRow({
           flexShrink: 0,
         }}
       />
-      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', lineHeight: 1.3 }}>{label}</span>
+      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', lineHeight: 1.3, flex: 1 }}>{label}</span>
+      {action}
       <span
         style={{
           fontSize: 'var(--font-size-sm)',
@@ -924,6 +1030,7 @@ function KpiBulletRow({
               : positive
                 ? 'var(--color-positive)'
                 : 'var(--color-negative)',
+          flexShrink: 0,
         }}
       >
         {value}
