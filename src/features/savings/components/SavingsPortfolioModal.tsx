@@ -295,7 +295,6 @@ export function SavingsPortfolioModal({
     [accountEvents],
   )
 
-  const cappedSurplus = plafond ? Math.max(0, currentAmount - plafond) : 0
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
 
