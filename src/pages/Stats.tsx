@@ -13,17 +13,15 @@ import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025T
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
-import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
 import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
 import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
-import { SavingsInsightsSection } from '@/features/savings/components/SavingsInsightsSection'
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { InvestmentPerformanceSection } from '@/features/stats/components/InvestmentPerformanceSection'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
-import { EmptyState, StatsSection, YearToggle } from '@/features/stats/components/ui'
+import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
 type StatsTabId = 'analytics_2025' | 'performance' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
@@ -31,16 +29,12 @@ type StatsTabConfig = {
   label: string
   iconSrc: string
 }
-type SavingsAnalyticsYear = 2026 | 2025
-
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'analytics_2025', label: 'Analytics', iconSrc: analyticsIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
   { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
   { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
 ]
-const SAVINGS_ANALYTICS_YEARS: SavingsAnalyticsYear[] = [2026, 2025]
-
 function StatsMajorSectionHeading({ title }: { title: string }) {
   return (
     <StatsSection>
@@ -95,7 +89,6 @@ export function Stats() {
   const annual2026 = useAnnual2026Analysis()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2025')
-  const [selectedSavingsYear, setSelectedSavingsYear] = useState<SavingsAnalyticsYear>(2026)
   const [selectedAnalyticsYear, setSelectedAnalyticsYear] = useState<2024 | 2025>(2025)
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
@@ -326,37 +319,15 @@ export function Stats() {
           <StatsMajorSectionHeading title="Détails de l'épargne" />
           <SavingsAllocationDonut />
           <SavingsEvolutionFiveYearsChart />
-          <StatsSection>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <YearToggle
-                years={SAVINGS_ANALYTICS_YEARS}
-                value={selectedSavingsYear}
-                onChange={(year) => setSelectedSavingsYear(year as SavingsAnalyticsYear)}
-              />
-            </div>
-          </StatsSection>
-
-          <SavingsInsightsSection year={selectedSavingsYear} />
           <FinancialSecurityCard />
 
           {snapshot ? (
-            <>
-              <StatsSavingsCard
-                savingsSummary={snapshot.savingsSummary}
-                savingsLines={snapshot.savingsLines}
-              />
-
-              <StatsTotalNeedCard
-                totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
-                totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
-                totalMonthlyNeed={snapshot.totalMonthlyNeed}
-              />
-            </>
-          ) : (
-            <StatsSection>
-              <EmptyState message="Données d’épargne en cours de chargement" />
-            </StatsSection>
-          )}
+            <StatsTotalNeedCard
+              totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
+              totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
+              totalMonthlyNeed={snapshot.totalMonthlyNeed}
+            />
+          ) : null}
         </motion.section>
       ) : null}
 

@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
 import { EmptyState, SkeletonCard, StatsSection } from '@/features/stats/components/ui'
-import type { SavingsEvolutionFiveYearsSeries, SavingsEvolutionOperationEvent } from '@/features/savings/types'
+import type { SavingsEvolutionFiveYearsSeries, SavingsEvolutionFiveYearsRow, SavingsEvolutionOperationEvent } from '@/features/savings/types'
 import { SavingsPortfolioModal } from '@/features/savings/components/SavingsPortfolioModal'
 import amundiEpargneIcon from '@/assets/icons/accounts/amundi_epargne.webp'
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
@@ -184,6 +184,44 @@ function formatYAxisCompact(value: number): string {
   return String(Math.round(numeric))
 }
 
+// Build a per-account step-function balance timeline from individual operations
+function buildAccountTimeline(
+  accountKey: string,
+  allOperations: SavingsEvolutionOperationEvent[],
+  rows: SavingsEvolutionFiveYearsRow[],
+  windowStartYear: number,
+  todayStr: string,
+): Array<{ date: string; balance: number }> {
+  // Seed: year-end balance just before the window
+  const seedRow = rows.find((r) => Number(r.year) === windowStartYear - 1)
+  let running = seedRow ? Math.max(0, Number(seedRow[accountKey] ?? 0)) : 0
+
+  const windowStartDate = `${windowStartYear}-01-01`
+  const points: Array<{ date: string; balance: number }> = [
+    { date: windowStartDate, balance: running },
+  ]
+
+  // Group same-date operations (sum amounts)
+  const dateGroups = new Map<string, number>()
+  for (const op of allOperations) {
+    if (op.account_key !== accountKey) continue
+    if (op.transaction_date < windowStartDate || op.transaction_date > todayStr) continue
+    dateGroups.set(op.transaction_date, (dateGroups.get(op.transaction_date) ?? 0) + op.amount)
+  }
+
+  for (const [date, total] of [...dateGroups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    running = Math.max(0, running + total)
+    points.push({ date, balance: running })
+  }
+
+  // Extend to today so the last segment fills the visible area
+  if (todayStr > (points[points.length - 1]?.date ?? '')) {
+    points.push({ date: todayStr, balance: running })
+  }
+
+  return points
+}
+
 export function SavingsEvolutionFiveYearsChart() {
   const { data, isLoading, error } = useSavingsEvolutionFiveYears()
   const [disabledSeriesKeys, setDisabledSeriesKeys] = useState<string[]>([])
@@ -242,16 +280,69 @@ export function SavingsEvolutionFiveYearsChart() {
   }, [rows, selectedPeriodYears])
   const visibleYears = useMemo(() => new Set(chartRows.map((row) => row.year)), [chartRows])
   const visibleSeriesKeys = useMemo(() => new Set(visibleSeries.map((entry) => entry.key)), [visibleSeries])
-  const visibleOperationEvents = useMemo(() => (
-    operationEvents.filter((event) => visibleSeriesKeys.has(event.account_key) && visibleYears.has(event.year))
-  ), [operationEvents, visibleSeriesKeys, visibleYears])
-  const operationEventByAccountYear = useMemo(() => {
-    const map = new Map<string, SavingsEvolutionOperationEvent>()
-    for (const event of visibleOperationEvents) {
-      map.set(`${event.account_key}::${event.year}`, event)
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const windowStartYear = useMemo(
+    () => Number(chartRows[0]?.year ?? new Date().getFullYear()),
+    [chartRows],
+  )
+  const windowStartDate = useMemo(() => `${windowStartYear}-01-01`, [windowStartYear])
+
+  const accountTimelines = useMemo(() => {
+    const timelines = new Map<string, Array<{ date: string; balance: number }>>()
+    for (const entry of styledSeries) {
+      timelines.set(
+        entry.key,
+        buildAccountTimeline(entry.key, operationEvents, rows, windowStartYear, today),
+      )
     }
-    return map
-  }, [visibleOperationEvents])
+    return timelines
+  }, [styledSeries, operationEvents, rows, windowStartYear, today])
+
+  const granularChartData = useMemo(() => {
+    const allDates = new Set<string>()
+    const endYear = new Date().getFullYear()
+    for (let y = windowStartYear; y <= endYear; y++) allDates.add(`${y}-01-01`)
+    allDates.add(today)
+    for (const key of visibleSeriesKeys) {
+      const tl = accountTimelines.get(key)
+      if (tl) for (const pt of tl) allDates.add(pt.date)
+    }
+    const sorted = [...allDates].sort()
+    const lookups = new Map<string, Map<string, number>>()
+    for (const [key, tl] of accountTimelines.entries()) {
+      const m = new Map<string, number>()
+      for (const pt of tl) m.set(pt.date, pt.balance)
+      lookups.set(key, m)
+    }
+    return sorted.map((date) => {
+      const row: Record<string, string | number> = { date }
+      for (const [key, lookup] of lookups.entries()) {
+        if (lookup.has(date)) row[key] = lookup.get(date)!
+      }
+      return row
+    })
+  }, [accountTimelines, visibleSeriesKeys, windowStartYear, today])
+
+  const xAxisTicks = useMemo(() => {
+    const ticks: string[] = []
+    const endYear = new Date().getFullYear()
+    for (let y = windowStartYear; y <= endYear; y++) ticks.push(`${y}-01-01`)
+    return ticks
+  }, [windowStartYear])
+
+  const visibleOperationEvents = useMemo(() => (
+    operationEvents.filter((event) =>
+      visibleSeriesKeys.has(event.account_key) &&
+      event.transaction_date >= windowStartDate &&
+      event.transaction_date <= today
+    )
+  ), [operationEvents, visibleSeriesKeys, windowStartDate, today])
+
+  const operationEventIds = useMemo(
+    () => new Set(visibleOperationEvents.map((e) => e.id)),
+    [visibleOperationEvents],
+  )
   const selectedPeriodLabel = useMemo(
     () => PERIOD_OPTIONS.find((option) => option.years === selectedPeriodYears)?.label ?? '5yrs',
     [selectedPeriodYears],
@@ -281,9 +372,9 @@ export function SavingsEvolutionFiveYearsChart() {
     return map
   }, [rows, styledSeries])
   const yAxisMax = useMemo(() => {
-    if (chartRows.length === 0 || styledSeries.length === 0) return undefined
+    if (granularChartData.length === 0 || styledSeries.length === 0) return undefined
     let max = 0
-    for (const row of chartRows) {
+    for (const row of granularChartData) {
       for (const s of styledSeries) {
         const v = Number(row[s.key] ?? 0)
         if (Number.isFinite(v) && v > max) max = v
@@ -292,7 +383,7 @@ export function SavingsEvolutionFiveYearsChart() {
     if (max === 0) return undefined
     const exp = 10 ** Math.floor(Math.log10(max))
     return Math.ceil(max / exp) * exp
-  }, [chartRows, styledSeries])
+  }, [granularChartData, styledSeries])
 
   const selectedYearMetrics = useMemo(() => {
     const year = selectedYearBubble?.year ?? selectedYear ?? selectedYearRow?.year ?? null
@@ -323,11 +414,10 @@ export function SavingsEvolutionFiveYearsChart() {
 
   useEffect(() => {
     if (!selectedOperationBubble) return
-    const key = `${selectedOperationBubble.event.account_key}::${selectedOperationBubble.event.year}`
-    if (!operationEventByAccountYear.has(key)) {
+    if (!operationEventIds.has(selectedOperationBubble.event.id)) {
       setSelectedOperationBubble(null)
     }
-  }, [operationEventByAccountYear, selectedOperationBubble])
+  }, [operationEventIds, selectedOperationBubble])
 
   useEffect(() => {
     if (!selectedYearBubble) return
@@ -336,50 +426,23 @@ export function SavingsEvolutionFiveYearsChart() {
     }
   }, [visibleYears, selectedYearBubble])
 
-  const renderInteractiveDot = (seriesEntry: StyledSeries) => (
-    dotProps: { cx?: number; cy?: number; payload?: { year?: string } },
-  ) => {
-    const year = String(dotProps.payload?.year ?? '')
-    const cx = Number(dotProps.cx ?? 0)
-    const cy = Number(dotProps.cy ?? 0)
-    return (
-      <circle
-        key={`dot-${seriesEntry.key}-${year}`}
-        cx={cx} cy={cy} r={2.5}
-        fill={seriesEntry.color}
-        style={{ cursor: 'pointer' }}
-        onClick={(event) => {
-          event.stopPropagation()
-          setSelectedYear(year)
-          setSelectedOperationBubble(null)
-          setSelectedYearBubble(null)
-        }}
-      />
-    )
-  }
-
   const renderYearTick = (tickProps: { x?: number; y?: number; index?: number; payload?: { value?: string | number } }) => {
-    const rawYear = String(tickProps.payload?.value ?? '')
-    const hasValidYear = /^\d{4}$/.test(rawYear)
-    const fallbackYearFromIndex = typeof tickProps.index === 'number'
-      ? chartRows[tickProps.index]?.year
-      : undefined
-    const year = hasValidYear
-      ? rawYear
-      : String(fallbackYearFromIndex ?? chartRows[0]?.year ?? '')
+    const rawValue = String(tickProps.payload?.value ?? '')
+    // Tick values are date strings like "2022-01-01" — extract the year
+    const year = rawValue.slice(0, 4)
+    if (!year || !/^\d{4}$/.test(year)) return <g />
     const x = Number(tickProps.x ?? 0)
     const y = Number(tickProps.y ?? 0)
     const active = selectedYear === year
-    const firstVisibleYear = chartRows[0]?.year
-    const isFirstVisibleYear = year === firstVisibleYear
+    const isFirstTick = (tickProps.index ?? 0) === 0
 
     return (
       <g transform={`translate(${x},${y})`}>
         <text
-          x={isFirstVisibleYear ? 2 : 0}
+          x={isFirstTick ? 2 : 0}
           y={0}
           dy={12}
-          textAnchor={isFirstVisibleYear ? 'start' : 'middle'}
+          textAnchor={isFirstTick ? 'start' : 'middle'}
           fill={active ? 'var(--neutral-800)' : 'var(--neutral-500)'}
           style={{ fontSize: 11, fontWeight: active ? 700 : 600, cursor: 'pointer' }}
           onClick={(event) => {
@@ -424,15 +487,7 @@ export function SavingsEvolutionFiveYearsChart() {
       if (!xAxis?.scale || !yAxis?.scale) return null
 
       const xScale = xAxis.scale as (v: string) => number | undefined
-
-      // Point scale: derive step from first two consecutive year ticks
-      const firstYear = chartRows[0]?.year
-      const secondYear = chartRows[1]?.year
-      if (!firstYear || !secondYear) return null
-      const x0 = xScale(firstYear)
-      const x1 = xScale(secondYear)
-      if (x0 === undefined || x1 === undefined) return null
-      const step = x1 - x0
+      const yScale = yAxis.scale as (v: number) => number | undefined
 
       const GAP = 4
       const TRI_H = 6
@@ -444,33 +499,21 @@ export function SavingsEvolutionFiveYearsChart() {
             const seriesEntry = styledSeries.find((s) => s.key === event.account_key)
             if (!seriesEntry) return null
 
-            const opDate = new Date(event.transaction_date)
-            if (Number.isNaN(opDate.getTime())) return null
+            // X position: exact operation date on the granular axis
+            const xPos = xScale(event.transaction_date)
+            if (xPos === undefined) return null
 
-            const opMonth = opDate.getMonth() + 1
-            const currYearX = xScale(event.year)
-            if (currYearX === undefined) return null
-            const prevYearX = currYearX - step
-            const xPos = prevYearX + (opMonth / 12) * step
-
-            const yearIndex = chartRows.findIndex((row) => row.year === event.year)
-            const currRow = chartRows[yearIndex]
-            const prevRow = yearIndex > 0 ? chartRows[yearIndex - 1] : null
-            const currValue = Number(currRow?.[event.account_key])
-            const prevValue = prevRow != null ? Number(prevRow[event.account_key] ?? currValue) : currValue
-            if (!Number.isFinite(currValue)) return null
-
-            const interpValue = Number.isFinite(prevValue)
-              ? prevValue + (opMonth / 12) * (currValue - prevValue)
-              : currValue
-            const yPos = yAxis.scale!(interpValue)
+            // Y position: balance from the account timeline at this exact date
+            const timeline = accountTimelines.get(event.account_key)
+            const timelinePoint = timeline?.find((pt) => pt.date === event.transaction_date)
+            if (!timelinePoint) return null
+            const yPos = yScale(timelinePoint.balance)
             if (yPos === undefined) return null
 
             const isSelected = selectedOperationBubble?.event.id === event.id
 
-            const tipX = xPos
             const tipY = yPos - GAP
-            const pts = `${tipX},${tipY} ${xPos - TRI_HW},${tipY - TRI_H} ${xPos + TRI_HW},${tipY - TRI_H}`
+            const pts = `${xPos},${tipY} ${xPos - TRI_HW},${tipY - TRI_H} ${xPos + TRI_HW},${tipY - TRI_H}`
 
             return (
               <g
@@ -501,7 +544,7 @@ export function SavingsEvolutionFiveYearsChart() {
         </g>
       )
     },
-    [visibleOperationEvents, styledSeries, chartRows, selectedOperationBubble,
+    [visibleOperationEvents, styledSeries, accountTimelines, selectedOperationBubble,
       setSelectedYear, setSelectedYearBubble, setSelectedOperationBubble],
   )
 
@@ -767,14 +810,14 @@ export function SavingsEvolutionFiveYearsChart() {
         <div style={{ marginTop: 'var(--space-2)', position: 'relative' }}>
           <ResponsiveContainer width="100%" height={252}>
             <LineChart
-              data={chartRows}
+              data={granularChartData}
               margin={{ top: 4, right: 1, left: -24, bottom: 2 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
               <XAxis
-                dataKey="year"
+                dataKey="date"
                 type="category"
-                ticks={chartRows.map((row) => row.year)}
+                ticks={xAxisTicks}
                 allowDuplicatedCategory={false}
                 axisLine={false}
                 tickLine={false}
@@ -789,17 +832,17 @@ export function SavingsEvolutionFiveYearsChart() {
                 domain={[0, yAxisMax ?? 'auto']}
               />
               {selectedYear ? (
-                <ReferenceLine x={selectedYear} stroke="var(--neutral-400)" strokeDasharray="2 3" />
+                <ReferenceLine x={`${selectedYear}-01-01`} stroke="var(--neutral-400)" strokeDasharray="2 3" />
               ) : null}
               {visibleSeries.map((entry) => (
                 <Line
                   key={entry.key}
-                  type="monotone"
+                  type="stepAfter"
                   dataKey={entry.key}
                   name={entry.shortLabel}
                   stroke={entry.color}
                   strokeWidth={2.2}
-                  dot={renderInteractiveDot(entry)}
+                  dot={false}
                   activeDot={false}
                   connectNulls
                   isAnimationActive={false}
@@ -813,8 +856,9 @@ export function SavingsEvolutionFiveYearsChart() {
             const { event } = selectedOperationBubble
             const seriesEntry = styledSeries.find((s) => s.key === event.account_key)
             const displayLabel = seriesEntry?.shortLabel ?? event.account_label
-            const yearRow = chartRows.find((r) => r.year === event.year)
-            const portfolioBalance = Number(yearRow?.[event.account_key] ?? 0)
+            const timeline = accountTimelines.get(event.account_key)
+            const timelinePoint = timeline?.find((pt) => pt.date === event.transaction_date)
+            const portfolioBalance = timelinePoint?.balance ?? 0
             const isPositiveAmount = event.amount >= 0
             const natureLabel = event.nature === 'intérêts'
               ? 'Intérêts'

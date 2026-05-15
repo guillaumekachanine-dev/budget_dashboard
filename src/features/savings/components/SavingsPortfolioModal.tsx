@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BarChart2, CalendarDays, Check, Compass, PiggyBank, Shield, Target, ArrowDownToLine, X } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
 import epargneInteretsIcon from '@/assets/icons/categories/epargne_interets.webp'
@@ -942,7 +943,43 @@ function IndicatorCell({
   )
 }
 
-// INDEX EVOLUTION MODAL — placeholder, data to be wired later
+// ETF cotation data for PEA (Amundi MSCI World, Apr 2025 – Apr 2026)
+const PEA_ETF_DATA = [
+  { date: '2025-04-30', value: 5.12 },
+  { date: '2025-05-15', value: 5.48 },
+  { date: '2025-06-01', value: 5.45 },
+  { date: '2025-06-15', value: 5.52 },
+  { date: '2025-07-01', value: 5.60 },
+  { date: '2025-07-15', value: 5.68 },
+  { date: '2025-08-01', value: 5.72 },
+  { date: '2025-08-15', value: 5.75 },
+  { date: '2025-09-01', value: 5.80 },
+  { date: '2025-09-15', value: 5.88 },
+  { date: '2025-10-01', value: 6.02 },
+  { date: '2025-10-15', value: 6.10 },
+  { date: '2025-11-01', value: 5.98 },
+  { date: '2025-11-15', value: 6.08 },
+  { date: '2025-12-01', value: 6.12 },
+  { date: '2025-12-15', value: 6.18 },
+  { date: '2026-01-15', value: 6.25 },
+  { date: '2026-02-15', value: 6.20 },
+  { date: '2026-03-15', value: 5.95 },
+  { date: '2026-04-29', value: 6.38 },
+]
+
+const FR_MONTHS = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc']
+
+function fmtEtfDate(iso: string): string {
+  const d = new Date(iso)
+  return `${FR_MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`
+}
+
+function resolveIndexData(label: string): typeof PEA_ETF_DATA | null {
+  const n = normalizeStr(label)
+  if (n.includes('pea')) return PEA_ETF_DATA
+  return null
+}
+
 function IndexEvolutionModal({
   accountLabel,
   accountColor,
@@ -952,6 +989,17 @@ function IndexEvolutionModal({
   accountColor: string
   onClose: () => void
 }) {
+  const data = resolveIndexData(accountLabel)
+  const first = data?.[0]
+  const last = data?.[data.length - 1]
+  const pct = first && last ? ((last.value - first.value) / first.value) * 100 : null
+  const minVal = data ? Math.min(...data.map((d) => d.value)) : 0
+  const maxVal = data ? Math.max(...data.map((d) => d.value)) : 0
+  const yMin = Math.floor((minVal - 0.1) * 10) / 10
+  const yMax = Math.ceil((maxVal + 0.1) * 10) / 10
+
+  const gradientId = 'etf-area-gradient'
+
   return (
     <>
       <motion.div
@@ -970,7 +1018,9 @@ function IndexEvolutionModal({
         style={{ position: 'fixed', inset: 0, zIndex: 81, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', pointerEvents: 'none' }}
       >
         <div style={{ width: 'min(560px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: '0 24px 60px rgba(13,13,31,0.28)', pointerEvents: 'auto', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
               <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
@@ -981,13 +1031,106 @@ function IndexEvolutionModal({
               <X size={16} />
             </button>
           </div>
-          <div style={{ padding: 'var(--space-5) var(--space-4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 220, background: 'var(--neutral-50)' }}>
-            <BarChart2 size={32} strokeWidth={1.5} color="var(--neutral-300)" />
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-400)', textAlign: 'center' }}>
-              Données à configurer<br />
-              <span style={{ fontWeight: 400 }}>Les données d'indices seront intégrées prochainement.</span>
-            </p>
-          </div>
+
+          {data ? (
+            <>
+              {/* Performance strip */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 20px', background: 'var(--neutral-50)', borderBottom: '1px solid var(--neutral-100)' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Valeur départ</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>{first?.value.toFixed(2)} €</p>
+                </div>
+                <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                {pct != null && (
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Performance</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: pct >= 0 ? '#2ED47A' : '#FC5A5A' }}>
+                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)} %
+                    </p>
+                  </div>
+                )}
+                <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Valeur actuelle</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: accountColor }}>{last?.value.toFixed(2)} €</p>
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div style={{ padding: '20px 8px 12px 4px' }}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={accountColor} stopOpacity={0.22} />
+                        <stop offset="100%" stopColor={accountColor} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={fmtEtfDate}
+                      tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontWeight: 600 }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={3}
+                    />
+                    <YAxis
+                      domain={[yMin, yMax]}
+                      tickFormatter={(v: number) => `${v.toFixed(1)}`}
+                      tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontWeight: 600 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={32}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const val = payload[0]?.value as number
+                        const base = first?.value ?? 1
+                        const delta = ((val - base) / base) * 100
+                        return (
+                          <div style={{
+                            background: '#1a1f3a',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 8,
+                            padding: '7px 12px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.32)',
+                          }}>
+                            <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, marginBottom: 4 }}>{fmtEtfDate(label as string)}</p>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#fff' }}>{val.toFixed(2)} €</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: delta >= 0 ? '#2ED47A' : '#FC5A5A' }}>
+                              {delta >= 0 ? '+' : ''}{delta.toFixed(1)} % vs départ
+                            </p>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke={accountColor}
+                      strokeWidth={2}
+                      fill={`url(#${gradientId})`}
+                      dot={false}
+                      activeDot={{ r: 4, fill: accountColor, strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+                <p style={{ margin: '4px 20px 0', fontSize: 9, color: 'var(--neutral-400)', textAlign: 'right', fontStyle: 'italic' }}>
+                  ETF Amundi MSCI World — données semi-mensuelles
+                </p>
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: 'var(--space-5) var(--space-4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 220, background: 'var(--neutral-50)' }}>
+              <BarChart2 size={32} strokeWidth={1.5} color="var(--neutral-300)" />
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-400)', textAlign: 'center' }}>
+                Données non disponibles<br />
+                <span style={{ fontWeight: 400 }}>Aucun indice configuré pour ce compte.</span>
+              </p>
+            </div>
+          )}
         </div>
       </motion.div>
     </>

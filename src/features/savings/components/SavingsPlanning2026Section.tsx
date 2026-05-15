@@ -191,23 +191,32 @@ export function SavingsPlanning2026Section() {
               }}
             />
 
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 96,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+                pointerEvents: 'none',
+              }}
+            >
             <motion.div
               role="dialog"
               aria-modal="true"
               aria-label={`Planning épargne ${activeMilestone.fullLabel}`}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
+              initial={{ opacity: 0, scale: 0.98, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 10 }}
               transition={{ duration: 0.18 }}
               style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: 'min(560px, calc(100vw - 32px))',
+                pointerEvents: 'auto',
+                width: '100%',
+                maxWidth: 560,
                 maxHeight: 'min(80vh, 700px)',
                 overflowY: 'auto',
-                zIndex: 96,
                 background: 'var(--neutral-0)',
                 border: '1px solid var(--neutral-200)',
                 borderRadius: 'var(--radius-xl)',
@@ -265,6 +274,7 @@ export function SavingsPlanning2026Section() {
                 </p>
               </div>
             </motion.div>
+            </div>
           </>
         ) : null}
       </AnimatePresence>

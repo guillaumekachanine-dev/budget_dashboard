@@ -253,174 +253,179 @@ function InsightModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.18 }}
+        transition={{ duration: 0.15 }}
         onClick={onClose}
         style={{
           position: 'fixed',
           inset: 0,
           zIndex: 60,
-          background: 'rgba(10,12,28,0.60)',
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)',
+          background: 'rgba(10,12,28,0.52)',
+          backdropFilter: 'blur(2px)',
+          WebkitBackdropFilter: 'blur(2px)',
         }}
       />
 
-      {/* Panel */}
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label={insight.modal.title}
-        initial={{ y: '100%', opacity: 0.8 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        onClick={(e) => e.stopPropagation()}
+      {/* Centering wrapper — keeps motion.div's transform clean */}
+      <div
         style={{
           position: 'fixed',
-          left: 'var(--space-3)',
-          right: 'var(--space-3)',
-          bottom: 'calc(var(--safe-bottom-offset, 0px) + 56px + var(--space-3))',
+          inset: 0,
           zIndex: 61,
-          maxWidth: 560,
-          margin: '0 auto',
-          background: 'var(--neutral-0)',
-          borderRadius: 'var(--radius-2xl)',
-          boxShadow: '0 -8px 48px rgba(10,12,28,0.22), 0 2px 12px rgba(10,12,28,0.10)',
-          overflow: 'hidden',
-          maxHeight: '72dvh',
-          overflowY: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px 28px',
+          pointerEvents: 'none',
         }}
       >
-        {/* Top accent bar */}
-        <div
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={insight.modal.title}
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.97 }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
+          onClick={(e) => e.stopPropagation()}
           style={{
-            height: 4,
-            background: `linear-gradient(90deg, ${badgeColor} 0%, ${accentColor} 100%)`,
-            flexShrink: 0,
-          }}
-        />
-
-        {/* Header */}
-        <div
-          style={{
-            padding: 'var(--space-5) var(--space-5) 0',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 'var(--space-3)',
+            pointerEvents: 'auto',
+            width: '100%',
+            maxWidth: 440,
+            maxHeight: '85dvh',
+            overflowY: 'auto',
+            background: 'var(--neutral-0)',
+            borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--neutral-150)',
+            boxShadow: '0 8px 40px rgba(10,12,28,0.18), 0 2px 8px rgba(10,12,28,0.08)',
+            overflow: 'hidden',
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Big badge */}
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 38,
-                fontWeight: 800,
-                color: badgeColor,
-                lineHeight: 1,
-                letterSpacing: '-0.03em',
-                marginBottom: 8,
-              }}
-            >
-              {insight.badge}
-            </div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 'var(--font-size-base)',
-                fontWeight: 700,
-                color: 'var(--neutral-900)',
-                lineHeight: 1.35,
-              }}
-            >
-              {insight.modal.title}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Fermer"
-            onClick={onClose}
+          {/* Top accent stripe */}
+          <div
             style={{
-              border: 'none',
-              background: 'var(--neutral-100)',
-              color: 'var(--neutral-600)',
-              width: 32,
-              height: 32,
-              borderRadius: 'var(--radius-full)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
+              height: 3,
+              background: `linear-gradient(90deg, ${badgeColor} 0%, ${accentColor} 100%)`,
               flexShrink: 0,
-              marginTop: 4,
+            }}
+          />
+
+          {/* Header */}
+          <div
+            style={{
+              padding: '14px 16px 0',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
             }}
           >
-            <X size={14} />
-          </button>
-        </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Badge value inline with level indicator */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: badgeColor,
+                    lineHeight: 1,
+                    letterSpacing: '-0.03em',
+                  }}
+                >
+                  {insight.badge}
+                </span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: badgeColor,
+                    opacity: 0.7,
+                    lineHeight: 1,
+                  }}
+                >
+                  {insight.level}
+                </span>
+              </div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: 'var(--neutral-900)',
+                  lineHeight: 1.3,
+                }}
+              >
+                {insight.modal.title}
+              </h2>
+            </div>
 
-        {/* Divider */}
-        <div
-          style={{
-            margin: 'var(--space-4) var(--space-5) 0',
-            height: 1,
-            background: 'var(--neutral-150)',
-          }}
-        />
+            <button
+              type="button"
+              aria-label="Fermer"
+              onClick={onClose}
+              style={{
+                border: '1px solid var(--neutral-200)',
+                background: 'var(--neutral-0)',
+                color: 'var(--neutral-500)',
+                width: 26,
+                height: 26,
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <X size={12} />
+            </button>
+          </div>
 
-        {/* Body */}
-        <div
-          style={{
-            padding: 'var(--space-4) var(--space-5) var(--space-5)',
-            display: 'grid',
-            gap: 'var(--space-4)',
-          }}
-        >
           {/* Lead */}
           <p
             style={{
-              margin: 0,
-              fontSize: 'var(--font-size-sm)',
-              fontWeight: 600,
-              color: 'var(--neutral-800)',
-              lineHeight: 1.65,
+              margin: '10px 16px 0',
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--neutral-700)',
+              lineHeight: 1.6,
             }}
           >
             {insight.modal.lead}
           </p>
 
+          {/* Divider */}
+          <div style={{ margin: '12px 16px', height: 1, background: 'var(--neutral-100)' }} />
+
           {/* Metrics grid */}
           <div
             style={{
+              padding: '0 16px',
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: 'var(--space-2)',
+              gap: 6,
             }}
           >
             {insight.modal.metrics.map((metric, i) => (
-              <MetricCell
-                key={i}
-                metric={metric}
-                badgeColor={badgeColor}
-              />
+              <MetricCell key={i} metric={metric} badgeColor={badgeColor} />
             ))}
           </div>
 
           {/* Detail paragraph */}
           <p
             style={{
-              margin: 0,
-              fontSize: 'var(--font-size-xs)',
-              color: 'var(--neutral-500)',
-              lineHeight: 1.7,
+              margin: '12px 16px 16px',
+              fontSize: 11,
+              color: 'var(--neutral-400)',
+              lineHeight: 1.65,
             }}
           >
             {insight.modal.body}
           </p>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </>
   )
 }
@@ -438,24 +443,23 @@ function MetricCell({
     <div
       style={{
         background: metric.highlight
-          ? `color-mix(in oklab, ${badgeColor} 8%, var(--neutral-50) 92%)`
+          ? `color-mix(in oklab, ${badgeColor} 7%, var(--neutral-50) 93%)`
           : 'var(--neutral-50)',
         border: metric.highlight
-          ? `1px solid color-mix(in oklab, ${badgeColor} 22%, transparent 78%)`
-          : '1px solid var(--neutral-150)',
-        borderRadius: 'var(--radius-md)',
-        padding: '10px 12px',
+          ? `1px solid color-mix(in oklab, ${badgeColor} 20%, transparent 80%)`
+          : '1px solid var(--neutral-100)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '8px 10px',
       }}
     >
       <p
         style={{
-          margin: 0,
+          margin: '0 0 3px',
           fontSize: 9,
           fontWeight: 700,
           color: 'var(--neutral-400)',
           textTransform: 'uppercase',
           letterSpacing: '0.07em',
-          marginBottom: 5,
         }}
       >
         {metric.label}
@@ -464,7 +468,7 @@ function MetricCell({
         style={{
           margin: 0,
           fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--font-size-sm)',
+          fontSize: 13,
           fontWeight: 800,
           color: metric.highlight ? badgeColor : 'var(--neutral-900)',
           lineHeight: 1.2,
@@ -473,14 +477,7 @@ function MetricCell({
         {metric.value}
       </p>
       {metric.delta ? (
-        <p
-          style={{
-            margin: '3px 0 0',
-            fontSize: 9,
-            color: 'var(--neutral-400)',
-            fontWeight: 500,
-          }}
-        >
+        <p style={{ margin: '2px 0 0', fontSize: 9, color: 'var(--neutral-400)', fontWeight: 500 }}>
           {metric.delta}
         </p>
       ) : null}
