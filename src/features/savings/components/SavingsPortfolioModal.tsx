@@ -203,8 +203,6 @@ export function SavingsPortfolioModal({
     [accountEvents],
   )
 
-  const plafond = resolvePlafond(account.label)
-
   const accountIsLivret = isLivret(account.label)
 
   const investAccount = useMemo(() => {
