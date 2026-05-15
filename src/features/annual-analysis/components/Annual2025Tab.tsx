@@ -119,7 +119,7 @@ const MONTH_LABELS_UPPER = [
 ] as const
 
 export function Annual2025Tab() {
-  const { loading, error } =
+  const { loading, error, annualTotals } =
     useAnnual2025Analysis()
 
   if (loading) {
@@ -156,7 +156,7 @@ export function Annual2025Tab() {
         />
       </div>
 
-      <AnnualProjectionSection />
+      <AnnualProjectionSection annualIncome2025={annualTotals?.income_total_year ?? null} />
     </motion.div>
   )
 }
@@ -461,7 +461,7 @@ function RepartitionCarouselSection() {
   )
 }
 
-function AnnualProjectionSection() {
+function AnnualProjectionSection({ annualIncome2025 }: { annualIncome2025: number | null }) {
   const {
     loading,
     error,
@@ -482,6 +482,9 @@ function AnnualProjectionSection() {
       <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', marginTop: MAJOR_SECTION_GAP }}>
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
           <ComparedVelocityCard
+            income2025Ytd={flows2025?.income_total ?? 0}
+            income2026Ytd={flows2026?.income_total ?? 0}
+            annualIncome2025={annualIncome2025}
             expense2025={flows2025?.expense_total ?? 0}
             expense2026={flows2026?.expense_total ?? 0}
             projected2025={projectedExpense2025}

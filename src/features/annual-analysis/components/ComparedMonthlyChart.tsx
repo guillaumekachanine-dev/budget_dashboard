@@ -58,10 +58,13 @@ type Props = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHeight }: Props) {
-  const [activeMetric, setActiveMetric] = useState<MetricKey>('expense')
+  const [focusedMetric, setFocusedMetric] = useState<MetricKey>('expense')
+  const [enabledMetrics, setEnabledMetrics] = useState<MetricKey[]>(['expense', 'income', 'savings', 'net'])
+  const [visibleYear, setVisibleYear] = useState<'2025' | '2026'>('2026')
 
-  const active     = METRICS.find((m) => m.key === activeMetric) ?? METRICS[0]
-  const activeFlux = fluxMetrics.find((f) => f.label === active.fluxLabel) ?? null
+  const focused = METRICS.find((m) => m.key === focusedMetric) ?? METRICS[0]
+  const activeFlux = fluxMetrics.find((f) => f.label === focused.fluxLabel) ?? null
+  const hasAnyMetricEnabled = enabledMetrics.length > 0
 
   // Build aligned 4-point chart data
   const chartData = [1, 2, 3, 4].map((month) => {
@@ -79,9 +82,6 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
       net2026: r26 ? r26.income_total - r26.expense_total : null,
     }
   })
-
-  const gradId25 = `cmc-grad-25-${active.key}`
-  const gradId26 = `cmc-grad-26-${active.key}`
 
   const has2025 = (flows2025?.months?.length ?? 0) > 0
   const has2026 = (flows2026?.months?.length ?? 0) > 0
@@ -132,65 +132,19 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
             }}>
               Flux mensuels comparés
             </p>
-            <div style={{
-              marginTop: 2,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-3)',
-            }}>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--neutral-500)',
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.04em',
-              }}>
-                2025
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 26,
-                    borderTop: `2px solid ${active.color}`,
-                    opacity: 0.95,
-                  }}
-                />
-              </span>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--neutral-500)',
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.04em',
-              }}>
-                2026
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 26,
-                    borderTop: `2px dashed ${active.color}`,
-                    opacity: 0.7,
-                  }}
-                />
-              </span>
-            </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 1 }}>
             {METRICS.map((m) => {
-              const isActive = m.key === activeMetric
+              const isEnabled = enabledMetrics.includes(m.key)
+              const isFocused = m.key === focusedMetric
               const hasCircle = m.key === 'savings' || m.key === 'net'
               const background = m.key === 'savings'
                 ? '#FFAB2E'
                 : m.key === 'net'
                   ? '#111111'
                   : 'transparent'
-              const borderColor = hasCircle && isActive
+              const borderColor = hasCircle && isEnabled
                 ? m.key === 'savings'
                   ? '#FFAB2E'
                   : m.key === 'net'
@@ -199,15 +153,23 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
                 : hasCircle
                   ? 'var(--neutral-200)'
                   : 'transparent'
-              const iconOpacity = isActive ? 1 : 0.82
+              const iconOpacity = isEnabled ? 1 : 0.44
 
               return (
                 <button
                   key={m.key}
                   type="button"
-                  onClick={() => setActiveMetric(m.key)}
+                  onClick={() => {
+                    setFocusedMetric(m.key)
+                    setEnabledMetrics((prev) => (
+                      prev.includes(m.key)
+                        ? prev.filter((key) => key !== m.key)
+                        : [...prev, m.key]
+                    ))
+                  }}
                   aria-label={m.label}
                   title={m.label}
+                  aria-pressed={isEnabled}
                   style={{
                     width: 28,
                     height: 28,
@@ -221,8 +183,8 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: hasCircle && isActive ? 'var(--shadow-card)' : 'none',
-                    transform: isActive ? 'translateY(-1px)' : 'none',
+                    boxShadow: isFocused ? 'var(--shadow-card)' : 'none',
+                    transform: isFocused ? 'translateY(-1px)' : 'none',
                     opacity: iconOpacity,
                     transition: 'all 140ms ease',
                     outline: 'none',
@@ -235,20 +197,88 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
             })}
           </div>
         </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <button
+              type="button"
+              onClick={() => setVisibleYear('2025')}
+              aria-pressed={visibleYear === '2025'}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: 0,
+                cursor: 'pointer',
+                opacity: visibleYear === '2025' ? 1 : 0.5,
+              }}
+            >
+              <span style={{
+                border: '1px solid var(--neutral-300)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '2px 6px',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--neutral-700)',
+                fontFamily: 'var(--font-mono)',
+                background: visibleYear === '2025' ? 'var(--neutral-0)' : 'var(--neutral-100)',
+              }}>
+                2025
+              </span>
+              <span aria-hidden="true" style={{ width: 26, borderTop: `2px solid ${focused.color}` }} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setVisibleYear('2026')}
+              aria-pressed={visibleYear === '2026'}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: 0,
+                cursor: 'pointer',
+                opacity: visibleYear === '2026' ? 1 : 0.5,
+              }}
+            >
+              <span style={{
+                border: '1px solid var(--neutral-300)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '2px 6px',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--neutral-700)',
+                fontFamily: 'var(--font-mono)',
+                background: visibleYear === '2026' ? 'var(--neutral-0)' : 'var(--neutral-100)',
+              }}>
+                2026
+              </span>
+              <span aria-hidden="true" style={{ width: 26, borderTop: `2px dashed ${focused.color}` }} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={chartHeight}>
         <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
           <defs>
-            <linearGradient id={gradId25} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={active.color} stopOpacity={0.18} />
-              <stop offset="100%" stopColor={active.color} stopOpacity={0}    />
-            </linearGradient>
-            <linearGradient id={gradId26} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={active.color} stopOpacity={0.10} />
-              <stop offset="100%" stopColor={active.color} stopOpacity={0}    />
-            </linearGradient>
+            {METRICS.map((metric) => (
+              <linearGradient key={`g25-${metric.key}`} id={`cmc-grad-25-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={metric.color} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
+              </linearGradient>
+            ))}
+            {METRICS.map((metric) => (
+              <linearGradient key={`g26-${metric.key}`} id={`cmc-grad-26-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={metric.color} stopOpacity={0.1} />
+                <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
+              </linearGradient>
+            ))}
           </defs>
 
           <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
@@ -267,45 +297,56 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
           />
           <Tooltip
             trigger="click"
-            content={<MonthlyFluxTooltip metricLabel={active.label} accentColor={active.color} />}
+            content={
+              <MonthlyFluxTooltip
+                metricLabel={focused.label}
+                accentColor={focused.color}
+                valueKey2025={focused.key2025}
+                valueKey2026={focused.key2026}
+              />
+            }
             cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }}
           />
 
-          {has2025 && (
+          {METRICS.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
             <Area
+              key={`y25-${metric.key}`}
               type="monotone"
-              dataKey={active.key2025}
-              name="2025"
-              stroke={active.color}
+              dataKey={metric.key2025}
+              name={`${metric.shortLabel}-2025`}
+              stroke={metric.color}
               strokeWidth={2}
-              fill={`url(#${gradId25})`}
+              fill={`url(#cmc-grad-25-${metric.key})`}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: active.color }}
+              activeDot={{ r: 4, strokeWidth: 0, fill: metric.color }}
               connectNulls
+              hide={!has2025 || visibleYear !== '2025'}
             />
-          )}
-          {has2026 && (
+          ))}
+          {METRICS.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
             <Area
+              key={`y26-${metric.key}`}
               type="monotone"
-              dataKey={active.key2026}
-              name="2026"
-              stroke={active.color}
+              dataKey={metric.key2026}
+              name={`${metric.shortLabel}-2026`}
+              stroke={metric.color}
               strokeWidth={2}
               strokeDasharray="5 3"
               strokeOpacity={0.65}
-              fill={`url(#${gradId26})`}
+              fill={`url(#cmc-grad-26-${metric.key})`}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: active.color, fillOpacity: 0.65 }}
+              activeDot={{ r: 4, strokeWidth: 0, fill: metric.color, fillOpacity: 0.65 }}
               connectNulls
+              hide={!has2026 || visibleYear !== '2026'}
             />
-          )}
+          ))}
         </AreaChart>
       </ResponsiveContainer>
 
       {/* ── Active metric KPI — inline, no nested card ── */}
-      {activeFlux != null && (
+      {activeFlux != null && hasAnyMetricEnabled && (
         <div style={{
-          marginTop: 'var(--space-3)',
+          marginTop: 'var(--space-4)',
         }}>
           {/* Top line: 2025 | flux name | 2026 */}
           <div style={{
@@ -332,10 +373,10 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
               fontWeight: 800,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              color: active.color,
+              color: focused.color,
               textAlign: 'center',
             }}>
-              {active.label}
+              {focused.label}
             </p>
             <p style={{
               margin: 0,
@@ -351,7 +392,7 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
           </div>
 
           <div style={{
-            borderTop: `1px solid color-mix(in oklab, ${active.color} 20%, var(--neutral-100) 80%)`,
+            borderTop: `1px solid color-mix(in oklab, ${focused.color} 20%, var(--neutral-100) 80%)`,
             marginBottom: 1,
           }} />
 
@@ -421,10 +462,12 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
 
 type MonthlyFluxTooltipProps = {
   active?: boolean
-  payload?: Array<{ name?: string; value?: number }>
+  payload?: Array<{ payload?: Record<string, number | string | null> }>
   label?: string
   metricLabel: string
   accentColor: string
+  valueKey2025: string
+  valueKey2026: string
 }
 
 function MonthlyFluxTooltip({
@@ -433,11 +476,16 @@ function MonthlyFluxTooltip({
   label,
   metricLabel,
   accentColor,
+  valueKey2025,
+  valueKey2026,
 }: MonthlyFluxTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
 
-  const v2025 = payload.find((item) => item.name === '2025')?.value ?? null
-  const v2026 = payload.find((item) => item.name === '2026')?.value ?? null
+  const row = payload[0]?.payload
+  const raw2025 = row?.[valueKey2025]
+  const raw2026 = row?.[valueKey2026]
+  const v2025 = typeof raw2025 === 'number' ? raw2025 : null
+  const v2026 = typeof raw2026 === 'number' ? raw2026 : null
   const delta = v2025 != null && v2026 != null ? v2026 - v2025 : null
   const deltaPct = v2025 != null && v2026 != null && v2025 !== 0
     ? ((v2026 - v2025) / v2025) * 100

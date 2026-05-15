@@ -1,26 +1,39 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 
 // Atterrissage réel connu pour 2025 (année clôturée)
 const REAL_2025_ANNUAL = 38_144
+const ASSURED_INCOME_2026_MONTHLY = 3334
+const ASSURED_INCOME_2026_MONTHS = 7
 
 type Props = {
-  expense2025:       number
-  expense2026:       number
-  projected2025:     number | null
-  projected2026:     number | null
+  income2025Ytd: number
+  income2026Ytd: number
+  annualIncome2025: number | null
+  expense2025: number
+  expense2026: number
+  projected2025: number | null
+  projected2026: number | null
   medianMonthly2025: number | null
   medianMonthly2026: number | null
-  remainingMonths:   number
+  remainingMonths: number
 }
 
 export function ComparedVelocityCard({
-  expense2025, expense2026,
-  projected2025, projected2026,
-  medianMonthly2025, medianMonthly2026,
+  income2025Ytd,
+  income2026Ytd,
+  annualIncome2025,
+  expense2025,
+  expense2026,
+  projected2025,
+  projected2026,
+  medianMonthly2025,
+  medianMonthly2026,
   remainingMonths,
 }: Props) {
-  const [openModal, setOpenModal] = useState<null | '2025' | '2026'>(null)
+  const [openExpenseModal, setOpenExpenseModal] = useState<null | '2025' | '2026'>(null)
+  const [isIncome2025ModalOpen, setIsIncome2025ModalOpen] = useState(false)
+  const [isIncome2026ModalOpen, setIsIncome2026ModalOpen] = useState(false)
 
   const delta = projected2026 != null && projected2025 != null
     ? projected2026 - projected2025
@@ -35,6 +48,13 @@ export function ComparedVelocityCard({
     ? ((REAL_2025_ANNUAL - projected2025) / projected2025) * 100
     : null
 
+  const incomeYtdDeltaPct = income2025Ytd > 0
+    ? ((income2026Ytd - income2025Ytd) / income2025Ytd) * 100
+    : null
+
+  const totalIncome2025 = annualIncome2025 ?? REAL_2025_ANNUAL
+  const projectedIncome2026 = income2026Ytd + (ASSURED_INCOME_2026_MONTHLY * ASSURED_INCOME_2026_MONTHS)
+
   return (
     <>
       <div style={{
@@ -44,14 +64,13 @@ export function ComparedVelocityCard({
         position: 'relative',
         overflow: 'hidden',
       }}>
-        {/* Halo décoratif */}
         <div style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute',
+          inset: 0,
           background: 'radial-gradient(ellipse at 80% 20%, rgba(91,87,245,0.25) 0%, transparent 65%)',
           pointerEvents: 'none',
         }} />
 
-        {/* Titre unique */}
         <p style={{
           margin: '0 0 var(--space-4)',
           fontSize: 'var(--font-size-sm)',
@@ -59,10 +78,9 @@ export function ComparedVelocityCard({
           color: '#fff',
           position: 'relative',
         }}>
-          Célérité de dépenses · Projection fin d'année
+          Projection des revenus
         </p>
 
-        {/* Deux cartes alignées */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
@@ -70,27 +88,67 @@ export function ComparedVelocityCard({
           marginBottom: 'var(--space-4)',
           alignItems: 'stretch',
         }}>
-          <VelocityItem
-            year="2025"
-            ytd={expense2025}
-            projected={projected2025}
-            accentColor="rgba(255,171,46,0.9)"
-            cardBg="rgba(255,171,46,0.10)"
-            projColor="rgba(255,255,255,0.9)"
-            onClick={() => setOpenModal('2025')}
+          <RevenueProjectionItem
+            title="2025 - revenus YTD"
+            ytdAmount={income2025Ytd}
+            annualAmount={totalIncome2025}
+            annualCaption="revenus totaux 2025"
+            accentColor="rgba(99, 241, 171, 0.95)"
+            cardBg="rgba(46,212,122,0.12)"
+            valueColor="#FFFFFF"
+            onClick={() => setIsIncome2025ModalOpen(true)}
           />
-          <VelocityItem
-            year="2026"
-            ytd={expense2026}
-            projected={projected2026}
-            accentColor="rgba(76,201,240,0.9)"
-            cardBg="rgba(76,201,240,0.11)"
-            projColor="#fff"
-            onClick={() => setOpenModal('2026')}
+          <RevenueProjectionItem
+            title="2026 - revenus YTD"
+            ytdAmount={income2026Ytd}
+            annualAmount={projectedIncome2026}
+            annualCaption="revenus totaux 2026"
+            accentColor="rgba(255, 176, 120, 0.95)"
+            cardBg="rgba(255,171,46,0.12)"
+            valueColor="#FFFFFF"
+            onClick={() => setIsIncome2026ModalOpen(true)}
           />
         </div>
 
-        {/* Section basse */}
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <p style={{
+            margin: '0 0 var(--space-4)',
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 700,
+            color: '#fff',
+            position: 'relative',
+          }}>
+            Célérité de dépenses · Projection fin d'année
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 'var(--space-3)',
+            marginBottom: 'var(--space-4)',
+            alignItems: 'stretch',
+          }}>
+            <VelocityItem
+              year="2025"
+              ytd={expense2025}
+              projected={projected2025}
+              accentColor="rgba(255,171,46,0.9)"
+              cardBg="rgba(255,171,46,0.10)"
+              projColor="rgba(255,255,255,0.9)"
+              onClick={() => setOpenExpenseModal('2025')}
+            />
+            <VelocityItem
+              year="2026"
+              ytd={expense2026}
+              projected={projected2026}
+              accentColor="rgba(76,201,240,0.9)"
+              cardBg="rgba(76,201,240,0.11)"
+              projColor="#fff"
+              onClick={() => setOpenExpenseModal('2026')}
+            />
+          </div>
+        </div>
+
         <div style={{
           borderTop: '1px solid rgba(255,255,255,0.1)',
           paddingTop: 'var(--space-3)',
@@ -99,7 +157,6 @@ export function ComparedVelocityCard({
           gap: 10,
           position: 'relative',
         }}>
-          {/* Écart de projection */}
           {delta != null && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
@@ -131,7 +188,6 @@ export function ComparedVelocityCard({
             </div>
           )}
 
-          {/* Atterrissage réel 2025 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
               Atterrissage réel 2025
@@ -162,25 +218,116 @@ export function ComparedVelocityCard({
         </div>
       </div>
 
-      {/* Modale calcul */}
-      {openModal != null && (
+      {openExpenseModal != null && (
         <CalcModal
-          year={openModal}
-          ytd={openModal === '2025' ? expense2025 : expense2026}
-          medianMonthly={openModal === '2025' ? medianMonthly2025 : medianMonthly2026}
+          year={openExpenseModal}
+          ytd={openExpenseModal === '2025' ? expense2025 : expense2026}
+          medianMonthly={openExpenseModal === '2025' ? medianMonthly2025 : medianMonthly2026}
           remainingMonths={remainingMonths}
-          projected={openModal === '2025' ? projected2025 : projected2026}
-          onClose={() => setOpenModal(null)}
+          projected={openExpenseModal === '2025' ? projected2025 : projected2026}
+          onClose={() => setOpenExpenseModal(null)}
         />
       )}
+
+      {isIncome2025ModalOpen ? (
+        <Revenue2025Modal
+          incomeYtd2025={income2025Ytd}
+          incomeAnnual2025={totalIncome2025}
+          incomeYtdDeltaPct={incomeYtdDeltaPct}
+          onClose={() => setIsIncome2025ModalOpen(false)}
+        />
+      ) : null}
+
+      {isIncome2026ModalOpen ? (
+        <Revenue2026Modal
+          incomeYtd2026={income2026Ytd}
+          assuredMonthlyIncome={ASSURED_INCOME_2026_MONTHLY}
+          assuredMonths={ASSURED_INCOME_2026_MONTHS}
+          projectedIncome2026={projectedIncome2026}
+          onClose={() => setIsIncome2026ModalOpen(false)}
+        />
+      ) : null}
     </>
   )
 }
 
-// ─── VelocityItem ──────────────────────────────────────────────────────────────
+function RevenueProjectionItem({
+  title,
+  ytdAmount,
+  annualAmount,
+  annualCaption,
+  accentColor,
+  cardBg,
+  valueColor,
+  onClick,
+}: {
+  title: string
+  ytdAmount: number
+  annualAmount: number | null
+  annualCaption: string
+  accentColor: string
+  cardBg: string
+  valueColor: string
+  onClick?: () => void
+}) {
+  const cardStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    gap: 2,
+    background: cardBg,
+    borderRadius: 'var(--radius-lg)',
+    padding: 'var(--space-3)',
+    border: `1px solid ${accentColor.replace('0.95', '0.24')}`,
+    textAlign: 'left' as const,
+    width: '100%',
+  }
+
+  const content = (
+    <>
+      <p style={{ margin: '0 0 var(--space-1)', fontSize: 9, fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+        {title}
+      </p>
+      <p style={{ margin: '0 0 4px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.55)' }}>
+        {fmt(ytdAmount)} encaissés
+      </p>
+      <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: valueColor, lineHeight: 1 }}>
+        {annualAmount != null ? fmt(annualAmount) : '\u00A0'}
+      </p>
+      <p style={{ margin: '4px 0 0', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
+        {annualCaption}
+      </p>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          ...cardStyle,
+          cursor: 'pointer',
+          transition: 'background 150ms ease, border-color 150ms ease',
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return <div style={cardStyle}>{content}</div>
+}
 
 function VelocityItem({
-  year, ytd, projected, accentColor, cardBg, projColor, onClick,
+  year,
+  ytd,
+  projected,
+  accentColor,
+  cardBg,
+  projColor,
+  onClick,
 }: {
   year: string
   ytd: number
@@ -221,24 +368,27 @@ function VelocityItem({
         </p>
       )}
       <p style={{ margin: '4px 0 0', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
-        projeté fin d'année · <span style={{ opacity: 0.7 }}>cliquer pour le détail</span>
+        projeté fin d'année
       </p>
     </button>
   )
 }
 
-// ─── CalcModal ─────────────────────────────────────────────────────────────────
-
-function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClose }: {
-  year: string
-  ytd: number
-  medianMonthly: number | null
-  remainingMonths: number
-  projected: number | null
+function Revenue2025Modal({
+  incomeYtd2025,
+  incomeAnnual2025,
+  incomeYtdDeltaPct,
+  onClose,
+}: {
+  incomeYtd2025: number
+  incomeAnnual2025: number
+  incomeYtdDeltaPct: number | null
   onClose: () => void
 }) {
-  const accentColor = year === '2025' ? '#FFAB2E' : '#4CC9F0'
-  const nbMonths = 12 - remainingMonths
+  const accentColor = '#FFAB2E'
+  const deltaText = incomeYtdDeltaPct == null
+    ? '—'
+    : `${incomeYtdDeltaPct > 0 ? '+' : ''}${incomeYtdDeltaPct.toFixed(1)}%`
 
   return (
     <div
@@ -246,7 +396,8 @@ function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClo
       aria-modal="true"
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0,
+        position: 'fixed',
+        inset: 0,
         background: 'rgba(10,10,30,0.6)',
         backdropFilter: 'blur(4px)',
         zIndex: 1000,
@@ -267,7 +418,194 @@ function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClo
           boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
         }}
       >
-        {/* En-tête */}
+        <div style={{ marginBottom: 'var(--space-4)', borderBottom: `2px solid ${accentColor}`, paddingBottom: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+            détail du calcul - 2025
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
+            rappel des revenus constatés sur l’année 2025
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <DetailLine label="revenus janvier-avril 2025" value={fmt(incomeYtd2025)} />
+          <DetailLine label="revenus constaté fin d’année 2025" value={fmt(incomeAnnual2025)} />
+          <DetailLine label="écart revenus 2025-2026 YTD" value={deltaText} />
+          <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+          <DetailLine label="total revenus 2025" value={fmt(incomeAnnual2025)} bold />
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            width: '100%',
+            padding: '9px 0',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            background: accentColor,
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            marginTop: 'var(--space-4)',
+          }}
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Revenue2026Modal({
+  incomeYtd2026,
+  assuredMonthlyIncome,
+  assuredMonths,
+  projectedIncome2026,
+  onClose,
+}: {
+  incomeYtd2026: number
+  assuredMonthlyIncome: number
+  assuredMonths: number
+  projectedIncome2026: number
+  onClose: () => void
+}) {
+  const accentColor = '#FFAB2E'
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(10,10,30,0.6)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'var(--space-5)',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-xl)',
+          padding: 'var(--space-5)',
+          maxWidth: 320,
+          width: '100%',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div style={{ marginBottom: 'var(--space-4)', borderBottom: `2px solid ${accentColor}`, paddingBottom: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+            détail du calcul - 2026
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
+            projection des revenus 2026
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <DetailLine label="revenus 2026 YTD" value={fmt(incomeYtd2026)} />
+          <DetailLine label="revenus assurés" value={`${fmt(assuredMonthlyIncome)}/mois (Chômage)`} />
+          <DetailLine label="période concernée" value={`mai-déc. (${assuredMonths} mois)`} />
+          <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+          <DetailLine label="projection 2026" value={fmt(projectedIncome2026)} bold />
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            width: '100%',
+            padding: '9px 0',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            background: accentColor,
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            marginTop: 'var(--space-4)',
+          }}
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DetailLine({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <span style={{ fontSize: 12, color: bold ? 'var(--neutral-900)' : 'var(--neutral-600)', fontWeight: bold ? 700 : 500 }}>
+        {label} :
+      </span>
+      <span style={{
+        fontSize: bold ? 14 : 12,
+        fontWeight: bold ? 800 : 600,
+        fontFamily: 'var(--font-mono)',
+        color: bold ? '#FFAB2E' : 'var(--neutral-700)',
+        flexShrink: 0,
+      }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function CalcModal({
+  year,
+  ytd,
+  medianMonthly,
+  remainingMonths,
+  projected,
+  onClose,
+}: {
+  year: string
+  ytd: number
+  medianMonthly: number | null
+  remainingMonths: number
+  projected: number | null
+  onClose: () => void
+}) {
+  const accentColor = year === '2025' ? '#FFAB2E' : '#4CC9F0'
+  const nbMonths = 12 - remainingMonths
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(10,10,30,0.6)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'var(--space-5)',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-xl)',
+          padding: 'var(--space-5)',
+          maxWidth: 320,
+          width: '100%',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
+        }}
+      >
         <div style={{ marginBottom: 'var(--space-4)', borderBottom: `2px solid ${accentColor}`, paddingBottom: 'var(--space-3)' }}>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
             Détail du calcul · {year}
@@ -277,7 +615,6 @@ function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClo
           </p>
         </div>
 
-        {/* Étapes */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <StepRow
             step="①"
@@ -336,7 +673,13 @@ function CalcModal({ year, ytd, medianMonthly, remainingMonths, projected, onClo
   )
 }
 
-function StepRow({ step, label, value, accent, bold }: {
+function StepRow({
+  step,
+  label,
+  value,
+  accent,
+  bold,
+}: {
   step: string
   label: string
   value: string

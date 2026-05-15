@@ -51,6 +51,12 @@ type DonutEntry = {
   iconKey: string | null
   rank: number
 }
+type DonutComparisonSelection = {
+  name: string
+  value2025: number
+  value2026: number
+  deltaPct: number | null
+}
 
 function normalizeCategoryLabel(value: string): string {
   return value
@@ -68,8 +74,10 @@ function isSavingsCategory(value: string): boolean {
 
 export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
   const [expandedCategoryNameModal, setExpandedCategoryNameModal] = useState<string | null>(null)
-  const [isFullListOpen, setIsFullListOpen] = useState(false)
+  const [isDonutDetailsModalOpen, setIsDonutDetailsModalOpen] = useState(false)
+  const [selectedCategoryNameModal, setSelectedCategoryNameModal] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<CategoryViewMode>('bars')
+  const [selectedDonutCategoryFromList, setSelectedDonutCategoryFromList] = useState<string | null>(null)
   const { data: categories = [] } = useCategories('expense')
   const categoryVisualByName = useMemo(() => {
     const map = new Map<string, { iconKey: string | null; color: string }>()
@@ -167,6 +175,29 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
     () => new Map(categorySeries.map((entry) => [entry.name, { value2025: entry.total2025, value2026: entry.total2026 }])),
     [categorySeries],
   )
+  const selectedDonutComparison = useMemo<DonutComparisonSelection | null>(() => {
+    if (!selectedDonutCategoryFromList) return null
+    const values = comparisonValuesByCategory.get(selectedDonutCategoryFromList)
+    if (!values) return null
+    const deltaPct = values.value2025 > 0
+      ? ((values.value2026 - values.value2025) / values.value2025) * 100
+      : null
+    return {
+      name: selectedDonutCategoryFromList,
+      value2025: values.value2025,
+      value2026: values.value2026,
+      deltaPct,
+    }
+  }, [comparisonValuesByCategory, selectedDonutCategoryFromList])
+  const selectedCategoryMetric = useMemo(
+    () => barMetrics.find((metric) => metric.parent_category_name === selectedCategoryNameModal) ?? null,
+    [barMetrics, selectedCategoryNameModal],
+  )
+  const selectedCategoryVisual = useMemo(() => (
+    selectedCategoryMetric
+      ? categoryVisualByName.get(normalizeCategoryLabel(selectedCategoryMetric.parent_category_name))
+      : undefined
+  ), [categoryVisualByName, selectedCategoryMetric])
   const subcategoriesByParent = useMemo(() => {
     const grouped = new Map<string, Map<string, { name: string; amount2025: number; amount2026: number }>>()
 
@@ -200,6 +231,11 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
 
     return out
   }, [categoryRows])
+  const selectedCategoryRows = useMemo(() => (
+    selectedCategoryMetric
+      ? (subcategoriesByParent.get(normalizeCategoryLabel(selectedCategoryMetric.parent_category_name)) ?? [])
+      : []
+  ), [selectedCategoryMetric, subcategoriesByParent])
 
   if (metrics.length === 0) return null
 
@@ -219,31 +255,6 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
             Dépenses par catégorie
           </p>
-          {viewMode === 'bars' ? (
-            <button
-              type="button"
-              onClick={() => setIsFullListOpen(true)}
-              style={{
-                marginTop: 4,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                width: 'fit-content',
-                border: '1px solid color-mix(in oklab, var(--primary-700) 78%, #0f234f 22%)',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--neutral-0)',
-                color: 'color-mix(in oklab, var(--primary-700) 75%, #12254d 25%)',
-                padding: '4px 9px',
-                fontSize: 10,
-                fontWeight: 700,
-                lineHeight: 1.1,
-                cursor: 'pointer',
-              }}
-            >
-              Liste complète
-              <ChevronRight size={12} strokeWidth={2.4} />
-            </button>
-          ) : null}
         </div>
         <div style={switchStyle} role="tablist" aria-label="Sélecteur d’affichage dépenses par catégorie">
           <button
@@ -311,37 +322,182 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
                   isExpanded={false}
                   onToggle={undefined}
                   expandable={false}
+                  rowClickable
+                  onRowClick={() => setSelectedCategoryNameModal(m.parent_category_name)}
                 />
               ))}
             </div>
           </div>
         ) : (
-          <div style={{ height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'stretch' }}>
-            <DonutCard
-              yearLabel="2025"
-              total={total2025}
-              data={donut2025}
-              comparisonValues={comparisonValuesByCategory}
-              onOpenDetails={(categoryName) => {
-                setExpandedCategoryNameModal(categoryName)
-                setIsFullListOpen(true)
-              }}
-            />
-            <DonutCard
-              yearLabel="2026"
-              total={total2026}
-              data={donut2026}
-              comparisonValues={comparisonValuesByCategory}
-              onOpenDetails={(categoryName) => {
-                setExpandedCategoryNameModal(categoryName)
-                setIsFullListOpen(true)
-              }}
-            />
+          <div style={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr', rowGap: 'var(--space-2)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'stretch' }}>
+              <DonutCard
+                yearLabel="2025"
+                total={total2025}
+                data={donut2025}
+                comparisonValues={comparisonValuesByCategory}
+                comparedCategoryId={selectedDonutCategoryFromList}
+                selectedComparison={selectedDonutComparison}
+                onListSelect={(categoryName) => setSelectedDonutCategoryFromList(categoryName)}
+                onOpenDetails={(categoryName) => {
+                  setSelectedCategoryNameModal(null)
+                  setExpandedCategoryNameModal(categoryName)
+                  setIsDonutDetailsModalOpen(true)
+                }}
+              />
+              <DonutCard
+                yearLabel="2026"
+                total={total2026}
+                data={donut2026}
+                comparisonValues={comparisonValuesByCategory}
+                comparedCategoryId={selectedDonutCategoryFromList}
+                selectedComparison={selectedDonutComparison}
+                onListSelect={(categoryName) => setSelectedDonutCategoryFromList(categoryName)}
+                onOpenDetails={(categoryName) => {
+                  setSelectedCategoryNameModal(null)
+                  setExpandedCategoryNameModal(categoryName)
+                  setIsDonutDetailsModalOpen(true)
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
 
-      {isFullListOpen ? (
+      {selectedCategoryMetric ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Détail catégorie ${selectedCategoryMetric.parent_category_name}`}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 3200,
+            background: 'rgba(20, 24, 38, 0.58)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 'var(--space-4)',
+          }}
+          onClick={() => setSelectedCategoryNameModal(null)}
+        >
+          <div
+            style={{
+              width: 'min(760px, 100%)',
+              maxHeight: '82vh',
+              overflowY: 'auto',
+              background: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--neutral-200)',
+              boxShadow: '0 18px 46px rgba(16, 22, 34, 0.26)',
+              padding: 'var(--space-4)',
+              display: 'grid',
+              gap: 'var(--space-3)',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{
+              margin: 'calc(var(--space-4) * -1) calc(var(--space-4) * -1) 0',
+              background: selectedCategoryVisual?.color ?? '#002FA7',
+              color: '#fff',
+              padding: '10px var(--space-4)',
+              borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-3)',
+            }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>
+                {selectedCategoryMetric.parent_category_name}
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryNameModal(null)}
+                aria-label="Fermer le détail de catégorie"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#fff',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 'var(--radius-full)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', marginBottom: 'var(--space-2)' }}>
+              <span />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, textAlign: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>2025</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>Var.</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>2026</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              {selectedCategoryRows.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>Aucune sous-catégorie disponible.</p>
+              ) : selectedCategoryRows.map((row) => {
+                const rowVisual = categoryVisualByName.get(normalizeCategoryLabel(row.name))
+                const has2025 = row.amount2025 > 0
+                const has2026 = row.amount2026 > 0
+                const subDeltaColor = row.deltaPct == null
+                  ? 'var(--neutral-300)'
+                  : row.deltaPct > 0
+                    ? 'var(--color-error)'
+                    : 'var(--color-success)'
+
+                return (
+                  <div
+                    key={`${selectedCategoryMetric.parent_category_name}-${row.name}`}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      alignItems: 'center',
+                      columnGap: 'var(--space-3)',
+                      minHeight: 28,
+                      borderBottom: '1px solid var(--neutral-150)',
+                      paddingBottom: 'var(--space-1)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <CategoryIcon
+                        iconKey={rowVisual?.iconKey ?? row.name}
+                        label={row.name}
+                        size={13}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {row.name}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, textAlign: 'center' }}>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: has2025 ? 'var(--neutral-500)' : 'var(--neutral-300)' }}>
+                        {has2025 ? fmt(row.amount2025) : '—'}
+                      </span>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: row.deltaPct == null ? 'var(--neutral-300)' : subDeltaColor, fontWeight: 700 }}>
+                        {row.deltaPct == null ? '—' : `${row.deltaPct > 0 ? '+' : ''}${Math.round(row.deltaPct)}%`}
+                      </span>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: has2026 ? 'var(--neutral-800)' : 'var(--neutral-300)', fontWeight: 700 }}>
+                        {has2026 ? fmt(row.amount2026) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDonutDetailsModalOpen ? (
         <div
           role="dialog"
           aria-modal="true"
@@ -356,7 +512,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
             justifyContent: 'center',
             padding: 'var(--space-4)',
           }}
-          onClick={() => setIsFullListOpen(false)}
+          onClick={() => setIsDonutDetailsModalOpen(false)}
         >
           <div
             style={{
@@ -389,7 +545,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
               </p>
               <button
                 type="button"
-                onClick={() => setIsFullListOpen(false)}
+                onClick={() => setIsDonutDetailsModalOpen(false)}
                 aria-label="Fermer la liste et détail par catégorie"
                 style={{
                   border: '1px solid rgba(255,255,255,0.35)',
@@ -458,17 +614,22 @@ function DonutCard({
   total,
   data,
   comparisonValues,
+  comparedCategoryId,
+  selectedComparison,
+  onListSelect,
   onOpenDetails,
 }: {
   yearLabel: '2025' | '2026'
   total: number
   data: DonutEntry[]
   comparisonValues: Map<string, { value2025: number; value2026: number }>
+  comparedCategoryId: string | null
+  selectedComparison: DonutComparisonSelection | null
+  onListSelect: (categoryName: string) => void
   onOpenDetails: (categoryName: string) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(data[0]?.id ?? null)
   const topFive = useMemo(() => data.slice(0, 5), [data])
-  const selected = useMemo(() => data.find((entry) => entry.id === selectedId) ?? null, [data, selectedId])
   const tooltipSurfaceRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -561,29 +722,31 @@ function DonutCard({
       </div>
 
       <div style={{ minHeight: 38, padding: '0 var(--space-1)' }}>
-        {selected ? (
+        {selectedComparison ? (
           <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-              {selected.name}
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {selectedComparison.name}
             </p>
             <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', lineHeight: 1.2, fontFamily: 'var(--font-mono)' }}>
-              {fmt(selected.value)}
+              {yearLabel === '2025'
+                ? (selectedComparison.value2025 > 0 ? fmt(selectedComparison.value2025) : '—')
+                : (selectedComparison.value2026 > 0 ? fmt(selectedComparison.value2026) : '—')}
             </p>
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)' }}>Clique une section pour voir le détail</p>
+          <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', textAlign: 'center' }}>Clique une ligne de liste</p>
         )}
       </div>
 
       <div style={{ display: 'grid', gap: 5, padding: '0 var(--space-1)', width: 'min(176px, 100%)', justifySelf: 'center' }}>
         {topFive.map((entry) => {
           const pct = total > 0 ? (entry.value / total) * 100 : 0
-          const active = selectedId === entry.id
+          const active = comparedCategoryId === entry.id
           return (
             <button
               key={`${yearLabel}-legend-${entry.id}`}
               type="button"
-              onClick={() => setSelectedId(entry.id)}
+              onClick={() => onListSelect(entry.id)}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -594,7 +757,7 @@ function DonutCard({
                 gap: 4,
                 textAlign: 'left',
                 cursor: 'pointer',
-                opacity: selectedId == null || active ? 1 : 0.58,
+                opacity: comparedCategoryId == null || active ? 1 : 0.58,
               }}
             >
               <CategoryIcon
@@ -769,6 +932,8 @@ function CategoryRow({
   isExpanded,
   onToggle,
   expandable = true,
+  rowClickable = false,
+  onRowClick,
 }: {
   metric: ComparedCategoryMetric
   maxVal: number
@@ -778,6 +943,8 @@ function CategoryRow({
   isExpanded: boolean
   onToggle?: () => void
   expandable?: boolean
+  rowClickable?: boolean
+  onRowClick?: () => void
 }) {
   const { parent_category_name, total_2025, total_2026, delta_eur, delta_pct } = metric
   const pct2025 = maxVal > 0 ? Math.min(100, (total_2025 / maxVal) * 100) : 0
@@ -860,6 +1027,14 @@ function CategoryRow({
           type="button"
           onClick={onToggle}
           aria-expanded={isExpanded}
+          style={{ border: 'none', background: 'transparent', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}
+        >
+          {rowHeader}
+        </button>
+      ) : rowClickable ? (
+        <button
+          type="button"
+          onClick={onRowClick}
           style={{ border: 'none', background: 'transparent', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}
         >
           {rowHeader}

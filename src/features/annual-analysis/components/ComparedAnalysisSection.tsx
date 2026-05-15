@@ -37,6 +37,9 @@ export function ComparedAnalysisSection({ hideMonthlyChart = false }: { hideMont
             <ComparedCategoryBars metrics={categoryMetrics} categoryRows={categoryRows} />
 
             <ComparedVelocityCard
+              income2025Ytd={flows2025?.income_total ?? 0}
+              income2026Ytd={flows2026?.income_total ?? 0}
+              annualIncome2025={null}
               expense2025={flows2025?.expense_total ?? 0}
               expense2026={flows2026?.expense_total ?? 0}
               projected2025={projectedExpense2025}
