@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
+import { ChevronRight } from 'lucide-react'
 import {
   CartesianGrid,
   Customized,
@@ -842,7 +843,7 @@ export function SavingsEvolutionFiveYearsChart() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '10px 12px 9px',
+                  padding: '10px 12px 5px',
                   gap: 8,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
@@ -855,11 +856,8 @@ export function SavingsEvolutionFiveYearsChart() {
                   )}
                 </div>
 
-                {/* Divider */}
-                <div style={{ height: 1, background: 'var(--neutral-150)' }} />
-
                 {/* Rows */}
-                <div style={{ padding: '7px 12px 9px', display: 'grid', gap: 4 }}>
+                <div style={{ padding: '3px 12px 9px', display: 'grid', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Date</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
@@ -899,24 +897,22 @@ export function SavingsEvolutionFiveYearsChart() {
                     }}
                     style={{
                       width: '100%',
-                      height: 24,
-                      border: '1.5px solid var(--primary)',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'transparent',
-                      color: 'var(--primary)',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 4,
-                      transition: 'background 150ms ease',
+                      padding: '5px 8px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1.5px solid #5B57F5',
+                      background: 'transparent',
+                      color: '#5B57F5',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: 'pointer',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(91,87,245,0.06)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                   >
-                    Détails <span aria-hidden="true">›</span>
+                    Détails
+                    <ChevronRight size={11} strokeWidth={2.5} />
                   </button>
                 </div>
               </div>

@@ -8,7 +8,6 @@ import {
   StatsSection,
   asFiniteNumber,
   formatEuro,
-  formatPercent,
 } from '@/features/stats/components/ui'
 
 function findLatestMetric(metrics: SavingsMonthlyMetric[]): SavingsMonthlyMetric | null {
@@ -22,66 +21,34 @@ function findLatestMetric(metrics: SavingsMonthlyMetric[]): SavingsMonthlyMetric
   return metrics[metrics.length - 1] ?? null
 }
 
-function findMetricForMonth(metrics: SavingsMonthlyMetric[], month: number): SavingsMonthlyMetric | null {
-  if (metrics.length === 0) return null
-
-  const exact = metrics.find((metric) => asFiniteNumber(metric.period_month) === month)
-  if (exact) return exact
-
-  for (let index = metrics.length - 1; index >= 0; index -= 1) {
-    const metricMonth = asFiniteNumber(metrics[index].period_month)
-    if (metricMonth != null && metricMonth <= month) {
-      return metrics[index]
-    }
-  }
-
-  return findLatestMetric(metrics)
-}
-
-function computeVariationPct(current: number | null, reference: number | null): number | null {
-  if (current == null || reference == null || reference === 0) return null
-  return ((current - reference) / Math.abs(reference)) * 100
-}
-
-function formatSignedPercent(value: number | null): string {
-  if (value == null) return '—'
-  const sign = value > 0 ? '+' : ''
-  return `${sign}${new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)} %`
-}
-
 export function SavingsHeroCard() {
   const { data, isLoading, error } = useSavingsCurrentSummary()
   const analytics2026 = useSavingsAnalytics(2026)
-  const analytics2025 = useSavingsAnalytics(2025)
 
   const {
     ytdSaved2026,
-    ytdVs2025Pct,
+    ytdAveragePerMonth2026,
     monthlySavingsTarget,
+    annualSavingsTarget2026,
   } = useMemo(() => {
     const metrics2026 = analytics2026.data?.monthlyMetrics ?? []
-    const metrics2025 = analytics2025.data?.monthlyMetrics ?? []
 
     const latest2026 = findLatestMetric(metrics2026)
     const month2026 = asFiniteNumber(latest2026?.period_month)
     const ytdSaved2026Value = asFiniteNumber(latest2026?.ytd_saved_amount)
     const targetValue = asFiniteNumber(latest2026?.savings_budget_total)
-
-    const reference2025 = month2026 != null
-      ? findMetricForMonth(metrics2025, month2026)
-      : findLatestMetric(metrics2025)
-
-    const ytdSaved2025 = asFiniteNumber(reference2025?.ytd_saved_amount)
+    const ytdAveragePerMonth = month2026 != null && month2026 > 0 && ytdSaved2026Value != null
+      ? ytdSaved2026Value / month2026
+      : null
+    const annualTarget = targetValue != null ? targetValue * 12 : null
 
     return {
       ytdSaved2026: ytdSaved2026Value,
-      ytdVs2025Pct: computeVariationPct(ytdSaved2026Value, ytdSaved2025),
+      ytdAveragePerMonth2026: ytdAveragePerMonth,
       monthlySavingsTarget: targetValue,
+      annualSavingsTarget2026: annualTarget,
     }
-  }, [analytics2025.data?.monthlyMetrics, analytics2026.data?.monthlyMetrics])
+  }, [analytics2026.data?.monthlyMetrics])
 
   if (isLoading) {
     return (
@@ -121,6 +88,9 @@ export function SavingsHeroCard() {
         }
       : null
 
+  const kpiTitleColor = 'var(--neutral-0)'
+  const kpiValueColor = 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-0) 22%)'
+
   return (
     <StatsSection>
       <div
@@ -137,8 +107,8 @@ export function SavingsHeroCard() {
         <span
           style={{
             position: 'absolute',
-            right: -10,
-            bottom: -18,
+            right: -16,
+            top: -14,
             fontSize: 92,
             fontWeight: 900,
             fontFamily: 'var(--font-mono)',
@@ -216,50 +186,38 @@ export function SavingsHeroCard() {
             }}
           >
             <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.46)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                livrets
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                epargne 2026
               </p>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.96)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(data?.livrets_total ?? null).replace(/\s+€/u, '€')}
-              </p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatPercent(data?.livrets_share_pct)}
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatEuro(ytdSaved2026)}
               </p>
             </div>
 
             <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.46)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                placements
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                moy/mois ytd
               </p>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.96)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(data?.placements_total ?? null).replace(/\s+€/u, '€')}
-              </p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatPercent(data?.placements_share_pct)}
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatEuro(ytdAveragePerMonth2026)}
               </p>
             </div>
 
             <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.46)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                épargné 2026 ytd
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                obj/mois
               </p>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.96)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(ytdSaved2026).replace(/\s+€/u, '€')}
-              </p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {`vs 2025 ${formatSignedPercent(ytdVs2025Pct)}`}
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatEuro(monthlySavingsTarget)}
               </p>
             </div>
 
             <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.46)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                objectif mensuel
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                obj.2026
               </p>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.96)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(monthlySavingsTarget).replace(/\s+€/u, '€')}
-              </p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                budget épargne
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatEuro(annualSavingsTarget2026)}
               </p>
             </div>
           </div>

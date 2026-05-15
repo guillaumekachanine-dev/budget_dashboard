@@ -19,6 +19,7 @@ import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAll
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsInsightsSection } from '@/features/savings/components/SavingsInsightsSection'
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
+import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { InvestmentPerformanceSection } from '@/features/stats/components/InvestmentPerformanceSection'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
@@ -248,6 +249,19 @@ export function Stats() {
               {lastUpdateHeaderText}
             </p>
           </div>
+        ) : activeTabId === 'epargne' ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-0)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Epargne
+          </p>
         ) : (
           <HeaderPeriodMenu
             buttonLabel={monthButtonLabel}
@@ -307,6 +321,8 @@ export function Stats() {
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
           <SavingsHeroCard />
+          <StatsMajorSectionHeading title="Planning épargne 2026" />
+          <SavingsPlanning2026Section />
           <StatsMajorSectionHeading title="Détails de l'épargne" />
           <SavingsAllocationDonut />
           <SavingsEvolutionFiveYearsChart />

@@ -1,8 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { X, TrendingUp } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
+import epargneInteretsIcon from '@/assets/icons/categories/epargne_interets.webp'
+import epargnePlacementIcon from '@/assets/icons/categories/epargne_placement.webp'
+import epargneVirementIcon from '@/assets/icons/categories/epargne_virement.webp'
 import type {
   SavingsEvolutionFiveYearsRow,
   SavingsEvolutionFiveYearsSeries,
@@ -115,6 +118,10 @@ const EUR = new Intl.NumberFormat('fr-FR', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 })
+const PCT_ONE_DECIMAL = new Intl.NumberFormat('fr-FR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
 
 function fmtEur(v: number): string {
   return EUR.format(v)
@@ -133,37 +140,8 @@ function fmtDate(s: string): string {
   return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
 }
 
-function CircleProgress({ pct, color, size = 42 }: { pct: number; color: string; size?: number }) {
-  const r = (size - 6) / 2
-  const cx = size / 2
-  const cy = size / 2
-  const circ = 2 * Math.PI * r
-  const filled = (pct / 100) * circ
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--neutral-150)" strokeWidth={3} />
-      <circle
-        cx={cx} cy={cy} r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={3}
-        strokeDasharray={`${filled} ${circ - filled}`}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`}
-        style={{ transition: 'stroke-dasharray 600ms ease' }}
-      />
-      <text
-        x={cx}
-        y={cy + 3.5}
-        textAnchor="middle"
-        fill={color}
-        style={{ fontSize: size < 30 ? 7 : 8, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
-      >
-        {Math.round(pct)}%
-      </text>
-    </svg>
-  )
+function fmtMonthYear(value: Date): string {
+  return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: '2-digit' }).format(value)
 }
 
 export function SavingsPortfolioModal({
@@ -186,16 +164,13 @@ export function SavingsPortfolioModal({
     [operationEvents, account.key],
   )
 
-  const currentYear = 2026
-  const ytdMetrics = yearlyMetrics[`${account.key}::${currentYear}`]
-  const ytdSaved = ytdMetrics?.total_saved_amount ?? 0
-
   const totalInterests = useMemo(
     () => accountEvents.filter((e) => e.nature === 'intérêts').reduce((sum, e) => sum + e.amount, 0),
     [accountEvents],
   )
 
   const plafond = resolvePlafond(account.label)
+  const pctOfPlafond = plafond ? (currentAmount / plafond) * 100 : null
   const fillPct = plafond ? Math.min(100, Math.max(0, (currentAmount / plafond) * 100)) : null
 
   const accountIsLivret = isLivret(account.label)
@@ -233,12 +208,76 @@ export function SavingsPortfolioModal({
     return count > 0 ? total / count : LIVRET_CURRENT_RATE
   }, [accountIsLivret, accountEvents])
 
-  // Balance at year-end for a given year (used for plafond progress per row)
-  const balanceAtYear = (year: string): number => {
-    const row = rows.find((r) => r.year === year)
-    if (!row) return 0
-    return Number(row[account.key] ?? 0)
-  }
+  const accountEventsAsc = useMemo(
+    () => [...accountEvents].sort((a, b) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime()),
+    [accountEvents],
+  )
+
+  const openedAt = useMemo(() => {
+    const firstEventDate = accountEventsAsc[0]?.transaction_date
+    if (firstEventDate) {
+      const parsed = new Date(firstEventDate)
+      if (!Number.isNaN(parsed.getTime())) return parsed
+    }
+
+    const firstFundedYear = [...rows]
+      .sort((a, b) => Number(a.year) - Number(b.year))
+      .find((row) => Number(row[account.key] ?? 0) > 0)?.year
+
+    if (firstFundedYear && /^\d{4}$/.test(firstFundedYear)) {
+      return new Date(Number(firstFundedYear), 0, 1)
+    }
+
+    return null
+  }, [accountEventsAsc, rows, account.key])
+
+  const plafondReachedAt = useMemo(() => {
+    if (!plafond || currentAmount < plafond) return null
+
+    let runningBalance = 0
+    for (const event of accountEventsAsc) {
+      runningBalance += Number(event.amount ?? 0)
+      if (runningBalance >= plafond) {
+        const reachedAt = new Date(event.transaction_date)
+        if (!Number.isNaN(reachedAt.getTime())) return reachedAt
+      }
+    }
+
+    const reachedYear = [...rows]
+      .sort((a, b) => Number(a.year) - Number(b.year))
+      .find((row) => Number(row[account.key] ?? 0) >= plafond)?.year
+
+    if (reachedYear && /^\d{4}$/.test(reachedYear)) {
+      return new Date(Number(reachedYear), 11, 1)
+    }
+
+    return null
+  }, [plafond, currentAmount, accountEventsAsc, rows, account.key])
+
+  const cappedSurplus = plafond ? Math.max(0, currentAmount - plafond) : 0
+  const isLddsAccount = normalizeStr(account.label).includes('ldds')
+  const showPlafondPct = !(isLddsAccount && cappedSurplus <= 0)
+  const currentYear = new Date().getFullYear()
+  const previousYear = currentYear - 1
+
+  const kpiPreviousYearAmount = useMemo(() => {
+    if (accountIsLivret) {
+      return accountEvents
+        .filter((event) => event.nature === 'intérêts' && Number(event.year) === previousYear)
+        .reduce((sum, event) => sum + Number(event.amount ?? 0), 0)
+    }
+
+    const prevYearRow = rows.find((row) => Number(row.year) === previousYear)
+    const prevPrevYearRow = rows.find((row) => Number(row.year) === previousYear - 1)
+    if (!prevYearRow || !prevPrevYearRow) return null
+
+    const prevYearBalance = Number(prevYearRow[account.key] ?? 0)
+    const prevPrevYearBalance = Number(prevPrevYearRow[account.key] ?? 0)
+    if (!Number.isFinite(prevYearBalance) || !Number.isFinite(prevPrevYearBalance)) return null
+
+    const savedPrevYear = yearlyMetrics[`${account.key}::${previousYear}`]?.total_saved_amount ?? 0
+    return prevYearBalance - prevPrevYearBalance - savedPrevYear
+  }, [accountIsLivret, accountEvents, previousYear, rows, account.key, yearlyMetrics])
 
   return (
     <>
@@ -260,141 +299,155 @@ export function SavingsPortfolioModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Détails ${account.listLabel}`}
-        initial={{ y: '100%', opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
+          inset: 0,
           zIndex: 71,
-          maxWidth: 480,
-          margin: '0 auto',
-          background: 'var(--neutral-0)',
-          borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
-          boxShadow: '0 -4px 32px rgba(13,13,31,0.18)',
-          maxHeight: '88dvh',
           display: 'flex',
-          flexDirection: 'column',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          padding: 'var(--space-3)',
+          overflowY: 'auto',
+          pointerEvents: 'none',
         }}
       >
-        {/* Drag handle */}
-        <div style={{ padding: '10px 0 0', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)' }} />
-        </div>
+        <div
+          style={{
+            width: 'min(640px, 100%)',
+            background: 'var(--neutral-0)',
+            borderRadius: 'var(--radius-2xl)',
+            boxShadow: '0 24px 60px rgba(13,13,31,0.24)',
+            margin: 'var(--space-4) 0',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'visible',
+            pointerEvents: 'auto',
+          }}
+        >
 
         {/* Header */}
         <div
           style={{
-            padding: 'var(--space-3) var(--space-4) var(--space-4)',
+            padding: 'var(--space-4)',
             borderBottom: '1px solid var(--neutral-100)',
             flexShrink: 0,
             display: 'grid',
             gap: 'var(--space-3)',
           }}
         >
-          {/* Top row: logo + name + YTD + close */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  border: `2.5px solid ${account.color}`,
-                  flexShrink: 0,
-                  overflow: 'hidden',
-                  background: 'var(--neutral-100)',
-                }}
-              >
-                <img
-                  src={account.iconSrc}
-                  alt=""
-                  aria-hidden="true"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+          <div
+            style={{
+              background: 'color-mix(in oklab, var(--primary-600) 5%, var(--neutral-0) 95%)',
+              border: '1px solid color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-3)',
+            }}
+          >
+            {/* Top row: logo + info left + amount right */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    border: `2.5px solid ${account.color}`,
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    background: 'var(--neutral-100)',
+                  }}
+                >
+                  <img
+                    src={account.iconSrc}
+                    alt=""
+                    aria-hidden="true"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-md)',
+                      fontWeight: 'var(--font-weight-extrabold)',
+                      color: 'var(--neutral-900)',
+                      lineHeight: 1.2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {account.listLabel}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 500 }}>
+                    {account.family === 'livrets' ? 'Livret réglementé' : 'Placement financier'}
+                  </p>
+                </div>
               </div>
-              <div style={{ minWidth: 0 }}>
+
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p
                   style={{
                     margin: 0,
                     fontSize: 'var(--font-size-md)',
                     fontWeight: 'var(--font-weight-extrabold)',
-                    color: 'var(--neutral-900)',
-                    lineHeight: 1.2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {account.listLabel}
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 500 }}>
-                  {account.family === 'livrets' ? 'Livret réglementé' : 'Placement financier'}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)', flexShrink: 0 }}>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                  Épargné {currentYear} YTD
-                </p>
-                <p
-                  style={{
-                    margin: '2px 0 0',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: 'var(--font-weight-extrabold)',
                     fontFamily: 'var(--font-mono)',
-                    color: ytdSaved >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
-                    lineHeight: 1,
+                    color: 'var(--color-positive)',
+                    lineHeight: 1.1,
                   }}
                 >
-                  {fmtSigned(ytdSaved)}
+                  {fmtEur(currentAmount)}
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label="Fermer la modale"
-                onClick={onClose}
-                style={{
-                  border: 'none',
-                  background: 'var(--neutral-100)',
-                  color: 'var(--neutral-600)',
-                  width: 28,
-                  height: 28,
-                  borderRadius: 'var(--radius-full)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <X size={14} />
-              </button>
             </div>
           </div>
+
+          <p
+            style={{
+              margin: 0,
+              padding: '8px var(--space-4) 0',
+              fontSize: 10,
+              color: 'var(--neutral-500)',
+              fontWeight: 600,
+            }}
+          >
+            Ouvert le {openedAt ? fmtMonthYear(openedAt) : '—'}
+          </p>
 
           {/* Plafond bar (for capped accounts) */}
           {plafond !== null && fillPct !== null ? (
             <div
               style={{
-                display: 'flex',
+                display: 'grid',
+                gridTemplateColumns: '40px minmax(0, 1fr)',
                 alignItems: 'center',
-                gap: 'var(--space-3)',
-                background: 'var(--neutral-50)',
-                borderRadius: 'var(--radius-md)',
-                padding: '10px 12px',
-                border: '1px solid var(--neutral-150)',
+                columnGap: 'var(--space-3)',
+                marginTop: 'var(--space-3)',
               }}
             >
-              <CircleProgress pct={fillPct} color={account.color} size={42} />
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--color-positive)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 0 2px color-mix(in oklab, var(--color-positive) 22%, var(--neutral-0) 78%)',
+                }}
+                aria-hidden="true"
+                role="img"
+              >
+                <Check size={18} color="var(--neutral-0)" strokeWidth={3} />
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                   <span
                     style={{
                       fontSize: 10,
@@ -406,16 +459,29 @@ export function SavingsPortfolioModal({
                   >
                     Plafond légal
                   </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--neutral-900)',
-                    }}
-                  >
-                    {fmtEur(currentAmount)} / {fmtEur(plafond)}
-                  </span>
+                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--neutral-900)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {fmtEur(currentAmount)} / {fmtEur(plafond)}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 600,
+                        color: 'var(--neutral-500)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {showPlafondPct && pctOfPlafond != null ? `(${PCT_ONE_DECIMAL.format(pctOfPlafond)}%)` : ''}
+                    </span>
+                  </div>
                 </div>
                 <div
                   style={{
@@ -432,18 +498,20 @@ export function SavingsPortfolioModal({
                       borderRadius: 'var(--radius-full)',
                       background:
                         fillPct > 90
-                          ? 'linear-gradient(90deg, var(--color-positive), #FFAB2E)'
+                          ? 'linear-gradient(90deg, var(--color-positive), var(--color-warning))'
                           : account.color,
                       transition: 'width 600ms ease',
                     }}
                   />
                 </div>
-                <p style={{ margin: '3px 0 0', fontSize: 10, color: 'var(--neutral-500)', fontWeight: 500 }}>
-                  {fillPct.toFixed(1)}% atteint · reste{' '}
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                    {fmtEur(Math.max(0, plafond - currentAmount))}
-                  </span>
-                </p>
+                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600 }}>
+                    100% atteints en {plafondReachedAt ? fmtMonthYear(plafondReachedAt) : '—'}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    +{fmtEur(cappedSurplus)}
+                  </p>
+                </div>
               </div>
             </div>
           ) : (
@@ -470,18 +538,13 @@ export function SavingsPortfolioModal({
           )}
         </div>
 
-        {/* Scrollable body */}
+        {/* Middle section: operations list */}
         <div
           style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: 'var(--space-5) var(--space-4)',
-            display: 'grid',
-            gap: 'var(--space-6)',
-            alignContent: 'start',
+            overflow: 'visible',
+            padding: 'var(--space-4)',
           }}
         >
-          {/* — Section Opérations — */}
           <section>
             <SectionHeading label="Opérations" count={accountEvents.length} color={account.color} />
 
@@ -503,13 +566,14 @@ export function SavingsPortfolioModal({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: plafond ? '1fr auto auto auto' : '1fr auto auto',
-                    gap: '6px',
-                    padding: '0 6px 6px',
+                    gridTemplateColumns: '1fr 116px 132px',
+                    columnGap: '14px',
+                    padding: '0 6px 4px',
                     borderBottom: '1px solid var(--neutral-100)',
+                    lineHeight: 1,
                   }}
                 >
-                  {(['Date', 'Nature', plafond ? 'Remplissage' : null, 'Montant'] as (string | null)[])
+                  {(['Date', 'Nature', 'Montant'] as const)
                     .filter(Boolean)
                     .map((label) => (
                       <span
@@ -520,7 +584,8 @@ export function SavingsPortfolioModal({
                           color: 'var(--neutral-400)',
                           textTransform: 'uppercase',
                           letterSpacing: '0.07em',
-                          textAlign: label === 'Montant' || label === 'Remplissage' ? 'right' : 'left',
+                          textAlign: label === 'Montant' ? 'left' : 'left',
+                          paddingLeft: label === 'Nature' ? 2 : 0,
                         }}
                       >
                         {label}
@@ -530,30 +595,34 @@ export function SavingsPortfolioModal({
 
                 {accountEvents.map((event, idx) => {
                   const isInterest = event.nature === 'intérêts'
-                  const yearBalance = balanceAtYear(event.year)
-                  const rowFillPct =
-                    plafond && event.nature === 'virement'
-                      ? Math.min(100, Math.max(0, (yearBalance / plafond) * 100))
-                      : null
+                  const isPlacementAccount = account.family === 'placements'
+                  const natureLabel = isInterest ? 'Intérêts' : (isPlacementAccount ? 'Placement' : 'Virement')
+                  const natureIconSrc = isInterest
+                    ? epargneInteretsIcon
+                    : (isPlacementAccount ? epargnePlacementIcon : epargneVirementIcon)
+                  const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
+                  const amountAbs = fmtEur(Math.abs(event.amount))
 
                   return (
                     <div
                       key={event.id}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: plafond ? '1fr auto auto auto' : '1fr auto auto',
-                        gap: '6px',
-                        padding: '10px 6px',
+                        gridTemplateColumns: '1fr 116px 132px',
+                        columnGap: '14px',
+                        padding: '7px 6px',
                         borderBottom: idx < accountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
                         alignItems: 'center',
+                        lineHeight: 1,
                       }}
                     >
                       <span
                         style={{
-                          fontSize: 11,
+                          fontSize: 10,
                           color: 'var(--neutral-700)',
                           fontFamily: 'var(--font-mono)',
-                          fontWeight: 600,
+                          fontWeight: 500,
+                          lineHeight: 1,
                         }}
                       >
                         {fmtDate(event.transaction_date)}
@@ -561,41 +630,75 @@ export function SavingsPortfolioModal({
 
                       <span
                         style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: isInterest ? 'var(--color-positive)' : 'var(--primary-600)',
-                          background: isInterest
-                            ? 'color-mix(in oklab, var(--color-positive) 12%, var(--neutral-0) 88%)'
-                            : 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-full)',
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: 'var(--neutral-900)',
                           whiteSpace: 'nowrap',
+                          lineHeight: 1,
+                          justifySelf: 'start',
+                          display: 'inline-grid',
+                          gridTemplateColumns: '12px auto',
+                          alignItems: 'center',
+                          columnGap: 6,
                         }}
                       >
-                        {isInterest ? '% Intérêts' : '→ Virement'}
+                        <span
+                          style={{
+                            width: 12,
+                            height: 12,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img
+                            src={natureIconSrc}
+                            alt=""
+                            aria-hidden="true"
+                            style={{
+                              width: 10,
+                              height: 10,
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                          />
+                        </span>
+                        {natureLabel}
                       </span>
-
-                      {plafond ? (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          {rowFillPct !== null ? (
-                            <CircleProgress pct={rowFillPct} color={account.color} size={26} />
-                          ) : (
-                            <span style={{ fontSize: 10, color: 'var(--neutral-300)', width: 26, textAlign: 'center' }}>—</span>
-                          )}
-                        </div>
-                      ) : null}
 
                       <span
                         style={{
                           fontSize: 12,
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)',
-                          textAlign: 'right',
-                          color: event.amount >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                          textAlign: 'left',
+                          color: 'var(--neutral-900)',
                           whiteSpace: 'nowrap',
+                          lineHeight: 1,
+                          width: '100%',
+                          display: 'inline-grid',
+                          gridTemplateColumns: '9px auto',
+                          columnGap: 4,
+                          justifyContent: 'start',
+                          alignItems: 'center',
+                          justifySelf: 'start',
                         }}
                       >
-                        {fmtSigned(event.amount)}
+                        <span
+                          style={{
+                            color:
+                              amountSign === '+'
+                                ? 'var(--color-positive)'
+                                : amountSign === '-'
+                                  ? 'var(--color-negative)'
+                                  : 'transparent',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {amountSign || '+'}
+                        </span>
+                        <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
                       </span>
                     </div>
                   )
@@ -603,148 +706,103 @@ export function SavingsPortfolioModal({
               </div>
             )}
           </section>
+        </div>
 
-          {/* — Section Performance — */}
+        {/* Bottom section: analysis and advice */}
+        <div
+          style={{
+            flexShrink: 0,
+            borderTop: '1px solid var(--neutral-100)',
+            background: 'var(--neutral-50)',
+            padding: 'var(--space-4)',
+          }}
+        >
           <section>
-            <SectionHeading label="Performance" color={account.color} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <SectionHeading label="Performance" color={account.color} />
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 'var(--radius-sm)',
+                  background: `color-mix(in oklab, ${grade.color} 12%, var(--neutral-0) 88%)`,
+                  border: `2px solid ${grade.color}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginRight: 12,
+                }}
+                aria-label={`Note ${grade.grade}`}
+                title={`Note ${grade.grade} · ${grade.label}`}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-mono)',
+                    color: grade.color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {grade.grade}
+                </span>
+              </div>
+            </div>
 
             <div style={{ marginTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
-              {/* Rate + gain */}
+              {/* KPI list */}
               <div
                 style={{
                   border: '1px solid var(--neutral-150)',
                   borderRadius: 'var(--radius-md)',
                   padding: 'var(--space-3)',
                   display: 'grid',
-                  gap: 'var(--space-2)',
-                }}
-              >
-                {accountIsLivret ? (
-                  <>
-                    <MetricRow label="Taux annuel actuel" value={`${LIVRET_CURRENT_RATE.toFixed(2)} %`} />
-                    {avgRate !== null ? (
-                      <MetricRow label="Taux moyen depuis ouverture" value={`~${avgRate.toFixed(2)} %`} />
-                    ) : null}
-                  </>
-                ) : investAccount?.estimated_gain_vs_total_cash_in_pct != null ? (
-                  <MetricRow
-                    label="Rendement estimé (vs. cash investi)"
-                    value={`${investAccount.estimated_gain_vs_total_cash_in_pct >= 0 ? '+' : ''}${investAccount.estimated_gain_vs_total_cash_in_pct.toFixed(1)} %`}
-                    positive={investAccount.estimated_gain_vs_total_cash_in_pct >= 0}
-                  />
-                ) : null}
-
-                <div style={{ height: 1, background: 'var(--neutral-100)' }} />
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
-                    {accountIsLivret ? 'Total intérêts générés' : 'Plus-value / gain estimé'}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: 'var(--font-weight-bold)',
-                      fontFamily: 'var(--font-mono)',
-                      color:
-                        totalGain == null
-                          ? 'var(--neutral-400)'
-                          : totalGain >= 0
-                            ? 'var(--color-positive)'
-                            : 'var(--color-negative)',
-                    }}
-                  >
-                    {totalGain != null ? fmtSigned(totalGain) : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Grade */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
                   gap: 'var(--space-3)',
-                  border: '1px solid var(--neutral-150)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: 'var(--space-3)',
                 }}
               >
-                <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: 'var(--neutral-500)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      marginBottom: 3,
-                    }}
-                  >
-                    Note de performance
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
-                    {grade.label}
-                  </p>
-                </div>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 'var(--radius-md)',
-                    background: `color-mix(in oklab, ${grade.color} 12%, var(--neutral-0) 88%)`,
-                    border: `2px solid ${grade.color}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 800,
-                      fontFamily: 'var(--font-mono)',
-                      color: grade.color,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {grade.grade}
-                  </span>
-                </div>
+                <KpiBulletRow
+                  label="Taux moyen depuis ouverture"
+                  value={
+                    accountIsLivret
+                      ? (avgRate != null ? `~${avgRate.toFixed(2)} %` : '—')
+                      : (investAccount?.estimated_gain_vs_total_cash_in_pct != null
+                          ? `${investAccount.estimated_gain_vs_total_cash_in_pct >= 0 ? '+' : ''}${investAccount.estimated_gain_vs_total_cash_in_pct.toFixed(1)} %`
+                          : '—')
+                  }
+                />
+                <KpiBulletRow
+                  label="Taux actuel en vigueur"
+                  value={`${LIVRET_CURRENT_RATE.toFixed(2)} %`}
+                />
+                <KpiBulletRow
+                  label={accountIsLivret ? 'Montant des intérêts N-1' : 'Montant de plus-value N-1'}
+                  value={kpiPreviousYearAmount != null ? fmtSigned(kpiPreviousYearAmount) : '—'}
+                />
+                <KpiBulletRow
+                  label={accountIsLivret
+                    ? 'Total des intérêts depuis ouverture'
+                    : 'Total de plus-value depuis ouverture'}
+                  value={totalGain != null ? fmtSigned(totalGain) : '—'}
+                />
               </div>
+
+              <SectionHeading label="Conseil" color={account.color} />
 
               {/* Expert advice */}
               <div
                 style={{
-                  background: 'color-mix(in oklab, var(--primary-600) 5%, var(--neutral-0) 95%)',
-                  border: '1px solid color-mix(in oklab, var(--primary-600) 16%, var(--neutral-0) 84%)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: 'var(--space-3)',
-                  display: 'grid',
-                  gap: 'var(--space-2)',
+                  background: 'linear-gradient(145deg, color-mix(in oklab, var(--primary-600) 84%, #1a1f4a 16%), color-mix(in oklab, var(--primary-600) 68%, #2a3672 32%))',
+                  border: '1px solid color-mix(in oklab, var(--primary-600) 42%, #324090 58%)',
+                  borderRadius: 'var(--radius-xl)',
+                  padding: 'var(--space-4)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TrendingUp size={12} color="var(--primary-600)" />
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: 'var(--primary-600)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.07em',
-                    }}
-                  >
-                    Avis expert
-                  </span>
-                </div>
                 <p
                   style={{
                     margin: 0,
-                    fontSize: 'var(--font-size-xs)',
-                    color: 'var(--neutral-700)',
+                    fontSize: 'var(--font-size-sm)',
+                    color: 'rgba(255,255,255,0.9)',
                     lineHeight: 1.6,
                   }}
                 >
@@ -753,9 +811,7 @@ export function SavingsPortfolioModal({
               </div>
             </div>
           </section>
-
-          {/* Safe area bottom padding */}
-          <div style={{ height: 'max(var(--safe-bottom-offset, 0px), var(--space-3))' }} />
+        </div>
         </div>
       </motion.div>
     </>
@@ -806,7 +862,7 @@ function SectionHeading({ label, count, color }: { label: string; count?: number
   )
 }
 
-function MetricRow({
+function KpiBulletRow({
   label,
   value,
   positive,
@@ -816,8 +872,18 @@ function MetricRow({
   positive?: boolean
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>{label}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <span
+        aria-hidden="true"
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 'var(--radius-full)',
+          background: 'var(--primary-600)',
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', lineHeight: 1.3 }}>{label}</span>
       <span
         style={{
           fontSize: 'var(--font-size-sm)',
