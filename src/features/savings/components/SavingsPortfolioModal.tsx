@@ -397,8 +397,6 @@ export function SavingsPortfolioModal({
             padding: 'var(--space-4)',
             borderBottom: '1px solid var(--neutral-100)',
             flexShrink: 0,
-            display: 'grid',
-            gap: 'var(--space-3)',
           }}
         >
           <div
@@ -455,7 +453,7 @@ export function SavingsPortfolioModal({
                 <p
                   style={{
                     margin: 0,
-                    fontSize: 'var(--font-size-md)',
+                    fontSize: 'var(--font-size-lg)',
                     fontWeight: 'var(--font-weight-extrabold)',
                     fontFamily: 'var(--font-mono)',
                     color: 'var(--color-positive)',
@@ -468,135 +466,6 @@ export function SavingsPortfolioModal({
             </div>
           </div>
 
-          <p
-            style={{
-              margin: 0,
-              padding: '8px var(--space-4) 0',
-              fontSize: 10,
-              color: 'var(--neutral-500)',
-              fontWeight: 600,
-            }}
-          >
-            Ouvert le {openedAt ? fmtMonthYear(openedAt) : '—'}
-          </p>
-
-          {/* Plafond bar (for capped accounts) */}
-          {plafond !== null && fillPct !== null ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '40px minmax(0, 1fr)',
-                alignItems: 'center',
-                columnGap: 'var(--space-3)',
-                marginTop: 'var(--space-3)',
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 'var(--radius-full)',
-                  background: 'var(--color-positive)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 0 0 2px color-mix(in oklab, var(--color-positive) 22%, var(--neutral-0) 78%)',
-                }}
-                aria-hidden="true"
-                role="img"
-              >
-                <Check size={18} color="var(--neutral-0)" strokeWidth={3} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: 'var(--neutral-600)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    Plafond légal
-                  </span>
-                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--neutral-900)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {fmtEur(currentAmount)} / {fmtEur(plafond)}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 600,
-                        color: 'var(--neutral-500)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {showPlafondPct && pctOfPlafond != null ? `(${PCT_ONE_DECIMAL.format(pctOfPlafond)}%)` : ''}
-                    </span>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    height: 5,
-                    borderRadius: 'var(--radius-full)',
-                    background: 'var(--neutral-200)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${fillPct}%`,
-                      borderRadius: 'var(--radius-full)',
-                      background:
-                        fillPct > 90
-                          ? 'linear-gradient(90deg, var(--color-positive), var(--color-warning))'
-                          : account.color,
-                      transition: 'width 600ms ease',
-                    }}
-                  />
-                </div>
-                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600 }}>
-                    100% atteints en {plafondReachedAt ? fmtMonthYear(plafondReachedAt) : '—'}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                    +{fmtEur(cappedSurplus)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 2px',
-              }}
-            >
-              <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontWeight: 600 }}>Solde actuel</span>
-              <span
-                style={{
-                  fontSize: 'var(--font-size-sm)',
-                  fontWeight: 'var(--font-weight-bold)',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--neutral-900)',
-                }}
-              >
-                {fmtEur(currentAmount)}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Quick indicators grid */}
