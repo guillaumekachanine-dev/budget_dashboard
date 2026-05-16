@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useSavingsCurrentSummary } from '@/features/savings/hooks/useSavingsCurrentSummary'
 import type { SavingsMonthlyMetric } from '@/features/savings/types'
+import repartitionEpargneIcon from '@/assets/icons/app/repartition_epargne.png'
 import {
   DataQualityNotice,
   StatsSection,
@@ -21,7 +22,11 @@ function findLatestMetric(metrics: SavingsMonthlyMetric[]): SavingsMonthlyMetric
   return metrics[metrics.length - 1] ?? null
 }
 
-export function SavingsHeroCard() {
+type SavingsHeroCardProps = {
+  onOpenAllocationModal?: () => void
+}
+
+export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps) {
   const { data, isLoading, error } = useSavingsCurrentSummary()
   const analytics2026 = useSavingsAnalytics(2026)
 
@@ -104,6 +109,40 @@ export function SavingsHeroCard() {
           overflow: 'hidden',
         }}
       >
+        {onOpenAllocationModal ? (
+          <button
+            type="button"
+            onClick={onOpenAllocationModal}
+            aria-label="Ouvrir la répartition de l'épargne"
+            title="Répartition"
+            style={{
+              position: 'absolute',
+              top: 'var(--space-3)',
+              right: 'var(--space-3)',
+              zIndex: 3,
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <img
+              src={repartitionEpargneIcon}
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: 34,
+                height: 34,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          </button>
+        ) : null}
+
         <span
           style={{
             position: 'absolute',

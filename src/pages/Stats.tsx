@@ -90,6 +90,7 @@ export function Stats() {
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
   const [showYearModal, setShowYearModal] = useState(false)
+  const [showSavingsAllocationModal, setShowSavingsAllocationModal] = useState(false)
   const hasAppliedDefaultPeriodRef = useRef(false)
 
   const activeTab = useMemo(
@@ -159,6 +160,11 @@ export function Stats() {
     if (!showTabModal) return
     return lockDocumentScroll()
   }, [showTabModal])
+
+  useEffect(() => {
+    if (!showSavingsAllocationModal) return
+    return lockDocumentScroll()
+  }, [showSavingsAllocationModal])
 
   const selectedPeriod = snapshot?.selectedPeriod ?? null
 
@@ -317,11 +323,10 @@ export function Stats() {
 
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
-          <SavingsHeroCard />
+          <SavingsHeroCard onOpenAllocationModal={() => setShowSavingsAllocationModal(true)} />
           <StatsMajorSectionHeading title="Planning épargne 2026" />
           <SavingsPlanning2026Section />
           <StatsMajorSectionHeading title="Détails de l'épargne" />
-          <SavingsAllocationDonut />
           <SavingsEvolutionFiveYearsChart />
           <FinancialSecurityCard />
 
@@ -431,6 +436,73 @@ export function Stats() {
                     </button>
                   )
                 })}
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+
+        {showSavingsAllocationModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSavingsAllocationModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(13,13,31,0.48)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Répartition de l'épargne"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 10, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 71,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 'var(--space-3)',
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                style={{
+                  position: 'relative',
+                  width: 'min(700px, 100%)',
+                  maxHeight: 'calc(100dvh - 2 * var(--space-3))',
+                  overflowY: 'auto',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Fermer la répartition de l'épargne"
+                  onClick={() => setShowSavingsAllocationModal(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 'var(--space-2)',
+                    right: 'var(--space-5)',
+                    zIndex: 2,
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    borderRadius: 'var(--radius-sm)',
+                    width: 28,
+                    height: 28,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--neutral-600)',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+                <SavingsAllocationDonut />
               </div>
             </motion.div>
           </>

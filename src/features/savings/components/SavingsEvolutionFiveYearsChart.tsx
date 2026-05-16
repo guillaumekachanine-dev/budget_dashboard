@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import {
@@ -231,6 +231,16 @@ export function SavingsEvolutionFiveYearsChart() {
   const [selectedOperationBubble, setSelectedOperationBubble] = useState<OperationBubbleState | null>(null)
   const [selectedYearBubble, setSelectedYearBubble] = useState<YearBubbleState | null>(null)
   const [selectedPortfolioKey, setSelectedPortfolioKey] = useState<string | null>(null)
+  const savingsListRef = useRef<HTMLDivElement | null>(null)
+  const handleClosePortfolioModal = useCallback(() => {
+    setSelectedPortfolioKey(null)
+  }, [])
+  const handleReturnToSavingsList = useCallback(() => {
+    setSelectedPortfolioKey(null)
+    requestAnimationFrame(() => {
+      savingsListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [])
   const rows = useMemo(() => data?.rows ?? [], [data?.rows])
   const series = useMemo(() => data?.series ?? [], [data?.series])
   const yearlyAccountMetrics = useMemo(() => data?.yearly_account_metrics ?? {}, [data?.yearly_account_metrics])
@@ -1007,7 +1017,7 @@ export function SavingsEvolutionFiveYearsChart() {
           ) : null}
         </div>
 
-        <div style={{ display: 'grid', gap: '6px', marginTop: 'var(--space-2)' }}>
+        <div ref={savingsListRef} style={{ display: 'grid', gap: '6px', marginTop: 'var(--space-2)' }}>
           <div
             aria-hidden="true"
             style={{
@@ -1128,10 +1138,10 @@ export function SavingsEvolutionFiveYearsChart() {
                 listLabel: portfolioRow.listLabel,
               }}
               operationEvents={operationEvents}
-              yearlyMetrics={yearlyAccountMetrics}
               rows={rows}
               currentAmount={portfolioRow.currentAmount}
-              onClose={() => setSelectedPortfolioKey(null)}
+              onClose={handleClosePortfolioModal}
+              onReturnToList={handleReturnToSavingsList}
             />
           )
         })() : null}

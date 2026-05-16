@@ -13,7 +13,6 @@ import type {
   SavingsEvolutionFiveYearsRow,
   SavingsEvolutionFiveYearsSeries,
   SavingsEvolutionOperationEvent,
-  SavingsEvolutionYearAccountMetrics,
 } from '@/features/savings/types'
 
 type StyledSeries = SavingsEvolutionFiveYearsSeries & {
@@ -25,10 +24,10 @@ type StyledSeries = SavingsEvolutionFiveYearsSeries & {
 type Props = {
   account: StyledSeries
   operationEvents: SavingsEvolutionOperationEvent[]
-  yearlyMetrics: Record<string, SavingsEvolutionYearAccountMetrics>
   rows: SavingsEvolutionFiveYearsRow[]
   currentAmount: number
   onClose: () => void
+  onReturnToList?: () => void
 }
 
 function normalizeStr(value: string): string {
@@ -156,10 +155,10 @@ function fmtMonthYear(value: Date): string {
 export function SavingsPortfolioModal({
   account,
   operationEvents,
-  yearlyMetrics: _yearlyMetrics,
   rows,
   currentAmount,
   onClose,
+  onReturnToList,
 }: Props) {
   const { data: perfData } = useInvestmentPerformance(2026)
   const { data: annualPerf } = useSavingsAnnualPerformance()
@@ -261,6 +260,13 @@ export function SavingsPortfolioModal({
 
   const [showIndexModal, setShowIndexModal] = useState(false)
   const [showOperationsModal, setShowOperationsModal] = useState(false)
+  const handleReturnToList = () => {
+    if (onReturnToList) {
+      onReturnToList()
+      return
+    }
+    onClose()
+  }
 
   const totalCashIn = useMemo(
     () => accountEvents
@@ -273,6 +279,28 @@ export function SavingsPortfolioModal({
     [currentAmount, totalCashIn],
   )
   const previewAccountEvents = useMemo(() => accountEvents.slice(0, 3), [accountEvents])
+  const cumulativeDepositsByEventId = useMemo(() => {
+    const cumulative = new Map<string, number>()
+    let runningTotal = 0
+
+    for (const event of accountEvents) {
+      if (event.amount > 0 && event.nature !== 'intérêts') runningTotal += event.amount
+      cumulative.set(event.id, runningTotal)
+    }
+
+    return cumulative
+  }, [accountEvents])
+  const previewCumulativeDepositsByEventId = useMemo(() => {
+    const cumulative = new Map<string, number>()
+    let runningTotal = 0
+
+    for (const event of previewAccountEvents) {
+      if (event.amount > 0 && event.nature !== 'intérêts') runningTotal += event.amount
+      cumulative.set(event.id, runningTotal)
+    }
+
+    return cumulative
+  }, [previewAccountEvents])
 
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
@@ -320,7 +348,7 @@ export function SavingsPortfolioModal({
           inset: 0,
           zIndex: 71,
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'center',
           padding: 'var(--space-3)',
           overflowY: 'auto',
@@ -330,13 +358,14 @@ export function SavingsPortfolioModal({
         <div
           style={{
             width: 'min(640px, 100%)',
+            maxHeight: 'calc(100dvh - 2 * var(--space-3))',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-2xl)',
             boxShadow: '0 24px 60px rgba(13,13,31,0.24)',
-            margin: 'var(--space-4) 0',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'visible',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             pointerEvents: 'auto',
           }}
         >
@@ -418,40 +447,42 @@ export function SavingsPortfolioModal({
 
         </div>
 
-        {/* Quick indicators grid */}
-        <div style={{ padding: '8px var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-            <IndicatorCell
-              icon={<CalendarDays size={14} strokeWidth={2} />}
-              value={openedAt
-                ? `${fmtMonthYear(openedAt)}${activeMonths != null ? ` (${activeMonths} mois)` : ''}`
-                : '—'}
-            />
-            <IndicatorCell
-              icon={<ArrowDownToLine size={14} strokeWidth={2} />}
-              value={lastDeposit
-                ? `${fmtDate(lastDeposit.transaction_date)} · ${fmtEur(lastDeposit.amount)}`
-                : '—'}
-            />
-            <IndicatorCell
-              icon={<PiggyBank size={14} strokeWidth={2} />}
-              value={amount2026 != null ? fmtEur(amount2026) : '—'}
-            />
-            <IndicatorCell
-              icon={<Target size={14} strokeWidth={2} />}
-              value={objectif2026}
-            />
-            <IndicatorCell
-              icon={<Shield size={14} strokeWidth={2} />}
-              value={risk.label}
-              valueColor={risk.color}
-            />
-            <IndicatorCell
-              icon={<Compass size={14} strokeWidth={2} />}
-              value={trend.label}
-              valueColor={trend.color}
-            />
-          </div>
+        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+          <section>
+            <SectionHeading label="Activité" color={account.color} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginTop: 'var(--space-3)' }}>
+              <IndicatorCell
+                icon={<CalendarDays size={14} strokeWidth={2} />}
+                value={openedAt
+                  ? `${fmtMonthYear(openedAt)}${activeMonths != null ? ` (${activeMonths} mois)` : ''}`
+                  : '—'}
+              />
+              <IndicatorCell
+                icon={<ArrowDownToLine size={14} strokeWidth={2} />}
+                value={lastDeposit
+                  ? `${fmtDate(lastDeposit.transaction_date)} · ${fmtEur(lastDeposit.amount)}`
+                  : '—'}
+              />
+              <IndicatorCell
+                icon={<PiggyBank size={14} strokeWidth={2} />}
+                value={amount2026 != null ? fmtEur(amount2026) : '—'}
+              />
+              <IndicatorCell
+                icon={<Target size={14} strokeWidth={2} />}
+                value={objectif2026}
+              />
+              <IndicatorCell
+                icon={<Shield size={14} strokeWidth={2} />}
+                value={risk.label}
+                valueColor={risk.color}
+              />
+              <IndicatorCell
+                icon={<Compass size={14} strokeWidth={2} />}
+                value={trend.label}
+                valueColor={trend.color}
+              />
+            </div>
+          </section>
         </div>
 
         {/* Middle section: operations list */}
@@ -464,7 +495,31 @@ export function SavingsPortfolioModal({
           <section>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <SectionHeading label="Opérations" color={account.color} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderTop: '6px solid transparent',
+                      borderBottom: '6px solid transparent',
+                      borderLeft: `10px solid ${account.color}`,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-xs)',
+                      fontWeight: 500,
+                      color: 'var(--neutral-900)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                    }}
+                  >
+                    Opérations
+                  </h3>
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowOperationsModal(true)}
@@ -479,7 +534,7 @@ export function SavingsPortfolioModal({
                     alignItems: 'center',
                     color: 'var(--primary)',
                     fontSize: 9,
-                    fontWeight: 700,
+                    fontWeight: 500,
                     flexShrink: 0,
                   }}
                 >
@@ -506,31 +561,88 @@ export function SavingsPortfolioModal({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 116px 132px',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                     columnGap: '14px',
                     padding: '0 6px 4px',
                     borderBottom: '1px solid var(--neutral-100)',
                     lineHeight: 1,
                   }}
                 >
-                  {(['Date', 'Nature', 'Montant'] as const)
-                    .filter(Boolean)
-                    .map((label) => (
-                      <span
-                        key={label}
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          color: 'var(--neutral-400)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.07em',
-                          textAlign: label === 'Montant' ? 'left' : 'left',
-                          paddingLeft: label === 'Nature' ? 2 : 0,
-                        }}
-                      >
-                        {label}
-                      </span>
-                    ))}
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 500,
+                      color: 'var(--neutral-400)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      textAlign: 'left',
+                    }}
+                  >
+                    Date
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 500,
+                      color: 'var(--neutral-400)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      display: 'inline-grid',
+                      gridTemplateColumns: '12px auto',
+                      columnGap: 6,
+                      alignItems: 'center',
+                      justifyItems: 'start',
+                    }}
+                  >
+                    <span aria-hidden="true" style={{ width: 12, height: 12, display: 'inline-block' }} />
+                    <span>Nature</span>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 500,
+                      color: 'var(--neutral-400)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      display: 'inline-grid',
+                      gridTemplateColumns: '9px auto',
+                      columnGap: 4,
+                      alignItems: 'center',
+                      justifyItems: 'start',
+                      justifySelf: 'center',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 9,
+                        display: 'inline-block',
+                        visibility: 'hidden',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        fontFamily: 'var(--font-mono)',
+                        lineHeight: 1,
+                        textAlign: 'center',
+                      }}
+                    >
+                      +
+                    </span>
+                    <span>Montant</span>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 500,
+                      color: 'var(--neutral-400)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      textAlign: 'right',
+                      justifySelf: 'end',
+                    }}
+                  >
+                    Total
+                  </span>
                 </div>
 
                 {previewAccountEvents.map((event, idx) => {
@@ -542,13 +654,14 @@ export function SavingsPortfolioModal({
                     : (isPlacementAccount ? epargnePlacementIcon : epargneVirementIcon)
                   const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
                   const amountAbs = fmtEur(Math.abs(event.amount))
+                  const cumulativeTotal = previewCumulativeDepositsByEventId.get(event.id) ?? 0
 
                   return (
                     <div
                       key={event.id}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '1fr 116px 132px',
+                        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                         columnGap: '14px',
                         padding: '7px 6px',
                         borderBottom: idx < previewAccountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
@@ -610,19 +723,19 @@ export function SavingsPortfolioModal({
                       <span
                         style={{
                           fontSize: 12,
-                          fontWeight: 700,
+                          fontWeight: 500,
                           fontFamily: 'var(--font-mono)',
                           textAlign: 'left',
                           color: 'var(--neutral-900)',
                           whiteSpace: 'nowrap',
                           lineHeight: 1,
-                          width: '100%',
+                          width: 'auto',
                           display: 'inline-grid',
                           gridTemplateColumns: '9px auto',
                           columnGap: 4,
                           justifyContent: 'start',
                           alignItems: 'center',
-                          justifySelf: 'start',
+                          justifySelf: 'center',
                         }}
                       >
                         <span
@@ -640,6 +753,20 @@ export function SavingsPortfolioModal({
                         </span>
                         <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
                       </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--neutral-900)',
+                          textAlign: 'right',
+                          justifySelf: 'end',
+                          whiteSpace: 'nowrap',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {fmtEur(cumulativeTotal)}
+                      </span>
                     </div>
                   )
                 })}
@@ -654,7 +781,7 @@ export function SavingsPortfolioModal({
             flexShrink: 0,
             borderTop: '1px solid var(--neutral-100)',
             background: 'var(--neutral-50)',
-            padding: 'var(--space-4)',
+            padding: 'var(--space-4) var(--space-4) var(--space-2)',
           }}
         >
           <section>
@@ -785,6 +912,29 @@ export function SavingsPortfolioModal({
                   {advice}
                 </p>
               </div>
+
+              <div style={{ marginTop: 'var(--space-1)', display: 'flex', justifyContent: 'flex-start' }}>
+                <button
+                  type="button"
+                  onClick={handleReturnToList}
+                  style={{
+                    height: 34,
+                    minHeight: 34,
+                    minWidth: 104,
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--neutral-700)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-800)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 'var(--font-weight-bold)',
+                    textTransform: 'lowercase',
+                    padding: '0 var(--space-4)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  retour
+                </button>
+              </div>
             </div>
           </section>
         </div>
@@ -841,7 +991,7 @@ export function SavingsPortfolioModal({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 500 }}>
                   Liste complète des opérations ({accountEvents.length})
                 </p>
                 <button
@@ -876,29 +1026,88 @@ export function SavingsPortfolioModal({
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '1fr 116px 132px',
+                        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                         columnGap: '14px',
                         padding: '0 6px 4px',
                         borderBottom: '1px solid var(--neutral-100)',
                         lineHeight: 1,
                       }}
                     >
-                      {(['Date', 'Nature', 'Montant'] as const).map((label) => (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 500,
+                          color: 'var(--neutral-400)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.07em',
+                          textAlign: 'left',
+                        }}
+                      >
+                        Date
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 500,
+                          color: 'var(--neutral-400)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.07em',
+                          display: 'inline-grid',
+                          gridTemplateColumns: '12px auto',
+                          columnGap: 6,
+                          alignItems: 'center',
+                          justifyItems: 'start',
+                        }}
+                      >
+                        <span aria-hidden="true" style={{ width: 12, height: 12, display: 'inline-block' }} />
+                        <span>Nature</span>
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 500,
+                          color: 'var(--neutral-400)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.07em',
+                          display: 'inline-grid',
+                          gridTemplateColumns: '9px auto',
+                          columnGap: 4,
+                          alignItems: 'center',
+                          justifyItems: 'start',
+                          justifySelf: 'center',
+                          textAlign: 'left',
+                        }}
+                      >
                         <span
-                          key={label}
+                          aria-hidden="true"
                           style={{
-                            fontSize: 9,
-                            fontWeight: 700,
-                            color: 'var(--neutral-400)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.07em',
-                            textAlign: 'left',
-                            paddingLeft: label === 'Nature' ? 2 : 0,
+                            width: 9,
+                            display: 'inline-block',
+                            visibility: 'hidden',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            fontFamily: 'var(--font-mono)',
+                            lineHeight: 1,
+                            textAlign: 'center',
                           }}
                         >
-                          {label}
+                          +
                         </span>
-                      ))}
+                        <span>Montant</span>
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 500,
+                          color: 'var(--neutral-400)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.07em',
+                          textAlign: 'right',
+                          justifySelf: 'end',
+                        }}
+                      >
+                        Total
+                      </span>
                     </div>
 
                     {accountEvents.map((event, idx) => {
@@ -910,13 +1119,14 @@ export function SavingsPortfolioModal({
                         : (isPlacementAccount ? epargnePlacementIcon : epargneVirementIcon)
                       const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
                       const amountAbs = fmtEur(Math.abs(event.amount))
+                      const cumulativeTotal = cumulativeDepositsByEventId.get(event.id) ?? 0
 
                       return (
                         <div
                           key={`all-${event.id}`}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 116px 132px',
+                            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                             columnGap: '14px',
                             padding: '7px 6px',
                             borderBottom: idx < accountEvents.length - 1 ? '1px solid var(--neutral-50)' : 'none',
@@ -978,19 +1188,19 @@ export function SavingsPortfolioModal({
                           <span
                             style={{
                               fontSize: 12,
-                              fontWeight: 700,
+                              fontWeight: 500,
                               fontFamily: 'var(--font-mono)',
                               textAlign: 'left',
                               color: 'var(--neutral-900)',
                               whiteSpace: 'nowrap',
                               lineHeight: 1,
-                              width: '100%',
+                              width: 'auto',
                               display: 'inline-grid',
                               gridTemplateColumns: '9px auto',
                               columnGap: 4,
                               justifyContent: 'start',
                               alignItems: 'center',
-                              justifySelf: 'start',
+                              justifySelf: 'center',
                             }}
                           >
                             <span
@@ -1007,6 +1217,20 @@ export function SavingsPortfolioModal({
                               {amountSign || '+'}
                             </span>
                             <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--neutral-900)',
+                              textAlign: 'right',
+                              justifySelf: 'end',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1,
+                            }}
+                          >
+                            {fmtEur(cumulativeTotal)}
                           </span>
                         </div>
                       )
@@ -1523,14 +1747,17 @@ function IndexEvolutionModal({
         style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.6)', backdropFilter: 'blur(3px)' }}
       />
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Évolution des indices ${accountLabel}`}
         initial={{ opacity: 0, scale: 0.97, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        style={{ position: 'fixed', inset: 0, zIndex: 81, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', pointerEvents: 'none' }}
+        style={{ position: 'fixed', inset: 0, zIndex: 81, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', overflowY: 'auto', pointerEvents: 'none' }}
       >
-        <div style={{ width: 'min(560px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: '0 24px 60px rgba(13,13,31,0.28)', pointerEvents: 'auto', overflow: 'hidden' }}>
+        <div style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100dvh - 2 * var(--space-4))', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: '0 24px 60px rgba(13,13,31,0.28)', pointerEvents: 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
@@ -1582,6 +1809,8 @@ function IndexEvolutionModal({
               </button>
             </div>
           </div>
+
+          <div style={{ overflowY: 'auto' }}>
 
           {/* ── Bitcoin — cours + valeur portefeuille bimestriel ── */}
           {isBtcChart && btcData ? (
@@ -2620,6 +2849,7 @@ function IndexEvolutionModal({
               </p>
             </div>
           )}
+          </div>
         </div>
       </motion.div>
     </>
