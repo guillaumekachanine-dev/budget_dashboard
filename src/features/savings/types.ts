@@ -98,11 +98,73 @@ export type FinancialSecurityPayload = {
   monthly_essentials: FinancialSecurityMonthlyEssential[]
 }
 
+export type SavingsRiskLevel = 'low' | 'medium' | 'high'
+
+export type SavingsAccountDisplay = {
+  config_id: string
+  user_id: string
+  account_id: string
+  savings_family: string | null
+  savings_kind: string | null
+  display_name: string | null
+  display_order: number | null
+  is_liquid: boolean | null
+  risk_level: SavingsRiskLevel | null
+  is_tax_advantaged: boolean | null
+  is_locked: boolean | null
+  institution_name: string | null
+  currency: string | null
+  current_balance: number | null
+  sub_accounts_count: number | null
+  latest_balance_month: string | null
+  latest_observed_date: string | null
+}
+
+export type SavingsAnnualPerformanceRow = {
+  user_id: string
+  account_id: string
+  display_name: string | null
+  display_order: number | null
+  savings_family: string | null
+  savings_kind: string | null
+  period_year: number | null
+  balance_boy: number | null
+  balance_eoy: number | null
+  total_versed_eur: number | null
+  operations_count: number | null
+  performance_amount: number | null
+  performance_pct: number | null
+  regulated_rate_pct: number | null
+  regulated_interest_theoretical: number | null
+  latest_snapshot_date: string | null
+}
+
+export type SavingsPortfolioAnnualRow = {
+  user_id: string
+  period_year: number | null
+  total_portfolio_eoy: number | null
+  total_portfolio_boy: number | null
+  total_versed_year: number | null
+  total_performance_amount: number | null
+  livrets_eoy: number | null
+  placements_eoy: number | null
+  livrets_versed: number | null
+  placements_versed: number | null
+  livrets_performance: number | null
+  placements_performance: number | null
+  accounts_count: number | null
+  portfolio_performance_pct: number | null
+  cumul_versed_all_time: number | null
+  cumul_performance_all_time: number | null
+}
+
 export type SavingsEvolutionFiveYearsSeries = {
   key: string
   label: string
   color: string
   family: 'livrets' | 'placements'
+  savings_kind: string
+  risk_level: SavingsRiskLevel | null
 }
 
 export type SavingsEvolutionFiveYearsRow = {

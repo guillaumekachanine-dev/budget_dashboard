@@ -3,15 +3,18 @@ import type {
   SavingsEvolutionFiveYearsPayload,
   SavingsEvolutionFiveYearsRow,
   SavingsEvolutionFiveYearsSeries,
+  SavingsRiskLevel,
 } from '@/features/savings/types'
 
 type SavingsFamily = 'livrets' | 'placements'
 
-type AccountRow = {
-  id: string
-  name: string
-  account_type: string | null
-  opening_balance: number | null
+type ConfigRow = {
+  account_id: string
+  display_name: string | null
+  savings_family: string | null
+  savings_kind: string | null
+  risk_level: SavingsRiskLevel | null
+  current_balance: number | null
 }
 
 type SnapshotRow = {
@@ -47,41 +50,6 @@ function normalizeLabelStr(value: string): string {
     .trim()
 }
 
-function hasWord(normalized: string, word: string): boolean {
-  const pattern = new RegExp(`\\b${word}\\b`, 'i')
-  return pattern.test(normalized)
-}
-
-function resolveSavingsFamily(name: string, accountType: string | null): SavingsFamily | null {
-  const normalized = normalizeLabelStr(name)
-
-  const isPer = hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')
-  const isPercol = hasWord(normalized, 'percol') || hasWord(normalized, 'perco') || hasWord(normalized, 'peg') || normalized.includes('capgemini')
-  if (
-    hasWord(normalized, 'pea')
-    || isPer
-    || isPercol
-    || normalized.includes('placement')
-    || normalized.includes('assurance vie')
-    || normalized.includes('crypto')
-    || normalized.includes('amundi')
-    || hasWord(normalized, 'cto')
-    || hasWord(normalized, 'bitcoin')
-  ) {
-    return 'placements'
-  }
-
-  if (normalized.includes('livret') || hasWord(normalized, 'ldds') || hasWord(normalized, 'lep')) {
-    return 'livrets'
-  }
-
-  if (accountType === 'savings') {
-    return normalized.includes('epargne') ? 'livrets' : 'placements'
-  }
-
-  return null
-}
-
 function toNatureFromView(
   normalizedLabel: string | null,
   categoryName: string | null,
@@ -107,10 +75,10 @@ function buildFallbackPayload(endYear: number): SavingsEvolutionFiveYearsPayload
   const years = Array.from({ length: 5 }, (_, index) => String(endYear - 4 + index))
 
   const series: SavingsEvolutionFiveYearsSeries[] = [
-    { key: 'livret_a', label: 'Livret A', color: LIVRET_LINE_COLORS[0], family: 'livrets' },
-    { key: 'ldds', label: 'LDDS', color: LIVRET_LINE_COLORS[1], family: 'livrets' },
-    { key: 'pea', label: 'PEA', color: PLACEMENT_LINE_COLORS[0], family: 'placements' },
-    { key: 'per', label: 'PER', color: PLACEMENT_LINE_COLORS[1], family: 'placements' },
+    { key: 'livret_a', label: 'Livret A', color: LIVRET_LINE_COLORS[0], family: 'livrets', savings_kind: 'livret_a', risk_level: null },
+    { key: 'ldds', label: 'LDDS', color: LIVRET_LINE_COLORS[1], family: 'livrets', savings_kind: 'ldds', risk_level: null },
+    { key: 'pea', label: 'PEA', color: PLACEMENT_LINE_COLORS[0], family: 'placements', savings_kind: 'pea', risk_level: 'medium' },
+    { key: 'per', label: 'PER', color: PLACEMENT_LINE_COLORS[1], family: 'placements', savings_kind: 'per', risk_level: 'low' },
   ]
 
   const baseRows = [
@@ -179,10 +147,11 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
 
   try {
     const [accountsResult, snapshotsResult, operationsResult] = await Promise.all([
-      budgetDb
-        .from('accounts')
-        .select('id,name,account_type,opening_balance')
-        .eq('include_in_dashboard', true),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (budgetDb as any)
+        .from('v_savings_accounts_display')
+        .select('account_id,display_name,savings_family,savings_kind,risk_level,current_balance')
+        .order('display_order', { ascending: true }),
       budgetDb
         .from('savings_balance_snapshots')
         .select('account_id,snapshot_date,balance_eur,total_saved_eur,operations_count')
@@ -207,9 +176,10 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
       throw new Error(`getSavingsEvolutionFiveYears operations: ${operationsResult.error.message}`)
     }
 
-    const accounts = ((accountsResult.data ?? []) as unknown as AccountRow[])
-      .map((a) => ({ ...a, family: resolveSavingsFamily(a.name, a.account_type) }))
-      .filter((a): a is AccountRow & { family: SavingsFamily } => a.family != null)
+    const accounts = ((accountsResult.data ?? []) as unknown as ConfigRow[])
+      .filter((a): a is ConfigRow & { savings_family: SavingsFamily } =>
+        a.savings_family === 'livrets' || a.savings_family === 'placements'
+      )
 
     const snapshots = (snapshotsResult.data ?? []) as unknown as SnapshotRow[]
     const allOperations = (operationsResult.data ?? []) as unknown as OperationsViewRow[]
@@ -218,31 +188,16 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
       return buildFallbackPayload(endYear)
     }
 
-    // Latest balance per account from snapshots (ordered ASC → last write wins)
-    const latestBalanceByAccount = new Map<string, number>()
-    for (const snap of snapshots) {
-      latestBalanceByAccount.set(snap.account_id, Number(snap.balance_eur ?? 0))
-    }
-
-    // Include accounts with snapshot balance OR positive opening_balance (e.g. Bitcoin)
     const selectedAccounts = accounts
-      .filter((a) => {
-        const snapshotBal = latestBalanceByAccount.get(a.id) ?? 0
-        const openingBal = a.opening_balance ?? 0
-        return Math.max(snapshotBal, openingBal) > 0
-      })
-      .sort((a, b) => {
-        const balA = Math.max(latestBalanceByAccount.get(a.id) ?? 0, a.opening_balance ?? 0)
-        const balB = Math.max(latestBalanceByAccount.get(b.id) ?? 0, b.opening_balance ?? 0)
-        return balB - balA
-      })
+      .filter((a) => (a.current_balance ?? 0) > 0)
+      .sort((a, b) => (b.current_balance ?? 0) - (a.current_balance ?? 0))
       .slice(0, MAX_SERIES)
 
     if (selectedAccounts.length === 0) {
       return buildFallbackPayload(endYear)
     }
 
-    const selectedAccountIds = new Set(selectedAccounts.map((a) => a.id))
+    const selectedAccountIds = new Set(selectedAccounts.map((a) => a.account_id))
 
     // For each (account_id × year): latest snapshot balance (ordered ASC → last write wins per year)
     type YearSnap = {
@@ -266,10 +221,17 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     const livretColorCursor = { value: 0 }
     const placementColorCursor = { value: 0 }
     const series: SavingsEvolutionFiveYearsSeries[] = selectedAccounts.map((a) => {
-      const color = a.family === 'livrets'
+      const color = a.savings_family === 'livrets'
         ? LIVRET_LINE_COLORS[livretColorCursor.value++ % LIVRET_LINE_COLORS.length]
         : PLACEMENT_LINE_COLORS[placementColorCursor.value++ % PLACEMENT_LINE_COLORS.length]
-      return { key: a.id, label: a.name, color, family: a.family }
+      return {
+        key: a.account_id,
+        label: a.display_name ?? a.account_id,
+        color,
+        family: a.savings_family,
+        savings_kind: a.savings_kind ?? '',
+        risk_level: a.risk_level ?? null,
+      }
     })
 
     // Rows: one entry per year, one column per account
@@ -279,17 +241,16 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     }
     for (const account of selectedAccounts) {
       for (let y = startYear; y <= endYear; y++) {
-        const snap = snapByAccountYear.get(`${account.id}::${y}`)
+        const snap = snapByAccountYear.get(`${account.account_id}::${y}`)
         if (snap) {
           const row = yearlyPoints.get(String(y))
-          if (row) row[account.id] = Math.max(0, Math.round(snap.balance_eur))
+          if (row) row[account.account_id] = Math.max(0, Math.round(snap.balance_eur))
         }
       }
-      // Accounts with no snapshots (e.g. Bitcoin): use opening_balance for current year
-      const hasAnySnapshot = snapshots.some((s) => s.account_id === account.id)
-      if (!hasAnySnapshot && (account.opening_balance ?? 0) > 0) {
-        const currentYearRow = yearlyPoints.get(String(endYear))
-        if (currentYearRow) currentYearRow[account.id] = Math.round(account.opening_balance!)
+      // Accounts with no current-year snapshot: carry forward current_balance from the view
+      const currentYearRow = yearlyPoints.get(String(endYear))
+      if (currentYearRow && currentYearRow[account.account_id] === undefined && (account.current_balance ?? 0) > 0) {
+        currentYearRow[account.account_id] = Math.round(account.current_balance!)
       }
     }
 
@@ -310,7 +271,7 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     const yearlyMetricsPayload: SavingsEvolutionFiveYearsPayload['yearly_account_metrics'] = {}
     for (const account of selectedAccounts) {
       for (let y = startYear; y <= endYear; y++) {
-        const key = `${account.id}::${y}`
+        const key = `${account.account_id}::${y}`
         const snap = snapByAccountYear.get(key)
         yearlyMetricsPayload[key] = {
           operations_count: snap?.operations_count ?? 0,
@@ -332,12 +293,12 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
       // Withdrawals (direction='expense') are stored as positive but represent outflows
       const amount = op.direction === 'expense' ? -rawAmount : rawAmount
       const year = op.transaction_date.slice(0, 4)
-      const account = selectedAccounts.find((a) => a.id === op.destination_account_id)
+      const account = selectedAccounts.find((a) => a.account_id === op.destination_account_id)
 
       operationEvents.push({
         id: op.transaction_id,
         account_key: op.destination_account_id,
-        account_label: account?.name ?? op.destination_account_name ?? '',
+        account_label: account?.display_name ?? op.destination_account_name ?? '',
         year,
         transaction_date: op.transaction_date,
         amount,
@@ -352,7 +313,8 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
       operation_events: operationEvents,
       isFallback: false,
     }
-  } catch {
+  } catch (err) {
+    console.error('[getSavingsEvolutionFiveYears] fallback triggered:', err)
     return buildFallbackPayload(endYear)
   }
 }
