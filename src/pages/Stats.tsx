@@ -17,6 +17,7 @@ import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAll
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
+import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
 import { EmptyState, StatsSection } from '@/features/stats/components/ui'
@@ -326,9 +327,11 @@ export function Stats() {
           <SavingsHeroCard onOpenAllocationModal={() => setShowSavingsAllocationModal(true)} />
           <StatsMajorSectionHeading title="Planning épargne 2026" />
           <SavingsPlanning2026Section />
-          <StatsMajorSectionHeading title="Détails de l'épargne" />
+          <StatsMajorSectionHeading title="Capital investi" />
           <SavingsEvolutionFiveYearsChart />
           <FinancialSecurityCard />
+          <StatsMajorSectionHeading title="performance" />
+          <SavingsPortfoliosListSection />
 
           {snapshot ? (
             <StatsTotalNeedCard
