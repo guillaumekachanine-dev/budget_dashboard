@@ -117,8 +117,10 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
             title="Répartition"
             style={{
               position: 'absolute',
-              top: 'var(--space-3)',
-              right: 'var(--space-3)',
+              top: 0,
+              right: 0,
+              transform: 'translate(18%, -18%)',
+              transformOrigin: 'top right',
               zIndex: 3,
               border: 'none',
               background: 'transparent',
@@ -134,8 +136,8 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
               alt=""
               aria-hidden="true"
               style={{
-                width: 34,
-                height: 34,
+                width: 204,
+                height: 204,
                 objectFit: 'contain',
                 display: 'block',
               }}
