@@ -12,7 +12,8 @@ function asNullableBoolean(value: unknown): boolean | null {
 }
 
 export async function getSavingsAccountsDisplay(): Promise<SavingsAccountDisplay[]> {
-  const { data, error } = await budgetDb
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (budgetDb as any)
     .from('v_savings_accounts_display')
     .select('*')
     .order('display_order', { ascending: true })

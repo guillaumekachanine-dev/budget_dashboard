@@ -7,7 +7,8 @@ function asNullableNumber(value: unknown): number | null {
 }
 
 export async function getSavingsAnnualPerformance(): Promise<SavingsAnnualPerformanceRow[]> {
-  const { data, error } = await budgetDb
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (budgetDb as any)
     .from('v_savings_annual_performance')
     .select('*')
     .order('period_year', { ascending: true })

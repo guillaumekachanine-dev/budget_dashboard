@@ -1121,6 +1121,8 @@ export function SavingsEvolutionFiveYearsChart() {
                 label: portfolioRow.label,
                 color: portfolioRow.color,
                 family: portfolioRow.family,
+                savings_kind: portfolioRow.savings_kind,
+                risk_level: portfolioRow.risk_level,
                 shortLabel: portfolioRow.shortLabel,
                 iconSrc: portfolioRow.iconSrc,
                 listLabel: portfolioRow.listLabel,
