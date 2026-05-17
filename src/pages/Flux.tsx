@@ -6,7 +6,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
-import { formatCurrency, formatCurrencyRounded, getTxLabel, todayIso } from '@/lib/utils'
+import { formatCurrencyRounded, getTxLabel, todayIso } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -275,7 +275,7 @@ function resultNoun(flow: FlowFilter): string {
   return 'opérations'
 }
 
-function formatRowAmount(amount: number, flowType: string, rawAmount: number): string {
+function formatRowAmount(amount: number, flowType: string | null, rawAmount: number): string {
   if (flowType === 'transfer' || flowType === 'savings') {
     return `(${formatCurrencyRounded(Math.abs(rawAmount))})`
   }
