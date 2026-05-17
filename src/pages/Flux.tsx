@@ -1862,7 +1862,7 @@ export function Flux() {
                         border: 'none',
                         background: 'transparent',
                         display: 'grid',
-                        gridTemplateColumns: '42px 26px 8px 1fr auto',
+                        gridTemplateColumns: '42px 26px 1fr auto',
                         alignItems: 'center',
                         gap: 8,
                         padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
@@ -1880,14 +1880,6 @@ export function Flux() {
                       <span style={{ fontSize: 12, fontWeight: 700, color: isJoint ? '#C9A26A' : 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
                         {formatDateLabel(transaction.transaction_date)}
                       </span>
-                      {isJoint && (
-                        <span style={{
-                          width: 6, height: 6,
-                          borderRadius: '50%',
-                          backgroundColor: '#C9A26A',
-                          flexShrink: 0,
-                        }} />
-                      )}
                       <span style={{
                         width: 26, height: 26,
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1950,7 +1942,7 @@ export function Flux() {
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                     }}>
-                      <CategoryIcon iconKey={planned.category_id ? categoryById.get(planned.category_id)?.icon_key ?? null : null} label={categoryName} size={24} />
+                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
                     </span>
                     <span
                       style={{
