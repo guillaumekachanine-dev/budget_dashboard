@@ -305,7 +305,6 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-x: clip;
   }
 
   .app-main {
@@ -344,7 +343,6 @@
   .app-shell {
     min-height: var(--app-height);
     height: auto;
-    overflow-x: hidden;
     overflow-y: visible;
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Pencil, AlertCircle } from 'lucide-react'
-import { formatCurrencyRounded, getCategoryColor } from '@/lib/utils'
+import { formatCurrency, getCategoryColor } from '@/lib/utils'
 import type { Category, Transaction, FlowType, BudgetBehavior } from '@/lib/types'
 import { useUpdateTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -65,11 +65,6 @@ function formatLongDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-}
-
-function formatMoneyInteger(amount: number): string {
-  if (!Number.isFinite(amount)) return formatCurrencyRounded(0)
-  return formatCurrencyRounded(Math.floor(amount))
 }
 
 export function TransactionDetailsModal({
@@ -611,7 +606,7 @@ export function TransactionDetailsModal({
                             fontFamily: 'var(--font-mono)',
                           }}
                         >
-                          {formatMoneyInteger(details.amount)}
+                          {formatCurrency(details.amount)}
                         </p>
 
                         <p

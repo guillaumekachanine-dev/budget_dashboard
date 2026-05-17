@@ -6,7 +6,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
-import { formatCurrency, getTxLabel, todayIso } from '@/lib/utils'
+import { formatCurrency, formatCurrencyRounded, getTxLabel, todayIso } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -275,6 +275,16 @@ function resultNoun(flow: FlowFilter): string {
   return 'opérations'
 }
 
+function formatRowAmount(amount: number, flowType: string, rawAmount: number): string {
+  if (flowType === 'transfer' || flowType === 'savings') {
+    return `(${formatCurrencyRounded(Math.abs(rawAmount))})`
+  }
+  if (amount > 0) {
+    return `+${formatCurrencyRounded(amount)}`
+  }
+  return formatCurrencyRounded(amount)
+}
+
 function getTodayDateKey(): string {
   const now = new Date()
   const y = now.getFullYear()
@@ -294,8 +304,8 @@ function signedPlannedAmount(item: PlannedOperationFlowItem): number {
   const flow = item.flow_type
 
   if (flow === 'income') return absolute
-  if (flow === 'transfer') return 0
-  if (flow === 'expense' || flow === 'savings') {
+  if (flow === 'transfer' || flow === 'savings') return 0
+  if (flow === 'expense') {
     return -absolute
   }
 
@@ -1575,7 +1585,7 @@ export function Flux() {
           <div
             style={{
               position: 'sticky',
-              top: 0,
+              top: 'var(--safe-top, 0px)',
               zIndex: 10,
               background: 'var(--neutral-0)',
               borderBottom: '1px solid var(--neutral-200)',
@@ -1625,7 +1635,7 @@ export function Flux() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {formatCurrency(listHeaderAmount)}
+              {formatCurrencyRounded(listHeaderAmount)}
             </span>
           </div>
 
@@ -1700,10 +1710,10 @@ export function Flux() {
                               fontFamily: 'var(--font-mono)',
                               textAlign: 'right',
                               whiteSpace: 'nowrap',
-                              color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                             }}
                           >
-                            {formatCurrency(amount)}
+                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
                           </span>
                         </div>
                       </div>
@@ -1758,10 +1768,10 @@ export function Flux() {
                               fontFamily: 'var(--font-mono)',
                               textAlign: 'right',
                               whiteSpace: 'nowrap',
-                              color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                             }}
                           >
-                            {formatCurrency(amount)}
+                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
                           </span>
                         </div>
                       </div>
@@ -1780,68 +1790,57 @@ export function Flux() {
             {generalMergedRows.map((row, index) => {
               const prevRow = index > 0 ? generalMergedRows[index - 1] : null
               const prevKey = prevRow?.dateKey ?? null
-              const curYear = row.dateKey.slice(0, 4)
               const curMonth = row.dateKey.slice(0, 7)
-              const prevYear = prevKey?.slice(0, 4) ?? null
               const prevMonth = prevKey?.slice(0, 7) ?? null
-              const yearChanged = prevYear !== null && prevYear !== curYear
-              const monthChanged = prevMonth !== null && prevMonth !== curMonth
-              const hasSeparator = yearChanged || monthChanged
+              const monthChanged = prevMonth !== curMonth
+              const hasSeparator = monthChanged
 
-              const separators = (
-                <>
-                  {yearChanged && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '10px var(--space-6) 3px',
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: 'var(--neutral-600)',
-                          letterSpacing: '0.06em',
-                          fontFamily: 'var(--font-mono)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span style={{ fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1 }}>▶</span>
-                        {curYear}
-                      </span>
-                      <div style={{ flex: 1, height: 1.5, background: 'var(--neutral-400)' }} />
-                    </div>
-                  )}
-                  {monthChanged && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: yearChanged ? '2px var(--space-6) 3px' : '10px var(--space-6) 3px',
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: 'var(--neutral-500)',
-                          letterSpacing: '0.01em',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {formatMonthLabel(row.dateKey)}
-                      </span>
-                      <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
-                    </div>
-                  )}
-                </>
+              let monthRowsCount = 0
+              let monthRowsSum = 0
+              if (monthChanged) {
+                let j = index
+                while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
+                  monthRowsCount++
+                  const r = generalMergedRows[j]
+                  const amt = r.source === 'transaction' ? signedAmount(r.transaction) : signedPlannedAmount(r.planned)
+                  monthRowsSum += amt
+                  j++
+                }
+              }
+
+              const separators = monthChanged && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '10px var(--space-6) 3px',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: 'var(--neutral-500)',
+                      letterSpacing: '0.01em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatMonthLabel(row.dateKey)}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: 'var(--neutral-500)',
+                      letterSpacing: '0.01em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCurrencyRounded(monthRowsSum)}
+                  </span>
+                </div>
               )
 
               if (row.source === 'transaction') {
@@ -1906,10 +1905,10 @@ export function Flux() {
                           fontFamily: 'var(--font-mono)',
                           textAlign: 'right',
                           whiteSpace: 'nowrap',
-                          color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                          color: (transaction.flow_type === 'transfer' || transaction.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                         }}
                       >
-                        {formatCurrency(amount)}
+                        {formatRowAmount(amount, transaction.flow_type, Number(transaction.amount) || 0)}
                       </span>
                     </button>
                   </Fragment>
@@ -1963,10 +1962,10 @@ export function Flux() {
                         fontFamily: 'var(--font-mono)',
                         textAlign: 'right',
                         whiteSpace: 'nowrap',
-                        color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                        color: (planned.flow_type === 'transfer' || planned.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                       }}
                     >
-                      {formatCurrency(amount)}
+                      {formatRowAmount(amount, planned.flow_type, Number(planned.planned_personal_amount) || 0)}
                     </span>
                   </div>
                 </Fragment>
