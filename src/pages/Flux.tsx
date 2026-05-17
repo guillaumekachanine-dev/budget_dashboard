@@ -1928,7 +1928,7 @@ export function Flux() {
                       width: '100%',
                       background: 'transparent',
                       display: 'grid',
-                      gridTemplateColumns: '42px 26px 1fr auto',
+                      gridTemplateColumns: '42px 26px 1fr 26px auto',
                       alignItems: 'center',
                       gap: 8,
                       padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
@@ -1942,7 +1942,7 @@ export function Flux() {
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                     }}>
-                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
+                      <CategoryIcon iconKey={planned.category_id ? categoryById.get(planned.category_id)?.icon_key ?? null : null} label={categoryName} size={24} />
                     </span>
                     <span
                       style={{
@@ -1955,6 +1955,13 @@ export function Flux() {
                       }}
                     >
                       {planned.label ?? categoryName}
+                    </span>
+                    <span style={{
+                      width: 26, height: 26,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
                     </span>
                     <span
                       style={{
