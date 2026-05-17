@@ -1919,7 +1919,6 @@ export function Flux() {
               const planned = row.planned
               const amount = signedPlannedAmount(planned)
               const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
-              const iconKey = planned.category_id ? categoryById.get(planned.category_id)?.icon_key ?? null : null
 
               return (
                 <Fragment key={row.id}>
