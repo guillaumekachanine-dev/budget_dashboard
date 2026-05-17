@@ -1960,7 +1960,7 @@ export function Flux() {
                       width: 26, height: 26,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
-                      marginLeft: -12,
+                      marginLeft: -20,
                     }}>
                       <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(1.6)' }} />
                     </span>
