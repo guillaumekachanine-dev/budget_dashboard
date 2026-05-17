@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useDeferredValue, Fragment } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
+import { ChevronDown, ArrowLeft, Search, Check, ArrowUp } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
@@ -81,6 +81,17 @@ function capitalizeFirst(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return value
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`
+}
+
+const FRENCH_MONTHS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+]
+
+function formatMonthLabel(dateKey: string): string {
+  const year = parseInt(dateKey.slice(0, 4), 10)
+  const month = parseInt(dateKey.slice(5, 7), 10) - 1
+  return `${FRENCH_MONTHS[month]} ${year}`
 }
 
 const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string; hasSeparator?: boolean }> = [
@@ -726,6 +737,7 @@ export function Flux() {
   const [budgetFilter, setBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
   const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
   const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('all')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
@@ -1044,6 +1056,12 @@ export function Flux() {
   }, [draftFlow, draftPeriod, draftPeriodMode])
 
   const anySheetOpen = showTypeSheet || showPeriodSheet || showCategorySheet || showHeaderCategorySheet || showAdvancedSheet
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 220)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (!anySheetOpen) return
@@ -1554,11 +1572,14 @@ export function Flux() {
       </motion.section>
 
       <section>
-        <div style={{ padding: '0 var(--space-6)' }}>
           <div
             style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'var(--neutral-0)',
               borderBottom: '1px solid var(--neutral-200)',
-              paddingBottom: 10,
+              padding: 'var(--space-3) var(--space-6) 10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1607,7 +1628,6 @@ export function Flux() {
               {formatCurrency(listHeaderAmount)}
             </span>
           </div>
-        </div>
 
         {showSearchInput ? (
           <div style={{ padding: 'var(--space-3) var(--space-6) 0' }}>
@@ -1652,12 +1672,11 @@ export function Flux() {
                       <div
                         key={`planned-done-${operation.id}`}
                         style={{
-                          borderBottom: '1px solid var(--neutral-200)',
                           display: 'grid',
                           gridTemplateColumns: '42px 1fr auto',
                           alignItems: 'center',
                           gap: 8,
-                          padding: 'var(--space-3) var(--space-6)',
+                          padding: '7px var(--space-6)',
                         }}
                       >
                         {renderPlannedDate(operation.planned_date, 'done')}
@@ -1709,12 +1728,11 @@ export function Flux() {
                       <div
                         key={`planned-upcoming-${operation.id}`}
                         style={{
-                          borderBottom: '1px solid var(--neutral-200)',
                           display: 'grid',
                           gridTemplateColumns: '42px 1fr auto',
                           alignItems: 'center',
                           gap: 8,
-                          padding: 'var(--space-3) var(--space-6)',
+                          padding: '7px var(--space-6)',
                           opacity: 0.84,
                           background: 'color-mix(in oklab, var(--primary-50) 28%, var(--neutral-0) 72%)',
                         }}
@@ -1759,44 +1777,173 @@ export function Flux() {
           </motion.div>
         ) : (
           <div>
-            {generalMergedRows.map((row) => {
+            {generalMergedRows.map((row, index) => {
+              const prevRow = index > 0 ? generalMergedRows[index - 1] : null
+              const prevKey = prevRow?.dateKey ?? null
+              const curYear = row.dateKey.slice(0, 4)
+              const curMonth = row.dateKey.slice(0, 7)
+              const prevYear = prevKey?.slice(0, 4) ?? null
+              const prevMonth = prevKey?.slice(0, 7) ?? null
+              const yearChanged = prevYear !== null && prevYear !== curYear
+              const monthChanged = prevMonth !== null && prevMonth !== curMonth
+              const hasSeparator = yearChanged || monthChanged
+
+              const separators = (
+                <>
+                  {yearChanged && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px var(--space-6) 3px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: 'var(--neutral-600)',
+                          letterSpacing: '0.06em',
+                          fontFamily: 'var(--font-mono)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1 }}>▶</span>
+                        {curYear}
+                      </span>
+                      <div style={{ flex: 1, height: 1.5, background: 'var(--neutral-400)' }} />
+                    </div>
+                  )}
+                  {monthChanged && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: yearChanged ? '2px var(--space-6) 3px' : '10px var(--space-6) 3px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: 'var(--neutral-500)',
+                          letterSpacing: '0.01em',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatMonthLabel(row.dateKey)}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
+                    </div>
+                  )}
+                </>
+              )
+
               if (row.source === 'transaction') {
                 const transaction = row.transaction
                 const label = getTxLabel(transaction)
                 const category = displayTxnCategoryName(transaction)
                 const amount = signedAmount(transaction)
+                const isJoint = transaction.account?.name?.toLowerCase().includes('joint') ?? false
 
                 return (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => setDetailsTxn(transaction)}
+                  <Fragment key={row.id}>
+                    {separators}
+                    <button
+                      type="button"
+                      onClick={() => setDetailsTxn(transaction)}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'grid',
+                        gridTemplateColumns: '42px 26px 1fr auto',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'background-color var(--transition-fast)',
+                      }}
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 700, color: isJoint ? '#C9A26A' : 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
+                        {formatDateLabel(transaction.transaction_date)}
+                      </span>
+                      <span style={{
+                        width: 26, height: 26,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 400,
+                          color: 'var(--neutral-700)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 400,
+                          fontFamily: 'var(--font-mono)',
+                          textAlign: 'right',
+                          whiteSpace: 'nowrap',
+                          color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                        }}
+                      >
+                        {formatCurrency(amount)}
+                      </span>
+                    </button>
+                  </Fragment>
+                )
+              }
+
+              const planned = row.planned
+              const amount = signedPlannedAmount(planned)
+              const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
+              const iconKey = planned.category_id ? categoryById.get(planned.category_id)?.icon_key ?? null : null
+
+              return (
+                <Fragment key={row.id}>
+                  {separators}
+                  <div
                     style={{
                       width: '100%',
-                      border: 'none',
-                      borderBottom: '1px solid var(--neutral-200)',
                       background: 'transparent',
                       display: 'grid',
                       gridTemplateColumns: '42px 26px 1fr auto',
                       alignItems: 'center',
                       gap: 8,
-                      padding: 'var(--space-3) var(--space-6)',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      transition: 'background-color var(--transition-fast)',
-                    }}
-                    onMouseEnter={(event) => {
-                      event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                    }}
-                    onMouseLeave={(event) => {
-                      event.currentTarget.style.backgroundColor = 'transparent'
+                      padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
                     }}
                   >
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-                      {formatDateLabel(transaction.transaction_date)}
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-600)', whiteSpace: 'nowrap' }}>
+                      {formatDateLabel(planned.planned_date)}
                     </span>
-                    <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
+                    <span style={{
+                      width: 26, height: 26,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
                     </span>
                     <span
                       style={{
@@ -1808,7 +1955,7 @@ export function Flux() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {label}
+                      {planned.label ?? categoryName}
                     </span>
                     <span
                       style={{
@@ -1822,58 +1969,8 @@ export function Flux() {
                     >
                       {formatCurrency(amount)}
                     </span>
-                  </button>
-                )
-              }
-
-              const planned = row.planned
-              const amount = signedPlannedAmount(planned)
-              const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
-              const iconKey = planned.category_id ? categoryById.get(planned.category_id)?.icon_key ?? null : null
-
-              return (
-                <div
-                  key={row.id}
-                  style={{
-                    width: '100%',
-                    borderBottom: '1px solid var(--neutral-200)',
-                    background: 'transparent',
-                    display: 'grid',
-                    gridTemplateColumns: '42px 26px 1fr auto',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: 'var(--space-3) var(--space-6)',
-                  }}
-                >
-                  {renderPlannedDate(planned.planned_date)}
-                  <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CategoryIcon iconKey={iconKey} label={categoryName} size={24} />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 400,
-                      color: 'var(--neutral-700)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {planned.label ?? categoryName}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 400,
-                      fontFamily: 'var(--font-mono)',
-                      textAlign: 'right',
-                      whiteSpace: 'nowrap',
-                      color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                    }}
-                  >
-                    {formatCurrency(amount)}
-                  </span>
-                </div>
+                  </div>
+                </Fragment>
               )
             })}
             {!isPlannedMode && isGeneralPlannedLoading ? (
@@ -2641,6 +2738,41 @@ export function Flux() {
         open={showPlannedOperationModal}
         onClose={() => setShowPlannedOperationModal(false)}
       />
+
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            key="scroll-top"
+            type="button"
+            aria-label="Revenir en haut"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.12, ease: [0.34, 1.56, 0.64, 1] }}
+            style={{
+              position: 'fixed',
+              bottom: 'calc(var(--nav-height) + 16px)',
+              right: 16,
+              zIndex: 200,
+              width: 44,
+              height: 44,
+              borderRadius: 'var(--radius-full)',
+              border: 'none',
+              background: 'var(--primary-600)',
+              color: 'var(--neutral-0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(91,87,245,0.35)',
+              cursor: 'pointer',
+            }}
+            whileTap={{ scale: 0.9 }}
+          >
+            <ArrowUp size={20} strokeWidth={2.5} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
