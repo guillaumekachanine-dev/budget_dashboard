@@ -230,7 +230,7 @@ function AnnualCostProjectionCard({
     () => new Map(
       categories
         .filter((cat) => cat.parent_id === null)
-        .map((cat, index) => [parentKeyFromName(cat.name), getCategoryColor(cat.color_token, index)]),
+        .map((cat, index) => [parentKeyFromName(cat.name), getCategoryColor(cat.color_token, index, cat.name)]),
     ),
     [categories],
   )

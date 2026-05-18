@@ -102,17 +102,49 @@ export const ACCOUNT_COLORS: Record<string, string> = {
 }
 
 export const CATEGORY_COLOR_MAP: Record<string, string> = {
-  transport: '#FF6B6B',
-  food:      '#FFB347',
-  sport:     '#4ECDC4',
-  education: '#A29BFE',
-  entertain: '#FD79A8',
-  household: '#6C5CE7',
-  bills:     '#00B894',
-  subscript: '#E17055',
+  logement:     '#1D3F8F',
+  alimentation: '#35C17B',
+  divers:       '#FDAA1B',
+  sorties:      '#FB5534',
+  voyages:      '#2B94FF',
+  transport:    '#FA8728',
+  famille:      '#D98880',
+  business:     '#8B7954',
+  abonnements:  '#8B51D0',
+  sante:        '#E82665',
+  taxes:        '#6B6B6B',
+  epargne:      '#12B4A9',
 }
 
-export function getCategoryColor(colorToken: string | null, index = 0): string {
+function categoryKeyFromName(name: string): string | null {
+  const n = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  if (n.includes('logement')) return 'logement'
+  if (n.includes('alimentat')) return 'alimentation'
+  if (n.includes('divers') || (n.includes('achat') && !n.includes('abonnement'))) return 'divers'
+  if (n.includes('sorti')) return 'sorties'
+  if (n.includes('voyage')) return 'voyages'
+  if (n.includes('transport')) return 'transport'
+  if (n.includes('famille') || n.includes('enfant')) return 'famille'
+  if (n.includes('business')) return 'business'
+  if (n.includes('abonn')) return 'abonnements'
+  if (n.includes('sant')) return 'sante'
+  if (n.includes('tax') || n.includes('impot') || (n.includes('frais') && !n.includes('transport'))) return 'taxes'
+  if (n.includes('epargn')) return 'epargne'
+  return null
+}
+
+export function categoryColorFromName(name: string | null | undefined): string {
+  if (!name) return '#9898A6'
+  const key = categoryKeyFromName(name)
+  if (key) return CATEGORY_COLOR_MAP[key]
+  const colors = Object.values(CATEGORY_COLOR_MAP)
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash << 5) - hash + name.charCodeAt(i)
+  return colors[Math.abs(hash) % colors.length]
+}
+
+export function getCategoryColor(colorToken: string | null, index = 0, name?: string): string {
+  if (name) return categoryColorFromName(name)
   if (colorToken && CATEGORY_COLOR_MAP[colorToken]) return CATEGORY_COLOR_MAP[colorToken]
   const fallbacks = Object.values(CATEGORY_COLOR_MAP)
   return fallbacks[index % fallbacks.length]

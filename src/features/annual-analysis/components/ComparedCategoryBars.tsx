@@ -86,7 +86,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
       if (category.parent_id != null) return
       map.set(normalizeCategoryLabel(category.name), {
         iconKey: category.icon_key,
-        color: getCategoryColor(category.color_token, index),
+        color: getCategoryColor(category.color_token, index, category.name),
       })
     })
 
@@ -95,7 +95,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
       if (map.has(key)) return
       map.set(key, {
         iconKey: category.icon_key,
-        color: getCategoryColor(category.color_token, index),
+        color: getCategoryColor(category.color_token, index, category.name),
       })
     })
 
@@ -124,7 +124,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
         name: metric.parent_category_name,
         total2025: metric.total_2025,
         total2026: metric.total_2026,
-        color: visual?.color ?? getCategoryColor(null, index),
+        color: visual?.color ?? getCategoryColor(null, index, metric.parent_category_name),
         iconKey: visual?.iconKey ?? metric.parent_category_name,
       }
     })
@@ -949,7 +949,7 @@ function CategoryRow({
   const { parent_category_name, total_2025, total_2026, delta_eur, delta_pct } = metric
   const pct2025 = maxVal > 0 ? Math.min(100, (total_2025 / maxVal) * 100) : 0
   const pct2026 = maxVal > 0 ? Math.min(100, (total_2026 / maxVal) * 100) : 0
-  const bar2026Color = visual?.color ?? getCategoryColor(null, colorIndex)
+  const bar2026Color = visual?.color ?? getCategoryColor(null, colorIndex, parent_category_name)
   const shortPct = Math.min(pct2025, pct2026)
   const longPct = Math.max(pct2025, pct2026)
   const shortRatioInLong = longPct > 0 ? (shortPct / longPct) * 100 : 0

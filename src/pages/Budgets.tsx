@@ -18,7 +18,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel } from '@/lib/utils'
+import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel, categoryColorFromName } from '@/lib/utils'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { FlowType, Transaction } from '@/lib/types'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
@@ -46,9 +46,11 @@ import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
+import metriquesBudgetsIcon from '@/assets/icons/app/metriques_budgets.png'
 import analyticsIcon from '@/assets/icons/app/analytics.webp'
 import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
 import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
+import { ProjectionsTab } from '@/features/budget/components/ProjectionsTab'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -80,7 +82,7 @@ const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 
-type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'legacy'
+type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'legacy' | 'metriques'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
 const BUDGETS_TABS: BudgetsTabConfig[] = [
   { id: 'enveloppes', label: 'Enveloppes', iconSrc: budgetsPeriodIcon },
@@ -278,7 +280,6 @@ function formatMonthYearShort(month: number, year: number): string {
 }
 
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
   { id: 'socle_fixe', label: 'Fixe', color: 'var(--primary-500)' },
   { id: 'variable_essentielle', label: 'Variable essentielle', color: 'var(--color-success)' },
@@ -333,13 +334,6 @@ const SLIDE_THREE_SCOPE_COLORS: Record<string, string> = {
   hors_pilotage: 'var(--neutral-400)',
 }
 
-function accentFromLabel(label: string | null | undefined): string {
-  const safeLabel = typeof label === 'string' && label.trim().length > 0 ? label : 'categorie'
-  const key = safeLabel.trim().toLowerCase()
-  let hash = 0
-  for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
-  return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
-}
 
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
   switch (bucket) {
@@ -647,7 +641,7 @@ export function Budgets() {
   const [selectedYtdSlideView, setSelectedYtdSlideView] = useState<BudgetYtdSlideView>('kpi')
   const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
   const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
-  const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('legacy')
+  const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('enveloppes')
   const [showBudgetsTabModal, setShowBudgetsTabModal] = useState(false)
   const {
     data: budgetPayload,
@@ -1241,8 +1235,8 @@ export function Budgets() {
     const category = categoryById.get(slideThreeScopeSelection.id) ?? null
     const categoryPayload = payloadByCategory.find((row) => row.category_id === slideThreeScopeSelection.id)
     const scopeColor = categoryPayload?.budget_bucket
-      ? (SLIDE_THREE_SCOPE_COLORS[categoryPayload.budget_bucket] ?? accentFromLabel(category?.name))
-      : accentFromLabel(category?.name)
+      ? (SLIDE_THREE_SCOPE_COLORS[categoryPayload.budget_bucket] ?? categoryColorFromName(category?.name))
+      : categoryColorFromName(category?.name)
     return {
       label: category?.name ?? 'Catégorie',
       iconType: 'category' as const,
@@ -1515,7 +1509,7 @@ export function Budgets() {
           id: row.parent_category_id,
           name: row.parent_category_name,
           value: Number(row.actual_amount ?? 0),
-          color: accentFromLabel(row.parent_category_name),
+          color: categoryColorFromName(row.parent_category_name),
         }))
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
@@ -1527,7 +1521,7 @@ export function Budgets() {
         id: row.category_id,
         name: row.category_name,
         value: Number(row.actual_amount ?? 0),
-        color: accentFromLabel(row.category_name),
+        color: categoryColorFromName(row.category_name),
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -1542,7 +1536,7 @@ export function Budgets() {
           id: row.parent_category_id,
           name: row.parent_category_name,
           value: Number(row.budget_amount ?? 0),
-          color: accentFromLabel(row.parent_category_name),
+          color: categoryColorFromName(row.parent_category_name),
         }))
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
@@ -1554,7 +1548,7 @@ export function Budgets() {
         id: row.category_id,
         name: row.category_name,
         value: Number(row.budget_amount ?? 0),
-        color: accentFromLabel(row.category_name),
+        color: categoryColorFromName(row.category_name),
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -1832,7 +1826,7 @@ export function Budgets() {
   const revenuePageColor = 'var(--color-success)'
   const revenueTableHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
   const revenueListHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
-  const categoryListHeaderBackground = `color-mix(in oklab, ${accentFromLabel(selectedCatInfo?.name)} 22%, var(--neutral-0) 78%)`
+  const categoryListHeaderBackground = `color-mix(in oklab, ${categoryColorFromName(selectedCatInfo?.name)} 22%, var(--neutral-0) 78%)`
   const blockListHeaderBackground = `color-mix(in oklab, ${selectedBlockPage?.color ?? 'var(--primary-500)'} 22%, var(--neutral-0) 78%)`
   const revenueMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const series = [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => a.month_start.localeCompare(b.month_start))
@@ -2204,9 +2198,9 @@ export function Budgets() {
   }, [dataDisplayMode, selectedBlockPage])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : 'var(--space-5)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
-        title={budgetsTabId === 'legacy' ? 'Budgets' : activeBudgetsTab.label}
+        title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Métriques' : activeBudgetsTab.label}
         titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
         onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
         actionIcon={(
@@ -2222,42 +2216,64 @@ export function Budgets() {
         )}
         actionAriaLabel="Choisir un onglet budgets"
         onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
-        rightSlot={budgetsTabId === 'legacy' ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (isSlideOneOrTwoMode) {
-                setShowCatSheet(false)
-                setShowSlideThreeScopeSheet(false)
-                setShowHeaderPeriodMenu((current) => !current)
-                return
-              }
-              setShowHeaderPeriodMenu(false)
-              if (isSlideThreeMetricsMode) {
-                setShowCatSheet(false)
-                setShowSlideThreeScopeSheet((current) => !current)
-                return
-              }
-              setShowSlideThreeScopeSheet(false)
-              setShowCatSheet((current) => !current)
-            }}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
-              fontSize: 'var(--font-size-base)',
-              fontWeight: 'var(--font-weight-semibold)',
-              textTransform: 'capitalize',
-              whiteSpace: 'nowrap',
-              padding: 0,
-              cursor: 'pointer',
-              minHeight: 'var(--touch-target-min)',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
-          >
-            {headerPeriodLabel}
-          </button>
+        rightSlot={budgetsTabId !== 'metriques' ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {budgetsTabId === 'legacy' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSlideOneOrTwoMode) {
+                    setShowCatSheet(false)
+                    setShowSlideThreeScopeSheet(false)
+                    setShowHeaderPeriodMenu((current) => !current)
+                    return
+                  }
+                  setShowHeaderPeriodMenu(false)
+                  if (isSlideThreeMetricsMode) {
+                    setShowCatSheet(false)
+                    setShowSlideThreeScopeSheet((current) => !current)
+                    return
+                  }
+                  setShowSlideThreeScopeSheet(false)
+                  setShowCatSheet((current) => !current)
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
+                  fontSize: 'var(--font-size-base)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
+                  padding: 0,
+                  cursor: 'pointer',
+                  minHeight: 'var(--touch-target-min)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                {headerPeriodLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId('metriques')}
+              aria-label="Aller aux métriques"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 'var(--touch-target-min)',
+                minWidth: 'var(--touch-target-min)',
+              }}
+            >
+              <img src={metriquesBudgetsIcon} alt="Métriques" width={28} height={28} style={{ display: 'block', objectFit: 'contain' }} />
+            </button>
+          </div>
         ) : undefined}
       />
 
@@ -3305,7 +3321,7 @@ export function Budgets() {
                       aria-label="Retour"
                       style={{
                         border: 'none',
-                        background: accentFromLabel(selectedCatInfo?.name),
+                        background: categoryColorFromName(selectedCatInfo?.name),
                         color: 'var(--neutral-0)',
                         width: 24,
                         height: 24,
@@ -3374,7 +3390,7 @@ export function Budgets() {
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
                     return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
-                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={accentFromLabel(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={categoryColorFromName(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -3405,7 +3421,7 @@ export function Budgets() {
                   const source = subCategoryRowById.get(row.id)
                   if (!source) return null
                   const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
-                  const accent = accentFromLabel(row.name)
+                  const accent = categoryColorFromName(row.name)
                   return (
                     <button
                       key={row.id}
@@ -3566,7 +3582,7 @@ export function Budgets() {
                       const source = subCategoryRowById.get(row.id)
                       if (!source) return null
                       const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
-                      const accent = accentFromLabel(row.name)
+                      const accent = categoryColorFromName(row.name)
                       return (
                         <button
                           key={row.id}
@@ -4581,12 +4597,10 @@ export function Budgets() {
       </>
       ) : budgetsTabId === 'enveloppes' ? (
         <EnveloppesTab
-          payloadByParentCategory={payloadByParentCategory}
-          payloadByBucket={payloadByBucket}
-          startDate={range.startDate}
-          endDate={range.endDate}
           onCategoryClick={handleEnveloppesCategoryClick}
         />
+      ) : budgetsTabId === 'metriques' ? (
+        <ProjectionsTab />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8) var(--page-gutter)', gap: 'var(--space-3)', minHeight: 240 }}>
           <img src={activeBudgetsTab.iconSrc} alt={activeBudgetsTab.label} width={48} height={48} style={{ objectFit: 'contain', opacity: 0.35 }} loading="lazy" decoding="async" />

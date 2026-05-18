@@ -227,7 +227,7 @@ export function TransactionDetailsModal({
       categoryName,
       subCategoryName,
       headerIconKey,
-      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex),
+      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex, colorSourceCategory?.name),
       rows: [
         { key: 'Catégorie', value: categoryName },
         { key: 'Sous-catégorie', value: subCategoryName },

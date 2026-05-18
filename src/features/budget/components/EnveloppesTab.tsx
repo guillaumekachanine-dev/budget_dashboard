@@ -6,11 +6,27 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
-import { formatCurrencyFloored, getTxLabel } from '@/lib/utils'
+import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } from '@/lib/utils'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import type { Category, Transaction } from '@/lib/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow } from '../types'
+import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
 
 // ─── local helpers ────────────────────────────────────────────────────────────
+
+const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
+
+function getPeriodRange(year: number, month: number): { startDate: string; endDate: string } {
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const now = new Date()
+  const today = todayIso()
+  const startDate = `${year}-${pad2(month)}-01`
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
+  if (isCurrentMonth) return { startDate, endDate: today }
+  const monthEndDate = new Date(year, month, 0)
+  return { startDate, endDate: `${monthEndDate.getFullYear()}-${pad2(monthEndDate.getMonth() + 1)}-${pad2(monthEndDate.getDate())}` }
+}
 
 interface PieDatum {
   id: string
@@ -19,15 +35,6 @@ interface PieDatum {
   color: string
 }
 
-const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
-
-function accentFromLabel(label: string | null | undefined): string {
-  const safeLabel = typeof label === 'string' && label.trim() ? label : 'categorie'
-  const key = safeLabel.trim().toLowerCase()
-  let hash = 0
-  for (let i = 0; i < key.length; i++) hash = (hash << 5) - hash + key.charCodeAt(i)
-  return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
-}
 
 function formatPercentSigned(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
@@ -417,18 +424,43 @@ interface ModalTarget {
 }
 
 export interface EnveloppesTabProps {
-  payloadByParentCategory: BudgetPageParentCategoryRow[]
-  payloadByBucket: Record<string, BudgetPageBucketRow>
-  startDate: string
-  endDate: string
   onCategoryClick?: (categoryId: string) => void
 }
 
 type ViewMode = 'categories' | 'socles'
 
-export function EnveloppesTab({ payloadByParentCategory, payloadByBucket, startDate, endDate, onCategoryClick }: EnveloppesTabProps) {
+export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
   const { data: categories = [] } = useCategories()
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+
+  const todayNow = new Date()
+  const [year, setYear] = useState(todayNow.getFullYear())
+  const [month, setMonth] = useState(todayNow.getMonth() + 1)
+  const [showMonthModal, setShowMonthModal] = useState(false)
+  const [modalPickerYear, setModalPickerYear] = useState(todayNow.getFullYear())
+
+  const { data: budgetPayload } = useBudgetPagePayload({ periodYear: year, periodMonth: month })
+  const payloadByParentCategory = useMemo<BudgetPageParentCategoryRow[]>(
+    () => (Array.isArray(budgetPayload?.by_parent_category) ? budgetPayload.by_parent_category : []),
+    [budgetPayload],
+  )
+  const payloadByBucket = useMemo(() => {
+    const rows = Array.isArray(budgetPayload?.by_bucket) ? budgetPayload.by_bucket : []
+    return rows.reduce<Record<string, BudgetPageBucketRow>>((acc, row) => {
+      const key = String(row?.budget_bucket ?? '')
+      if (key) acc[key] = row
+      return acc
+    }, {})
+  }, [budgetPayload])
+  const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
+
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+
+  function isMonthDisabled(y: number, m: number) {
+    return y === currentYear && m > currentMonth
+  }
 
   const [viewMode, setViewMode] = useState<ViewMode>('categories')
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry | null>(null)
@@ -456,7 +488,7 @@ export function EnveloppesTab({ payloadByParentCategory, payloadByBucket, startD
   const catRealPieData = useMemo<PieDatum[]>(
     () =>
       payloadByParentCategory
-        .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.actual_amount ?? 0), color: accentFromLabel(row.parent_category_name) }))
+        .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.actual_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
         .sort((a, b) => b.value - a.value),
     [payloadByParentCategory],
@@ -465,7 +497,7 @@ export function EnveloppesTab({ payloadByParentCategory, payloadByBucket, startD
   const catBudgetPieData = useMemo<PieDatum[]>(
     () =>
       payloadByParentCategory
-        .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.budget_amount ?? 0), color: accentFromLabel(row.parent_category_name) }))
+        .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.budget_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
         .sort((a, b) => b.value - a.value),
     [payloadByParentCategory],
@@ -593,8 +625,132 @@ export function EnveloppesTab({ payloadByParentCategory, payloadByBucket, startD
 
   // ── render ────────────────────────────────────────────────────────────────
 
+  const monthLabel = `${MONTHS_FR_FULL[month - 1]} ${String(year).slice(2)}`
+
   return (
     <div>
+      {/* ── month selector button ── */}
+      <div style={{ padding: '0 var(--page-gutter)', marginBottom: 'var(--space-3)' }}>
+        <button
+          type="button"
+          onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            border: 'none',
+            background: 'transparent',
+            padding: '2px 0',
+            cursor: 'pointer',
+          }}
+        >
+          <img src={budgetsPeriodIcon} alt="" width={20} height={20} style={{ objectFit: 'contain', flexShrink: 0 }} />
+          <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)', lineHeight: 1 }}>
+            {monthLabel}
+          </span>
+          <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginLeft: 2, flexShrink: 0 }} />
+        </button>
+      </div>
+
+      {/* ── month picker modal ── */}
+      <AnimatePresence>
+        {showMonthModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMonthModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner un mois"
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--page-gutter)',
+                right: 'var(--page-gutter)',
+                top: '25vh',
+                zIndex: 61,
+                maxWidth: 320,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-2xl)',
+                padding: 'var(--space-4)',
+                boxShadow: '0 8px 40px rgba(13,13,31,0.18)',
+              }}
+            >
+              {/* year row */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                {[2025, 2026].map((y) => (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setModalPickerYear(y)}
+                    style={{
+                      flex: 1,
+                      padding: '8px var(--space-3)',
+                      border: modalPickerYear === y ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                      borderRadius: 'var(--radius-md)',
+                      background: modalPickerYear === y ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                      color: modalPickerYear === y ? 'var(--primary-600)' : 'var(--neutral-700)',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-base)',
+                    }}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+
+              {/* month grid: 4 × 3 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {MONTHS_FR_SHORT.map((label, idx) => {
+                  const m = idx + 1
+                  const disabled = isMonthDisabled(modalPickerYear, m)
+                  const isSelected = modalPickerYear === year && m === month
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setYear(modalPickerYear)
+                        setMonth(m)
+                        setShowMonthModal(false)
+                        setSelectedEntry(null)
+                      }}
+                      style={{
+                        padding: '7px 4px',
+                        border: isSelected ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: isSelected ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : 'var(--neutral-50)',
+                        color: disabled ? 'var(--neutral-300)' : isSelected ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        fontSize: 11,
+                        fontWeight: isSelected ? 700 : 500,
+                        cursor: disabled ? 'default' : 'pointer',
+                        transition: 'all var(--transition-base)',
+                        pointerEvents: disabled ? 'none' : 'auto',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* ── title + toggle ── */}
       <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
         <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>

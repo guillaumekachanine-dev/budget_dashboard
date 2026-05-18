@@ -1156,8 +1156,8 @@ export function Home() {
     return driftRows.find((r) => r.id === selectedDriftCategoryId) ?? null
   }, [selectedDriftCategoryId, driftRows])
   const selectedDriftCategoryColor = useMemo(
-    () => getCategoryColor(selectedDriftCategoryMeta?.colorToken ?? null, 0),
-    [selectedDriftCategoryMeta?.colorToken],
+    () => getCategoryColor(selectedDriftCategoryMeta?.colorToken ?? null, 0, selectedDriftCategoryMeta?.name),
+    [selectedDriftCategoryMeta?.colorToken, selectedDriftCategoryMeta?.name],
   )
 
   const selectedDriftCategoryTransactions = useMemo(() => {

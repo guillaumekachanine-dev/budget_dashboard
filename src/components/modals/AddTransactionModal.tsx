@@ -694,7 +694,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   }, [categories, headerColorSource])
 
   const headerBackgroundColor = headerColorSource
-    ? getCategoryColor(headerColorSource.color_token, headerColorIndex)
+    ? getCategoryColor(headerColorSource.color_token, headerColorIndex, headerColorSource.name)
     : 'var(--primary-500)'
   const transactionPillBorderColor = useMemo(() => {
     if (values.transactionType === 'expense') return 'color-mix(in oklab, var(--color-error) 52%, white 48%)'
