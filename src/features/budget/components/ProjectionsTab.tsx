@@ -232,19 +232,19 @@ export function ProjectionsTab() {
               role="dialog"
               aria-modal="true"
               aria-label="Sélectionner une catégorie"
-              initial={{ scale: 0.94, opacity: 0, y: '-50%' }}
-              animate={{ scale: 1, opacity: 1, y: '-50%' }}
-              exit={{ scale: 0.94, opacity: 0, y: '-50%' }}
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 340 }}
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'fixed',
                 left: 'var(--page-gutter)',
                 right: 'var(--page-gutter)',
-                top: '50%',
+                top: '25vh',
                 zIndex: 61,
                 maxWidth: 340,
-                maxHeight: '78vh',
+                maxHeight: '68vh',
                 overflowY: 'auto',
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
@@ -345,16 +345,16 @@ export function ProjectionsTab() {
               role="dialog"
               aria-modal="true"
               aria-label="Sélectionner un mois"
-              initial={{ scale: 0.94, opacity: 0, y: '-50%' }}
-              animate={{ scale: 1, opacity: 1, y: '-50%' }}
-              exit={{ scale: 0.94, opacity: 0, y: '-50%' }}
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 340 }}
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'fixed',
                 left: 'var(--page-gutter)',
                 right: 'var(--page-gutter)',
-                top: '50%',
+                top: '25vh',
                 zIndex: 61,
                 maxWidth: 320,
                 margin: '0 auto',

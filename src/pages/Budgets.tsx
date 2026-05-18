@@ -51,6 +51,7 @@ import analyticsIcon from '@/assets/icons/app/analytics.webp'
 import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
 import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
 import { ProjectionsTab } from '@/features/budget/components/ProjectionsTab'
+import { ProjectionsTabContent } from '@/features/budget/components/ProjectionsTabContent'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -2203,6 +2204,7 @@ export function Budgets() {
         title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Métriques' : activeBudgetsTab.label}
         titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
         onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
+        contentOffsetY={4}
         actionIcon={(
           <img
             src={activeBudgetsTab.iconSrc}
@@ -2271,7 +2273,7 @@ export function Budgets() {
                 minWidth: 'var(--touch-target-min)',
               }}
             >
-              <img src={metriquesBudgetsIcon} alt="Métriques" width={28} height={28} style={{ display: 'block', objectFit: 'contain' }} />
+              <img src={metriquesBudgetsIcon} alt="Métriques" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} />
             </button>
           </div>
         ) : undefined}
@@ -4601,6 +4603,8 @@ export function Budgets() {
         />
       ) : budgetsTabId === 'metriques' ? (
         <ProjectionsTab />
+      ) : budgetsTabId === 'projections' ? (
+        <ProjectionsTabContent />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8) var(--page-gutter)', gap: 'var(--space-3)', minHeight: 240 }}>
           <img src={activeBudgetsTab.iconSrc} alt={activeBudgetsTab.label} width={48} height={48} style={{ objectFit: 'contain', opacity: 0.35 }} loading="lazy" decoding="async" />
