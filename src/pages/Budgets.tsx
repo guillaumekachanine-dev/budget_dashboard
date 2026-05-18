@@ -46,6 +46,7 @@ import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
+import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -1261,6 +1262,12 @@ export function Budgets() {
     if (!selectedRootCategory) return false
     if (selectedRootCategory.flow_type === 'savings') return true
     return normalizeCategoryToken(selectedRootCategory.name) === 'epargne'
+  }, [selectedCat, selectedRootCategory])
+
+  const isVoyagesCategoryMode = useMemo(() => {
+    if (selectedCat === 'all') return false
+    if (!selectedRootCategory) return false
+    return normalizeCategoryToken(selectedRootCategory.name) === 'voyages'
   }, [selectedCat, selectedRootCategory])
 
   const selectedCategoryFlowType: FlowType = isSavingsCategoryMode ? 'savings' : 'expense'
@@ -3274,74 +3281,84 @@ export function Budgets() {
       ) : null}
 
       {isCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      shouldFocusCategoriesSectionRef.current = true
-                      setActiveSlide(0)
-                      setSelectedCat('all')
+        isVoyagesCategoryMode ? (
+          <VoyagesFeaturePage
+            onBack={() => {
+              shouldFocusCategoriesSectionRef.current = true
+              setActiveSlide(0)
+              setSelectedCat('all')
+            }}
+          />
+        ) : (
+          <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        shouldFocusCategoriesSectionRef.current = true
+                        setActiveSlide(0)
+                        setSelectedCat('all')
+                      }}
+                      aria-label="Retour"
+                      style={{
+                        border: 'none',
+                        background: accentFromLabel(selectedCatInfo?.name),
+                        color: 'var(--neutral-0)',
+                        width: 24,
+                        height: 24,
+                        minWidth: 24,
+                        minHeight: 24,
+                        borderRadius: 'var(--radius-full)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        flexShrink: 0,
                     }}
-                    aria-label="Retour"
-                    style={{
-                      border: 'none',
-                      background: accentFromLabel(selectedCatInfo?.name),
-                      color: 'var(--neutral-0)',
-                      width: 24,
-                      height: 24,
-                      minWidth: 24,
-                      minHeight: 24,
-                      borderRadius: 'var(--radius-full)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      padding: 0,
-                      flexShrink: 0,
-                  }}
-                >
-                  <ArrowLeft size={14} />
-                </button>
-                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
-                    <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      {selectedCatInfo?.name ?? '—'}
-                    </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - {categoryBlockLabel}
-                    </span>
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
+                      <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                        {selectedCatInfo?.name ?? '—'}
+                      </p>
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
+                        - {categoryBlockLabel}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {categoryRanking ? `rang ${categoryRanking.index}/${categoryRanking.total}` : '—'}
-                </span>
-              </div>
-
-              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {categoryRanking ? `rang ${categoryRanking.index}/${categoryRanking.total}` : '—'}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
-                </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
+
+                <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+                      {formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                    </span>
+                  </div>
+                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </motion.section>
+          </motion.section>
+        )
       ) : null}
 
-      {isCategoryMode ? (
+      {isCategoryMode && !isVoyagesCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
