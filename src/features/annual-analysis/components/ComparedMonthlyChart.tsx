@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { ArrowDownCircle, ArrowUpCircle, RotateCw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDownCircle, ArrowUpCircle, RotateCw, SlidersHorizontal } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Area,
   AreaChart,
@@ -53,16 +54,66 @@ type Props = {
   flows2026:   YtdFlowSummary | null
   fluxMetrics: ComparedFluxMetric[]
   minHeight?: number
+  mode?: 'full' | 'insight'
+  allowedMetrics?: MetricKey[]
+  defaultEnabledMetrics?: MetricKey[]
+  maxEnabledMetrics?: number
+  forceBothYears?: boolean
+  title?: string
+  lockedMetrics?: MetricKey[]
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHeight }: Props) {
-  const [focusedMetric, setFocusedMetric] = useState<MetricKey>('expense')
-  const [enabledMetrics, setEnabledMetrics] = useState<MetricKey[]>(['expense', 'income', 'savings', 'net'])
-  const [visibleYear, setVisibleYear] = useState<'2025' | '2026'>('2026')
+export function ComparedMonthlyChart({
+  flows2025,
+  flows2026,
+  fluxMetrics,
+  minHeight,
+  mode = 'full',
+  allowedMetrics,
+  defaultEnabledMetrics,
+  maxEnabledMetrics,
+  forceBothYears = false,
+  title = 'Flux mensuels comparés',
+  lockedMetrics,
+}: Props) {
+  const isInsightMode = mode === 'insight'
+  const normalizedAllowedMetrics = useMemo(() => {
+    const allowed = (allowedMetrics?.length ? allowedMetrics : METRICS.map((m) => m.key))
+      .filter((key, idx, arr) => arr.indexOf(key) === idx)
+    return allowed.length ? allowed : (['expense'] as MetricKey[])
+  }, [allowedMetrics])
+  const normalizedLockedMetrics = useMemo(
+    () => (lockedMetrics ?? []).filter((key) => normalizedAllowedMetrics.includes(key)),
+    [lockedMetrics, normalizedAllowedMetrics],
+  )
+  const metricMenuLimit = maxEnabledMetrics ?? (isInsightMode ? 2 : METRICS.length)
 
-  const focused = METRICS.find((m) => m.key === focusedMetric) ?? METRICS[0]
+  const initialEnabled = useMemo(() => {
+    const preferred = defaultEnabledMetrics?.filter((key) => normalizedAllowedMetrics.includes(key)) ?? []
+    const base = preferred.length > 0
+      ? preferred
+      : normalizedAllowedMetrics.slice(0, Math.max(1, Math.min(metricMenuLimit, normalizedAllowedMetrics.length)))
+    const merged = [...new Set([...normalizedLockedMetrics, ...base])]
+    if (merged.length <= metricMenuLimit) return merged
+    const lockedPart = merged.filter((key) => normalizedLockedMetrics.includes(key))
+    const unlockedPart = merged.filter((key) => !normalizedLockedMetrics.includes(key))
+    const allowedUnlockedCount = Math.max(0, metricMenuLimit - lockedPart.length)
+    return [...lockedPart, ...unlockedPart.slice(0, allowedUnlockedCount)]
+  }, [defaultEnabledMetrics, metricMenuLimit, normalizedAllowedMetrics, normalizedLockedMetrics])
+
+  const [focusedMetric, setFocusedMetric] = useState<MetricKey>(initialEnabled[0] ?? normalizedAllowedMetrics[0])
+  const [enabledMetrics, setEnabledMetrics] = useState<MetricKey[]>(initialEnabled)
+  const [visibleYear, setVisibleYear] = useState<'2025' | '2026'>('2026')
+  const [showMetricMenu, setShowMetricMenu] = useState(false)
+  const [tooltipResetKey, setTooltipResetKey] = useState(0)
+  const chartContainerRef = useRef<HTMLDivElement | null>(null)
+
+  const activeMetricKey = enabledMetrics.includes(focusedMetric)
+    ? focusedMetric
+    : (enabledMetrics[0] ?? normalizedAllowedMetrics[0])
+  const focused = METRICS.find((m) => m.key === activeMetricKey) ?? METRICS[0]
   const activeFlux = fluxMetrics.find((f) => f.label === focused.fluxLabel) ?? null
   const hasAnyMetricEnabled = enabledMetrics.length > 0
 
@@ -101,166 +152,338 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
       : 'rgba(252,90,90,0.10)'
   const arrow = deltaEur === 0 ? '—' : deltaEur > 0 ? '▲' : '▼'
 
-  const renderMetricIcon = (key: MetricKey) => {
+  const renderMetricIcon = (key: MetricKey, compact = false) => {
+    const circleSize = compact ? 14 : 24
+    const spinSize = compact ? 10 : 13
+    const euroSize = compact ? 9 : 11
     if (key === 'expense') {
-      return <ArrowUpCircle size={24} strokeWidth={2.2} color="#FC5A5A" />
+      return <ArrowUpCircle size={circleSize} strokeWidth={2.2} color="#FC5A5A" />
     }
     if (key === 'income') {
-      return <ArrowDownCircle size={24} strokeWidth={2.2} color="#2ED47A" />
+      return <ArrowDownCircle size={circleSize} strokeWidth={2.2} color="#2ED47A" />
     }
     if (key === 'savings') {
       return (
-        <span style={{ fontSize: 11, fontWeight: 900, color: '#111111', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+        <span style={{ fontSize: euroSize, fontWeight: 900, color: '#111111', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
           €
         </span>
       )
     }
-    return <RotateCw size={13} strokeWidth={2.3} color="#FFFFFF" />
+    return <RotateCw size={spinSize} strokeWidth={2.3} color="#FFFFFF" />
   }
 
+  const toggleMetric = (key: MetricKey) => {
+    if (isInsightMode) {
+      setEnabledMetrics([key])
+      setFocusedMetric(key)
+      return
+    }
+    setEnabledMetrics((prev) => {
+      const isEnabled = prev.includes(key)
+      if (isEnabled && normalizedLockedMetrics.includes(key)) return prev
+      if (isEnabled) {
+        const next = prev.filter((k) => k !== key)
+        if (next.length === 0) return prev
+        return next
+      }
+      const next = [...prev, key]
+      if (next.length <= metricMenuLimit) return next
+      const lockedPart = next.filter((k) => normalizedLockedMetrics.includes(k))
+      const unlockedPart = next.filter((k) => !normalizedLockedMetrics.includes(k))
+      const allowedUnlockedCount = Math.max(0, metricMenuLimit - lockedPart.length)
+      return [...lockedPart, ...unlockedPart.slice(unlockedPart.length - allowedUnlockedCount)]
+    })
+    setFocusedMetric(key)
+  }
+
+  const availableMetrics = METRICS.filter((m) => normalizedAllowedMetrics.includes(m.key))
+
+  useEffect(() => {
+    if (!isInsightMode) return
+    setEnabledMetrics((prev) => [prev[0] ?? normalizedAllowedMetrics[0]])
+  }, [isInsightMode, normalizedAllowedMetrics])
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!chartContainerRef.current) return
+      if (chartContainerRef.current.contains(event.target as Node)) return
+      setShowMetricMenu(false)
+      setTooltipResetKey((prev) => prev + 1)
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [])
+
   return (
-    <div style={{ ...CARD_BASE, minHeight, padding: compactMode ? 'var(--space-4)' : CARD_BASE.padding }}>
+    <div
+      ref={chartContainerRef}
+      style={{ ...CARD_BASE, minHeight, padding: compactMode ? 'var(--space-4)' : CARD_BASE.padding }}
+    >
       {/* Header */}
       <div style={{ marginBottom: 'var(--space-4)', display: 'grid', gap: 'var(--space-2)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, display: 'grid', gap: 6 }}>
             <p style={{
               margin: 0,
               fontSize: 'var(--font-size-sm)',
               fontWeight: 700,
               color: 'var(--neutral-700)',
             }}>
-              Flux mensuels comparés
+              {title}
             </p>
+            {forceBothYears ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>2025</span>
+                  <span aria-hidden="true" style={{ width: 22, borderTop: `2px solid ${focused.color}` }} />
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>2026</span>
+                  <span aria-hidden="true" style={{ width: 22, borderTop: `2px dashed ${focused.color}` }} />
+                </span>
+              </div>
+            ) : null}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 1 }}>
-            {METRICS.map((m) => {
-              const isEnabled = enabledMetrics.includes(m.key)
-              const isFocused = m.key === focusedMetric
-              const hasCircle = m.key === 'savings' || m.key === 'net'
-              const background = m.key === 'savings'
-                ? '#FFAB2E'
-                : m.key === 'net'
-                  ? '#111111'
-                  : 'transparent'
-              const borderColor = hasCircle && isEnabled
-                ? m.key === 'savings'
+          {isInsightMode ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowMetricMenu((prev) => !prev)}
+                aria-label="Paramètres du graphique"
+                aria-expanded={showMetricMenu}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--radius-full)',
+                  border: '1px solid var(--neutral-200)',
+                  background: 'var(--neutral-0)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--neutral-700)',
+                  cursor: 'pointer',
+                }}
+              >
+                <SlidersHorizontal size={14} />
+              </button>
+
+              <AnimatePresence>
+                {showMetricMenu ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.14 }}
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 'calc(100% + 6px)',
+                      zIndex: 10,
+                      width: 'max-content',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid var(--neutral-200)',
+                      background: 'var(--neutral-0)',
+                      boxShadow: 'var(--shadow-card)',
+                      padding: 'var(--space-2)',
+                      display: 'grid',
+                      gap: 6,
+                    }}
+                  >
+                    {availableMetrics.map((m) => {
+                      const isEnabled = enabledMetrics.includes(m.key)
+                      const isFocused = m.key === focused.key
+                      const hasCircle = m.key === 'savings' || m.key === 'net'
+                      const background = m.key === 'savings'
+                        ? '#FFAB2E'
+                        : m.key === 'net'
+                          ? '#111111'
+                          : 'transparent'
+                      const borderColor = hasCircle && isEnabled
+                        ? m.key === 'savings'
+                          ? '#FFAB2E'
+                          : m.key === 'net'
+                            ? '#111111'
+                            : m.color
+                        : hasCircle
+                          ? 'var(--neutral-200)'
+                          : 'transparent'
+                      const iconOpacity = isEnabled ? 1 : 0.44
+
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => toggleMetric(m.key)}
+                          aria-pressed={isEnabled}
+                          style={{
+                            border: '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-md)',
+                            background: isFocused ? 'var(--neutral-100)' : 'var(--neutral-0)',
+                            color: 'var(--neutral-800)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-start',
+                            gap: 8,
+                            cursor: 'pointer',
+                            minHeight: 34,
+                            width: 'auto',
+                            transition: 'all 140ms ease',
+                            padding: '0 10px 0 8px',
+                            opacity: iconOpacity,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 'var(--radius-full)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: `1.5px solid ${borderColor}`,
+                              background,
+                              color: m.key === 'net' ? '#FFFFFF' : 'inherit',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {renderMetricIcon(m.key, true)}
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 700 }}>
+                            {m.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 1 }}>
+              {availableMetrics.map((m) => {
+                const isEnabled = enabledMetrics.includes(m.key)
+                const isFocused = m.key === focused.key
+                const hasCircle = m.key === 'savings' || m.key === 'net'
+                const background = m.key === 'savings'
                   ? '#FFAB2E'
                   : m.key === 'net'
                     ? '#111111'
-                    : m.color
-                : hasCircle
-                  ? 'var(--neutral-200)'
-                  : 'transparent'
-              const iconOpacity = isEnabled ? 1 : 0.44
+                    : 'transparent'
+                const borderColor = hasCircle && isEnabled
+                  ? m.key === 'savings'
+                    ? '#FFAB2E'
+                    : m.key === 'net'
+                      ? '#111111'
+                      : m.color
+                  : hasCircle
+                    ? 'var(--neutral-200)'
+                    : 'transparent'
+                const iconOpacity = isEnabled ? 1 : 0.44
 
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => {
-                    setFocusedMetric(m.key)
-                    setEnabledMetrics((prev) => (
-                      prev.includes(m.key)
-                        ? prev.filter((key) => key !== m.key)
-                        : [...prev, m.key]
-                    ))
-                  }}
-                  aria-label={m.label}
-                  title={m.label}
-                  aria-pressed={isEnabled}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    minWidth: 28,
-                    minHeight: 28,
-                    borderRadius: 'var(--radius-full)',
-                    border: `1.5px solid ${borderColor}`,
-                    background,
-                    color: m.key === 'net' ? '#FFFFFF' : 'inherit',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: isFocused ? 'var(--shadow-card)' : 'none',
-                    transform: isFocused ? 'translateY(-1px)' : 'none',
-                    opacity: iconOpacity,
-                    transition: 'all 140ms ease',
-                    outline: 'none',
-                    padding: 0,
-                  }}
-                >
-                  {renderMetricIcon(m.key)}
-                </button>
-              )
-            })}
-          </div>
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggleMetric(m.key)}
+                    aria-label={m.label}
+                    title={m.label}
+                    aria-pressed={isEnabled}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      minWidth: 28,
+                      minHeight: 28,
+                      borderRadius: 'var(--radius-full)',
+                      border: `1.5px solid ${borderColor}`,
+                      background,
+                      color: m.key === 'net' ? '#FFFFFF' : 'inherit',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: isFocused ? 'var(--shadow-card)' : 'none',
+                      transform: isFocused ? 'translateY(-1px)' : 'none',
+                      opacity: iconOpacity,
+                      transition: 'all 140ms ease',
+                      outline: 'none',
+                      padding: 0,
+                    }}
+                  >
+                    {renderMetricIcon(m.key)}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <button
-              type="button"
-              onClick={() => setVisibleYear('2025')}
-              aria-pressed={visibleYear === '2025'}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: 0,
-                cursor: 'pointer',
-                opacity: visibleYear === '2025' ? 1 : 0.5,
-              }}
-            >
-              <span style={{
-                border: '1px solid var(--neutral-300)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '2px 6px',
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--neutral-700)',
-                fontFamily: 'var(--font-mono)',
-                background: visibleYear === '2025' ? 'var(--neutral-0)' : 'var(--neutral-100)',
-              }}>
-                2025
-              </span>
-              <span aria-hidden="true" style={{ width: 26, borderTop: `2px solid ${focused.color}` }} />
-            </button>
+        {!forceBothYears ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <button
+                type="button"
+                onClick={() => setVisibleYear('2025')}
+                aria-pressed={visibleYear === '2025'}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: 0,
+                  cursor: 'pointer',
+                  opacity: visibleYear === '2025' ? 1 : 0.5,
+                }}
+              >
+                <span style={{
+                  border: '1px solid var(--neutral-300)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '2px 6px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--neutral-700)',
+                  fontFamily: 'var(--font-mono)',
+                  background: visibleYear === '2025' ? 'var(--neutral-0)' : 'var(--neutral-100)',
+                }}>
+                  2025
+                </span>
+                <span aria-hidden="true" style={{ width: 26, borderTop: `2px solid ${focused.color}` }} />
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setVisibleYear('2026')}
-              aria-pressed={visibleYear === '2026'}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: 0,
-                cursor: 'pointer',
-                opacity: visibleYear === '2026' ? 1 : 0.5,
-              }}
-            >
-              <span style={{
-                border: '1px solid var(--neutral-300)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '2px 6px',
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--neutral-700)',
-                fontFamily: 'var(--font-mono)',
-                background: visibleYear === '2026' ? 'var(--neutral-0)' : 'var(--neutral-100)',
-              }}>
-                2026
-              </span>
-              <span aria-hidden="true" style={{ width: 26, borderTop: `2px dashed ${focused.color}` }} />
-            </button>
+              <button
+                type="button"
+                onClick={() => setVisibleYear('2026')}
+                aria-pressed={visibleYear === '2026'}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: 0,
+                  cursor: 'pointer',
+                  opacity: visibleYear === '2026' ? 1 : 0.5,
+                }}
+              >
+                <span style={{
+                  border: '1px solid var(--neutral-300)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '2px 6px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--neutral-700)',
+                  fontFamily: 'var(--font-mono)',
+                  background: visibleYear === '2026' ? 'var(--neutral-0)' : 'var(--neutral-100)',
+                }}>
+                  2026
+                </span>
+                <span aria-hidden="true" style={{ width: 26, borderTop: `2px dashed ${focused.color}` }} />
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {/* Chart */}
@@ -296,6 +519,7 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
             tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
           />
           <Tooltip
+            key={tooltipResetKey}
             trigger="click"
             content={
               <MonthlyFluxTooltip
@@ -308,7 +532,7 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
             cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }}
           />
 
-          {METRICS.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
+          {availableMetrics.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
             <Area
               key={`y25-${metric.key}`}
               type="monotone"
@@ -320,10 +544,10 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0, fill: metric.color }}
               connectNulls
-              hide={!has2025 || visibleYear !== '2025'}
+              hide={!has2025 || (!forceBothYears && visibleYear !== '2025')}
             />
           ))}
-          {METRICS.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
+          {availableMetrics.filter((metric) => enabledMetrics.includes(metric.key)).map((metric) => (
             <Area
               key={`y26-${metric.key}`}
               type="monotone"
@@ -337,9 +561,10 @@ export function ComparedMonthlyChart({ flows2025, flows2026, fluxMetrics, minHei
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0, fill: metric.color, fillOpacity: 0.65 }}
               connectNulls
-              hide={!has2026 || visibleYear !== '2026'}
+              hide={!has2026 || (!forceBothYears && visibleYear !== '2026')}
             />
           ))}
+
         </AreaChart>
       </ResponsiveContainer>
 

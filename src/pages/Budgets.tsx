@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -15,7 +15,7 @@ import {
   Pie,
   ReferenceLine,
 } from 'recharts'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel, categoryColorFromName } from '@/lib/utils'
@@ -52,6 +52,7 @@ import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeature
 import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
 import { ProjectionsTab } from '@/features/budget/components/ProjectionsTab'
 import { ProjectionsTabContent } from '@/features/budget/components/ProjectionsTabContent'
+import { BudgetsAnalyticsTab } from '@/features/budget/components/BudgetsAnalyticsTab'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -591,6 +592,7 @@ function SubCategoryTransactionsModal({
 }
 
 export function Budgets() {
+  const queryClient = useQueryClient()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
@@ -644,6 +646,8 @@ export function Budgets() {
   const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
   const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('enveloppes')
   const [showBudgetsTabModal, setShowBudgetsTabModal] = useState(false)
+  const [analyticsRefreshing, setAnalyticsRefreshing] = useState(false)
+  const [analyticsLastUpdatedAt, setAnalyticsLastUpdatedAt] = useState<Date>(() => new Date())
   const {
     data: budgetPayload,
   } = useBudgetPagePayload({
@@ -790,6 +794,34 @@ export function Budgets() {
     setShowSlideThreeScopeSheet(false)
     setShowCatSheet(false)
   }, [])
+
+  const handleAnalyticsRefresh = useCallback(async () => {
+    if (analyticsRefreshing) return
+
+    setAnalyticsRefreshing(true)
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['annual-2025-analysis'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-ytd-flows'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-bucket-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-category-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['annual-projection-overview-2026'] }),
+      ])
+      setAnalyticsLastUpdatedAt(new Date())
+    } finally {
+      setAnalyticsRefreshing(false)
+    }
+  }, [analyticsRefreshing, queryClient])
+
+  const analyticsLastUpdateLabel = useMemo(() => {
+    const date = analyticsLastUpdatedAt
+    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `Actualisé le ${day}/${month} à ${hours}:${minutes}`
+  }, [analyticsLastUpdatedAt])
 
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
@@ -2205,6 +2237,43 @@ export function Budgets() {
         titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
         onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
         contentOffsetY={4}
+        titleAfter={budgetsTabId === 'analytics' ? (
+          <button
+            type="button"
+            onClick={handleAnalyticsRefresh}
+            disabled={analyticsRefreshing}
+            aria-label="Actualiser les données analytics"
+            style={{
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px',
+              width: '24px',
+              height: '24px',
+              background: 'color-mix(in oklab, var(--neutral-0) 20%, var(--primary-600) 80%)',
+              color: 'var(--neutral-0)',
+              cursor: analyticsRefreshing ? 'not-allowed' : 'pointer',
+              opacity: analyticsRefreshing ? 0.6 : 1,
+              transition: 'all var(--transition-base)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <RotateCw size={12} style={{ transition: 'transform var(--transition-base)', transform: analyticsRefreshing ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+          </button>
+        ) : undefined}
+        titleMeta={budgetsTabId === 'analytics' ? (
+          <p style={{
+            margin: 0,
+            fontSize: '9px',
+            color: 'color-mix(in oklab, var(--neutral-0) 70%, var(--primary-100) 30%)',
+            fontWeight: 'var(--font-weight-medium)',
+            whiteSpace: 'nowrap',
+          }}>
+            {analyticsLastUpdateLabel}
+          </p>
+        ) : undefined}
         actionIcon={(
           <img
             src={activeBudgetsTab.iconSrc}
@@ -2218,7 +2287,7 @@ export function Budgets() {
         )}
         actionAriaLabel="Choisir un onglet budgets"
         onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
-        rightSlot={budgetsTabId !== 'metriques' ? (
+        rightSlot={budgetsTabId !== 'metriques' && budgetsTabId !== 'analytics' ? (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             {budgetsTabId === 'legacy' && (
               <button
@@ -4601,6 +4670,8 @@ export function Budgets() {
         <EnveloppesTab
           onCategoryClick={handleEnveloppesCategoryClick}
         />
+      ) : budgetsTabId === 'analytics' ? (
+        <BudgetsAnalyticsTab />
       ) : budgetsTabId === 'metriques' ? (
         <ProjectionsTab />
       ) : budgetsTabId === 'projections' ? (

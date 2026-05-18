@@ -4,12 +4,14 @@ import { X } from 'lucide-react'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
+import { AnnualProjectionSectionConnected, type ProjectionViewMode } from '@/features/annual-analysis/components/AnnualCostProjection2026'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { getMonthShortLabel } from '@/features/annual-analysis/components/_constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type DisplayMode = 'depenses' | 'revenus'
+type CostProjectionSlide = 'categories' | 'global'
 
 const CYAN = '#0EA5C3'
 
@@ -55,6 +57,39 @@ function DarkToggle({ mode, onChange }: { mode: DisplayMode; onChange: (m: Displ
     }}>
       <button type="button" onClick={() => onChange('depenses')} style={btn(mode === 'depenses')}>Dépenses</button>
       <button type="button" onClick={() => onChange('revenus')} style={btn(mode === 'revenus')}>Revenus</button>
+    </div>
+  )
+}
+
+function DarkSlideToggle({ slide, onChange }: { slide: CostProjectionSlide; onChange: (s: CostProjectionSlide) => void }) {
+  function btn(active: boolean): React.CSSProperties {
+    return {
+      border: active ? '1.5px solid var(--neutral-800)' : '1.5px solid var(--neutral-300)',
+      background: active ? 'var(--neutral-800)' : 'var(--neutral-0)',
+      color: active ? 'var(--neutral-0)' : 'var(--neutral-700)',
+      borderRadius: 'var(--radius-md)',
+      padding: 'var(--space-2) var(--space-4)',
+      fontSize: 'var(--font-size-sm)',
+      fontWeight: 700,
+      cursor: 'pointer',
+      transition: 'all var(--transition-base)',
+      minHeight: 34,
+      textAlign: 'center' as const,
+    }
+  }
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 3,
+      background: 'var(--neutral-100)',
+      borderRadius: 'var(--radius-md)',
+      padding: '3px',
+      width: 224,
+    }}>
+      <button type="button" onClick={() => onChange('categories')} style={btn(slide === 'categories')}>Catégories</button>
+      <button type="button" onClick={() => onChange('global')} style={btn(slide === 'global')}>Global</button>
     </div>
   )
 }
@@ -240,6 +275,7 @@ function CalcModal({ config, onClose }: { config: CalcModalConfig | null; onClos
 
 export function ProjectionsTabContent() {
   const [mode, setMode] = useState<DisplayMode>('depenses')
+  const [costProjectionSlide, setCostProjectionSlide] = useState<CostProjectionSlide>('categories')
   const [activeModal, setActiveModal] = useState<CalcModalConfig | null>(null)
 
   const { summary, categories } = useAnnual2026Analysis()
@@ -296,6 +332,7 @@ export function ProjectionsTabContent() {
   }, [revenueData, projection, ytdMonths, remainingMonths])
 
   const { ytdRevenue, avgMonthly6m, scenario1, scenario2, gapRevYtdVs2025Pct, gapS2Vs2025TotalPct, ytd2025SamePeriod } = revenueMetrics
+  const legacyProjectionViewMode: ProjectionViewMode = costProjectionSlide === 'categories' ? 'category' : 'year'
 
   // ── Modal configs ────────────────────────────────────────────────────────────
 
@@ -570,6 +607,17 @@ export function ProjectionsTabContent() {
       <h2 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
         Projection coûts annuels
       </h2>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <DarkSlideToggle slide={costProjectionSlide} onChange={setCostProjectionSlide} />
+        </div>
+
+        <AnnualProjectionSectionConnected
+          viewMode={legacyProjectionViewMode}
+          hideModeToggle
+        />
+      </div>
 
       <CalcModal config={activeModal} onClose={() => setActiveModal(null)} />
     </div>

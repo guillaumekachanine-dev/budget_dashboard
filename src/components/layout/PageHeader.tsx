@@ -4,6 +4,8 @@ type PageHeaderProps = {
   title: string
   titleAriaLabel?: string
   onTitleClick?: () => void
+  titleAfter?: ReactNode
+  titleMeta?: ReactNode
   centerLabel?: string
   rightLabel?: string
   rightSlot?: ReactNode
@@ -19,6 +21,8 @@ export function PageHeader({
   title,
   titleAriaLabel,
   onTitleClick,
+  titleAfter,
+  titleMeta,
   centerLabel,
   rightLabel,
   rightSlot,
@@ -65,40 +69,56 @@ export function PageHeader({
             transform: `translateY(${contentOffsetY}px)`,
           }}
         >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-2xl)',
-              lineHeight: 1.1,
-              fontWeight: 'var(--font-weight-extrabold)',
-              color: 'var(--neutral-0)',
-              letterSpacing: '-0.02em',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
-          >
-            {onTitleClick ? (
-              <button
-                type="button"
-                aria-label={titleAriaLabel ?? title}
-                onClick={onTitleClick}
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-2xl)',
+                lineHeight: 1.1,
+                fontWeight: 'var(--font-weight-extrabold)',
+                color: 'var(--neutral-0)',
+                letterSpacing: '-0.02em',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              {onTitleClick ? (
+                <button
+                  type="button"
+                  aria-label={titleAriaLabel ?? title}
+                  onClick={onTitleClick}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'inherit',
+                    font: 'inherit',
+                    letterSpacing: 'inherit',
+                    padding: 0,
+                    margin: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {title}
+                </button>
+              ) : (
+                title
+              )}
+            </h1>
+            {titleAfter ?? null}
+            {titleMeta ? (
+              <div
                 style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'inherit',
-                  font: 'inherit',
-                  letterSpacing: 'inherit',
-                  padding: 0,
-                  margin: 0,
-                  cursor: 'pointer',
+                  position: 'absolute',
+                  left: 0,
+                  top: 'calc(50% + 10px)',
+                  lineHeight: 1,
+                  pointerEvents: 'none',
                 }}
               >
-                {title}
-              </button>
-            ) : (
-              title
-            )}
-          </h1>
+                {titleMeta}
+              </div>
+            ) : null}
+          </div>
 
           {centerLabel ? (
             <p

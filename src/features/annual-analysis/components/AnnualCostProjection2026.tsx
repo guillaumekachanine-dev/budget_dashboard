@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, LayoutGrid, X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine, ReferenceDot } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
@@ -20,7 +20,7 @@ import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 
-type ProjectionViewMode = 'category' | 'year'
+export type ProjectionViewMode = 'category' | 'year'
 
 type CategoryProjectionPoint = {
   parentKey: string
@@ -78,6 +78,10 @@ type DeltaBlockSummaryRow = {
 
 type AnnualProjectionSectionConnectedProps = {
   scopeSelection?: MetricsScopeSelection
+  initialViewMode?: ProjectionViewMode
+  viewMode?: ProjectionViewMode
+  onViewModeChange?: (mode: ProjectionViewMode) => void
+  hideModeToggle?: boolean
 }
 
 const fmtCurrency = (n: number) => formatCurrencyFloored(n)
@@ -161,6 +165,10 @@ function buildParentProjectionGroups(rows: CategoryAnnualCostProjection2026[]): 
 
 export function AnnualProjectionSectionConnected({
   scopeSelection,
+  initialViewMode = 'category',
+  viewMode,
+  onViewModeChange,
+  hideModeToggle = false,
 }: AnnualProjectionSectionConnectedProps) {
   const { data: rows, isLoading: isLoadingCategories } = useCategoryAnnualCostProjection2026(scopeSelection, 2026)
 
@@ -191,17 +199,34 @@ export function AnnualProjectionSectionConnected({
     )
   }
 
-  return <AnnualCostProjectionCard rows={rows} bare />
+  return (
+    <AnnualCostProjectionCard
+      rows={rows}
+      bare
+      initialViewMode={initialViewMode}
+      viewMode={viewMode}
+      onViewModeChange={onViewModeChange}
+      hideModeToggle={hideModeToggle}
+    />
+  )
 }
 
 function AnnualCostProjectionCard({
   rows,
   bare = false,
+  initialViewMode = 'category',
+  viewMode: controlledViewMode,
+  onViewModeChange,
+  hideModeToggle = false,
 }: {
   rows: CategoryAnnualCostProjection2026[]
   bare?: boolean
+  initialViewMode?: ProjectionViewMode
+  viewMode?: ProjectionViewMode
+  onViewModeChange?: (mode: ProjectionViewMode) => void
+  hideModeToggle?: boolean
 }) {
-  const [viewMode, setViewMode] = useState<ProjectionViewMode>('category')
+  const [internalViewMode, setInternalViewMode] = useState<ProjectionViewMode>(initialViewMode)
   const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null)
   const [selectedDeltaBlockKey, setSelectedDeltaBlockKey] = useState<string | null>(null)
   const [openedDeltaBreakdownBlockKey, setOpenedDeltaBreakdownBlockKey] = useState<string | null>(null)
@@ -211,6 +236,12 @@ function AnnualCostProjectionCard({
   const deltaTooltipRef = useRef<HTMLDivElement | null>(null)
   const wasDetailsVisibleRef = useRef(false)
   const { data: categories = [] } = useCategories()
+  const viewMode = controlledViewMode ?? internalViewMode
+
+  const handleViewModeChange = (nextMode: ProjectionViewMode) => {
+    if (controlledViewMode == null) setInternalViewMode(nextMode)
+    onViewModeChange?.(nextMode)
+  }
 
   const categoryIconById = useMemo(
     () => new Map(categories.map((cat) => [cat.id, cat.icon_key])),
@@ -268,10 +299,10 @@ function AnnualCostProjectionCard({
       name: row.parentName,
       theoreticalAnnualAmount: row.budgetAnnualAmount,
       refinedAnnualAmount: row.projectedAnnualAmount,
-      color: VIZ_PALETTE[i % VIZ_PALETTE.length] ?? 'var(--neutral-500)',
+      color: parentHeaderColorByName.get(row.parentKey) ?? VIZ_PALETTE[i % VIZ_PALETTE.length] ?? 'var(--neutral-500)',
       isSelected: selectedParentKey === row.parentKey,
     })),
-    [top5, selectedParentKey],
+    [top5, selectedParentKey, parentHeaderColorByName],
   )
 
   const blockDeltaData = useMemo<BlockDeltaBarRow[]>(() => {
@@ -497,13 +528,13 @@ function AnnualCostProjectionCard({
     }
   }, [selectedRow, viewMode])
 
-  const modeToggle = (
+  const modeToggle = hideModeToggle ? null : (
     <div style={switchStyle} role="tablist" aria-label="Mode de projection">
       <button
         type="button"
         role="tab"
         aria-selected={viewMode === 'category'}
-        onClick={() => setViewMode('category')}
+        onClick={() => handleViewModeChange('category')}
         style={{
           ...switchButtonStyle,
           ...(viewMode === 'category' ? switchButtonActiveStyle : null),
@@ -515,7 +546,7 @@ function AnnualCostProjectionCard({
         type="button"
         role="tab"
         aria-selected={viewMode === 'year'}
-        onClick={() => setViewMode('year')}
+        onClick={() => handleViewModeChange('year')}
         style={{
           ...switchButtonStyle,
           ...(viewMode === 'year' ? switchButtonActiveStyle : null),
@@ -527,7 +558,7 @@ function AnnualCostProjectionCard({
   )
 
   const chart = (
-    <div style={{ height: 292, width: '100%', position: 'relative' }}>
+    <div style={{ height: 292, width: '100%', position: 'relative', marginTop: viewMode === 'year' ? 10 : 0 }}>
       {viewMode === 'category' ? (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={categoryData} margin={{ top: 42, right: 0, left: 0, bottom: 28 }}>
@@ -563,141 +594,142 @@ function AnnualCostProjectionCard({
       ) : (
         <>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={blockDeltaData} margin={{ top: 48, right: 0, left: 0, bottom: 28 }} barCategoryGap="18%">
-            <XAxis
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              tick={false}
-            />
-            <YAxis
-              hide
-              domain={[-deltaAxisMax, deltaAxisMax]}
-            />
-            <ReferenceLine
-              y={0}
-              stroke="var(--neutral-400)"
-              strokeWidth={1.2}
-            />
-            {blockDeltaData
-              .filter((row) => !row.isTotal && row.iconSrc)
-              .map((row) => (
-                <ReferenceDot
-                  key={`axis-icon-${row.blockKey}`}
-                  x={row.name}
-                  y={0}
-                  ifOverflow="visible"
-                  isFront
-                  shape={(props: unknown) => {
-                    const { cx, cy } = (props ?? {}) as { cx?: number; cy?: number }
-                    if (cx == null || cy == null || !row.iconSrc) return <g />
-                    const iconSize = 24
-                    const iconY = row.deltaAmount >= 0 ? (cy + 3) : (cy - iconSize - 3)
+            <BarChart
+              data={blockDeltaData}
+              layout="vertical"
+              margin={{ top: 8, right: 20, left: 20, bottom: 4 }}
+              barCategoryGap="9%"
+            >
+              <XAxis
+                type="number"
+                axisLine={false}
+                tickLine={false}
+                tick={false}
+                domain={[-deltaAxisMax, deltaAxisMax]}
+              />
+              <YAxis
+                dataKey="name"
+                type="category"
+                hide
+              />
+              <ReferenceLine
+                x={0}
+                stroke="var(--neutral-400)"
+                strokeWidth={1.2}
+              />
+              <Bar
+                dataKey="deltaAmount"
+                barSize={20}
+                maxBarSize={20}
+                radius={4}
+                cursor="pointer"
+                onClick={(_: unknown, index: number) => {
+                  const clicked = blockDeltaData[index]?.blockKey ?? null
+                  setSelectedDeltaBlockKey((prev) => (prev === clicked ? null : clicked))
+                }}
+              >
+                {blockDeltaData.map((row) => (
+                  <Cell
+                    key={`delta-${row.blockKey}`}
+                    fill={row.isTotal ? 'var(--neutral-0)' : row.color}
+                    fillOpacity={row.isTotal ? 1 : (row.isSelected || !selectedDeltaBlockKey ? 0.96 : 0.62)}
+                    stroke={row.isTotal ? 'var(--color-warning)' : (row.isSelected ? 'var(--neutral-900)' : row.color)}
+                    strokeWidth={row.isTotal ? (row.isSelected ? 3 : 2.3) : (row.isSelected ? 1.5 : 0)}
+                  />
+                ))}
+                <LabelList
+                  dataKey="deltaAmount"
+                  content={(props: unknown) => {
+                    const { x, y, width, height, value } = (props ?? {}) as {
+                      x?: number
+                      y?: number
+                      width?: number
+                      height?: number
+                      value?: number
+                    }
+                    if (x == null || y == null || width == null || height == null || value == null) return null
+                    const numericValue = Number(value)
+                    const endX = x + width
+                    const textX = numericValue >= 0 ? (endX + 6) : (endX - 6)
+                    const textY = y + (height / 2)
                     return (
-                      <image
-                        href={row.iconSrc}
-                        xlinkHref={row.iconSrc}
-                        x={cx - iconSize / 2}
-                        y={iconY}
-                        width={iconSize}
-                        height={iconSize}
-                        preserveAspectRatio="xMidYMid meet"
-                      />
+                      <text
+                        x={textX}
+                        y={textY}
+                        textAnchor={numericValue >= 0 ? 'start' : 'end'}
+                        dominantBaseline="middle"
+                        fill={(props as { payload?: BlockDeltaBarRow })?.payload?.isTotal ? '#B06A00' : 'var(--neutral-700)'}
+                        fontSize={10}
+                        fontWeight={700}
+                        fontFamily="var(--font-mono)"
+                      >
+                        {fmtSignedCurrency(numericValue)}
+                      </text>
                     )
                   }}
                 />
-              ))}
-            <Bar
-              dataKey="deltaAmount"
-              barSize={32}
-              maxBarSize={32}
-              radius={4}
-              cursor="pointer"
-              onClick={(_: unknown, index: number) => {
-                const clicked = blockDeltaData[index]?.blockKey ?? null
-                setSelectedDeltaBlockKey((prev) => (prev === clicked ? null : clicked))
-              }}
-            >
-              {blockDeltaData.map((row) => (
-                <Cell
-                  key={`delta-${row.blockKey}`}
-                  fill={row.isTotal ? 'var(--neutral-0)' : row.color}
-                  fillOpacity={row.isTotal ? 1 : (row.isSelected || !selectedDeltaBlockKey ? 0.96 : 0.62)}
-                  stroke={row.isTotal ? 'var(--color-warning)' : (row.isSelected ? 'var(--neutral-900)' : row.color)}
-                  strokeWidth={row.isTotal ? (row.isSelected ? 3 : 2.3) : (row.isSelected ? 1.5 : 0)}
+                <LabelList
+                  dataKey="name"
+                  content={(props: unknown) => {
+                    const { x, y, width, height, value, payload } = (props ?? {}) as {
+                      x?: number
+                      y?: number
+                      width?: number
+                      height?: number
+                      value?: string
+                      payload?: BlockDeltaBarRow
+                    }
+                    if (x == null || y == null || width == null || height == null || !value || !payload) return null
+                    if (payload.isTotal) return null
+                    const numericValue = Number(payload.deltaAmount ?? 0)
+                    const barEndX = x + width
+                    const axisX = numericValue >= 0 ? x : barEndX
+                    const isNegative = numericValue < 0
+                    const nameX = isNegative ? (axisX + 8) : (axisX - 8)
+                    return (
+                      <text
+                        x={nameX}
+                        y={y + (height / 2)}
+                        textAnchor={isNegative ? 'start' : 'end'}
+                        dominantBaseline="middle"
+                        fill="var(--neutral-500)"
+                        fontSize={10}
+                        fontWeight={700}
+                      >
+                        {value}
+                      </text>
+                    )
+                  }}
                 />
-              ))}
-              <LabelList
-                dataKey="deltaAmount"
-                content={(props: unknown) => {
-                  const { x, y, width, height, value } = (props ?? {}) as {
-                    x?: number
-                    y?: number
-                    width?: number
-                    height?: number
-                    value?: number
-                  }
-                  if (x == null || y == null || width == null || height == null || value == null) return null
-                  const numericValue = Number(value)
-                  const barTop = Math.min(y, y + height)
-                  const barBottom = Math.max(y, y + height)
-                  const posY = numericValue >= 0 ? (barTop - 10) : (barBottom + 12)
-                  return (
-                    <text
-                      x={x + width / 2}
-                      y={posY}
-                      textAnchor="middle"
-                      fill={(props as { payload?: BlockDeltaBarRow })?.payload?.isTotal ? '#B06A00' : 'var(--neutral-700)'}
-                      fontSize={10}
-                      fontWeight={700}
-                      fontFamily="var(--font-mono)"
-                    >
-                      {fmtSignedCurrency(numericValue)}
-                    </text>
-                  )
-                }}
-              />
-              <LabelList
-                dataKey="deltaAmount"
-                content={(props: unknown) => {
-                  const { x, y, width, height, payload } = (props ?? {}) as {
-                    x?: number
-                    y?: number
-                    width?: number
-                    height?: number
-                    payload?: BlockDeltaBarRow
-                  }
-                  if (x == null || y == null || width == null || height == null || !payload?.isTotal) return null
-                  const centerX = x + width / 2
-                  const barTop = Math.min(y, y + height)
-                  const barBottom = Math.max(y, y + height)
-                  const letters = ['T', 'O', 'T', 'A', 'L']
-                  const usableHeight = Math.max(34, barBottom - barTop - 6)
-                  const rowStep = usableHeight / (letters.length + 1)
-                  const firstY = barTop + rowStep
-                  const fontSize = Math.max(8, Math.min(11, rowStep * 0.72))
-
-                  return (
-                    <text
-                      x={centerX}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill="#B06A00"
-                      fontSize={fontSize}
-                      fontWeight={700}
-                      fontFamily="var(--font-mono)"
-                      style={{ letterSpacing: '0.02em' }}
-                    >
-                      {letters.map((letter, index) => (
-                        <tspan key={`${letter}-${index}`} x={centerX} y={firstY + index * rowStep}>
-                          {letter}
-                        </tspan>
-                      ))}
-                    </text>
-                  )
-                }}
-              />
-            </Bar>
+                <LabelList
+                  dataKey="name"
+                  content={(props: unknown) => {
+                    const { x, y, width, height, payload } = (props ?? {}) as {
+                      x?: number
+                      y?: number
+                      width?: number
+                      height?: number
+                      payload?: BlockDeltaBarRow
+                    }
+                    if (x == null || y == null || width == null || height == null || !payload?.isTotal) return null
+                    return (
+                      <text
+                        x={x + width / 2}
+                        y={y + height / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#B06A00"
+                        fontSize={10}
+                        fontWeight={700}
+                        fontFamily="var(--font-mono)"
+                        style={{ letterSpacing: '0.03em' }}
+                      >
+                        TOTAL
+                      </text>
+                    )
+                  }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           {selectedDeltaTooltip ? (
@@ -706,7 +738,10 @@ function AnnualCostProjectionCard({
                 ref={deltaTooltipRef}
                 style={{
                   ...deltaTooltipCardStyle,
-                  left: `clamp(92px, ${((selectedDeltaTooltip.index + 0.5) / blockDeltaData.length) * 100}%, calc(100% - 92px))`,
+                  left: 'auto',
+                  right: 10,
+                  top: 10,
+                  transform: 'none',
                 }}
               >
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)' }}>
@@ -742,7 +777,12 @@ function AnnualCostProjectionCard({
     ? <ProjectionDetailsCard row={selectedRow} />
     : null
   const categoryPlaceholderCard = viewMode === 'category' && !selectedCard
-    ? <ProjectionDetailsPlaceholderCard />
+    ? (
+      <ProjectionDetailsPlaceholderCard
+        rows={top5}
+        parentIconByName={parentIconByName}
+      />
+    )
     : null
   const yearSummaryCard = viewMode === 'year' ? (
     <DeltaBlockSummaryCard
@@ -859,7 +899,7 @@ function DeltaBlockSummaryCard({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '16px minmax(0,1fr) 82px 24px',
+            gridTemplateColumns: '16px minmax(0,1fr) 90px 24px',
             alignItems: 'center',
             columnGap: 7,
             padding: '1px 0 4px',
@@ -876,7 +916,7 @@ function DeltaBlockSummaryCard({
               justifyContent: 'center',
               borderRadius: 'var(--radius-sm)',
               padding: '2px 7px',
-              width: 82,
+              width: 90,
               background: totalDeltaPositive ? 'rgba(252,90,90,0.14)' : 'rgba(46,212,122,0.14)',
               border: `1px solid ${totalDeltaPositive ? 'rgba(252,90,90,0.24)' : 'rgba(46,212,122,0.24)'}`,
               color: totalDeltaPositive ? 'var(--negative)' : 'var(--positive)',
@@ -894,14 +934,13 @@ function DeltaBlockSummaryCard({
         {rows.map((row) => {
           const isOverBudget = row.deltaAmount > 0
           const pillColor = isOverBudget ? 'var(--negative)' : 'var(--positive)'
-          const categoriesLabel = `${row.categoryCount} catégories`
 
           return (
             <div
               key={row.blockKey}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '16px minmax(0,1fr) 82px 24px',
+                gridTemplateColumns: '16px minmax(0,1fr) 90px 24px',
                 alignItems: 'center',
                 columnGap: 7,
                 padding: '3px 0',
@@ -915,12 +954,9 @@ function DeltaBlockSummaryCard({
                 style={{ width: 15, height: 15, objectFit: 'contain' }}
               />
 
-              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline' }}>
                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {row.name}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap' }}>
-                  {categoriesLabel}
                 </span>
               </div>
 
@@ -934,7 +970,7 @@ function DeltaBlockSummaryCard({
                   fontWeight: 700,
                   fontFamily: 'var(--font-mono)',
                   whiteSpace: 'nowrap',
-                  width: 82,
+                  width: 90,
                 }}
               >
                 {fmtSignedCurrency(row.deltaAmount)}
@@ -956,13 +992,60 @@ function DeltaBlockSummaryCard({
   )
 }
 
-function ProjectionDetailsPlaceholderCard() {
+function ProjectionDetailsPlaceholderCard({
+  rows,
+  parentIconByName,
+}: {
+  rows: ParentProjectionGroup[]
+  parentIconByName: Map<string, string | null>
+}) {
   return (
     <div style={{ ...selectedCardStyle, minHeight: 152 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
         <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--neutral-800)' }}>
-          détails
+          Top 5 catégories dépenses
         </span>
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {rows.map((row) => (
+          <div
+            key={row.parentKey}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '16px minmax(0,1fr) auto',
+              alignItems: 'center',
+              columnGap: 7,
+            }}
+          >
+            <CategoryIcon
+              iconKey={parentIconByName.get(row.parentKey) ?? null}
+              label={row.parentName}
+              size={15}
+            />
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--neutral-800)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {row.parentName}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--neutral-700)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {fmtCurrency(row.projectedAnnualAmount)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
