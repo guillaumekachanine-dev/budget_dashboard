@@ -9,7 +9,7 @@ export async function getTrips(year: number): Promise<Trip[]> {
     .order('start_date', { ascending: true })
 
   if (error) throw new Error(`getTrips failed: ${error.message}`)
-  return (data ?? []) as Trip[]
+  return (data ?? []) as unknown as Trip[]
 }
 
 export async function getTripTransactions(tripIds: string[]): Promise<TripTransaction[]> {
@@ -21,5 +21,5 @@ export async function getTripTransactions(tripIds: string[]): Promise<TripTransa
     .in('trip_id', tripIds)
 
   if (error) throw new Error(`getTripTransactions failed: ${error.message}`)
-  return (data ?? []) as TripTransaction[]
+  return (data ?? []) as unknown as TripTransaction[]
 }

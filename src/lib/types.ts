@@ -543,6 +543,7 @@ export type Database = {
       import_batches: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       savings_balance_snapshots: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      trips: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
     }
     Views: {
       budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
@@ -561,6 +562,7 @@ export type Database = {
       v_planned_operations_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
+      v_trip_transactions: { Row: Record<string, unknown>; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {

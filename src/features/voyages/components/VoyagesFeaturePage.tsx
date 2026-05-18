@@ -196,7 +196,7 @@ function RankingRow({ item, index, maxAvg }: { item: TripWithStats; index: numbe
             {item.trip.name}
           </span>
           <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>
-            {item.trip.duration ?? item.trip.start_date} · {item.duration}j
+            {formatDateShort(item.trip.start_date)} · {item.duration}j
           </span>
         </div>
         <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
@@ -439,7 +439,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
               <p style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
                 Classement par coût journalier
               </p>
-              {sortedByAvg.map((item, i) => (
+              {sortedByAvg.map((item) => (
                 <RankingRow
                   key={item.trip.id}
                   item={item}
