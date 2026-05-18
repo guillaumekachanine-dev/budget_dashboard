@@ -23,6 +23,7 @@ import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
 import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
 import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.png'
+import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
 
 const EURO_ROUNDED = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
@@ -97,18 +98,6 @@ function resolveLegendLabel(label: string): string {
   if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return 'PER'
   if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return 'BTC'
   return label
-}
-
-function resolveSeriesColor(label: string, fallbackColor: string): string {
-  const normalized = normalizeLabel(label)
-  if (normalized.includes('livret a')) return '#1D4ED8'
-  if (hasWord(normalized, 'ldds')) return '#D946EF'
-  if (hasWord(normalized, 'lep')) return '#0D9488'
-  if (hasWord(normalized, 'pea')) return '#10b981'
-  if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return '#7C3AED'
-  if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return '#DC2626'
-  if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return '#CA8A04'
-  return fallbackColor
 }
 
 function resolveSeriesIcon(label: string, family: 'livrets' | 'placements'): string {
@@ -230,7 +219,12 @@ export function SavingsEvolutionFiveYearsChart() {
   const styledSeries: StyledSeries[] = useMemo(() => series.map((entry) => ({
     ...entry,
     shortLabel: resolveLegendLabel(entry.label),
-    color: resolveSeriesColor(entry.label, entry.color),
+    color: resolveSavingsPortfolioColor({
+      key: entry.key,
+      label: entry.label,
+      savingsKind: entry.savings_kind,
+      fallbackColor: entry.color,
+    }),
     iconSrc: resolveSeriesIcon(entry.label, entry.family),
   })), [series])
 

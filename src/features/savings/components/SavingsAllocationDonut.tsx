@@ -8,6 +8,7 @@ import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
 import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
 import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.png'
+import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
 
 type SavingsFamily = 'livrets' | 'placements'
 
@@ -30,20 +31,6 @@ type SavingsSlice = {
   varianceVsFamilyAvgPct: number
   indicator: ProductIndicator
 }
-
-const LIVRET_COLORS = [
-  'color-mix(in oklab, var(--color-positive) 88%, var(--neutral-0) 12%)',
-  'color-mix(in oklab, var(--color-positive) 74%, var(--neutral-0) 26%)',
-  'color-mix(in oklab, var(--color-positive) 60%, var(--neutral-0) 40%)',
-  'color-mix(in oklab, var(--color-positive) 46%, var(--neutral-0) 54%)',
-] as const
-
-const PLACEMENT_COLORS = [
-  'color-mix(in oklab, var(--color-warning) 66%, var(--neutral-0) 34%)',
-  'color-mix(in oklab, var(--color-warning) 54%, var(--neutral-0) 46%)',
-  'color-mix(in oklab, var(--color-warning) 44%, var(--neutral-0) 56%)',
-  'color-mix(in oklab, var(--color-warning) 34%, var(--neutral-0) 66%)',
-] as const
 
 function formatTightEuro(value: number): string {
   return formatEuro(value).replace(/\s+€/u, '€')
@@ -222,8 +209,6 @@ export function SavingsAllocationDonut() {
     const livretsSum = livrets.reduce((sum, e) => sum + e.value, 0)
     const placementsSum = placements.reduce((sum, e) => sum + e.value, 0)
 
-    const familyColorIndexes: Record<SavingsFamily, number> = { livrets: 0, placements: 0 }
-
     const computed = [...raw]
       .sort((a, b) => b.value - a.value)
       .map((entry) => {
@@ -231,10 +216,6 @@ export function SavingsAllocationDonut() {
         const familyTotal = entry.family === 'livrets' ? livretsSum : placementsSum
         const familyCount = entry.family === 'livrets' ? livrets.length : placements.length
         const familyAvgSharePct = familyCount > 0 && total > 0 ? ((familyTotal / total) * 100) / familyCount : 0
-
-        const palette = entry.family === 'livrets' ? LIVRET_COLORS : PLACEMENT_COLORS
-        const paletteIndex = familyColorIndexes[entry.family] % palette.length
-        familyColorIndexes[entry.family] += 1
 
         const indicator = perfByAccount.get(entry.id) ?? {
           label: entry.family === 'livrets' ? ('Tx intérêts' as const) : ('Performance' as const),
@@ -248,7 +229,12 @@ export function SavingsAllocationDonut() {
           family: entry.family,
           savings_kind: entry.savings_kind,
           value: entry.value,
-          color: palette[paletteIndex],
+          color: resolveSavingsPortfolioColor({
+            key: entry.id,
+            label: entry.name,
+            savingsKind: entry.savings_kind,
+            fallbackColor: entry.family === 'livrets' ? 'var(--color-positive)' : 'var(--color-warning)',
+          }),
           iconSrc: resolveAccountIconSrc(entry.savings_kind),
           sharePct,
           familyAvgSharePct,

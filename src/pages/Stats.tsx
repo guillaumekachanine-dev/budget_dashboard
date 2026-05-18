@@ -330,7 +330,7 @@ export function Stats() {
           <StatsMajorSectionHeading title="Capital investi" />
           <SavingsEvolutionFiveYearsChart />
           <FinancialSecurityCard />
-          <StatsMajorSectionHeading title="performance" />
+          <StatsMajorSectionHeading title="Performance" />
           <SavingsPortfoliosListSection />
 
           {snapshot ? (

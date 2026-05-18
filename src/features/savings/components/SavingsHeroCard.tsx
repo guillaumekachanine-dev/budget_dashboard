@@ -1,26 +1,15 @@
-import { useMemo } from 'react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useSavingsCurrentSummary } from '@/features/savings/hooks/useSavingsCurrentSummary'
-import type { SavingsMonthlyMetric } from '@/features/savings/types'
+import epargneCapitalInvestiIcon from '@/assets/icons/app/epargne_capital_investi.png'
+import epargnePerformanceIcon from '@/assets/icons/app/epargne_performance.png'
+import epargnePlanning2026Icon from '@/assets/icons/app/epargne_planning_2026.png'
+import epargneRepartitionIcon from '@/assets/icons/app/epargne_repartition.png'
 import repartitionEpargneIcon from '@/assets/icons/app/repartition_epargne.png'
 import {
   DataQualityNotice,
   StatsSection,
-  asFiniteNumber,
   formatEuro,
 } from '@/features/stats/components/ui'
-
-function findLatestMetric(metrics: SavingsMonthlyMetric[]): SavingsMonthlyMetric | null {
-  if (metrics.length === 0) return null
-
-  for (let index = metrics.length - 1; index >= 0; index -= 1) {
-    const amount = asFiniteNumber(metrics[index].ytd_saved_amount)
-    if (amount != null) return metrics[index]
-  }
-
-  return metrics[metrics.length - 1] ?? null
-}
 
 type SavingsHeroCardProps = {
   onOpenAllocationModal?: () => void
@@ -28,32 +17,6 @@ type SavingsHeroCardProps = {
 
 export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps) {
   const { data, isLoading, error } = useSavingsCurrentSummary()
-  const analytics2026 = useSavingsAnalytics(2026)
-
-  const {
-    ytdSaved2026,
-    ytdAveragePerMonth2026,
-    monthlySavingsTarget,
-    annualSavingsTarget2026,
-  } = useMemo(() => {
-    const metrics2026 = analytics2026.data?.monthlyMetrics ?? []
-
-    const latest2026 = findLatestMetric(metrics2026)
-    const month2026 = asFiniteNumber(latest2026?.period_month)
-    const ytdSaved2026Value = asFiniteNumber(latest2026?.ytd_saved_amount)
-    const targetValue = asFiniteNumber(latest2026?.savings_budget_total)
-    const ytdAveragePerMonth = month2026 != null && month2026 > 0 && ytdSaved2026Value != null
-      ? ytdSaved2026Value / month2026
-      : null
-    const annualTarget = targetValue != null ? targetValue * 12 : null
-
-    return {
-      ytdSaved2026: ytdSaved2026Value,
-      ytdAveragePerMonth2026: ytdAveragePerMonth,
-      monthlySavingsTarget: targetValue,
-      annualSavingsTarget2026: annualTarget,
-    }
-  }, [analytics2026.data?.monthlyMetrics])
 
   if (isLoading) {
     return (
@@ -92,9 +55,6 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
           detail: 'Connecte au moins un compte d’épargne pour alimenter cette section.',
         }
       : null
-
-  const kpiTitleColor = 'var(--neutral-0)'
-  const kpiValueColor = 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-0) 22%)'
 
   return (
     <StatsSection>
@@ -223,43 +183,20 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
               display: 'grid',
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               gap: 'var(--space-2)',
-              alignItems: 'start',
+              alignItems: 'center',
             }}
           >
-            <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                epargne 2026
-              </p>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(ytdSaved2026)}
-              </p>
+            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+              <img src={epargneRepartitionIcon} alt="" aria-hidden="true" width={42} height={42} style={{ width: 42, height: 42, objectFit: 'contain' }} loading="lazy" decoding="async" />
             </div>
-
-            <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                moy/mois ytd
-              </p>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(ytdAveragePerMonth2026)}
-              </p>
+            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+              <img src={epargnePlanning2026Icon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
             </div>
-
-            <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                obj/mois
-              </p>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(monthlySavingsTarget)}
-              </p>
+            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+              <img src={epargneCapitalInvestiIcon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
             </div>
-
-            <div style={{ minWidth: 0, display: 'grid', gap: '2px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: kpiTitleColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                obj.2026
-              </p>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: kpiValueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatEuro(annualSavingsTarget2026)}
-              </p>
+            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+              <img src={epargnePerformanceIcon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
             </div>
           </div>
 

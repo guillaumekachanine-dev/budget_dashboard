@@ -5,6 +5,7 @@ import type {
   SavingsEvolutionFiveYearsSeries,
   SavingsRiskLevel,
 } from '@/features/savings/types'
+import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
 
 type SavingsFamily = 'livrets' | 'placements'
 
@@ -37,9 +38,6 @@ type OperationsViewRow = {
 }
 
 const MAX_SERIES = 6
-
-const LIVRET_LINE_COLORS = ['#2ED47A', '#3CD985', '#59E09A', '#1EB866'] as const
-const PLACEMENT_LINE_COLORS = ['#FFAB2E', '#FFBC59', '#F7C789', '#E89E3B'] as const
 
 function normalizeLabelStr(value: string): string {
   return value
@@ -75,10 +73,38 @@ function buildFallbackPayload(endYear: number): SavingsEvolutionFiveYearsPayload
   const years = Array.from({ length: 5 }, (_, index) => String(endYear - 4 + index))
 
   const series: SavingsEvolutionFiveYearsSeries[] = [
-    { key: 'livret_a', label: 'Livret A', color: LIVRET_LINE_COLORS[0], family: 'livrets', savings_kind: 'livret_a', risk_level: null },
-    { key: 'ldds', label: 'LDDS', color: LIVRET_LINE_COLORS[1], family: 'livrets', savings_kind: 'ldds', risk_level: null },
-    { key: 'pea', label: 'PEA', color: PLACEMENT_LINE_COLORS[0], family: 'placements', savings_kind: 'pea', risk_level: 'medium' },
-    { key: 'per', label: 'PER', color: PLACEMENT_LINE_COLORS[1], family: 'placements', savings_kind: 'per', risk_level: 'low' },
+    {
+      key: 'livret_a',
+      label: 'Livret A',
+      color: resolveSavingsPortfolioColor({ key: 'livret_a', label: 'Livret A', savingsKind: 'livret_a' }),
+      family: 'livrets',
+      savings_kind: 'livret_a',
+      risk_level: null,
+    },
+    {
+      key: 'ldds',
+      label: 'LDDS',
+      color: resolveSavingsPortfolioColor({ key: 'ldds', label: 'LDDS', savingsKind: 'ldds' }),
+      family: 'livrets',
+      savings_kind: 'ldds',
+      risk_level: null,
+    },
+    {
+      key: 'pea',
+      label: 'PEA',
+      color: resolveSavingsPortfolioColor({ key: 'pea', label: 'PEA', savingsKind: 'pea' }),
+      family: 'placements',
+      savings_kind: 'pea',
+      risk_level: 'medium',
+    },
+    {
+      key: 'per',
+      label: 'PER',
+      color: resolveSavingsPortfolioColor({ key: 'per', label: 'PER', savingsKind: 'per' }),
+      family: 'placements',
+      savings_kind: 'per',
+      risk_level: 'low',
+    },
   ]
 
   const baseRows = [
@@ -218,16 +244,15 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
     }
 
     // Series
-    const livretColorCursor = { value: 0 }
-    const placementColorCursor = { value: 0 }
     const series: SavingsEvolutionFiveYearsSeries[] = selectedAccounts.map((a) => {
-      const color = a.savings_family === 'livrets'
-        ? LIVRET_LINE_COLORS[livretColorCursor.value++ % LIVRET_LINE_COLORS.length]
-        : PLACEMENT_LINE_COLORS[placementColorCursor.value++ % PLACEMENT_LINE_COLORS.length]
       return {
         key: a.account_id,
         label: a.display_name ?? a.account_id,
-        color,
+        color: resolveSavingsPortfolioColor({
+          key: a.account_id,
+          label: a.display_name ?? a.account_id,
+          savingsKind: a.savings_kind ?? '',
+        }),
         family: a.savings_family,
         savings_kind: a.savings_kind ?? '',
         risk_level: a.risk_level ?? null,

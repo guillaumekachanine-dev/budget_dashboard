@@ -266,7 +266,7 @@ export function SavingsPortfolioModal({
 
   const totalCashIn = useMemo(
     () => accountEvents
-      .filter((e) => e.amount > 0 && e.nature !== 'intérêts')
+      .filter((e) => e.nature !== 'intérêts')
       .reduce((sum, e) => sum + e.amount, 0),
     [accountEvents],
   )
@@ -770,23 +770,23 @@ const BTC_PORTFOLIO_DATA: Array<{ date: string; cours: number; portefeuille: num
   { date: '2025-07-27', cours: 95394.26, portefeuille: 3012.91 },
   { date: '2025-09-27', cours: 97452.70, portefeuille: 3077.92 },
   { date: '2025-11-27', cours: 77765.60, portefeuille: 2456.13 },
-  { date: '2026-01-27', cours: 59617.29, portefeuille: 1882.94 },
-  { date: '2026-03-27', cours: 62106.51, portefeuille: 1961.56 },
-  { date: '2026-05-16', cours: 67965.58, portefeuille: 2146.61 },
+  { date: '2026-01-27', cours: 59617.29, portefeuille: 2796.37 },
+  { date: '2026-03-27', cours: 62106.51, portefeuille: 2913.15 },
+  { date: '2026-05-16', cours: 67965.58, portefeuille: 3188.00 },
 ]
 
-// Synthèse Bitcoin (depuis achat mars 2024)
+// Synthèse Bitcoin — portefeuille consolidé BTC-1 (2000€, mars 2024) + BTC-2 (1042€, déc 2025)
 const BTC_SYNTHESE = {
   dateAchat: '2024-03-27',
   dateValorisation: '2026-05-16',
-  montantInvesti: 2000.0,
-  valeurActuelle: 2146.61,
-  gainLatent: 146.61,
-  rendementCumulePct: 7.33,
+  montantInvesti: 3042.0,
+  valeurActuelle: 3188.00,
+  gainLatent: 146.00,
+  rendementCumulePct: 4.80,
   dureeJours: 780,
-  rendementAnnualisePct: 3.37,
-  quantiteBtc: 0.03158378,
-  prixRevient: 63323.64,
+  rendementAnnualisePct: 2.22,
+  quantiteBtc: 0.050791,
+  prixRevient: 59890,
   prixActuel: 67965.58,
 }
 
