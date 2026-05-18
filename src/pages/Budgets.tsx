@@ -46,7 +46,9 @@ import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
+import analyticsIcon from '@/assets/icons/app/analytics.webp'
 import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
+import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -77,6 +79,15 @@ const REVENUE_BLOCK_PAGE_ID = 'revenu' as const
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 const REVENUE_HISTORY_Y_AXIS_MAX = 15000
+
+type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'legacy'
+type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
+const BUDGETS_TABS: BudgetsTabConfig[] = [
+  { id: 'enveloppes', label: 'Enveloppes', iconSrc: budgetsPeriodIcon },
+  { id: 'projections', label: 'Projections', iconSrc: blockProvisionsIcon },
+  { id: 'analytics', label: 'Analytics', iconSrc: analyticsIcon },
+  { id: 'legacy', label: 'Legacy', iconSrc: blockFixeIcon },
+]
 
 interface BudgetBlockLineItem {
   id: string
@@ -636,6 +647,8 @@ export function Budgets() {
   const [selectedYtdSlideView, setSelectedYtdSlideView] = useState<BudgetYtdSlideView>('kpi')
   const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
   const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
+  const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('legacy')
+  const [showBudgetsTabModal, setShowBudgetsTabModal] = useState(false)
   const {
     data: budgetPayload,
   } = useBudgetPagePayload({
@@ -770,6 +783,19 @@ export function Budgets() {
     }
   }, [availableBudgetPeriods, defaultPeriodYear, defaultPeriodMonth])
 
+  const activeBudgetsTab = useMemo(
+    () => BUDGETS_TABS.find((t) => t.id === budgetsTabId) ?? BUDGETS_TABS[0],
+    [budgetsTabId],
+  )
+
+  const handleBudgetsTabSelect = useCallback((tabId: BudgetsTabId) => {
+    setBudgetsTabId(tabId)
+    setShowBudgetsTabModal(false)
+    setShowHeaderPeriodMenu(false)
+    setShowSlideThreeScopeSheet(false)
+    setShowCatSheet(false)
+  }, [])
+
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
     setSelectedBlockPage(null)
@@ -809,6 +835,12 @@ export function Budgets() {
       })
     })
   }, [cancelSmoothScroll, cancelTopTravelSnap])
+
+  const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
+    setBudgetsTabId('legacy')
+    setSelectedCat(categoryId)
+    scrollViewportToTop()
+  }, [setSelectedCat, scrollViewportToTop])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -2174,95 +2206,63 @@ export function Budgets() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : 'var(--space-5)' }}>
       <PageHeader
-        title="Budgets"
-        titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
-        onTitleClick={handleHeaderTitleReset}
-        actionIcon={
-          isSlideOneOrTwoMode
-            ? (
-              <img
-                src={budgetsPeriodIcon}
-                alt="Icône période budgets"
-                width={30}
-                height={30}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-              />
-              )
-            : isSlideThreeMetricsMode
-            ? (
-              slideThreeSelectedScopeMeta.iconType === 'block'
-                ? (
-                  <img
-                    src={slideThreeSelectedScopeMeta.iconSrc ?? blockProvisionsIcon}
-                    alt={`Icône ${slideThreeSelectedScopeMeta.label}`}
-                    width={28}
-                    height={28}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ display: 'block', objectFit: 'contain' }}
-                  />
-                  )
-                : <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={28} />
-            )
-            : isRevenueBlockPage
-            ? (
-              <img
-                src={blockRevenusIcon}
-                alt="Icône bloc Revenus"
-                width={28}
-                height={28}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-              />
-              )
-            : isExpenseBlockPage && selectedBlockPage
-            ? (
-              <img
-                src={BLOCK_ICON_SRC[selectedBlockPage.id]}
-                alt={`Icône bloc ${selectedBlockPage.label}`}
-                width={28}
-                height={28}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-              />
-              )
-            : selectedCat === 'all'
-              ? (
-                <img
-                  src={budgetsPeriodIcon}
-                  alt="Icône période budgets"
-                  width={26}
-                  height={26}
-                  loading="lazy"
-                  decoding="async"
-                  style={{ display: 'block', objectFit: 'contain' }}
-                />
-                )
-              : <CategoryIcon iconKey={selectedCatInfo?.icon_key} label={selectedCatInfo?.name} size={28} />
-        }
-        actionAriaLabel={isSlideOneOrTwoMode ? 'Choisir une période' : (isSlideThreeMetricsMode ? 'Choisir un bloc ou une catégorie' : 'Choisir une catégorie')}
-        onActionClick={() => {
-          if (isSlideOneOrTwoMode) {
-            setShowCatSheet(false)
-            setShowSlideThreeScopeSheet(false)
-            setShowHeaderPeriodMenu((current) => !current)
-            return
-          }
-          setShowHeaderPeriodMenu(false)
-          if (isSlideThreeMetricsMode) {
-            setShowCatSheet(false)
-            setShowSlideThreeScopeSheet((current) => !current)
-            return
-          }
-          setShowSlideThreeScopeSheet(false)
-          setShowCatSheet((current) => !current)
-        }}
-        rightLabel={headerPeriodLabel}
+        title={budgetsTabId === 'legacy' ? 'Budgets' : activeBudgetsTab.label}
+        titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
+        onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
+        actionIcon={(
+          <img
+            src={activeBudgetsTab.iconSrc}
+            alt={activeBudgetsTab.label}
+            width={30}
+            height={30}
+            loading="lazy"
+            decoding="async"
+            style={{ display: 'block', objectFit: 'contain' }}
+          />
+        )}
+        actionAriaLabel="Choisir un onglet budgets"
+        onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
+        rightSlot={budgetsTabId === 'legacy' ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (isSlideOneOrTwoMode) {
+                setShowCatSheet(false)
+                setShowSlideThreeScopeSheet(false)
+                setShowHeaderPeriodMenu((current) => !current)
+                return
+              }
+              setShowHeaderPeriodMenu(false)
+              if (isSlideThreeMetricsMode) {
+                setShowCatSheet(false)
+                setShowSlideThreeScopeSheet((current) => !current)
+                return
+              }
+              setShowSlideThreeScopeSheet(false)
+              setShowCatSheet((current) => !current)
+            }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
+              fontSize: 'var(--font-size-base)',
+              fontWeight: 'var(--font-weight-semibold)',
+              textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
+              padding: 0,
+              cursor: 'pointer',
+              minHeight: 'var(--touch-target-min)',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          >
+            {headerPeriodLabel}
+          </button>
+        ) : undefined}
       />
+
+      {budgetsTabId === 'legacy' ? (
+      <>
       {showHeaderPeriodMenu && isSlideOneOrTwoMode ? (
         <div
           style={{
@@ -4573,6 +4573,121 @@ export function Budgets() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+      </>
+      ) : budgetsTabId === 'enveloppes' ? (
+        <EnveloppesTab
+          payloadByParentCategory={payloadByParentCategory}
+          payloadByBucket={payloadByBucket}
+          startDate={range.startDate}
+          endDate={range.endDate}
+          onCategoryClick={handleEnveloppesCategoryClick}
+        />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8) var(--page-gutter)', gap: 'var(--space-3)', minHeight: 240 }}>
+          <img src={activeBudgetsTab.iconSrc} alt={activeBudgetsTab.label} width={48} height={48} style={{ objectFit: 'contain', opacity: 0.35 }} loading="lazy" decoding="async" />
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)', fontWeight: 'var(--font-weight-medium)' }}>Bientôt disponible</p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showBudgetsTabModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBudgetsTabModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner un onglet budgets"
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '-100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
+                top: 0,
+                zIndex: 61,
+                width: 'auto',
+                maxWidth: 430,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
+                boxShadow: 'var(--shadow-lg)',
+                maxHeight: '78dvh',
+                overflowY: 'auto',
+              }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-4)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                  Sélectionner un onglet
+                </p>
+                <button
+                  type="button"
+                  aria-label="Fermer"
+                  onClick={() => setShowBudgetsTabModal(false)}
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+                {BUDGETS_TABS.map((tab) => {
+                  const isActive = tab.id === budgetsTabId
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleBudgetsTabSelect(tab.id)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: 0,
+                        cursor: 'pointer',
+                        display: 'grid',
+                        justifyItems: 'center',
+                        gap: 'var(--space-2)',
+                      }}
+                    >
+                      <img
+                        src={tab.iconSrc}
+                        alt={tab.label}
+                        width={34}
+                        height={34}
+                        style={{ width: 34, height: 34, objectFit: 'contain' }}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span style={{ fontSize: 10, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', textTransform: 'capitalize', whiteSpace: 'pre-line' }}>
+                        {tab.label}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </motion.div>
           </>
