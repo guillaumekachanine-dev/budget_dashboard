@@ -44,15 +44,19 @@
   --viz-d: #8BC34A;  /* Lime / Category D */
   --viz-e: #B0BEC5;  /* Grey / Category E */
 
-  /* CATEGORY COLORS — source de vérité : tailwind.config.js cat.* */
-  --cat-transport:   #FF6B6B;
-  --cat-food:        #FFB347;
-  --cat-sport:       #4ECDC4;
-  --cat-education:   #A29BFE;
-  --cat-entertain:   #FD79A8;
-  --cat-household:   #6C5CE7;
-  --cat-bills:       #00B894;
-  --cat-subscript:   #E17055;
+  /* CATEGORY COLORS — palette fixe par catégorie */
+  --cat-logement:      #1D3F8F;  /* Logement */
+  --cat-alimentation:  #35C17B;  /* Alimentation */
+  --cat-divers:        #FDAA1B;  /* Achats divers */
+  --cat-sorties:       #FB5534;  /* Sorties */
+  --cat-voyages:       #2B94FF;  /* Voyages */
+  --cat-transport:     #FA8728;  /* Transport */
+  --cat-famille:       #D98880;  /* Famille/Enfant */
+  --cat-business:      #8B7954;  /* Business */
+  --cat-abonnements:   #8B51D0;  /* Abonnements */
+  --cat-sante:         #E82665;  /* Santé */
+  --cat-taxes:         #6B6B6B;  /* Taxes / Frais */
+  --cat-epargne:       #12B4A9;  /* Épargne */
 
   /* TYPOGRAPHY — DM Sans (UI) + DM Mono (chiffres) */
   --font-display: 'DM Sans', sans-serif;
@@ -305,7 +309,6 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-x: clip;
   }
 
   .app-main {
@@ -344,7 +347,6 @@
   .app-shell {
     min-height: var(--app-height);
     height: auto;
-    overflow-x: hidden;
     overflow-y: visible;
   }
 

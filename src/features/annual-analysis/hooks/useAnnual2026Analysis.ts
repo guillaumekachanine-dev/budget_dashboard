@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { Budget2026Line } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
 import { getAnnual2026BudgetLines } from '@/features/annual-analysis/api/getAnnual2026BudgetLines'
+import { getAnnual2026Actuals } from '@/features/annual-analysis/api/getAnnual2026Actuals'
+import { getSavingsBudgetTotalsByPeriod } from '@/features/stats/api/getSavingsBudgetTotalsByPeriod'
 import {
   BUCKET_ORDER,
   BUCKET_LABELS,
@@ -24,10 +26,15 @@ export interface Budget2026BucketSummary {
 export interface Budget2026CategorySummary {
   name: string
   monthlyBudget: number
+  annualBudget: number
   pctOfTotal: number
   color: string
   bucket: string
   lines: Budget2026Line[]
+  ytdActual: number
+  ytdMonthCount: number
+  ytdAvgMonthly: number
+  realisticAnnual: number
 }
 
 export interface Budget2026InsightCard {
@@ -62,7 +69,7 @@ export interface Annual2026Summary {
   totalMonthlyBudget: number   // budget dépenses / mois
   totalSavingsBudget: number   // épargne / mois
   totalMonthlyNeed: number     // totalMonthlyBudget + totalSavingsBudget
-  ytdMonths: number            // 5 (Jan–Mai 2026)
+  ytdMonths: number            // mois écoulés depuis Jan de l'année en cours
   ytdBudgetTotal: number       // totalMonthlyBudget × ytdMonths
   ytdSavingsTotal: number      // totalSavingsBudget × ytdMonths
   ytdTotalNeed: number         // ytdBudgetTotal + ytdSavingsTotal
@@ -81,14 +88,21 @@ export interface Annual2026Analysis {
   rawLines: Budget2026Line[]
 }
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-
-/** Épargne mensuelle fixe confirmée dans le JSON source */
-const SAVINGS_MONTHLY = 500
-const YTD_MONTHS = 5
-
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function extractSavingsMonthly(rows: Array<Record<string, unknown>>): number | null {
+  const candidates = ['total_savings_budget_eur', 'target_savings_total_eur', 'target_total_eur', 'budget_total_eur']
+  for (const row of rows) {
+    for (const field of candidates) {
+      const v = row[field]
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN
+      if (!isNaN(n) && n > 0) return n
+    }
+  }
+  return null
+}
+
+
 
 function pct(part: number, total: number): number {
   if (total === 0) return 0
@@ -97,7 +111,7 @@ function pct(part: number, total: number): number {
 
 // ─── Derivations ──────────────────────────────────────────────────────────────
 
-function buildBuckets(lines: Budget2026Line[], totalBudget: number): Budget2026BucketSummary[] {
+function buildBuckets(lines: Budget2026Line[], totalBudget: number, ytdMonths: number): Budget2026BucketSummary[] {
   const map = new Map<string, { amount: number; count: number }>()
 
   for (const line of lines) {
@@ -117,14 +131,19 @@ function buildBuckets(lines: Budget2026Line[], totalBudget: number): Budget2026B
         label: BUCKET_LABELS[key] ?? key,
         color: BUCKET_COLORS[key] ?? '#B0BEC5',
         monthlyBudget: entry.amount,
-        ytdBudget: entry.amount * YTD_MONTHS,
+        ytdBudget: entry.amount * ytdMonths,
         pctOfTotal: pct(entry.amount, totalBudget),
         lineCount: entry.count,
       }
     })
 }
 
-function buildCategories(lines: Budget2026Line[], totalBudget: number): Budget2026CategorySummary[] {
+function buildCategories(
+  lines: Budget2026Line[],
+  totalBudget: number,
+  actualsMap: Map<string, { ytdActual: number; monthCount: number }>,
+  remainingMonths: number,
+): Budget2026CategorySummary[] {
   const map = new Map<string, { amount: number; bucket: string; lines: Budget2026Line[] }>()
 
   for (const line of lines) {
@@ -139,14 +158,24 @@ function buildCategories(lines: Budget2026Line[], totalBudget: number): Budget20
 
   return [...map.entries()]
     .sort((a, b) => b[1].amount - a[1].amount)
-    .map(([name, entry], i) => ({
-      name,
-      monthlyBudget: entry.amount,
-      pctOfTotal: pct(entry.amount, totalBudget),
-      color: VIZ_PALETTE[i % VIZ_PALETTE.length] ?? '#B0BEC5',
-      bucket: entry.bucket,
-      lines: entry.lines,
-    }))
+    .map(([name, entry], i) => {
+      const actuals = actualsMap.get(name) ?? { ytdActual: 0, monthCount: 0 }
+      const ytdAvgMonthly = actuals.monthCount > 0 ? actuals.ytdActual / actuals.monthCount : 0
+      const realisticAnnual = actuals.ytdActual + ytdAvgMonthly * remainingMonths
+      return {
+        name,
+        monthlyBudget: entry.amount,
+        annualBudget: entry.amount * 12,
+        pctOfTotal: pct(entry.amount, totalBudget),
+        color: VIZ_PALETTE[i % VIZ_PALETTE.length] ?? '#B0BEC5',
+        bucket: entry.bucket,
+        lines: entry.lines,
+        ytdActual: actuals.ytdActual,
+        ytdMonthCount: actuals.monthCount,
+        ytdAvgMonthly,
+        realisticAnnual,
+      }
+    })
 }
 
 function buildInsights(
@@ -186,13 +215,13 @@ function buildInsights(
   }
 
   // 3 – Taux d'épargne
-  const savingsRate = pct(SAVINGS_MONTHLY, summary.totalMonthlyNeed)
+  const savingsRate = pct(summary.totalSavingsBudget, summary.totalMonthlyNeed)
   cards.push({
     key: 'savings_rate',
     level: savingsRate >= 0.12 ? 'success' : savingsRate >= 0.08 ? 'warning' : 'alert',
     title: 'Taux d\'épargne cible',
     main: `${(savingsRate * 100).toFixed(1)}%`,
-    sub: `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(SAVINGS_MONTHLY)} / mois`,
+    sub: `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(summary.totalSavingsBudget)} / mois`,
     detail: savingsRate >= 0.12 ? 'Objectif solide ✓' : 'Marge de progression possible',
   })
 
@@ -260,26 +289,14 @@ function buildOptimizations(
     .filter((s): s is Budget2026OptimizationScenario => s !== null)
 }
 
-function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2026Point[] {
-  // Budget est constant Jan–Mai 2026. On simule une légère variance saisonnière
-  // sur les buckets discrétionnaires pour rendre le graphe vivant.
-  const seasonalMultipliers: Record<number, Partial<Record<string, number>>> = {
-    1: { discretionnaire: 0.85, cagnotte_projet: 0.7, provision: 1.2 },
-    2: { discretionnaire: 0.9,  cagnotte_projet: 0.8, provision: 0.9 },
-    3: { discretionnaire: 1.05, cagnotte_projet: 1.1, provision: 1.0 },
-    4: { discretionnaire: 1.1,  cagnotte_projet: 1.2, provision: 0.85 },
-    5: { discretionnaire: 1.0,  cagnotte_projet: 1.0, provision: 1.0 },
-  }
-
-  return Array.from({ length: YTD_MONTHS }, (_, i) => {
+function buildMonthlyProfile(buckets: Budget2026BucketSummary[], ytdMonths: number, savingsMonthly: number): MonthlyBudget2026Point[] {
+  return Array.from({ length: ytdMonths }, (_, i) => {
     const month = i + 1
-    const mult = seasonalMultipliers[month] ?? {}
     const bucketValues: Record<string, number> = {}
     let total = 0
 
     for (const b of buckets) {
-      const m = mult[b.key] ?? 1
-      const val = Math.round(b.monthlyBudget * m)
+      const val = Math.round(b.monthlyBudget)
       bucketValues[b.key] = val
       total += val
     }
@@ -288,118 +305,92 @@ function buildMonthlyProfile(buckets: Budget2026BucketSummary[]): MonthlyBudget2
       month,
       monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
       totalExpenseBudget: total,
-      totalNeed: total + SAVINGS_MONTHLY,
+      totalNeed: total + savingsMonthly,
       buckets: bucketValues,
     }
   })
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Fetch function ───────────────────────────────────────────────────────────
 
-const INITIAL_STATE: Annual2026Analysis = {
-  loading: true,
-  error: null,
-  summary: null,
-  buckets: [],
-  categories: [],
-  insights: [],
-  optimizations: [],
-  monthlyProfile: [],
-  rawLines: [],
+type Annual2026QueryData = Omit<Annual2026Analysis, 'loading'> & { error: string | null }
+
+async function fetchAnnual2026Analysis(): Promise<Annual2026QueryData> {
+  const year = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+  const ytdMonths = Math.min(currentMonth, 12)
+  const remainingMonths = 12 - currentMonth
+
+  let effectiveLines: Budget2026Line[]
+  let queryError: string | null = null
+  let actualsMap = new Map<string, { ytdActual: number; monthCount: number }>()
+  let savingsMonthly = 500
+
+  try {
+    const [lines, actuals, savingsTotals] = await Promise.all([
+      getAnnual2026BudgetLines(),
+      getAnnual2026Actuals(year),
+      getSavingsBudgetTotalsByPeriod(year, currentMonth),
+    ])
+    effectiveLines = lines.length > 0 ? lines : STATIC_BUDGET_LINES
+    for (const a of actuals) {
+      actualsMap.set(a.parentCategoryName, { ytdActual: a.ytdActual, monthCount: a.monthCount })
+    }
+    savingsMonthly = extractSavingsMonthly(savingsTotals as Array<Record<string, unknown>>) ?? 500
+  } catch (err) {
+    effectiveLines = STATIC_BUDGET_LINES
+    queryError = err instanceof Error ? `${err.message} (données statiques affichées)` : null
+  }
+
+  const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
+  const totalMonthlyNeed = totalMonthlyBudget + savingsMonthly
+
+  const summary: Annual2026Summary = {
+    totalMonthlyBudget,
+    totalSavingsBudget: savingsMonthly,
+    totalMonthlyNeed,
+    ytdMonths,
+    ytdBudgetTotal: totalMonthlyBudget * ytdMonths,
+    ytdSavingsTotal: savingsMonthly * ytdMonths,
+    ytdTotalNeed: totalMonthlyNeed * ytdMonths,
+    coverageScore: Math.round(Math.min(100, (savingsMonthly / totalMonthlyNeed) * 100 * 7)),
+  }
+
+  const buckets = buildBuckets(effectiveLines, totalMonthlyBudget, ytdMonths)
+  const categories = buildCategories(effectiveLines, totalMonthlyBudget, actualsMap, remainingMonths)
+
+  return {
+    error: queryError,
+    summary,
+    buckets,
+    categories,
+    insights: buildInsights(effectiveLines, buckets, categories, summary),
+    optimizations: buildOptimizations(buckets, categories),
+    monthlyProfile: buildMonthlyProfile(buckets, ytdMonths, savingsMonthly),
+    rawLines: effectiveLines,
+  }
 }
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useAnnual2026Analysis(): Annual2026Analysis {
-  const [state, setState] = useState<Annual2026Analysis>(INITIAL_STATE)
+  const query = useQuery({
+    queryKey: ['annual-2026-analysis'],
+    queryFn: fetchAnnual2026Analysis,
+    staleTime: 15 * 60_000,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setState((prev) => ({ ...prev, loading: true, error: null }))
-
-      try {
-        const lines = await getAnnual2026BudgetLines()
-
-        if (cancelled) return
-
-        // Si pas de lignes en DB (table inexistante), on utilise les données
-        // statiques issues du JSON source comme fallback de démonstration
-        const effectiveLines: Budget2026Line[] = lines.length > 0 ? lines : STATIC_BUDGET_LINES
-
-        const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
-        const totalMonthlyNeed = totalMonthlyBudget + SAVINGS_MONTHLY
-
-        const summary: Annual2026Summary = {
-          totalMonthlyBudget,
-          totalSavingsBudget: SAVINGS_MONTHLY,
-          totalMonthlyNeed,
-          ytdMonths: YTD_MONTHS,
-          ytdBudgetTotal: totalMonthlyBudget * YTD_MONTHS,
-          ytdSavingsTotal: SAVINGS_MONTHLY * YTD_MONTHS,
-          ytdTotalNeed: totalMonthlyNeed * YTD_MONTHS,
-          coverageScore: Math.round(Math.min(100, (SAVINGS_MONTHLY / totalMonthlyNeed) * 100 * 7)),
-        }
-
-        const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
-        const categories = buildCategories(effectiveLines, totalMonthlyBudget)
-        const insights = buildInsights(effectiveLines, buckets, categories, summary)
-        const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(buckets)
-
-        setState({
-          loading: false,
-          error: null,
-          summary,
-          buckets,
-          categories,
-          insights,
-          optimizations,
-          monthlyProfile,
-          rawLines: effectiveLines,
-        })
-      } catch (err) {
-        if (cancelled) return
-        // Fallback sur données statiques en cas d'erreur Supabase
-        const effectiveLines = STATIC_BUDGET_LINES
-        const totalMonthlyBudget = effectiveLines.reduce((s, l) => s + l.amount, 0)
-        const totalMonthlyNeed = totalMonthlyBudget + SAVINGS_MONTHLY
-
-        const summary: Annual2026Summary = {
-          totalMonthlyBudget,
-          totalSavingsBudget: SAVINGS_MONTHLY,
-          totalMonthlyNeed,
-          ytdMonths: YTD_MONTHS,
-          ytdBudgetTotal: totalMonthlyBudget * YTD_MONTHS,
-          ytdSavingsTotal: SAVINGS_MONTHLY * YTD_MONTHS,
-          ytdTotalNeed: totalMonthlyNeed * YTD_MONTHS,
-          coverageScore: Math.round(Math.min(100, (SAVINGS_MONTHLY / totalMonthlyNeed) * 100 * 7)),
-        }
-
-        const buckets = buildBuckets(effectiveLines, totalMonthlyBudget)
-        const categories = buildCategories(effectiveLines, totalMonthlyBudget)
-        const insights = buildInsights(effectiveLines, buckets, categories, summary)
-        const optimizations = buildOptimizations(buckets, categories)
-        const monthlyProfile = buildMonthlyProfile(buckets)
-
-        setState({
-          loading: false,
-          error: err instanceof Error ? `${err.message} (données statiques affichées)` : null,
-          summary,
-          buckets,
-          categories,
-          insights,
-          optimizations,
-          monthlyProfile,
-          rawLines: effectiveLines,
-        })
-      }
-    }
-
-    void load()
-    return () => { cancelled = true }
-  }, [])
-
-  return state
+  return {
+    loading: query.isPending,
+    error: query.data?.error ?? null,
+    summary: query.data?.summary ?? null,
+    buckets: query.data?.buckets ?? [],
+    categories: query.data?.categories ?? [],
+    insights: query.data?.insights ?? [],
+    optimizations: query.data?.optimizations ?? [],
+    monthlyProfile: query.data?.monthlyProfile ?? [],
+    rawLines: query.data?.rawLines ?? [],
+  }
 }
 
 // ─── Données statiques fallback (source: JSON export) ─────────────────────────

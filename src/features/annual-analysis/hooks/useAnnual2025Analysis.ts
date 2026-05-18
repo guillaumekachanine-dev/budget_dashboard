@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type {
   Annual2025Analysis,
   Annual2025InsightRow,
@@ -61,64 +61,44 @@ function parseTop5Categories(insight: Annual2025InsightRow | undefined): Top5Cat
   })
 }
 
-const INITIAL_STATE: Annual2025Analysis = {
-  loading: true,
-  error: null,
-  annualTotals: null,
-  insightByKey: {},
-  yearlyBuckets: [],
-  yearlyParentCategories: [],
-  monthlyProfile: [],
-  top5ParentCategories: [],
-  top5LeafCategories: [],
+type Annual2025Data = Omit<Annual2025Analysis, 'loading' | 'error'>
+
+async function fetchAnnual2025Analysis(): Promise<Annual2025Data> {
+  const [insights, buckets, parentCategories] = await Promise.all([
+    getAnnual2025Insights(),
+    getAnnual2025YearlyBuckets(),
+    getAnnual2025YearlyParentCategories(),
+  ])
+
+  const insightByKey = Object.fromEntries(insights.map((row) => [row.insight_key, row]))
+
+  return {
+    annualTotals: parseAnnualTotals(insightByKey['annual_totals']),
+    insightByKey,
+    yearlyBuckets: buckets,
+    yearlyParentCategories: parentCategories,
+    monthlyProfile: parseMonthlyProfile(insightByKey['monthly_profile']),
+    top5ParentCategories: parseTop5Categories(insightByKey['top5_parent_categories']),
+    top5LeafCategories: parseTop5Categories(insightByKey['top5_leaf_categories']),
+  }
 }
 
 export function useAnnual2025Analysis(): Annual2025Analysis {
-  const [state, setState] = useState<Annual2025Analysis>(INITIAL_STATE)
+  const query = useQuery({
+    queryKey: ['annual-2025-analysis'],
+    queryFn: fetchAnnual2025Analysis,
+    staleTime: 15 * 60_000,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setState((prev) => ({ ...prev, loading: true, error: null }))
-
-      try {
-        const [insights, buckets, parentCategories] = await Promise.all([
-          getAnnual2025Insights(),
-          getAnnual2025YearlyBuckets(),
-          getAnnual2025YearlyParentCategories(),
-        ])
-
-        if (cancelled) return
-
-        const insightByKey = Object.fromEntries(insights.map((row) => [row.insight_key, row]))
-
-        setState({
-          loading: false,
-          error: null,
-          annualTotals: parseAnnualTotals(insightByKey['annual_totals']),
-          insightByKey,
-          yearlyBuckets: buckets,
-          yearlyParentCategories: parentCategories,
-          monthlyProfile: parseMonthlyProfile(insightByKey['monthly_profile']),
-          top5ParentCategories: parseTop5Categories(insightByKey['top5_parent_categories']),
-          top5LeafCategories: parseTop5Categories(insightByKey['top5_leaf_categories']),
-        })
-      } catch (err) {
-        if (cancelled) return
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Erreur inconnue lors du chargement',
-        }))
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return state
+  return {
+    loading: query.isPending,
+    error: query.error?.message ?? null,
+    annualTotals: query.data?.annualTotals ?? null,
+    insightByKey: query.data?.insightByKey ?? {},
+    yearlyBuckets: query.data?.yearlyBuckets ?? [],
+    yearlyParentCategories: query.data?.yearlyParentCategories ?? [],
+    monthlyProfile: query.data?.monthlyProfile ?? [],
+    top5ParentCategories: query.data?.top5ParentCategories ?? [],
+    top5LeafCategories: query.data?.top5LeafCategories ?? [],
+  }
 }

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { getCategoryIconSrc } from "@/lib/categoryIcons";
 
 type CategoryIconProps = {
@@ -5,6 +6,7 @@ type CategoryIconProps = {
   label?: string | null;
   size?: number;
   className?: string;
+  style?: CSSProperties;
 };
 
 export function CategoryIcon({
@@ -12,6 +14,7 @@ export function CategoryIcon({
   label,
   size = 28,
   className,
+  style,
 }: CategoryIconProps) {
   const src = getCategoryIconSrc(iconKey);
 
@@ -24,6 +27,7 @@ export function CategoryIcon({
       loading="lazy"
       decoding="async"
       className={className}
+      style={style}
     />
   );
 }

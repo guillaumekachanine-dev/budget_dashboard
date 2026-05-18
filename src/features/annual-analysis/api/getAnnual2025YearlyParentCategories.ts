@@ -2,7 +2,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import type { Annual2025YearlyCategoryRow } from '@/features/annual-analysis/types'
 
 export async function getAnnual2025YearlyParentCategories(): Promise<Annual2025YearlyCategoryRow[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('analytics_2025_yearly_category_summary')
     .select('category_name, category_level, amount_total_year, share_of_year_expense_pct, rank_in_year, analysis_year')
     .eq('analysis_year', 2025)

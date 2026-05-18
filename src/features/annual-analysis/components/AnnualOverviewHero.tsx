@@ -6,7 +6,6 @@ type Props = {
 }
 
 export function AnnualOverviewHero({ data }: Props) {
-  const netIsNegative   = data.net_cashflow_year < 0
   const savingsRate     = data.income_total_year > 0
     ? Math.round((data.savings_total_year / data.income_total_year) * 100)
     : 0
@@ -41,7 +40,7 @@ export function AnnualOverviewHero({ data }: Props) {
             2025
           </span>
 
-          {/* Header + rate badges */}
+          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
             <p style={{
               margin: 0,
@@ -51,12 +50,8 @@ export function AnnualOverviewHero({ data }: Props) {
               textTransform: 'uppercase',
               letterSpacing: '0.09em',
             }}>
-              Dépenses totales · Bilan 2025
+              Bilan 2025
             </p>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <RateBadge label="épargne" value={`${savingsRate}%`} color="rgba(46,212,122,0.9)" />
-              <RateBadge label="dépenses" value={`${expenseRate}%`} color="rgba(252,90,90,0.8)" />
-            </div>
           </div>
 
           {/* Main amount */}
@@ -71,6 +66,15 @@ export function AnnualOverviewHero({ data }: Props) {
           }}>
             {formatCurrency(data.expense_total_year)}
           </p>
+          <p style={{
+            margin: '4px 0 0',
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.68)',
+            lineHeight: 1.2,
+          }}>
+            dépensés
+          </p>
 
           {/* Divider */}
           <div style={{
@@ -82,37 +86,13 @@ export function AnnualOverviewHero({ data }: Props) {
           {/* 4 KPIs inline */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)' }}>
             <KpiItem label="Revenus" value={formatCurrency(data.income_total_year)} />
+            <KpiItem label="% dépenses" value={`${expenseRate}%`} />
             <KpiItem label="Épargne" value={formatCurrency(data.savings_total_year)} />
-            <KpiItem
-              label="Net cashflow"
-              value={formatCurrency(data.net_cashflow_year)}
-              highlight={netIsNegative ? 'negative' : 'positive'}
-            />
-            <KpiItem label="Moy. / mois" value={formatCurrency(data.avg_monthly_expense)} />
+            <KpiItem label="% épargne" value={`${savingsRate}%`} highlight="positive" />
           </div>
         </div>
       </div>
     </section>
-  )
-}
-
-function RateBadge({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div style={{
-      background: 'rgba(0,0,0,0.18)',
-      borderRadius: 20,
-      padding: '3px 8px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-    }}>
-      <span style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1 }}>
-        {label}
-      </span>
-      <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color, lineHeight: 1.3 }}>
-        {value}
-      </span>
-    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
-import { hydrateStatsReferenceData } from '@/features/stats/store/statsReferenceStore'
 import type { FlowType, Transaction } from '@/lib/types'
+import { QK } from '@/lib/queryKeys'
 
 interface TransactionFilters {
   accountId?: string | null
@@ -56,7 +56,7 @@ async function fetchTransactions(filters: TransactionFilters = {}): Promise<Tran
     return []
   }
 
-  let query = budgetDb().from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
+  let query = budgetDb.from('transactions').select('*, category:categories(*), account:accounts(*)').eq('is_hidden', false)
 
   if (filters.accountId) query = query.eq('account_id', filters.accountId)
   if (filters.categoryIds && filters.categoryIds.length > 0) query = query.in('category_id', filters.categoryIds)
@@ -110,7 +110,7 @@ export function useCurrentMonthTransactions(year: number, month: number) {
 // ne sont pas re-fetchées inutilement.
 function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQueryClient>, accountId: string) {
   void queryClient.invalidateQueries({
-    queryKey: ['transactions'],
+    queryKey: [QK.TRANSACTIONS],
     predicate: (query) => {
       const filters = query.queryKey[1] as Record<string, unknown> | undefined
       if (!filters || typeof filters !== 'object') return true
@@ -120,18 +120,53 @@ function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQuer
   })
 }
 
+// Invalide tous les caches analytics dérivés des transactions.
+// N'invalide PAS les tables de config statiques (categories, budget_periods, bucket_map)
+// ni les données 2025 figées (annual-2025-analysis).
+// React Query ne re-fetchera que les queries dont le subscriber est monté.
+function invalidateAllAnalyticsCaches(queryClient: ReturnType<typeof useQueryClient>) {
+  const keys = [
+    QK.ACCOUNTS,
+    QK.BUDGET_PAYLOAD,
+    QK.BUDGET_ANALYTICS,
+    QK.BUDGET_REVENUE_ANALYTICS,
+    QK.BUDGETS,                          // useBudgets — calcule le dépensé depuis transactions
+    QK.SAVINGS,                          // épargne (summary, analytics, financial-security)
+    QK.STATS,                            // investment-performance, optimization-capacity
+    QK.STATS_REFERENCE,                  // budget vs actual mensuel
+    QK.ANNUAL_2026_ANALYSIS,
+    QK.ANNUAL_PROJECTION_OVERVIEW_2026,
+    QK.CATEGORY_ANNUAL_COST_PROJECTION_2026,
+    QK.CATEGORY_ROLLING_12M_STATS,
+    QK.COMPARED_YTD_FLOWS,
+    QK.COMPARED_YTD_FLOWS_KPI_CARDS,
+    QK.COMPARED_CATEGORY_SUMMARY,
+    QK.COMPARED_BUCKET_SUMMARY,
+    QK.MONTHLY_FLOWS_BY_SCOPE,
+    QK.MONTHLY_FLOWS_ANALYSIS_CARD,
+    QK.BUDGET_METRICS_PERIOD_DATASET,
+    QK.BUDGET_METRICS_YEAR_DATASET,
+    QK.BUDGET_METRICS_CATEGORIES,
+  ] as const
+
+  for (const key of keys) {
+    void queryClient.invalidateQueries({ queryKey: [key] })
+  }
+}
+
 export function useAddTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (txn: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'category' | 'account'>) => {
-      const { data, error } = await budgetDb().from('transactions').insert(txn).select().single()
+      const { data, error } = await budgetDb.from('transactions').insert(txn).select().single()
       if (error) throw error
       return data
     },
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }
@@ -140,7 +175,7 @@ export function useUpdateTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Transaction> }) => {
-      const { data, error } = await budgetDb()
+      const { data, error } = await budgetDb
         .from('transactions')
         .update(updates)
         .eq('id', id)
@@ -153,10 +188,11 @@ export function useUpdateTransaction() {
       if (updated?.account_id) {
         invalidateTransactionsForAccount(queryClient, updated.account_id)
       } else {
-        void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+        void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }
@@ -165,14 +201,15 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await budgetDb().from('transactions').delete().eq('id', id)
+      const { error } = await budgetDb.from('transactions').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       // account_id inconnu après delete — invalidation large inévitable
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void hydrateStatsReferenceData({ force: true }).catch(() => {})
+      void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'daily-budget-payload'] })
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME, 'trajectory'] })
+      invalidateAllAnalyticsCaches(queryClient)
     },
   })
 }

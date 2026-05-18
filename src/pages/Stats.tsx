@@ -4,32 +4,75 @@ import { X, RotateCw } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import analyticsIcon from '@/assets/icons/app/analytics.png'
-import optimisationIcon from '@/assets/icons/app/optimisation.png'
-import epargneIcon from '@/assets/icons/app/epargne.png'
+import analyticsIcon from '@/assets/icons/app/analytics.webp'
+import optimisationIcon from '@/assets/icons/app/epargne_optimisation.png'
+import epargneIcon from '@/assets/icons/categories/epargne.webp'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
-import { Annual2026Tab } from '@/features/annual-analysis/components/Annual2026Tab'
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
-import { StatsSavingsCard } from '@/features/stats/components/StatsSavingsCard'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
+import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
+import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
+import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
+import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
+import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
+import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
+import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import type { StatsSelectedPeriod } from '@/features/stats/types'
+import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
-type StatsTabId = 'analytics_2026' | 'analytics_2025' | 'optimisation' | 'epargne'
+type StatsTabId = 'analytics_2025' | 'optimisation' | 'epargne'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
   iconSrc: string
 }
-
 const STATS_TABS: StatsTabConfig[] = [
-  { id: 'analytics_2026', label: 'Analytics\n2026', iconSrc: analyticsIcon },
-  { id: 'analytics_2025', label: 'Analytics\n2025', iconSrc: analyticsIcon },
-  { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
+  { id: 'analytics_2025', label: 'Analytics', iconSrc: analyticsIcon },
   { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
+  { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
 ]
+function StatsMajorSectionHeading({ title }: { title: string }) {
+  return (
+    <StatsSection>
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <div
+          aria-hidden="true"
+          style={{
+            height: 2,
+            width: '100%',
+            background: 'var(--neutral-900)',
+            borderRadius: 'var(--radius-full)',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: '8px solid transparent',
+              borderBottom: '8px solid transparent',
+              borderLeft: '14px solid var(--neutral-900)',
+              flexShrink: 0,
+            }}
+          />
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-lg)',
+              fontWeight: 'var(--font-weight-bold)',
+              color: 'var(--neutral-900)',
+            }}
+          >
+            {title}
+          </h3>
+        </div>
+      </div>
+    </StatsSection>
+  )
+}
 
 export function Stats() {
   const {
@@ -43,9 +86,12 @@ export function Stats() {
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
 
-  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2026')
+  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2025')
+  const [selectedAnalyticsYear, setSelectedAnalyticsYear] = useState<2024 | 2025>(2025)
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)
+  const [showYearModal, setShowYearModal] = useState(false)
+  const [showSavingsAllocationModal, setShowSavingsAllocationModal] = useState(false)
   const hasAppliedDefaultPeriodRef = useRef(false)
 
   const activeTab = useMemo(
@@ -63,11 +109,8 @@ export function Stats() {
   }, [])
 
   const handleRefresh = useCallback(() => {
-    void (async () => {
-      if (storeUserId) await refreshBudgetAnalytics(storeUserId).catch(() => {})
-      await hydrateStatsReferenceData({ force: true }).catch(() => {})
-    })()
-  }, [hydrateStatsReferenceData, storeUserId])
+    void hydrateStatsReferenceData({ force: true }).catch(() => {})
+  }, [hydrateStatsReferenceData])
 
   const isPeriodOptionActive = useCallback((option: { period_year: number; period_month: number }, selected: StatsSelectedPeriod | null) => {
     if (!selected) return false
@@ -119,14 +162,12 @@ export function Stats() {
     return lockDocumentScroll()
   }, [showTabModal])
 
-  const selectedPeriod = snapshot?.selectedPeriod ?? null
+  useEffect(() => {
+    if (!showSavingsAllocationModal) return
+    return lockDocumentScroll()
+  }, [showSavingsAllocationModal])
 
-  const lastUpdateText = (() => {
-    if (!snapshot?.loadedAt) return 'Jamais mis à jour'
-    const date = new Date(snapshot.loadedAt)
-    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
-    return `Mis à jour le ${date.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
-  })()
+  const selectedPeriod = snapshot?.selectedPeriod ?? null
 
   const lastUpdateHeaderText = (() => {
     if (!snapshot?.loadedAt) return 'Jamais mis à jour'
@@ -138,46 +179,99 @@ export function Stats() {
     const hours = date.getHours().toString().padStart(2, '0')
     const minutes = date.getMinutes().toString().padStart(2, '0')
 
-    return `Dernière actualisation : ${day}/${month} à ${hours}:${minutes}`
+    return `Actualisé le ${day}/${month} à ${hours}:${minutes}`
   })()
 
   const monthButtonLabel = selectedPeriod?.label ?? 'Mois'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
         title="Analytics"
-        rightSlot={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', transform: 'translateY(4px)' }}>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              aria-label="Actualiser les données"
-              style={{
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '4px 10px',
-                background: 'rgba(255, 255, 255, 0.15)',
-                color: 'var(--neutral-0)',
-                fontSize: '11px',
-                fontWeight: 'var(--font-weight-semibold)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all var(--transition-base)',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <RotateCw size={11} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              {loading ? 'Chargement' : 'Actualiser'}
-            </button>
-            <p style={{ margin: 0, fontSize: '9px', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'var(--font-weight-medium)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {activeTabId === 'analytics_2025' ? lastUpdateHeaderText : lastUpdateText}
+        rightSlot={activeTabId === 'analytics_2025' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setShowYearModal(prev => !prev)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: 'var(--font-size-2xl)',
+                  fontWeight: 'var(--font-weight-extrabold)',
+                  color: 'var(--neutral-0)',
+                  lineHeight: 1.1,
+                  letterSpacing: '-0.02em',
+                  margin: 0,
+                  transition: 'opacity var(--transition-base)',
+                }}
+              >
+                {selectedAnalyticsYear}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading}
+                aria-label="Actualiser les données"
+                style={{
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '4px',
+                  width: '24px',
+                  height: '24px',
+                  background: 'color-mix(in oklab, var(--neutral-0) 20%, var(--primary-600) 80%)',
+                  color: 'var(--neutral-0)',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1,
+                  transition: 'all var(--transition-base)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <RotateCw size={12} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              </button>
+            </div>
+            <p style={{
+              margin: 0,
+              fontSize: '9px',
+              color: 'color-mix(in oklab, var(--neutral-0) 70%, var(--primary-100) 30%)',
+              fontWeight: 'var(--font-weight-medium)',
+              lineHeight: 1.2,
+              textAlign: 'right',
+            }}>
+              {lastUpdateHeaderText}
             </p>
           </div>
+        ) : activeTabId === 'epargne' ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-0)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Epargne
+          </p>
+        ) : activeTabId === 'optimisation' ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-0)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Optimisation
+          </p>
         ) : (
           <HeaderPeriodMenu
             buttonLabel={monthButtonLabel}
@@ -188,38 +282,6 @@ export function Stats() {
             onBeforeToggle={() => setShowTabModal(false)}
             options={headerPeriodOptions}
           />
-        )}
-        headerSubtitle={(activeTabId === 'analytics_2025' || activeTabId === 'analytics_2026') ? null : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 'var(--font-weight-medium)' }}>
-              {lastUpdateText}
-            </p>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              aria-label="Actualiser les données"
-              style={{
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '6px 12px',
-                background: 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)',
-                color: 'var(--primary-600)',
-                fontSize: '12px',
-                fontWeight: 'var(--font-weight-semibold)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all var(--transition-base)',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <RotateCw size={13} style={{ transition: 'transform var(--transition-base)', transform: loading ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              {loading ? 'Chargement' : 'Actualiser'}
-            </button>
-          </div>
         )}
         actionIcon={(
           <img
@@ -240,52 +302,44 @@ export function Stats() {
         <Annual2025Tab />
       ) : null}
 
-      {activeTab.id === 'analytics_2026' ? (
-        <Annual2026Tab />
-      ) : null}
-
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-          {annual2026.optimizations.length > 0 && annual2026.summary ? (
-            <Annual2026Optimization
-              scenarios={annual2026.optimizations}
-              totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
-              totalSavings={annual2026.summary.totalSavingsBudget}
-            />
-          ) : (
-            <section style={{ padding: '0 var(--space-6)' }}>
-              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 160, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-0)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', padding: 'var(--space-6)' }}>
-                Aucun scénario d’optimisation disponible.
-              </div>
-            </section>
-          )}
+          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+            <StatsOptimizationsTab />
+
+            {annual2026.optimizations.length > 0 && annual2026.summary ? (
+              <Annual2026Optimization
+                scenarios={annual2026.optimizations}
+                totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
+                totalSavings={annual2026.summary.totalSavingsBudget}
+              />
+            ) : (
+              <StatsSection>
+                <EmptyState message="Aucun scénario d’optimisation disponible." />
+              </StatsSection>
+            )}
+          </div>
         </motion.div>
       ) : null}
 
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
-          {snapshot ? (
-            <>
-              <StatsSavingsCard
-                savingsSummary={snapshot.savingsSummary}
-                savingsLines={snapshot.savingsLines}
-              />
+          <SavingsHeroCard onOpenAllocationModal={() => setShowSavingsAllocationModal(true)} />
+          <StatsMajorSectionHeading title="Planning épargne 2026" />
+          <SavingsPlanning2026Section />
+          <StatsMajorSectionHeading title="Capital investi" />
+          <SavingsEvolutionFiveYearsChart />
+          <FinancialSecurityCard />
+          <StatsMajorSectionHeading title="Performance" />
+          <SavingsPortfoliosListSection />
 
-              <StatsTotalNeedCard
-                totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
-                totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
-                totalMonthlyNeed={snapshot.totalMonthlyNeed}
-              />
-            </>
-          ) : (
-            <div style={{ padding: '0 var(--space-6)' }}>
-              <div style={{ maxWidth: 600, margin: '0 auto', minHeight: 220, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--neutral-300)', background: 'color-mix(in oklab, var(--color-success) 6%, var(--neutral-0) 94%)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-600)', padding: 'var(--space-6)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-semibold)' }}>
-                  Données d’épargne en cours de chargement
-                </p>
-              </div>
-            </div>
-          )}
+          {snapshot ? (
+            <StatsTotalNeedCard
+              totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
+              totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
+              totalMonthlyNeed={snapshot.totalMonthlyNeed}
+            />
+          ) : null}
         </motion.section>
       ) : null}
 
@@ -351,7 +405,7 @@ export function Stats() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
@@ -385,6 +439,162 @@ export function Stats() {
                     </button>
                   )
                 })}
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+
+        {showSavingsAllocationModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSavingsAllocationModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(13,13,31,0.48)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Répartition de l'épargne"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 10, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 71,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 'var(--space-3)',
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                style={{
+                  position: 'relative',
+                  width: 'min(700px, 100%)',
+                  maxHeight: 'calc(100dvh - 2 * var(--space-3))',
+                  overflowY: 'auto',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Fermer la répartition de l'épargne"
+                  onClick={() => setShowSavingsAllocationModal(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 'var(--space-2)',
+                    right: 'var(--space-5)',
+                    zIndex: 2,
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    borderRadius: 'var(--radius-sm)',
+                    width: 28,
+                    height: 28,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--neutral-600)',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+                <SavingsAllocationDonut />
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+
+        {showYearModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowYearModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner une année"
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '-100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
+                top: 0,
+                zIndex: 61,
+                width: 'auto',
+                maxWidth: 340,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-4) var(--space-4)',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-3)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>
+                  Année
+                </p>
+                <button
+                  type="button"
+                  aria-label="Fermer"
+                  onClick={() => setShowYearModal(false)}
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                {[2024, 2025].map((year) => (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnalyticsYear(year as 2024 | 2025)
+                      setShowYearModal(false)
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: 'var(--space-2) var(--space-3)',
+                      border: selectedAnalyticsYear === year ? '2px solid var(--primary-600)' : '1px solid var(--neutral-300)',
+                      borderRadius: 'var(--radius-md)',
+                      background: selectedAnalyticsYear === year ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                      color: selectedAnalyticsYear === year ? 'var(--primary-600)' : 'var(--neutral-900)',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 'var(--font-weight-bold)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-base)',
+                    }}
+                  >
+                    {year}
+                  </button>
+                ))}
               </div>
             </motion.div>
           </>

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, ArrowLeft, Pencil, Check as CheckIcon, AlertCircle } from 'lucide-react'
-import { formatCurrencyRounded, getCategoryColor } from '@/lib/utils'
+import { ChevronLeft, ChevronRight, Pencil, AlertCircle } from 'lucide-react'
+import { formatCurrency, getCategoryColor } from '@/lib/utils'
 import type { Category, Transaction, FlowType, BudgetBehavior } from '@/lib/types'
 import { useUpdateTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useState } from 'react'
 import { CategoryPickerModal, ALL_CATEGORY_TOKEN } from './AddTransactionModal'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 interface TransactionDetailsModalProps {
   transaction: Transaction | null
@@ -27,6 +28,13 @@ function flowTypeLabel(flowType: string): string {
   if (flowType === 'expense') return 'Dépenses'
   if (flowType === 'transfer') return 'Transferts internes'
   return flowType
+}
+
+function flowTypePillBorderColor(flowType: FlowType): string {
+  if (flowType === 'expense') return 'color-mix(in oklab, var(--color-error) 52%, white 48%)'
+  if (flowType === 'income') return 'color-mix(in oklab, var(--color-success) 52%, white 48%)'
+  if (flowType === 'transfer') return 'color-mix(in oklab, var(--color-warning) 62%, var(--neutral-900) 38%)'
+  return 'color-mix(in oklab, var(--color-warning) 56%, white 44%)'
 }
 
 function budgetBehaviorLabel(value: string): string {
@@ -57,11 +65,6 @@ function formatLongDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-}
-
-function formatMoneyInteger(amount: number): string {
-  if (!Number.isFinite(amount)) return formatCurrencyRounded(0)
-  return formatCurrencyRounded(Math.floor(amount))
 }
 
 export function TransactionDetailsModal({
@@ -97,7 +100,6 @@ export function TransactionDetailsModal({
   const deleteMutation = useDeleteTransaction()
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const modalRef = useRef<HTMLDivElement | null>(null)
-  const closeRef = useRef<HTMLButtonElement | null>(null)
 
   const hasHierarchy = useMemo(
     () => (categories ?? []).some((category) => category.parent_id !== null),
@@ -170,7 +172,7 @@ export function TransactionDetailsModal({
     setIsEditing(false)
     setShowDeleteConfirm(false)
 
-    closeRef.current?.focus()
+    modalRef.current?.focus()
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -215,6 +217,7 @@ export function TransactionDetailsModal({
     const subCategoryName = parentCategory ? ownCategory?.name ?? '—' : '—'
     const colorSourceCategory = parentCategory ?? ownCategory ?? null
     const colorIndex = colorSourceCategory ? Math.max(categories.findIndex((c) => c.id === colorSourceCategory.id), 0) : 0
+    const headerIconKey = parentCategory ? ownCategory?.icon_key ?? parentCategory?.icon_key ?? null : ownCategory?.icon_key ?? null
 
     return {
       amount: signedAmount(transaction),
@@ -223,7 +226,8 @@ export function TransactionDetailsModal({
       dateText: formatLongDate(transaction.transaction_date),
       categoryName,
       subCategoryName,
-      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex),
+      headerIconKey,
+      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex, colorSourceCategory?.name),
       rows: [
         { key: 'Catégorie', value: categoryName },
         { key: 'Sous-catégorie', value: subCategoryName },
@@ -239,12 +243,36 @@ export function TransactionDetailsModal({
     if (!transaction || !sequence.length) return -1
     return sequence.findIndex((item) => item.id === transaction.id)
   }, [sequence, transaction])
+  const hasBackNavigation = Boolean(onBack)
   const previousTxn = currentIndex > 0 ? sequence[currentIndex - 1] : null
   const nextTxn = currentIndex >= 0 && currentIndex < sequence.length - 1 ? sequence[currentIndex + 1] : null
 
   const handleNavigate = (target: Transaction | null) => {
     if (!target || !onNavigate) return
     onNavigate(target)
+  }
+
+  const handleSaveEdit = () => {
+    if (!transaction) return
+
+    updateMutation.mutate(
+      {
+        id: transaction.id,
+        updates: {
+          normalized_label: editLabel,
+          amount: Number(editAmount),
+          transaction_date: editDate,
+          flow_type: editFlowType,
+          category_id: editCategoryId || null,
+          account_id: editAccountId,
+          budget_behavior: editBudgetBehavior,
+          personal_share_ratio: Number(editShareRatio),
+        },
+      },
+      {
+        onSuccess: () => setIsEditing(false),
+      },
+    )
   }
 
   return (
@@ -271,6 +299,7 @@ export function TransactionDetailsModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.985 }}
             transition={{ duration: 0.2 }}
+            onClick={onClose}
             style={{
               position: 'fixed',
               inset: 0,
@@ -282,203 +311,36 @@ export function TransactionDetailsModal({
           >
             <div
               ref={modalRef}
+              onClick={(event) => event.stopPropagation()}
+              tabIndex={-1}
+              data-has-back-navigation={hasBackNavigation ? '1' : '0'}
               className="txn-details-dialog"
               role="dialog"
               aria-modal="true"
               aria-labelledby="transaction-details-modal-title"
               style={{
                 width: '100%',
-                maxHeight: 'min(86dvh, 760px)',
+                maxHeight: 'min(92dvh, 820px)',
                 background: 'var(--neutral-0)',
                 border: '1px solid var(--neutral-200)',
                 borderRadius: 'var(--radius-lg)',
                 boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-6)',
-                display: 'grid',
-                gridTemplateRows: 'auto minmax(0, 1fr)',
-                gap: 'var(--space-5)',
+                padding: 'var(--space-2) var(--space-5) var(--space-4)',
                 overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  {onBack && !isEditing ? (
-                    <button
-                      type="button"
-                      aria-label="Retour à la liste des opérations"
-                      onClick={onBack}
-                      style={{
-                        minWidth: 'var(--touch-target-min)',
-                        minHeight: 'var(--touch-target-min)',
-                        borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--neutral-300)',
-                        background: 'var(--neutral-50)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--neutral-900)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)',
-                        boxShadow: 'var(--shadow-sm)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-200)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-50)'
-                      }}
-                    >
-                      <ArrowLeft size={16} />
-                    </button>
-                  ) : null}
-
-                  {showEditControls && !isEditing && (
-                    <button
-                      type="button"
-                      aria-label="Modifier l'opération"
-                      onClick={() => setIsEditing(true)}
-                      style={{
-                        minWidth: 'var(--touch-target-min)',
-                        minHeight: 'var(--touch-target-min)',
-                        borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--neutral-300)',
-                        background: 'var(--neutral-50)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--neutral-900)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)',
-                        boxShadow: 'var(--shadow-sm)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-200)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-50)'
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </button>
-                  ) || (isEditing && (
-                    <button
-                      type="button"
-                      aria-label="Annuler l'édition"
-                      onClick={() => setIsEditing(false)}
-                      style={{
-                        padding: '0 var(--space-4)',
-                        height: 'var(--touch-target-min)',
-                        borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--neutral-300)',
-                        background: 'var(--neutral-50)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--neutral-900)',
-                        fontSize: 'var(--font-size-xs)',
-                        fontWeight: 'var(--font-weight-bold)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)',
-                        boxShadow: 'var(--shadow-sm)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-200)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--neutral-50)'
-                      }}
-                    >
-                      Annuler
-                    </button>
-                  ))}
-                </div>
-                {isEditing ? (
-                  <button
-                    type="button"
-                    aria-label="Enregistrer les modifications"
-                    onClick={() => {
-                      if (!transaction) return
-                      updateMutation.mutate({
-                        id: transaction.id,
-                        updates: {
-                          normalized_label: editLabel,
-                          amount: Number(editAmount),
-                          transaction_date: editDate,
-                          flow_type: editFlowType,
-                          category_id: editCategoryId || null,
-                          account_id: editAccountId,
-                          budget_behavior: editBudgetBehavior,
-                          personal_share_ratio: Number(editShareRatio),
-                        },
-                      }, {
-                        onSuccess: () => setIsEditing(false)
-                      })
-                    }}
-                    style={{
-                      minWidth: 'var(--touch-target-min)',
-                      minHeight: 'var(--touch-target-min)',
-                      borderRadius: 'var(--radius-full)',
-                      border: '1px solid var(--primary-300)',
-                      background: 'var(--primary-600)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      transition: 'all var(--transition-fast)',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--primary-700)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--primary-600)'
-                    }}
-                  >
-                    <CheckIcon size={16} />
-                  </button>
-                ) : (
-                  <button
-                    ref={closeRef}
-                    type="button"
-                    aria-label="Fermer"
-                    onClick={onClose}
-                    style={{
-                      minWidth: 'var(--touch-target-min)',
-                      minHeight: 'var(--touch-target-min)',
-                      borderRadius: 'var(--radius-full)',
-                      border: '1px solid var(--neutral-300)',
-                      background: 'var(--neutral-50)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      color: 'var(--neutral-900)',
-                      cursor: 'pointer',
-                      transition: 'all var(--transition-fast)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--neutral-200)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--neutral-50)'
-                    }}
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-
               <div
                 style={{
                   minHeight: 0,
                   overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--space-5)',
+                  display: 'grid',
+                  gap: 'var(--space-2)',
                 }}
               >
                 <div
                   style={{
                     position: 'relative',
-                    minHeight: 290,
+                    minHeight: 312,
                     borderRadius: 'var(--radius-lg)',
                     background: details.heroColor,
                     overflow: 'hidden',
@@ -490,7 +352,7 @@ export function TransactionDetailsModal({
                       gridTemplateColumns: '48px 1fr 48px',
                       alignItems: 'center',
                       gap: 'var(--space-2)',
-                      padding: 'var(--space-4) var(--space-4) 0',
+                      padding: 'var(--space-3) var(--space-4) 0',
                       position: 'relative',
                       zIndex: 2,
                     }}
@@ -501,8 +363,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(previousTxn)}
                       disabled={!previousTxn}
                       style={{
-                        minWidth: 'var(--touch-target-min)',
-                        minHeight: 'var(--touch-target-min)',
+                        minWidth: 34,
+                        minHeight: 34,
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: previousTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
@@ -513,7 +375,7 @@ export function TransactionDetailsModal({
                         justifySelf: 'start',
                       }}
                     >
-                      <ChevronLeft size={18} />
+                      <ChevronLeft size={14} />
                     </button>
 
                     <h2
@@ -527,6 +389,7 @@ export function TransactionDetailsModal({
                         textTransform: 'capitalize',
                         display: 'flex',
                         justifyContent: 'center',
+                        transform: 'translateY(-2px)',
                       }}
                     >
                       {isEditing ? (
@@ -555,8 +418,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(nextTxn)}
                       disabled={!nextTxn}
                       style={{
-                        minWidth: 'var(--touch-target-min)',
-                        minHeight: 'var(--touch-target-min)',
+                        minWidth: 34,
+                        minHeight: 34,
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: nextTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
@@ -567,8 +430,43 @@ export function TransactionDetailsModal({
                         justifySelf: 'end',
                       }}
                     >
-                      <ChevronRight size={18} />
+                      <ChevronRight size={14} />
                     </button>
+                  </div>
+
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 2,
+                      marginTop: '10px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 'var(--radius-full)',
+                        overflow: 'hidden',
+                        background: 'var(--neutral-0)',
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.42)',
+                      }}
+                    >
+                      <CategoryIcon
+                        iconKey={details.headerIconKey ?? null}
+                        label={details.subCategoryName !== '—' ? details.subCategoryName : details.categoryName}
+                        size={42}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          transform: 'scale(1.12)',
+                          transformOrigin: 'center',
+                        }}
+                      />
+                    </div>
                   </div>
 
                   <div
@@ -576,27 +474,50 @@ export function TransactionDetailsModal({
                     style={{
                       position: 'absolute',
                       left: '50%',
-                      bottom: -220,
+                      bottom: -196,
                       width: '190%',
-                      height: 360,
+                      height: 246,
                       transform: 'translateX(-50%)',
                       borderRadius: '50%',
                       background: 'var(--neutral-50)',
+                    }}
+                  />
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: -1,
+                      height: 8,
+                      background: 'var(--neutral-50)',
+                      zIndex: 1,
                     }}
                   />
                 </div>
 
                 <div
                   style={{
-                    marginTop: '-178px',
+                    marginTop: '-196px',
                     position: 'relative',
                     zIndex: 2,
                     display: 'grid',
+                    gridTemplateRows: 'auto 1fr',
                     gap: 'var(--space-4)',
-                    padding: '0 var(--space-2) var(--space-2)',
+                    padding: 'var(--space-5) var(--space-2) var(--space-6)',
+                    background: 'var(--neutral-50)',
+                    borderRadius: 'var(--radius-lg)',
+                    minHeight: '100%',
                   }}
                 >
-                  <div style={{ textAlign: 'center', display: 'grid', gap: 'var(--space-1)' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      marginTop: '-32px',
+                      marginBottom: 'var(--space-1)',
+                    }}
+                  >
                     <p
                       onClick={() => {
                         if (!isEditing) return
@@ -606,19 +527,23 @@ export function TransactionDetailsModal({
                       }}
                       style={{
                         margin: 0,
-                        fontSize: 'var(--font-size-sm)',
+                        fontSize: 'var(--font-size-xs)',
                         fontWeight: 800,
-                        color: '#fff',
+                        color: 'var(--neutral-0)',
                         cursor: isEditing ? 'pointer' : 'default',
-                        padding: isEditing ? '2px 8px' : '0',
-                        borderRadius: 'var(--radius-sm)',
-                        background: isEditing ? 'rgba(255,255,255,0.1)' : 'transparent',
-                        border: isEditing ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                        padding: '5px 10px',
+                        borderRadius: 'var(--radius-full)',
+                        background: details.heroColor,
+                        border: `1.5px solid ${flowTypePillBorderColor(isEditing ? editFlowType : transaction.flow_type)}`,
+                        lineHeight: 'var(--line-height-tight)',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {isEditing ? flowTypeLabel(editFlowType) : details.flowTypeText}
                     </p>
+                  </div>
 
+                  <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
                     {isEditing ? (
                       <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
                         <p
@@ -681,7 +606,7 @@ export function TransactionDetailsModal({
                             fontFamily: 'var(--font-mono)',
                           }}
                         >
-                          {formatMoneyInteger(details.amount)}
+                          {formatCurrency(details.amount)}
                         </p>
 
                         <p
@@ -703,7 +628,7 @@ export function TransactionDetailsModal({
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
                     {isEditing ? (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-4)' }}>
@@ -817,34 +742,6 @@ export function TransactionDetailsModal({
                             {editShareRatio}
                           </button>
                         </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setShowDeleteConfirm(true)}
-                            style={{
-                              border: '2px solid var(--color-error)',
-                              background: 'transparent',
-                              color: 'var(--color-error)',
-                              borderRadius: 'var(--radius-md)',
-                              padding: 'var(--space-2) var(--space-6)',
-                              fontSize: 'var(--font-size-sm)',
-                              fontWeight: 'var(--font-weight-bold)',
-                              cursor: 'pointer',
-                              transition: 'all var(--transition-fast)',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'var(--color-error)'
-                              e.currentTarget.style.color = '#fff'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'transparent'
-                              e.currentTarget.style.color = 'var(--color-error)'
-                            }}
-                          >
-                            Supprimer
-                          </button>
-                        </div>
                       </>
                     ) : (
                       details.rows.map((row, idx) => (
@@ -886,6 +783,138 @@ export function TransactionDetailsModal({
                     )}
                   </div>
                 </div>
+
+                {showEditControls ? (
+                  <div
+                    style={{
+                      padding: 'var(--space-1) var(--space-2) 0',
+                    }}
+                  >
+                    {isEditing ? (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto 1fr',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          aria-label="Supprimer l'opération"
+                          onClick={() => setShowDeleteConfirm(true)}
+                          style={{
+                            justifySelf: 'start',
+                            padding: '0 var(--space-3)',
+                            minWidth: 108,
+                            height: 34,
+                            borderRadius: 'var(--radius-full)',
+                            border: '1px solid color-mix(in oklab, var(--color-error) 55%, var(--neutral-200) 45%)',
+                            background: 'color-mix(in oklab, var(--color-error) 10%, white 90%)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--color-error)',
+                            fontSize: 11,
+                            fontWeight: 'var(--font-weight-bold)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)',
+                          }}
+                        >
+                          Supprimer
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label="Annuler l'édition"
+                          onClick={() => setIsEditing(false)}
+                          style={{
+                            justifySelf: 'center',
+                            padding: '0 var(--space-3)',
+                            height: 34,
+                            borderRadius: 'var(--radius-full)',
+                            border: '1px solid var(--neutral-300)',
+                            background: 'var(--neutral-50)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--neutral-900)',
+                            fontSize: 11,
+                            fontWeight: 'var(--font-weight-bold)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)',
+                            boxShadow: 'var(--shadow-sm)',
+                          }}
+                        >
+                          Annuler
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label="Valider les modifications"
+                          onClick={handleSaveEdit}
+                          style={{
+                            justifySelf: 'end',
+                            padding: '0 var(--space-3)',
+                            minWidth: 108,
+                            height: 34,
+                            borderRadius: 'var(--radius-full)',
+                            border: '1px solid var(--primary-300)',
+                            background: 'var(--primary-600)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 11,
+                            fontWeight: 'var(--font-weight-bold)',
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)',
+                            boxShadow: 'var(--shadow-sm)',
+                          }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.background = 'var(--primary-700)'
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.background = 'var(--primary-600)'
+                          }}
+                        >
+                          Valider
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          aria-label="Modifier l'opération"
+                          onClick={() => setIsEditing(true)}
+                          style={{
+                            minWidth: 34,
+                            minHeight: 34,
+                            borderRadius: 'var(--radius-full)',
+                            border: '1px solid var(--neutral-300)',
+                            background: 'var(--neutral-50)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--neutral-900)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)',
+                            boxShadow: 'var(--shadow-sm)',
+                          }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.background = 'var(--neutral-200)'
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.background = 'var(--neutral-50)'
+                          }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
           </motion.div>

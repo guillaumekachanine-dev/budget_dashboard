@@ -2,7 +2,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import type { Annual2025InsightRow } from '@/features/annual-analysis/types'
 
 export async function getAnnual2025Insights(): Promise<Annual2025InsightRow[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('analytics_2025_insights')
     .select('insight_key, insight_level, value_text, value_numeric, payload')
 

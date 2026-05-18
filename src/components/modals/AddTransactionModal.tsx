@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
@@ -9,6 +18,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useAuth } from '@/hooks/useAuth'
 import { useCategories } from '@/hooks/useCategories'
 import { useAddTransaction } from '@/hooks/useTransactions'
+import { formatCurrencyAdaptive, getCategoryColor, todayIso } from '@/lib/utils'
 import type { BudgetBehavior, Category, Direction, RecurrenceFrequency } from '@/lib/types'
 
 interface AddTransactionModalProps {
@@ -17,7 +27,7 @@ interface AddTransactionModalProps {
 }
 
 type PickerMode = 'none' | 'category' | 'subcategory'
-type TransactionType = 'expense' | 'income' | 'transfer'
+type TransactionType = 'expense' | 'income' | 'transfer' | 'savings'
 
 type AccountMode = 'personal' | 'joint'
 
@@ -41,6 +51,7 @@ type AmountInputProps = {
   focused: boolean
   error?: string
   inputRef: React.RefObject<HTMLInputElement | null>
+  onSubmitEditing: () => void
   onFocus: () => void
   onBlur: () => void
   onChange: (next: string) => void
@@ -57,6 +68,9 @@ export type CategoryPickerModalProps = {
   flipId?: string | null
   onSelect: (id: string) => void
   onClose: () => void
+  onBackgroundClick?: () => void
+  getItemDisplayLabel?: (item: Category) => string
+  iconTreatment?: 'default' | 'croppedCircle'
 }
 
 type SettingsListProps = {
@@ -66,6 +80,7 @@ type SettingsListProps = {
   accountMode: AccountMode
   canUseJoint: boolean
   imputability: string
+  compactMobile?: boolean
   onCategoryClick: () => void
   onBehaviorToggle: () => void
   onRecurringToggle: () => void
@@ -75,6 +90,20 @@ type SettingsListProps = {
 
 export const ALL_CATEGORY_TOKEN = '__all__'
 const TRANSFER_SUBCATEGORY_NAMES = ['Virement épargne', 'Virement investissement', 'Épargne projet'] as const
+const SAVINGS_SUBCATEGORY_NAMES = ['Virement épargne', 'Placement', 'Investissement', 'Épargne projet', 'Intérêts'] as const
+const EXPENSE_ROOT_CATEGORY_ORDER = [
+  'logement',
+  'alimentation',
+  'achats divers',
+  'sorties',
+  'famille enfant',
+  'voyages',
+  'transport',
+  'business',
+  'abonnements',
+  'sante',
+  'taxes frais',
+] as const
 
 function normalizeText(value?: string | null): string {
   if (!value) return ''
@@ -85,16 +114,34 @@ function normalizeText(value?: string | null): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 }
-const TRANSACTION_ORDER: TransactionType[] = ['expense', 'income', 'transfer']
+
+export function orderExpenseRootCategories(items: Category[]): Category[] {
+  if (!items.length) return items
+  const remaining = [...items]
+  const ordered: Category[] = []
+
+  for (const token of EXPENSE_ROOT_CATEGORY_ORDER) {
+    const index = remaining.findIndex((category) => normalizeText(category.name).includes(token))
+    if (index >= 0) {
+      const [matched] = remaining.splice(index, 1)
+      if (matched) ordered.push(matched)
+    }
+  }
+
+  return [...ordered, ...remaining]
+}
+const TRANSACTION_ORDER: TransactionType[] = ['expense', 'income', 'transfer', 'savings']
 const TRANSACTION_LABEL: Record<TransactionType, string> = {
   expense: 'Dépense',
   income: 'Revenu',
   transfer: 'Transfert',
+  savings: 'Épargne',
 }
 const DIRECTION_BY_TYPE: Record<TransactionType, Direction> = {
   expense: 'expense',
   income: 'income',
   transfer: 'transfer_out',
+  savings: 'savings',
 }
 
 function createDefaultFormValues(): FormValues {
@@ -114,10 +161,6 @@ function createDefaultFormValues(): FormValues {
   }
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function parseMoney(value: string): number | null {
   const normalized = value.replace(/\s/g, '').replace('€', '').replace(/,/g, '.').trim()
   const sanitized = normalized.replace(/[^\d.]/g, '')
@@ -130,15 +173,6 @@ function parseMoney(value: string): number | null {
   if (!Number.isFinite(parsed)) return null
   if (parsed <= 0) return null
   return Math.round(parsed * 100) / 100
-}
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount)
 }
 
 function isValidDate(value: string): boolean {
@@ -160,7 +194,7 @@ function readFormattedAmount(value: string, focused: boolean): string {
   if (focused) return value
   const parsed = parseMoney(value)
   if (parsed == null) return ''
-  return formatMoney(parsed)
+  return formatCurrencyAdaptive(parsed)
 }
 
 function toAmountInputValue(value: string): string {
@@ -191,9 +225,13 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
-function AmountInput({ value, focused, error, inputRef, onFocus, onBlur, onChange }: AmountInputProps) {
+function AmountInput({ value, focused, error, inputRef, onSubmitEditing, onFocus, onBlur, onChange }: AmountInputProps) {
   return (
-    <section className="px-[var(--space-6)]" style={{ marginTop: '-6px' }} aria-labelledby="amount-input-label">
+    <section
+      className="relative px-[var(--space-6)]"
+      style={{ marginTop: '-4px', zIndex: 999, isolation: 'isolate' }}
+      aria-labelledby="amount-input-label"
+    >
       <p id="amount-input-label" className="sr-only">
         Montant
       </p>
@@ -204,9 +242,15 @@ function AmountInput({ value, focused, error, inputRef, onFocus, onBlur, onChang
           id="transaction-amount"
           type="text"
           inputMode="decimal"
+          enterKeyHint="next"
           autoComplete="off"
           autoFocus
           value={value}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            onSubmitEditing()
+          }}
           onFocus={onFocus}
           onBlur={onBlur}
           onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ''))}
@@ -230,11 +274,13 @@ function SettingsRow({
   label,
   value,
   onClick,
+  compactMobile = false,
   disabled = false,
 }: {
   label: string
   value: string
   onClick?: () => void
+  compactMobile?: boolean
   disabled?: boolean
 }) {
   const interactive = Boolean(onClick) && !disabled
@@ -243,23 +289,25 @@ function SettingsRow({
       type="button"
       onClick={interactive ? onClick : undefined}
       disabled={!interactive}
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-3)] text-left"
+      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left"
       style={{
         cursor: interactive ? 'pointer' : 'default',
         opacity: disabled ? 0.6 : 1,
       }}
     >
       <span
-        className="text-[var(--font-size-lg)] font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
-        style={{ lineHeight: 'var(--line-height-tight)' }}
+        className="font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
+        style={{ lineHeight: 'var(--line-height-tight)', fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}
       >
         {label}
       </span>
       <span
-        className="text-[var(--font-size-lg)] font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
+        className="font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
         style={{ lineHeight: 'var(--line-height-tight)' }}
       >
+        <span style={{ fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}>
         {value}
+        </span>
       </span>
     </button>
   )
@@ -272,6 +320,7 @@ function SettingsList({
   accountMode,
   canUseJoint,
   imputability,
+  compactMobile = false,
   onCategoryClick,
   onBehaviorToggle,
   onRecurringToggle,
@@ -280,17 +329,18 @@ function SettingsList({
 }: SettingsListProps) {
   return (
     <section className="mx-[var(--space-6)]">
-      <div className="divide-y divide-[var(--neutral-200)] border-t border-[var(--neutral-200)]">
-        <SettingsRow label="Catégorie" value={categoryLabel} onClick={onCategoryClick} />
-        <SettingsRow label="Fixe/variable" value={budgetBehaviorLabel(behavior)} onClick={onBehaviorToggle} />
-        <SettingsRow label="Récurrence" value={isRecurring ? 'OUI' : 'NON'} onClick={onRecurringToggle} />
+      <div className="divide-y divide-[var(--neutral-200)] border-0">
+        <SettingsRow label="Catégorie" value={categoryLabel} compactMobile={compactMobile} onClick={onCategoryClick} />
+        <SettingsRow label="Fixe/variable" value={budgetBehaviorLabel(behavior)} compactMobile={compactMobile} onClick={onBehaviorToggle} />
+        <SettingsRow label="Récurrence" value={isRecurring ? 'OUI' : 'NON'} compactMobile={compactMobile} onClick={onRecurringToggle} />
         <SettingsRow
           label="Compte"
           value={accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
+          compactMobile={compactMobile}
           onClick={onAccountModeToggle}
           disabled={!canUseJoint}
         />
-        <SettingsRow label="Imputabilité" value={imputability} onClick={onImputabilityToggle} />
+        <SettingsRow label="Imputabilité" value={imputability} compactMobile={compactMobile} onClick={onImputabilityToggle} />
       </div>
     </section>
   )
@@ -307,6 +357,9 @@ export function CategoryPickerModal({
   flipId,
   onSelect,
   onClose,
+  onBackgroundClick,
+  getItemDisplayLabel,
+  iconTreatment = 'default',
 }: CategoryPickerModalProps) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const displayItems = useMemo(
@@ -335,6 +388,14 @@ export function CategoryPickerModal({
 
     event.preventDefault()
     optionRefs.current[nextIndex]?.focus()
+  }
+
+  const handlePanelClick = (event: ReactMouseEvent<HTMLElement>) => {
+    if (mode !== 'subcategory' || !onBackgroundClick) return
+    const target = event.target as HTMLElement | null
+    if (!target) return
+    if (target.closest('[data-picker-option="true"]')) return
+    onBackgroundClick()
   }
 
   return (
@@ -367,16 +428,39 @@ export function CategoryPickerModal({
               maxHeight: '72dvh',
               overflow: 'hidden',
             }}
+            onClick={handlePanelClick}
           >
             <div className="modal-picker-scroll" style={{ overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gap: 'var(--space-4)' }} role="listbox" aria-label={title}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gridTemplateRows: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)' }} role="listbox" aria-label={title}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
+                    gap: 6,
+                    alignContent: 'start',
+                    minHeight: mode === 'subcategory' ? 'calc(2 * 68px + 6px)' : undefined,
+                  }}
+                >
                 {displayItems.map((item, index) => {
                   const selected = item.id === selectedId || (item.id === ALL_CATEGORY_TOKEN && selectedId === '')
                   const flipping = mode === 'subcategory' && item.id === flipId
+                  const itemLabel = getItemDisplayLabel ? getItemDisplayLabel(item) : item.name
+                  const iconStyle: CSSProperties | undefined =
+                    iconTreatment === 'croppedCircle'
+                      ? {
+                          borderRadius: '50%',
+                          clipPath: 'circle(50%)',
+                          border: '0.75px solid var(--neutral-700)',
+                          boxSizing: 'border-box',
+                          objectFit: 'cover',
+                          transform: 'scale(1.16)',
+                          transformOrigin: 'center',
+                        }
+                      : undefined
                   return (
                     <motion.button
                       key={item.id}
+                      data-picker-option="true"
                       ref={(node) => {
                         optionRefs.current[index] = node
                       }}
@@ -400,30 +484,28 @@ export function CategoryPickerModal({
                           ? { duration: 0.4, ease: [0.68, -0.55, 0.265, 1.55] }
                           : { duration: 0.15, ease: 'easeOut' }
                       }
-                      className="flex flex-col items-center gap-[var(--space-2)] rounded-[var(--radius-lg)] border px-[var(--space-2)] py-[var(--space-3)]"
+                      className="flex flex-col items-center gap-[var(--space-1)] border-none bg-transparent px-0 py-[var(--space-1)]"
                       style={{
-                        borderColor: selected ? 'var(--primary-500)' : 'var(--neutral-200)',
-                        borderWidth: selected ? 3 : 1,
-                        background: 'var(--neutral-0)',
                         transformStyle: 'preserve-3d',
-                        padding: '10px 8px',
+                        padding: '4px 2px',
                         cursor: 'pointer',
-                        transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
+                        opacity: selected ? 1 : 0.92,
+                        transition: 'opacity var(--transition-fast), transform var(--transition-fast)',
                       }}
                     >
-                      <CategoryIcon iconKey={item.icon_key} label={item.name} size={30} />
+                      <CategoryIcon iconKey={item.icon_key} label={item.name} size={30} style={iconStyle} />
                       <span
                         style={{
                           fontSize: 10,
-                          fontWeight: 700,
-                          color: 'var(--neutral-700)',
-                          lineHeight: 1.15,
+                          fontWeight: selected ? 800 : 700,
+                          color: selected ? 'var(--primary-700)' : 'var(--neutral-700)',
+                          lineHeight: 1.05,
                           textAlign: 'center',
                           maxWidth: '100%',
                           whiteSpace: 'normal',
                         }}
                       >
-                        {item.name}
+                        {itemLabel}
                       </span>
                     </motion.button>
                   )
@@ -447,8 +529,14 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const [pickerClosing, setPickerClosing] = useState<PickerMode>('none')
   const [flipSubId, setFlipSubId] = useState<string | null>(null)
   const [amountFocused, setAmountFocused] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.matchMedia('(max-width: 768px)').matches
+  })
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
+  const descriptionRef = useRef<HTMLInputElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
 
   const {
@@ -483,10 +571,25 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   }, [categories, hasHierarchy])
 
   const directSubcategoryRoot = useMemo(() => {
-    if (values.transactionType !== 'income' && values.transactionType !== 'transfer') return null
+    if (values.transactionType !== 'income' && values.transactionType !== 'transfer' && values.transactionType !== 'savings') return null
     if (!hasHierarchy || rootCategories.length !== 1) return null
     return rootCategories[0] ?? null
   }, [hasHierarchy, rootCategories, values.transactionType])
+
+  const orderedRootCategories = useMemo(() => (
+    values.transactionType === 'expense'
+      ? orderExpenseRootCategories(rootCategories)
+      : rootCategories
+  ), [rootCategories, values.transactionType])
+
+  const savingsRootCategory = useMemo(() => {
+    if (values.transactionType !== 'savings') return null
+    const list = categories ?? []
+    const rootList = hasHierarchy ? list.filter((category) => category.parent_id === null) : list
+    const byName = rootList.find((category) => normalizeText(category.name).includes('epargne')) ?? null
+    if (byName) return byName
+    return rootList[0] ?? null
+  }, [categories, hasHierarchy, values.transactionType])
 
   const subCategories = useMemo(() => {
     if (values.transactionType === 'transfer') {
@@ -524,11 +627,46 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
       if (merged.length > 0) return merged
     }
 
+    if (values.transactionType === 'savings') {
+      const savingsList = categories ?? []
+      const root = savingsRootCategory ?? directSubcategoryRoot
+      const savingsChildren = root
+        ? savingsList.filter((category) => category.parent_id === root.id)
+        : savingsList.filter((category) => category.parent_id !== null)
+
+      const source = savingsChildren.length > 0 ? savingsChildren : savingsList
+      const allowedSavings = source.filter((category) => {
+        const normalizedName = normalizeText(category.name)
+        const normalizedIconKey = normalizeText(category.icon_key)
+        const isVirementEpargne = normalizedName.includes('virement') && normalizedName.includes('epargne')
+        const isPlacement = normalizedName.includes('placement') || normalizedIconKey.includes('epargne placement')
+        const isInvestissement = normalizedName.includes('investissement') || normalizedIconKey.includes('epargne investissement')
+        const isEpargneProjet = (normalizedName.includes('epargne') && normalizedName.includes('projet')) || normalizedIconKey.includes('epargne projet')
+        const isInterets = normalizedName.includes('interet')
+        return isVirementEpargne || isPlacement || isInvestissement || isEpargneProjet || isInterets
+      })
+
+      const savingsOrder = SAVINGS_SUBCATEGORY_NAMES.map((label) => normalizeText(label))
+      const orderedSavings = allowedSavings.sort((a, b) => {
+        const aNorm = normalizeText(a.name)
+        const bNorm = normalizeText(b.name)
+        const aIndex = savingsOrder.findIndex((token) => aNorm.includes(token))
+        const bIndex = savingsOrder.findIndex((token) => bNorm.includes(token))
+        if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name, 'fr')
+        if (aIndex === -1) return 1
+        if (bIndex === -1) return -1
+        return aIndex - bIndex
+      })
+
+      if (orderedSavings.length > 0) return orderedSavings
+      return savingsChildren
+    }
+
     if (!values.categoryId) return []
     const list = categories ?? []
     if (!hasHierarchy) return list.filter((category) => category.id === values.categoryId)
     return list.filter((category) => category.parent_id === values.categoryId)
-  }, [allCategories, categories, hasHierarchy, values.categoryId, values.transactionType])
+  }, [allCategories, categories, directSubcategoryRoot, hasHierarchy, savingsRootCategory, values.categoryId, values.transactionType])
 
   const categoryById = useMemo(
     () => new Map((categories ?? []).map((category) => [category.id, category])),
@@ -539,6 +677,31 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const selectedSubCategory = values.subCategoryId ? categoryById.get(values.subCategoryId) ?? null : null
 
   const categoryLabel = selectedSubCategory?.name ?? selectedCategory?.name ?? 'Choisir'
+  const headerColorSource = useMemo(() => {
+    if (values.subCategoryId) {
+      return subCategories.find((category) => category.id === values.subCategoryId)
+        ?? categoryById.get(values.subCategoryId)
+        ?? null
+    }
+    if (!values.categoryId) return null
+    return categoryById.get(values.categoryId) ?? null
+  }, [categoryById, subCategories, values.categoryId, values.subCategoryId])
+
+  const headerColorIndex = useMemo(() => {
+    if (!headerColorSource) return 0
+    const index = (categories ?? []).findIndex((category) => category.id === headerColorSource.id)
+    return index >= 0 ? index : 0
+  }, [categories, headerColorSource])
+
+  const headerBackgroundColor = headerColorSource
+    ? getCategoryColor(headerColorSource.color_token, headerColorIndex, headerColorSource.name)
+    : 'var(--primary-500)'
+  const transactionPillBorderColor = useMemo(() => {
+    if (values.transactionType === 'expense') return 'color-mix(in oklab, var(--color-error) 52%, white 48%)'
+    if (values.transactionType === 'income') return 'color-mix(in oklab, var(--color-success) 52%, white 48%)'
+    if (values.transactionType === 'savings') return '#FFD700'
+    return 'color-mix(in oklab, var(--color-warning) 62%, var(--neutral-900) 38%)'
+  }, [values.transactionType])
 
   const amountDisplay = useMemo(() => readFormattedAmount(values.amount, amountFocused), [amountFocused, values.amount])
 
@@ -564,6 +727,19 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
 
+  const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+
+  const focusDescriptionInput = useCallback(() => {
+    amountRef.current?.blur()
+    window.setTimeout(() => {
+      descriptionRef.current?.focus()
+    }, 40)
+  }, [])
+
+  const closeDescriptionInput = useCallback(() => {
+    descriptionRef.current?.blur()
+  }, [])
+
   const closeAndReset = useCallback(() => {
     reset(createDefaultFormValues())
     setPickerMode('none')
@@ -578,6 +754,37 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     const timeout = window.setTimeout(() => amountRef.current?.focus(), 70)
     return () => window.clearTimeout(timeout)
   }, [open])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia('(max-width: 768px)')
+    const onChange = (event: MediaQueryListEvent) => setIsMobileViewport(event.matches)
+    setIsMobileViewport(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (!open || !isMobileViewport || typeof window === 'undefined') {
+      setKeyboardVisible(false)
+      return
+    }
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const updateKeyboardState = () => {
+      const keyboardDelta = window.innerHeight - viewport.height
+      setKeyboardVisible(keyboardDelta > 140)
+    }
+
+    updateKeyboardState()
+    viewport.addEventListener('resize', updateKeyboardState)
+    viewport.addEventListener('scroll', updateKeyboardState)
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState)
+      viewport.removeEventListener('scroll', updateKeyboardState)
+    }
+  }, [isMobileViewport, open])
 
   useEffect(() => {
     if (!accounts?.length || values.accountId) return
@@ -658,6 +865,15 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     }, 420)
   }
 
+  const handleSubCategoryBackToCategory = () => {
+    setPickerClosing('subcategory')
+    setFlipSubId(null)
+    window.setTimeout(() => {
+      setPickerMode('category')
+      setPickerClosing('none')
+    }, 280)
+  }
+
   const handleBehaviorToggle = () => {
     setValue('budgetBehavior', values.budgetBehavior === 'fixed' ? 'variable' : 'fixed')
   }
@@ -670,6 +886,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     if (!canUseJoint) return
     const nextMode: AccountMode = values.accountMode === 'personal' ? 'joint' : 'personal'
     setValue('accountMode', nextMode)
+    setValue('personalShareRatio', nextMode === 'joint' ? 0.5 : 1)
     const nextAccount = nextMode === 'joint' ? jointAccount : personalAccount
     if (nextAccount) setValue('accountId', nextAccount.id)
   }
@@ -761,10 +978,10 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 101, maxHeight: '88dvh' }}
+            style={{ zIndex: 101, maxHeight: '81dvh' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[88dvh] flex-col">
+            <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[81dvh] flex-col">
               <input type="hidden" {...register('amount')} />
               <input type="hidden" {...register('transactionType')} />
               <input type="hidden" {...register('categoryId')} />
@@ -777,10 +994,13 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               <input type="hidden" {...register('personalShareRatio', { valueAsNumber: true })} />
 
               <header
-                className="relative overflow-hidden bg-[var(--primary-500)] px-[var(--space-6)]"
+                className="relative overflow-hidden px-[var(--space-6)]"
                 style={{
-                  minHeight: 208,
+                  minHeight: isMobileViewport ? 162 : 176,
                   paddingTop: 'var(--space-5)',
+                  background: headerBackgroundColor,
+                  borderBottom: 'none',
+                  boxShadow: 'none',
                 }}
               >
                 <h2 id="add-transaction-modal-title" className="sr-only">
@@ -791,19 +1011,18 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   type="button"
                   aria-label="Fermer"
                   onClick={closeAndReset}
-                  className="absolute right-[var(--space-3)] top-[var(--space-3)] inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
+                  className="absolute right-[var(--space-3)] top-[var(--space-3)] inline-flex items-center justify-center rounded-[var(--radius-pill)] border-none bg-[rgba(255,255,255,0.18)] text-[var(--neutral-0)]"
+                  style={{
+                    width: isMobileViewport ? 38 : 44,
+                    height: isMobileViewport ? 38 : 44,
+                  }}
                 >
-                  <X size={20} />
+                  <X size={isMobileViewport ? 18 : 20} />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const pickerInput = dateRef.current as (HTMLInputElement & { showPicker?: () => void }) | null
-                    if (pickerInput?.showPicker) pickerInput.showPicker()
-                    else dateRef.current?.focus()
-                  }}
-                  className="absolute left-1/2 top-[var(--space-5)] -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 text-[var(--neutral-0)]"
+                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40 }}
                 >
                   <span
                     className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
@@ -811,19 +1030,55 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   >
                     {formatLongDate(values.date)}
                   </span>
-                </button>
+                  <input
+                    id="transaction-date"
+                    type="date"
+                    {...dateRegister}
+                    ref={(node) => {
+                      dateRef.current = node
+                      dateRegister.ref(node)
+                    }}
+                    value={values.date}
+                    onChange={(event) => {
+                      setValue('date', event.target.value)
+                      clearErrors('date')
+                    }}
+                    aria-label="Date de l'opération"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0.001,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 41,
+                      WebkitAppearance: 'none',
+                      appearance: 'none',
+                    }}
+                  />
+                </div>
 
                 <button
                   type="button"
                   onClick={handleTransactionTypeCycle}
-                  className="absolute left-1/2 top-[64px] -translate-x-1/2 border-none bg-transparent p-0 text-[var(--neutral-0)]"
+                  className="absolute left-1/2 -translate-x-1/2 border-none text-[var(--neutral-0)]"
+                  style={{
+                    top: isMobileViewport ? 60 : 74,
+                    border: `2px solid ${transactionPillBorderColor}`,
+                    borderRadius: 'var(--radius-full)',
+                    background: 'rgba(255,255,255,0.16)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 800,
+                    padding: '10px 18px',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    letterSpacing: '0.01em',
+                    lineHeight: 'var(--line-height-tight)',
+                    whiteSpace: 'nowrap',
+                  }}
+                  aria-label={`Type d'opération: ${TRANSACTION_LABEL[values.transactionType]}. Cliquer pour changer.`}
                 >
-                  <span
-                    className="block text-center text-[var(--font-size-lg)] font-[var(--font-weight-bold)]"
-                    style={{ lineHeight: 'var(--line-height-tight)' }}
-                  >
-                    {TRANSACTION_LABEL[values.transactionType]}
-                  </span>
+                  {TRANSACTION_LABEL[values.transactionType]}
                 </button>
 
                 <div
@@ -831,38 +1086,28 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   style={{
                     position: 'absolute',
                     left: '50%',
-                    bottom: -176,
+                    bottom: -178,
                     width: '190%',
-                    height: 260,
+                    height: 224,
                     transform: 'translateX(-50%)',
                     borderRadius: '50%',
                     background: 'var(--neutral-0)',
+                    zIndex: 0,
+                    border: 'none',
+                    boxShadow: 'none',
                   }}
                 />
 
-                <input
-                  id="transaction-date"
-                  type="date"
-                  {...dateRegister}
-                  ref={(node) => {
-                    dateRef.current = node
-                    dateRegister.ref(node)
-                  }}
-                  value={values.date}
-                  onChange={(event) => {
-                    setValue('date', event.target.value)
-                    clearErrors('date')
-                  }}
-                  className="sr-only"
-                />
+                
               </header>
 
-              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-[var(--space-1)]">
+              <div style={{ position: 'relative', zIndex: 1000, marginTop: isMobileViewport ? -14 : -4 }}>
                 <AmountInput
                   value={amountDisplay}
                   focused={amountFocused}
                   error={errors.amount?.message}
                   inputRef={amountRef}
+                  onSubmitEditing={focusDescriptionInput}
                   onFocus={() => {
                     setAmountFocused(true)
                     setValue('amount', toAmountInputValue(values.amount))
@@ -877,16 +1122,29 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     clearErrors('amount')
                   }}
                 />
+              </div>
 
-                <div className="mt-[var(--space-1)] px-[var(--space-6)]">
+              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0" style={{ position: 'relative', zIndex: 20 }}>
+
+                <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
                   <Input
+                    ref={descriptionRef}
                     id="transaction-description"
                     type="text"
+                    enterKeyHint="done"
                     value={values.description}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      closeDescriptionInput()
+                    }}
                     onChange={(event) => setValue('description', event.target.value)}
                     placeholder="libellé de l'opération"
                     aria-label="Libellé de l'opération"
-                    className="rounded-[var(--radius-md)] border-[var(--neutral-200)] px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-lg)] font-[var(--font-weight-semibold)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100"
+                    className="rounded-[var(--radius-md)] border-transparent px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-lg)] font-[var(--font-weight-semibold)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100 focus:border-transparent"
+                    style={{
+                      minHeight: isMobileViewport ? 36 : 58,
+                    }}
                   />
                 </div>
 
@@ -898,8 +1156,20 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     accountMode={values.accountMode}
                     canUseJoint={canUseJoint}
                     imputability={imputabilityLabel(values.personalShareRatio)}
+                    compactMobile={isMobileViewport}
                     onCategoryClick={() => {
                       if (values.transactionType === 'transfer') {
+                        setPickerMode('subcategory')
+                        setPickerClosing('none')
+                        return
+                      }
+
+                      if (values.transactionType === 'savings') {
+                        const savingsRoot = savingsRootCategory ?? directSubcategoryRoot ?? rootCategories[0] ?? null
+                        if (savingsRoot) {
+                          setValue('categoryId', savingsRoot.id)
+                          setValue('subCategoryId', '')
+                        }
                         setPickerMode('subcategory')
                         setPickerClosing('none')
                         return
@@ -930,23 +1200,29 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 </div>
               </div>
 
-              <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)] py-[var(--space-3)]">
-                <div className="flex items-center justify-between gap-[var(--space-3)]">
-                  <Button type="button" variant="outline" size="md" className="rounded-[var(--radius-md)]" onClick={closeAndReset}>
-                    Annuler
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="md"
-                    className="rounded-[var(--radius-md)]"
-                    disabled={!canSubmit}
-                    loading={isPending}
+              {!shouldHideFooter ? (
+                <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
+                  <div
+                    className="flex items-center justify-between gap-[var(--space-3)]"
+                    style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
                   >
-                    Ajouter
-                  </Button>
-                </div>
-              </footer>
+                    <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
+                      Annuler
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
+                      style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
+                      disabled={!canSubmit}
+                      loading={isPending}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                </footer>
+              ) : null}
             </form>
           </motion.section>
 
@@ -954,7 +1230,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             open={pickerMode === 'category'}
             mode="category"
             title="Sélectionner une catégorie"
-            items={rootCategories}
+            items={orderedRootCategories}
             selectedId={values.categoryId}
             closing={pickerClosing === 'category'}
             showAllOption={values.transactionType !== 'expense'}
@@ -962,6 +1238,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               setPickerMode('none')
               setPickerClosing('none')
             }}
+            iconTreatment="default"
             onSelect={handleCategorySelect}
           />
 
@@ -973,12 +1250,23 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             selectedId={values.subCategoryId}
             closing={pickerClosing === 'subcategory'}
             flipId={flipSubId}
+            onBackgroundClick={handleSubCategoryBackToCategory}
             onClose={() => {
               setPickerMode('none')
               setPickerClosing('none')
               setFlipSubId(null)
             }}
+            iconTreatment="default"
             onSelect={handleSubCategorySelect}
+            getItemDisplayLabel={(item) => {
+              if (values.transactionType === 'income' && item.name.trim().toLowerCase() === 'remboursement') {
+                return 'Rembours.'
+              }
+              if (item.name.trim().toLowerCase() === 'investissement') {
+                return 'Invest.'
+              }
+              return item.name
+            }}
           />
 
           <style>{`

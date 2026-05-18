@@ -202,6 +202,37 @@ export interface PlannedOperation {
   updated_at: string
 }
 
+export type PlannedOperationFlowItem = {
+  id: string
+  source_planned_operation_id: string
+  account_id: string | null
+  category_id: string | null
+  label: string | null
+  original_planned_date: string | null
+  original_month_start: string | null
+  planned_date: string
+  month_start: string
+  planned_amount: number
+  personal_share_ratio: number | null
+  planned_personal_amount: number
+  currency: string | null
+  flow_type: PlannedOperationFlowType | null
+  status: string | null
+  budget_impact: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  impacts_remaining_useful: boolean | null
+  remaining_useful_impact_amount: number | null
+  matched_transaction_id: string | null
+  notes: string | null
+  is_generated_occurrence: boolean
+  created_at: string | null
+  updated_at: string | null
+  source: 'planned_operation'
+  planned_status: 'done' | 'upcoming'
+}
+
 export type PlannedOperationInsert = {
   user_id: string
   account_id?: string | null
@@ -222,6 +253,37 @@ export type PlannedOperationInsert = {
   recurrence_day_of_month: number | null
   recurrence_start_date: string | null
   recurrence_end_date: string | null
+}
+
+export interface PlannedOperationsEnrichedViewRow {
+  id: string | null
+  user_id: string | null
+  source_planned_operation_id: string | null
+  account_id: string | null
+  category_id: string | null
+  label: string | null
+  original_planned_date: string | null
+  original_month_start: string | null
+  planned_date: string | null
+  month_start: string | null
+  planned_amount: number | null
+  personal_share_ratio: number | null
+  planned_personal_amount: number | null
+  currency: string | null
+  flow_type: PlannedOperationFlowType | null
+  status: string | null
+  budget_impact: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  impacts_remaining_useful: boolean | null
+  remaining_useful_impact_amount: number | null
+  matched_transaction_id: string | null
+  notes: string | null
+  planned_status: 'done' | 'upcoming' | null
+  is_generated_occurrence: boolean | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface AccountWithBalance extends Account {
@@ -350,6 +412,49 @@ export interface SavingsBudgetVsActualByPeriodRow {
   delta_savings_amount_eur: number | null
 }
 
+export interface SavingsCurrentSummaryRow {
+  user_id: string | null
+  total_savings: number | null
+  livrets_total: number | null
+  placements_total: number | null
+  liquid_savings_total: number | null
+  locked_savings_total: number | null
+  accounts_count: number | null
+  livrets_share_pct: number | null
+  placements_share_pct: number | null
+  liquid_share_pct: number | null
+  locked_share_pct: number | null
+}
+
+export interface SavingsMonthlyMetricsRow {
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  saved_amount: number | null
+  transfer_count: number | null
+  destination_count: number | null
+  income_total: number | null
+  savings_rate_on_income_pct: number | null
+  savings_budget_total: number | null
+  global_budget_total: number | null
+  savings_share_of_budget_pct: number | null
+  savings_rolling_avg_3m: number | null
+  savings_rolling_avg_6m: number | null
+  annualized_savings_speed_3m: number | null
+  ytd_saved_amount: number | null
+}
+
+export interface SavingsDestinationBreakdownViewRow {
+  month_start: string | null
+  period_year: number | null
+  period_month: number | null
+  destination_family: string | null
+  destination_label: string | null
+  saved_amount: number | null
+  transfer_count: number | null
+  avg_transfer_amount: number | null
+}
+
 export interface MonthlyBucketActualsCleanRow {
   user_id: string | null
   month_start: string | null
@@ -357,6 +462,36 @@ export interface MonthlyBucketActualsCleanRow {
   transaction_count: number | null
   revenue_amount: number | null
   net_amount: number | null
+}
+
+export interface CategoryAnnualCostProjection2026Row {
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  budget_bucket: string | null
+  months_elapsed: number | null
+  remaining_months: number | null
+  actual_ytd_amount: number | null
+  avg_monthly_ytd_amount: number | null
+  projected_remaining_amount: number | null
+  projected_annual_amount: number | null
+  budget_ytd_amount: number | null
+  budget_annual_amount: number | null
+  projected_vs_budget_amount: number | null
+  projected_vs_budget_pct: number | null
+}
+
+export interface AnnualProjectionOverview2026Row {
+  months_elapsed: number | null
+  remaining_months: number | null
+  projected_core_expenses_amount: number | null
+  projected_flexible_expenses_amount: number | null
+  projected_total_expenses_amount: number | null
+  projected_revenue_amount: number | null
+  projected_savings_amount: number | null
+  projected_revenue_after_savings_amount: number | null
+  projected_expenses_to_revenue_pct: number | null
+  projected_savings_to_revenue_pct: number | null
 }
 
 export interface BudgetTransactionsEnrichedRow {
@@ -407,6 +542,8 @@ export type Database = {
       category_budget_bucket_map: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       import_batches: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      savings_balance_snapshots: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      trips: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
     }
     Views: {
       budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
@@ -415,9 +552,17 @@ export type Database = {
       savings_budget_totals_by_period: { Row: SavingsBudgetTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_lines_by_period: { Row: SavingsBudgetLinesByPeriodRow & Record<string, unknown>; Relationships: [] }
       savings_budget_vs_actual_by_period: { Row: SavingsBudgetVsActualByPeriodRow & Record<string, unknown>; Relationships: [] }
+      v_savings_current_summary: { Row: SavingsCurrentSummaryRow & Record<string, unknown>; Relationships: [] }
+      v_savings_monthly_metrics: { Row: SavingsMonthlyMetricsRow & Record<string, unknown>; Relationships: [] }
+      v_savings_destination_breakdown: { Row: SavingsDestinationBreakdownViewRow & Record<string, unknown>; Relationships: [] }
       v_monthly_bucket_actuals_clean: { Row: MonthlyBucketActualsCleanRow & Record<string, unknown>; Relationships: [] }
+      v_category_annual_cost_projection_2026: { Row: CategoryAnnualCostProjection2026Row & Record<string, unknown>; Relationships: [] }
+      v_annual_projection_overview_2026: { Row: AnnualProjectionOverview2026Row & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
+      v_planned_operations_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
+      v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
+      v_trip_transactions: { Row: Record<string, unknown>; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {
@@ -435,6 +580,26 @@ export type Database = {
           p_period_year: number
           p_period_month: number
         }
+        Returns: Record<string, unknown>
+      }
+      get_trajectory_data: {
+        Args: {
+          p_user_id: string
+          p_year: number
+          p_month: number
+        }
+        Returns: Record<string, unknown>
+      }
+      get_financial_security_payload: {
+        Args: Record<string, never>
+        Returns: Record<string, unknown>
+      }
+      get_optimization_capacity_payload: {
+        Args: { p_year: number }
+        Returns: Record<string, unknown>
+      }
+      get_investment_performance_payload: {
+        Args: { p_year: number }
         Returns: Record<string, unknown>
       }
       refresh_budget_analytics: {

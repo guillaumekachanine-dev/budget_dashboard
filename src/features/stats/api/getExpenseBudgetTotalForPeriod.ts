@@ -1,5 +1,5 @@
 import { budgetDb } from '@/lib/supabaseBudget'
-import { asSafeNumber, isValidUuid, resolvePeriodIdByYearMonth } from '@/features/stats/api/_shared'
+import { asSafeNumber, isValidUuid } from '@/features/stats/api/_shared'
 
 interface BudgetCategoryRow {
   amount: number
@@ -12,15 +12,13 @@ interface CategoryFlowRow {
 }
 
 export async function getExpenseBudgetTotalForPeriod(
-  periodYear: number,
-  periodMonth: number,
+  periodId: string | null,
 ): Promise<number> {
-  const periodId = await resolvePeriodIdByYearMonth(periodYear, periodMonth)
   if (!isValidUuid(periodId)) {
     return 0
   }
 
-  const { data: budgetRowsData, error: budgetError } = await budgetDb()
+  const { data: budgetRowsData, error: budgetError } = await budgetDb
     .from('budgets')
     .select('amount, category_id')
     .eq('period_id', periodId)
@@ -39,7 +37,7 @@ export async function getExpenseBudgetTotalForPeriod(
     return 0
   }
 
-  const { data: categoriesData, error: categoriesError } = await budgetDb()
+  const { data: categoriesData, error: categoriesError } = await budgetDb
     .from('categories')
     .select('id, flow_type')
     .in('id', categoryIds)

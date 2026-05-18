@@ -9,18 +9,16 @@ const MONTHLY_VARIABLE_CATEGORIES_COLUMNS = [
   'category_name',
   'parent_category_id',
   'parent_category_name',
-  'category_path',
-  'amount_total',
+  'actual_amount',
 ].join(', ')
 
 export async function getMonthlyVariableCategories(year?: number): Promise<AnalyticsMonthlyCategoryMetrics[]> {
-  let query = budgetDb()
-    .from('analytics_monthly_category_metrics')
+  let query = budgetDb
+    .from('v_monthly_category_actuals_clean' as never)
     .select(MONTHLY_VARIABLE_CATEGORIES_COLUMNS)
-    .eq('flow_type', 'expense')
     .eq('budget_behavior', 'variable')
     .order('month_start', { ascending: true })
-    .order('amount_total', { ascending: false })
+    .order('actual_amount', { ascending: false })
 
   if (typeof year === 'number') {
     query = query.eq('period_year', year)

@@ -41,7 +41,7 @@ async function resolvePeriodId(params: GetBudgetLinesParams): Promise<string> {
     throw new Error('getBudgetLinesForPeriod requires either periodId or year/month')
   }
 
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_periods')
     .select('id')
     .eq('period_year', year)
@@ -95,7 +95,7 @@ function mergeRecommendations(
 export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Promise<BudgetLinesForPeriodResult> {
   const periodId = await resolvePeriodId(params)
 
-  const { data: budgetData, error: budgetError } = await budgetDb()
+  const { data: budgetData, error: budgetError } = await budgetDb
     .from('budgets')
     .select(BUDGET_COLUMNS)
     .eq('period_id', periodId)
@@ -118,7 +118,7 @@ export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Pro
   const categoryRowsById = new Map<string, CategoryRow>()
 
   if (categoryIds.length > 0) {
-    const { data: categoriesData, error: categoriesError } = await budgetDb()
+    const { data: categoriesData, error: categoriesError } = await budgetDb
       .from('categories')
       .select(CATEGORY_COLUMNS)
       .in('id', categoryIds)
@@ -141,7 +141,7 @@ export async function getBudgetLinesForPeriod(params: GetBudgetLinesParams): Pro
     const parentIds = [...new Set(categoriesRows.map((row) => row.parent_id).filter((value): value is string => Boolean(value)))]
 
     if (parentIds.length > 0) {
-      const { data: parentCategoriesData, error: parentCategoriesError } = await budgetDb()
+      const { data: parentCategoriesData, error: parentCategoriesError } = await budgetDb
         .from('categories')
         .select(CATEGORY_COLUMNS)
         .in('id', parentIds)

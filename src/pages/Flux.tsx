@@ -1,38 +1,106 @@
-import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, Fragment } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
+import { ChevronDown, ArrowLeft, Search, Check, ArrowUp } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
-import { usePlannedOperations } from '@/hooks/usePlannedOperations'
-import { formatCurrency } from '@/lib/utils'
+import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
+import { formatCurrencyRounded, getTxLabel, todayIso } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
+import categoriesHeaderIcon from '@/assets/icons/app/categories1.webp'
 import type {
   FlowType,
-  PlannedOperation,
-  PlannedOperationBudgetImpact,
-  PlannedOperationFlowType,
+  PlannedOperationFlowItem,
   Transaction,
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
+import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
 
-type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
-type PlannedFlowFilter = 'all' | PlannedOperationFlowType
+type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 type PeriodMode = 'current' | 'rolling' | 'future'
 type QuickParamPicker = 'type' | 'period' | 'modalite' | 'fixed' | 'account' | null
+type PlannedModalityFilter = 'all' | 'done' | 'upcoming'
 
-const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
+const HEADER_CATEGORY_ORDER = [
+  'alimentation',
+  'achats-divers',
+  'sorties',
+  'famille-enfant',
+  'logement',
+  'business',
+  'transport',
+  'voyages',
+  'sante',
+  'abonnements',
+  'taxes-frais',
+] as const
+
+function normalizeCategoryName(value?: string | null): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function headerCategoryOrderKey(name: string): string | null {
+  const normalized = normalizeCategoryName(name)
+  if (normalized.includes('alimentation')) return 'alimentation'
+  if (normalized.includes('achats') && normalized.includes('divers')) return 'achats-divers'
+  if (normalized.includes('sorties')) return 'sorties'
+  if (normalized.includes('famille') && normalized.includes('enfant')) return 'famille-enfant'
+  if (normalized.includes('logement')) return 'logement'
+  if (normalized.includes('business')) return 'business'
+  if (normalized.includes('transport')) return 'transport'
+  if (normalized.includes('voyages')) return 'voyages'
+  if (normalized.includes('sante')) return 'sante'
+  if (normalized.includes('abonn')) return 'abonnements'
+  if ((normalized.includes('taxes') && normalized.includes('frais')) || (normalized.includes('frais') && normalized.includes('impot'))) {
+    return 'taxes-frais'
+  }
+  return null
+}
+
+function headerCategoryLabel(name: string): string {
+  const key = headerCategoryOrderKey(name)
+  if (key === 'famille-enfant') return 'Famille/enfant'
+  if (key === 'abonnements') return 'Abonn.'
+  if (key === 'taxes-frais') return 'Taxes/frais'
+  return name
+}
+
+function capitalizeFirst(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return value
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`
+}
+
+const FRENCH_MONTHS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+]
+
+function formatMonthLabel(dateKey: string): string {
+  const year = parseInt(dateKey.slice(0, 4), 10)
+  const month = parseInt(dateKey.slice(5, 7), 10) - 1
+  return `${FRENCH_MONTHS[month]} ${year}`
+}
+
+const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string; hasSeparator?: boolean }> = [
   { value: 'all', label: 'Toutes' },
-  { value: 'expense', label: 'Depenses' },
+  { value: 'planned', label: 'Planifiées', hasSeparator: true },
+  { value: 'expense', label: 'Dépenses' },
   { value: 'income', label: 'Revenus' },
   { value: 'transfer', label: 'Transferts' },
+  { value: 'savings', label: 'Épargne' },
 ]
 
 const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
@@ -44,31 +112,6 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'all', label: 'Tout' },
 ]
 
-const PLANNED_FLOW_OPTIONS: Array<{ value: PlannedFlowFilter; label: string }> = [
-  { value: 'all', label: 'Toutes' },
-  { value: 'expense', label: 'Dépenses' },
-  { value: 'income', label: 'Revenus' },
-  { value: 'savings', label: 'Épargne' },
-  { value: 'transfer', label: 'Transferts' },
-]
-
-const PLANNED_FLOW_LABELS: Record<PlannedOperationFlowType, string> = {
-  expense: 'Dépense planifiée',
-  income: 'Revenu planifié',
-  savings: 'Épargne planifiée',
-  transfer: 'Transfert planifié',
-}
-
-const PLANNED_BUDGET_IMPACT_LABELS: Record<PlannedOperationBudgetImpact, string> = {
-  already_budgeted: 'Déjà budgétisée',
-  additional_commitment: 'Engagement additionnel',
-  informational: 'Informatif uniquement',
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function startOfIsoDay(d: Date): string {
   const dt = new Date(d)
   dt.setHours(0, 0, 0, 0)
@@ -79,6 +122,10 @@ function startOfIsoMonth(d: Date): string {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
 }
 
+function endOfIsoMonth(d: Date): string {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+}
+
 function startOfIsoQuarter(d: Date): string {
   const qMonth = Math.floor(d.getMonth() / 3) * 3
   return new Date(d.getFullYear(), qMonth, 1).toISOString().slice(0, 10)
@@ -86,6 +133,10 @@ function startOfIsoQuarter(d: Date): string {
 
 function startOfIsoYear(d: Date): string {
   return new Date(d.getFullYear(), 0, 1).toISOString().slice(0, 10)
+}
+
+function endOfIsoYear(d: Date): string {
+  return new Date(d.getFullYear(), 11, 31).toISOString().slice(0, 10)
 }
 
 function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: string; endDate?: string } {
@@ -167,10 +218,6 @@ function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: st
   }
 }
 
-function displayTxnLabel(t: Transaction): string {
-  return (t.normalized_label ?? t.raw_label ?? 'Operation').trim() || 'Operation'
-}
-
 function displayTxnCategoryName(t: Transaction): string {
   return t.category?.name ?? 'Sans categorie'
 }
@@ -204,29 +251,65 @@ function formatMoneyInteger(amount: number): string {
   }).format(Math.floor(amount))
 }
 
-function formatCategoryModalLabel(name: string): string {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
-  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
-  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
-  return name
+function formatMoneyNoDecimals(amount: number): string {
+  if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(0)
+
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount))
 }
 
 function resultNoun(flow: FlowFilter): string {
   if (flow === 'expense') return 'dépenses'
   if (flow === 'income') return 'revenus'
   if (flow === 'transfer') return 'transferts internes'
+  if (flow === 'planned') return 'opérations planifiées'
   return 'opérations'
 }
 
-function recurringLineLabel(operation: PlannedOperation): string {
-  if (!operation.is_recurring || operation.recurrence_frequency !== 'monthly') return 'Non'
-  const day = operation.recurrence_day_of_month
-    ?? new Date(`${operation.planned_date}T00:00:00`).getDate()
-  return `Tous les mois, le ${day}`
+function formatRowAmount(amount: number, flowType: string | null, rawAmount: number): string {
+  if (flowType === 'transfer' || flowType === 'savings') {
+    return `(${formatCurrencyRounded(Math.abs(rawAmount))})`
+  }
+  if (amount > 0) {
+    return `+${formatCurrencyRounded(amount)}`
+  }
+  return formatCurrencyRounded(amount)
+}
+
+function getTodayDateKey(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function toDateKey(value?: string | null): string {
+  if (!value) return ''
+  return value.slice(0, 10)
+}
+
+function signedPlannedAmount(item: PlannedOperationFlowItem): number {
+  const raw = Number(item.planned_personal_amount) || 0
+  const absolute = Math.abs(raw)
+  const flow = item.flow_type
+
+  if (flow === 'income') return absolute
+  if (flow === 'transfer' || flow === 'savings') return 0
+  if (flow === 'expense') {
+    return -absolute
+  }
+
+  return raw
 }
 
 function Sheet({
@@ -360,6 +443,7 @@ function FilterDropdown({
   fitContent = false,
   hideLabel = false,
   largeValue = false,
+  disabled = false,
 }: {
   id: Exclude<QuickParamPicker, null>
   label: string
@@ -375,6 +459,7 @@ function FilterDropdown({
   fitContent?: boolean
   hideLabel?: boolean
   largeValue?: boolean
+  disabled?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -413,6 +498,7 @@ function FilterDropdown({
 
   const onTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      if (disabled) return
       event.preventDefault()
       onToggle()
     }
@@ -465,8 +551,9 @@ function FilterDropdown({
         aria-expanded={isOpen}
         aria-controls={`flux-filter-dropdown-${id}`}
         aria-label={`Filtre ${label}`}
-        onClick={onToggle}
+        onClick={disabled ? undefined : onToggle}
         onKeyDown={onTriggerKeyDown}
+        disabled={disabled}
         whileHover={heroTone ? undefined : { scale: 1.05 }}
         transition={{ duration: 0.16, ease: 'easeOut' }}
         style={{
@@ -484,6 +571,7 @@ function FilterDropdown({
             : (isOpen ? 'var(--primary-700)' : 'var(--neutral-700)'),
           padding: heroTone ? 0 : 'var(--space-3) var(--space-4)',
           cursor: 'pointer',
+          opacity: disabled ? 0.55 : 1,
           transition: 'all var(--transition-fast)',
           boxShadow: heroTone ? 'none' : (isOpen ? 'var(--shadow-md)' : 'none'),
           display: 'grid',
@@ -511,7 +599,7 @@ function FilterDropdown({
               <ChevronDown
                 size={12}
                 style={{
-                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transform: isOpen && !disabled ? 'rotate(180deg)' : 'rotate(0deg)',
                   transition: 'transform var(--transition-fast)',
                   color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
                   flexShrink: 0,
@@ -536,14 +624,14 @@ function FilterDropdown({
             }}
           >
             {value}
-            {hideLabel && (
-              <ChevronDown
-                size={12}
-                style={{
-                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform var(--transition-fast)',
-                  color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-                  flexShrink: 0,
+              {hideLabel && (
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: isOpen && !disabled ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform var(--transition-fast)',
+                    color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
+                    flexShrink: 0,
                 }}
               />
             )}
@@ -552,7 +640,7 @@ function FilterDropdown({
       </motion.button>
 
       <AnimatePresence>
-        {isOpen ? (
+        {isOpen && !disabled ? (
           <motion.div
             id={`flux-filter-dropdown-${id}`}
             role="listbox"
@@ -637,8 +725,11 @@ function FilterDropdown({
 export function Flux() {
   const { user } = useAuth()
   const [search, setSearch] = useState('')
+  // useDeferredValue defers the expensive filteredTransactions recomputation until
+  // the browser is idle — keeps the input responsive on every keystroke
+  const deferredSearch = useDeferredValue(search)
   const [showSearchInput, setShowSearchInput] = useState(false)
-  const [flow, setFlow] = useState<FlowFilter>('expense')
+  const [flow, setFlow] = useState<FlowFilter>('all')
   const [period, setPeriod] = useState<PeriodFilter>('month')
   const [periodMode, setPeriodMode] = useState<PeriodMode>('current')
 
@@ -656,8 +747,9 @@ export function Flux() {
   const [budgetFilter, setBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
   const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
   const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
-  const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
+  const [draftFlow, setDraftFlow] = useState<FlowFilter>('all')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
   const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
   const [draftBudgetFilter, setDraftBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
@@ -668,22 +760,40 @@ export function Flux() {
   const [showPeriodMiniModal, setShowPeriodMiniModal] = useState(false)
   const [quickParamPicker, setQuickParamPicker] = useState<QuickParamPicker>(null)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
-  const [plannedFlowFilter, setPlannedFlowFilter] = useState<PlannedFlowFilter>('all')
+  const [plannedModalityFilter, setPlannedModalityFilter] = useState<PlannedModalityFilter>('all')
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(max-width: 768px)').matches
   })
 
-  const categoryFlowType = (showAdvancedSheet ? draftFlow : flow) === 'income' ? 'income' : 'expense'
+  const activeFlowTypeForCategory = showAdvancedSheet ? draftFlow : flow
+  const categoryFlowType = activeFlowTypeForCategory === 'income'
+    ? 'income'
+    : activeFlowTypeForCategory === 'savings'
+      ? 'savings'
+      : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
   const subCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id !== null), [flowCategories])
   const parentById = useMemo(() => new Map((rootCategories ?? []).map((c) => [c.id, c])), [rootCategories])
   const categoryById = useMemo(() => new Map((flowCategories ?? []).map((c) => [c.id, c])), [flowCategories])
+  const orderedHeaderRootCategories = useMemo(() => {
+    const byOrderKey = new Map<string, (typeof rootCategories)[number]>()
+    for (const category of rootCategories) {
+      const key = headerCategoryOrderKey(category.name)
+      if (key && !byOrderKey.has(key)) byOrderKey.set(key, category)
+    }
+    return HEADER_CATEGORY_ORDER
+      .map((key) => byOrderKey.get(key) ?? null)
+      .filter((category): category is (typeof rootCategories)[number] => category !== null)
+  }, [rootCategories])
 
+  const isPlannedMode = flow === 'planned'
+  const isSavingsMode = flow === 'savings'
+  const todayDateKey = getTodayDateKey()
   const range = useMemo(() => periodToRange(period, periodMode), [period, periodMode])
-  const flowTypeFilter: FlowType | undefined = flow === 'all' ? undefined : (flow as FlowType)
+  const flowTypeFilter: FlowType | undefined = flow === 'all' || flow === 'planned' ? undefined : (flow as FlowType)
 
   const categoryIdsFilter = useMemo(() => {
     if (!selectedCategoryId && !selectedParentCategoryId) return undefined
@@ -692,14 +802,68 @@ export function Flux() {
     return selectedParentCategoryId ? [selectedParentCategoryId, ...children] : undefined
   }, [selectedCategoryId, selectedParentCategoryId, subCategories])
 
-  const { data: txns, isLoading } = useTransactions({
+  const { data: txns, isLoading: isTransactionsLoading } = useTransactions({
     ...range,
     flowType: flowTypeFilter,
     categoryIds: categoryIdsFilter,
+  }, {
+    enabled: !isPlannedMode,
   })
-  const { data: plannedOperations = [], isLoading: isPlannedLoading } = usePlannedOperations(user?.id)
 
-  const filtered = useMemo(() => {
+  const plannedModeStartDate = useMemo(() => {
+    const now = new Date()
+    return period === 'year' ? startOfIsoYear(now) : startOfIsoMonth(now)
+  }, [period])
+  const plannedModeEndDate = useMemo(() => {
+    const now = new Date()
+    return period === 'year' ? endOfIsoYear(now) : endOfIsoMonth(now)
+  }, [period])
+
+  const generalModePlannedStartDate = useMemo(() => startOfIsoMonth(new Date()), [])
+  const generalModePlannedEndDate = useMemo(() => {
+    const now = new Date()
+    const monthEnd = endOfIsoMonth(now)
+    if (isSavingsMode) return monthEnd
+    return monthEnd < todayDateKey ? monthEnd : todayDateKey
+  }, [isSavingsMode, todayDateKey])
+
+  const isGeneralMonthView = !isPlannedMode && period === 'month' && periodMode === 'current'
+
+  const {
+    data: plannedGeneralDoneOperations = [],
+    isLoading: isGeneralPlannedLoading,
+    error: generalPlannedError,
+  } = usePlannedOperationsForFlow({
+    userId: user?.id,
+    startDate: generalModePlannedStartDate,
+    endDate: generalModePlannedEndDate,
+    includePast: true,
+    includeFuture: isSavingsMode,
+    flowType: isSavingsMode ? 'savings' : 'all',
+    categoryIds: categoryIdsFilter,
+    enabled: isGeneralMonthView,
+    mode: 'general',
+    ascending: false,
+  })
+
+  const {
+    data: plannedModeOperations = [],
+    isLoading: isPlannedModeLoading,
+    error: plannedModeError,
+  } = usePlannedOperationsForFlow({
+    userId: user?.id,
+    startDate: plannedModeStartDate,
+    endDate: plannedModeEndDate,
+    includePast: true,
+    includeFuture: true,
+    flowType: 'all',
+    categoryIds: categoryIdsFilter,
+    enabled: isPlannedMode,
+    mode: 'planned',
+    ascending: true,
+  })
+
+  const filteredTransactions = useMemo(() => {
     let list = (txns ?? []) as Transaction[]
 
     if (excludeRecurring) list = list.filter((t) => !t.is_recurring)
@@ -708,34 +872,139 @@ export function Flux() {
     if (accountFilter === 'joint') list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
     if (accountFilter === 'perso') list = list.filter((t) => !(t.account?.name?.toLowerCase().includes('joint') ?? false))
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter((t) => displayTxnLabel(t).toLowerCase().includes(q))
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase()
+      list = list.filter((t) => getTxLabel(t).toLowerCase().includes(q))
     }
 
     return list
-  }, [txns, excludeRecurring, budgetFilter, accountFilter, search])
+  }, [txns, excludeRecurring, budgetFilter, accountFilter, deferredSearch])
 
-  const filteredPlannedOperations = useMemo(() => {
-    if (plannedFlowFilter === 'all') return plannedOperations
-    return plannedOperations.filter((operation) => operation.flow_type === plannedFlowFilter)
-  }, [plannedFlowFilter, plannedOperations])
+  const generalPlannedRows = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase()
+    return plannedGeneralDoneOperations.filter((operation) => {
+      if (!q) return true
+      const text = (operation.label ?? operation.category_name ?? '').toLowerCase()
+      return text.includes(q)
+    })
+  }, [plannedGeneralDoneOperations, deferredSearch])
 
-  const totalAmount = useMemo(() => filtered.reduce((sum, t) => sum + signedAmount(t), 0), [filtered])
+  const plannedOperationsForList = useMemo(() => {
+    let list = plannedModeOperations
 
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    console.log('[planned_operations]', plannedOperations)
-  }, [plannedOperations])
+    if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
+    if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
+
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase()
+      list = list.filter((operation) => {
+        const text = `${operation.label ?? ''} ${operation.category_name ?? ''}`.toLowerCase()
+        return text.includes(q)
+      })
+    }
+
+    return [...list].sort((a, b) => toDateKey(a.planned_date).localeCompare(toDateKey(b.planned_date)))
+  }, [plannedModeOperations, plannedModalityFilter, deferredSearch])
+
+  const plannedDoneSection = useMemo(
+    () => plannedOperationsForList.filter((operation) => operation.planned_status === 'done'),
+    [plannedOperationsForList],
+  )
+  const plannedUpcomingSection = useMemo(
+    () => plannedOperationsForList.filter((operation) => operation.planned_status === 'upcoming'),
+    [plannedOperationsForList],
+  )
+
+  const plannedDoneTotal = useMemo(
+    () => plannedModeOperations.filter((operation) => operation.planned_status === 'done').reduce((sum, operation) => sum + signedPlannedAmount(operation), 0),
+    [plannedModeOperations],
+  )
+  const plannedUpcomingTotal = useMemo(
+    () => plannedModeOperations.filter((operation) => operation.planned_status === 'upcoming').reduce((sum, operation) => sum + signedPlannedAmount(operation), 0),
+    [plannedModeOperations],
+  )
+  const plannedTotal = plannedDoneTotal + plannedUpcomingTotal
+
+  const generalMergedRows = useMemo(() => {
+    type TimelineRow =
+      | { source: 'transaction'; id: string; dateKey: string; transaction: Transaction }
+      | { source: 'planned_operation'; id: string; dateKey: string; planned: PlannedOperationFlowItem }
+
+    const transactionRows: TimelineRow[] = filteredTransactions.map((transaction) => ({
+      source: 'transaction',
+      id: transaction.id,
+      dateKey: toDateKey(transaction.transaction_date),
+      transaction,
+    }))
+
+    const plannedRows: TimelineRow[] = generalPlannedRows.map((planned) => ({
+      source: 'planned_operation',
+      id: `planned-${planned.id}`,
+      dateKey: toDateKey(planned.planned_date),
+      planned,
+    }))
+
+    return [...transactionRows, ...plannedRows].sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+  }, [filteredTransactions, generalPlannedRows])
+
+  const generalTotalAmount = useMemo(() => {
+    const transactionsSum = filteredTransactions.reduce((sum, transaction) => sum + signedAmount(transaction), 0)
+    const plannedSum = generalPlannedRows.reduce((sum, operation) => sum + signedPlannedAmount(operation), 0)
+    return transactionsSum + plannedSum
+  }, [filteredTransactions, generalPlannedRows])
+
+  const heroMainAmount = isPlannedMode ? plannedDoneTotal : generalTotalAmount
+  const listHeaderAmount = isPlannedMode ? plannedTotal : generalTotalAmount
+  const operationsSummaryCount = isPlannedMode ? plannedOperationsForList.length : generalMergedRows.length
+  const isListLoading = isPlannedMode ? isPlannedModeLoading : isTransactionsLoading
+  const plannedLoadError = isPlannedMode ? plannedModeError : generalPlannedError
+  const renderPlannedDate = (date: string, tone: 'default' | 'done' | 'upcoming' = 'default') => (
+    <span
+      style={{
+        position: 'relative',
+        fontSize: 12,
+        fontWeight: 700,
+        color:
+          tone === 'done'
+            ? 'var(--color-success)'
+            : tone === 'upcoming'
+              ? 'var(--primary-700)'
+              : 'var(--neutral-600)',
+        whiteSpace: 'nowrap',
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: -2,
+          bottom: -2,
+          left: -6,
+          right: -3,
+          border:
+            tone === 'done'
+              ? '1px solid color-mix(in oklab, var(--color-success) 44%, var(--neutral-200) 56%)'
+              : tone === 'upcoming'
+                ? '1px solid color-mix(in oklab, var(--primary-500) 34%, var(--neutral-200) 66%)'
+                : '1px solid color-mix(in oklab, var(--primary-400) 28%, var(--neutral-300) 72%)',
+          borderRadius: 'var(--radius-pill)',
+          pointerEvents: 'none',
+        }}
+      />
+      <span style={{ position: 'relative', zIndex: 1 }}>{formatDateLabel(date)}</span>
+    </span>
+  )
 
   useEffect(() => {
     if (detailsTxn) {
-      const updated = filtered.find((t) => t.id === detailsTxn.id)
+      const updated = filteredTransactions.find((t) => t.id === detailsTxn.id)
       if (updated && updated !== detailsTxn) {
         setDetailsTxn(updated)
       }
     }
-  }, [filtered, detailsTxn])
+  }, [filteredTransactions, detailsTxn])
 
   const typeLabel = FLOW_OPTIONS.find((o) => o.value === flow)?.label ?? 'Depenses'
   const periodLabel = PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? 'Mois'
@@ -754,7 +1023,30 @@ export function Flux() {
     setSelectedParentCategoryId(null)
     setSelectedCategoryId(null)
     setCategoryStage('parents')
+    if (flow === 'planned') {
+      setPlannedModalityFilter('all')
+    }
   }, [flow])
+
+  useEffect(() => {
+    if (flow !== 'planned') return
+    if (period === 'month' || period === 'year') return
+    setPeriod('month')
+  }, [flow, period])
+
+  useEffect(() => {
+    if (isPlannedMode) return
+    if (periodMode === 'future') {
+      setPeriodMode('current')
+    }
+  }, [isPlannedMode, periodMode])
+
+  useEffect(() => {
+    if (!isPlannedMode) return
+    if (quickParamPicker === 'fixed' || quickParamPicker === 'account') {
+      setQuickParamPicker(null)
+    }
+  }, [isPlannedMode, quickParamPicker])
 
   useEffect(() => {
     if (!showAdvancedSheet) return
@@ -763,7 +1055,23 @@ export function Flux() {
     setCategoryStage('parents')
   }, [draftFlow, showAdvancedSheet])
 
+  useEffect(() => {
+    if (draftFlow !== 'planned') return
+    if (draftPeriod !== 'month' && draftPeriod !== 'year') {
+      setDraftPeriod('month')
+    }
+    if (draftPeriodMode !== 'current') {
+      setDraftPeriodMode('current')
+    }
+  }, [draftFlow, draftPeriod, draftPeriodMode])
+
   const anySheetOpen = showTypeSheet || showPeriodSheet || showCategorySheet || showHeaderCategorySheet || showAdvancedSheet
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 220)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (!anySheetOpen) return
@@ -798,13 +1106,20 @@ export function Flux() {
     if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.name ?? 'Catégorie'
     return 'Toutes catégories'
   }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
+  const selectedCategoryHeaderLabel = useMemo(
+    () => capitalizeFirst(selectedCategoryLabel),
+    [selectedCategoryLabel],
+  )
   const selectedCategoryIconKey = useMemo(() => {
     if (selectedCategoryId) return categoryById.get(selectedCategoryId)?.icon_key ?? null
     if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.icon_key ?? null
     return null
   }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
 
-  const operationsSummaryLabel = useMemo(() => `${filtered.length} ${resultNoun(flow)}`, [filtered.length, flow])
+  const operationsSummaryLabel = useMemo(
+    () => `${operationsSummaryCount} ${resultNoun(flow)}`,
+    [operationsSummaryCount, flow],
+  )
   const cardTypeValue = useMemo(() => {
     if (typeLabel.toLowerCase() === 'depenses') return 'Dépenses'
     return typeLabel
@@ -824,8 +1139,16 @@ export function Flux() {
   const cardAccountValue = accountFilter === 'all' ? 'Tout' : (accountFilter === 'joint' ? 'Joint' : 'Perso')
   const isTransferType = flow === 'transfer'
   const selectedPeriodHeader = useMemo(() => {
-    const endIso = range.endDate ?? (filtered.length ? filtered[0].transaction_date : todayIso())
-    const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
+    if (isPlannedMode) {
+      return {
+        startLabel: formatDateLabel(plannedModeStartDate),
+        endLabel: formatDateLabel(plannedModeEndDate),
+        text: `Du ${formatDateLabel(plannedModeStartDate)} au ${formatDateLabel(plannedModeEndDate)}`,
+      }
+    }
+
+    const endIso = range.endDate ?? (filteredTransactions.length ? filteredTransactions[0].transaction_date : todayIso())
+    const inferredStart = filteredTransactions.length ? filteredTransactions[filteredTransactions.length - 1].transaction_date : endIso
     const startIso = range.startDate ?? inferredStart
 
     return {
@@ -833,7 +1156,7 @@ export function Flux() {
       endLabel: formatDateLabel(endIso),
       text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)}`,
     }
-  }, [range.endDate, range.startDate, filtered])
+  }, [isPlannedMode, plannedModeEndDate, plannedModeStartDate, range.endDate, range.startDate, filteredTransactions])
 
   const draftTypeLabel = FLOW_OPTIONS.find((o) => o.value === draftFlow)?.label ?? 'Depenses'
   const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
@@ -877,11 +1200,25 @@ export function Flux() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <PageHeader
         title="Flux"
-        rightLabel={selectedCategoryLabel.toLowerCase()}
+        rightSlot={(
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-md)',
+              fontWeight: 'var(--font-weight-bold)',
+              color: 'color-mix(in oklab, var(--neutral-0) 94%, var(--primary-100) 6%)',
+              whiteSpace: 'nowrap',
+              textTransform: 'none',
+            }}
+          >
+            {selectedCategoryHeaderLabel}
+          </p>
+        )}
+        contentOffsetY={3}
         actionIcon={
           selectedCategoryId || selectedParentCategoryId
             ? <CategoryIcon iconKey={selectedCategoryIconKey} label={selectedCategoryLabel} size={30} />
-            : <Search size={24} />
+            : <img src={categoriesHeaderIcon} alt="" width={30} height={30} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}
@@ -908,38 +1245,40 @@ export function Flux() {
               FLUX
             </span>
 
-            <button
-              type="button"
-              aria-label="Planifier une opération"
-              title="Planifier une opération"
-              onClick={() => setShowPlannedOperationModal(true)}
-              style={{
-                position: 'absolute',
-                top: 'var(--space-2)',
-                right: 'var(--space-2)',
-                border: 'none',
-                background: 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: 0,
-                width: 68,
-                height: 68,
-                zIndex: 2,
-              }}
-            >
-              <img
-                src={planifierOperationIcon}
-                alt=""
-                width={64}
-                height={64}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-                aria-hidden="true"
-              />
-            </button>
+            {!isPlannedMode ? (
+              <button
+                type="button"
+                aria-label="Planifier une opération"
+                title="Planifier une opération"
+                onClick={() => setShowPlannedOperationModal(true)}
+                style={{
+                  position: 'absolute',
+                  top: 'var(--space-2)',
+                  right: 'var(--space-2)',
+                  border: 'none',
+                  background: 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                  width: 68,
+                  height: 68,
+                  zIndex: 2,
+                }}
+              >
+                <img
+                  src={planifierOperationIcon}
+                  alt=""
+                  width={64}
+                  height={64}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ display: 'block', objectFit: 'contain' }}
+                  aria-hidden="true"
+                />
+              </button>
+            ) : null}
 
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
@@ -947,9 +1286,32 @@ export function Flux() {
               </p>
             </div>
 
-            <p style={{ margin: '2px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-              {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
-            </p>
+            {isPlannedMode ? (
+              <div style={{ margin: '2px 0 0', minHeight: 50, display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: '100%', display: 'inline-flex', alignItems: 'baseline', justifyContent: 'center', gap: 'clamp(30px, 12vw, 88px)' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'rgba(204,255,228,0.95)', lineHeight: 1.05 }}>
+                      {formatMoneyNoDecimals(plannedDoneTotal)}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.76)', lineHeight: 1 }}>
+                      passées
+                    </span>
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.76)', lineHeight: 1 }}>
+                      À venir
+                    </span>
+                    <span style={{ fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'rgba(224,230,255,0.96)', lineHeight: 1.05 }}>
+                      {formatMoneyNoDecimals(plannedUpcomingTotal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ margin: '2px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                {formatMoneyInteger(heroMainAmount)}
+              </p>
+            )}
 
             <div style={{ marginTop: 0 }}>
               <div style={{ display: 'inline-flex' }}>
@@ -969,7 +1331,7 @@ export function Flux() {
                   options={FLOW_OPTIONS.map((opt) => ({
                     value: opt.value,
                     label: opt.label,
-                    hasSeparator: opt.value === 'all',
+                    hasSeparator: opt.hasSeparator || opt.value === 'all',
                     selected: flow === opt.value,
                     onSelect: () => {
                       setFlow(opt.value)
@@ -982,178 +1344,252 @@ export function Flux() {
 
             <div style={{ margin: 'var(--space-4) 0 var(--space-3)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
-              <div>
-                <FilterDropdown
-                  id="period"
-                  label="Période"
-                  value={cardPeriodValue}
-                  isOpen={quickParamPicker === 'period'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'period' ? null : 'period'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    { value: 'all', label: 'Toute', hasSeparator: true },
-                    { value: 'day', label: 'Jour' },
-                    { value: 'week', label: 'Semaine' },
-                    { value: 'month', label: 'Mois' },
-                    { value: 'year', label: 'Année' },
-                  ].map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                    hasSeparator: option.hasSeparator,
-                    selected: period === option.value,
-                    onSelect: () => {
-                      setPeriod(option.value as PeriodFilter)
-                      closeQuickPicker()
-                    },
-                  }))}
-                />
-              </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isPlannedMode ? 'max-content max-content 1fr auto' : 'repeat(4, minmax(0, 1fr))',
+                gap: 'var(--space-3)',
+                alignItems: 'end',
+              }}
+            >
+                <div>
+                  <FilterDropdown
+                    id="period"
+                    label="Période"
+                    value={cardPeriodValue}
+                    isOpen={quickParamPicker === 'period'}
+                    showMobileOverlay={isMobileViewport}
+                    onToggle={() => setQuickParamPicker((current) => (current === 'period' ? null : 'period'))}
+                    onClose={closeQuickPicker}
+                    heroTone
+                    fitContent
+                    options={(isPlannedMode
+                      ? [
+                          { value: 'month', label: 'Mois' },
+                          { value: 'year', label: 'Année' },
+                        ]
+                      : [
+                          { value: 'all', label: 'Toute', hasSeparator: true },
+                          { value: 'day', label: 'Jour' },
+                          { value: 'week', label: 'Semaine' },
+                          { value: 'month', label: 'Mois' },
+                          { value: 'year', label: 'Année' },
+                        ]).map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                      hasSeparator: 'hasSeparator' in option ? option.hasSeparator : false,
+                      selected: period === option.value,
+                      onSelect: () => {
+                        setPeriod(option.value as PeriodFilter)
+                        closeQuickPicker()
+                      },
+                    }))}
+                  />
+                </div>
 
-              <div>
-                <FilterDropdown
-                  id="modalite"
-                  label="Modalité"
-                  value={periodMode === 'current' ? 'Fixe' : (periodMode === 'rolling' ? 'Glissant' : 'À venir')}
-                  isOpen={quickParamPicker === 'modalite'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'modalite' ? null : 'modalite'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'current',
-                      label: 'Fixe',
-                      selected: periodMode === 'current',
-                      onSelect: () => {
-                        setPeriodMode('current')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'rolling',
-                      label: 'Glissant',
-                      selected: periodMode === 'rolling',
-                      onSelect: () => {
-                        setPeriodMode('rolling')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'future',
-                      label: 'À venir',
-                      selected: periodMode === 'future',
-                      onSelect: () => {
-                        setPeriodMode('future')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
+                <div>
+                  <FilterDropdown
+                    id="modalite"
+                    label={isPlannedMode ? 'Statut' : 'Modalité'}
+                    value={isPlannedMode
+                      ? (plannedModalityFilter === 'done' ? 'Passées' : plannedModalityFilter === 'upcoming' ? 'À venir' : 'Toutes')
+                      : (periodMode === 'rolling' ? 'Glissant' : 'Fixe')}
+                    isOpen={quickParamPicker === 'modalite'}
+                    showMobileOverlay={isMobileViewport}
+                    onToggle={() => setQuickParamPicker((current) => (current === 'modalite' ? null : 'modalite'))}
+                    onClose={closeQuickPicker}
+                    heroTone
+                    fitContent
+                    options={isPlannedMode
+                      ? [
+                          {
+                            value: 'all',
+                            label: 'Toutes',
+                            hasSeparator: true,
+                            selected: plannedModalityFilter === 'all',
+                            onSelect: () => {
+                              setPlannedModalityFilter('all')
+                              closeQuickPicker()
+                            },
+                          },
+                          {
+                            value: 'done',
+                            label: 'Passées',
+                            selected: plannedModalityFilter === 'done',
+                            onSelect: () => {
+                              setPlannedModalityFilter('done')
+                              closeQuickPicker()
+                            },
+                          },
+                          {
+                            value: 'upcoming',
+                            label: 'À venir',
+                            selected: plannedModalityFilter === 'upcoming',
+                            onSelect: () => {
+                              setPlannedModalityFilter('upcoming')
+                              closeQuickPicker()
+                            },
+                          },
+                        ]
+                      : [
+                          {
+                            value: 'current',
+                            label: 'Fixe',
+                            selected: periodMode === 'current',
+                            onSelect: () => {
+                              setPeriodMode('current')
+                              closeQuickPicker()
+                            },
+                          },
+                          {
+                            value: 'rolling',
+                            label: 'Glissant',
+                            selected: periodMode === 'rolling',
+                            onSelect: () => {
+                              setPeriodMode('rolling')
+                              closeQuickPicker()
+                            },
+                          },
+                        ]}
+                  />
+                </div>
 
-              <div>
-                <FilterDropdown
-                  id="fixed"
-                  label="Budget"
-                  value={cardBudgetValue}
-                  isOpen={quickParamPicker === 'fixed'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'fixed' ? null : 'fixed'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'all',
-                      label: 'Tout',
-                      hasSeparator: true,
-                      selected: budgetFilter === 'all',
-                      onSelect: () => {
-                        setBudgetFilter('all')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'variable',
-                      label: 'Variable',
-                      selected: budgetFilter === 'variable',
-                      onSelect: () => {
-                        setBudgetFilter('variable')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'fixed',
-                      label: 'Fixe',
-                      selected: budgetFilter === 'fixed',
-                      onSelect: () => {
-                        setBudgetFilter('fixed')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
+                {!isPlannedMode ? (
+                  <div>
+                    <FilterDropdown
+                      id="fixed"
+                      label="Budget"
+                      value={cardBudgetValue}
+                      isOpen={quickParamPicker === 'fixed'}
+                      showMobileOverlay={isMobileViewport}
+                      onToggle={() => setQuickParamPicker((current) => (current === 'fixed' ? null : 'fixed'))}
+                      onClose={closeQuickPicker}
+                      heroTone
+                      fitContent
+                      options={[
+                        {
+                          value: 'all',
+                          label: 'Tout',
+                          hasSeparator: true,
+                          selected: budgetFilter === 'all',
+                          onSelect: () => {
+                            setBudgetFilter('all')
+                            closeQuickPicker()
+                          },
+                        },
+                        {
+                          value: 'variable',
+                          label: 'Variable',
+                          selected: budgetFilter === 'variable',
+                          onSelect: () => {
+                            setBudgetFilter('variable')
+                            closeQuickPicker()
+                          },
+                        },
+                        {
+                          value: 'fixed',
+                          label: 'Fixe',
+                          selected: budgetFilter === 'fixed',
+                          onSelect: () => {
+                            setBudgetFilter('fixed')
+                            closeQuickPicker()
+                          },
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : null}
 
-              <div>
-                <FilterDropdown
-                  id="account"
-                  label="Compte"
-                  value={cardAccountValue}
-                  isOpen={quickParamPicker === 'account'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'account' ? null : 'account'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'all',
-                      label: 'Tout',
-                      hasSeparator: true,
-                      selected: accountFilter === 'all',
-                      onSelect: () => {
-                        setAccountFilter('all')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'perso',
-                      label: 'Perso',
-                      selected: accountFilter === 'perso',
-                      onSelect: () => {
-                        setAccountFilter('perso')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'joint',
-                      label: 'Joint',
-                      selected: accountFilter === 'joint',
-                      onSelect: () => {
-                        setAccountFilter('joint')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
+                {!isPlannedMode ? (
+                  <div>
+                    <FilterDropdown
+                      id="account"
+                      label="Compte"
+                      value={cardAccountValue}
+                      isOpen={quickParamPicker === 'account'}
+                      showMobileOverlay={isMobileViewport}
+                      onToggle={() => setQuickParamPicker((current) => (current === 'account' ? null : 'account'))}
+                      onClose={closeQuickPicker}
+                      heroTone
+                      fitContent
+                      options={[
+                        {
+                          value: 'all',
+                          label: 'Tout',
+                          hasSeparator: true,
+                          selected: accountFilter === 'all',
+                          onSelect: () => {
+                            setAccountFilter('all')
+                            closeQuickPicker()
+                          },
+                        },
+                        {
+                          value: 'perso',
+                          label: 'Perso',
+                          selected: accountFilter === 'perso',
+                          onSelect: () => {
+                            setAccountFilter('perso')
+                            closeQuickPicker()
+                          },
+                        },
+                        {
+                          value: 'joint',
+                          label: 'Joint',
+                          selected: accountFilter === 'joint',
+                          onSelect: () => {
+                            setAccountFilter('joint')
+                            closeQuickPicker()
+                          },
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Ajouter opération planifiée"
+                    title="Ajouter opération planifiée"
+                    onClick={() => setShowPlannedOperationModal(true)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                      width: 56,
+                      height: 56,
+                      justifySelf: 'end',
+                    }}
+                  >
+                    <img
+                      src={planifierOperationIcon}
+                      alt=""
+                      width={54}
+                      height={54}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ display: 'block', objectFit: 'contain' }}
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
+
             </div>
           </div>
         </div>
       </motion.section>
 
       <section>
-        <div style={{ padding: '0 var(--space-6)' }}>
           <div
             style={{
+              position: 'sticky',
+              top: 'var(--safe-top, 0px)',
+              zIndex: 10,
+              background: 'var(--neutral-0)',
               borderBottom: '1px solid var(--neutral-200)',
-              paddingBottom: 10,
+              padding: 'var(--space-3) var(--space-6) 10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1195,14 +1631,13 @@ export function Flux() {
                 fontSize: 14,
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
-                color: totalAmount > 0 ? 'var(--color-success)' : totalAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                color: listHeaderAmount > 0 ? 'var(--color-success)' : listHeaderAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                 whiteSpace: 'nowrap',
               }}
             >
-              {formatCurrency(totalAmount)}
+              {formatCurrencyRounded(listHeaderAmount)}
             </span>
           </div>
-        </div>
 
         {showSearchInput ? (
           <div style={{ padding: 'var(--space-3) var(--space-6) 0' }}>
@@ -1218,203 +1653,338 @@ export function Flux() {
           </div>
         ) : null}
 
-        {isLoading ? (
+        {isListLoading ? (
           <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>Chargement…</div>
-        ) : filtered.length === 0 ? (
+        ) : isPlannedMode && plannedLoadError ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-500)', textAlign: 'center', padding: 'var(--space-12)' }}>
+            Impossible de charger les opérations planifiées.
+          </motion.div>
+        ) : isPlannedMode ? (
+          plannedOperationsForList.length === 0 ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>
+              Aucune opération planifiée sur cette période.
+            </motion.div>
+          ) : (
+            <div style={{ display: 'grid' }}>
+              {plannedDoneSection.length > 0 ? (
+                <div style={{ borderBottom: plannedUpcomingSection.length > 0 ? '1px solid var(--neutral-150)' : 'none' }}>
+                  <div style={{ padding: 'var(--space-3) var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-success)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Effectuées
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
+                      {plannedDoneSection.length}
+                    </span>
+                  </div>
+                  {plannedDoneSection.map((operation) => {
+                    const amount = signedPlannedAmount(operation)
+                    return (
+                      <div
+                        key={`planned-done-${operation.id}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '42px 1fr auto',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '7px var(--space-6)',
+                        }}
+                      >
+                        {renderPlannedDate(operation.planned_date, 'done')}
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: 'var(--neutral-700)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {operation.label ?? operation.category_name ?? 'Opération planifiée'}
+                        </span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 500,
+                              fontFamily: 'var(--font-mono)',
+                              textAlign: 'right',
+                              whiteSpace: 'nowrap',
+                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                            }}
+                          >
+                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+
+              {plannedUpcomingSection.length > 0 ? (
+                <div>
+                  <div style={{ padding: 'var(--space-3) var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      À venir
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
+                      {plannedUpcomingSection.length}
+                    </span>
+                  </div>
+                  {plannedUpcomingSection.map((operation) => {
+                    const amount = signedPlannedAmount(operation)
+                    return (
+                      <div
+                        key={`planned-upcoming-${operation.id}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '42px 1fr auto',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '7px var(--space-6)',
+                          opacity: 0.84,
+                          background: 'color-mix(in oklab, var(--primary-50) 28%, var(--neutral-0) 72%)',
+                        }}
+                      >
+                        {renderPlannedDate(operation.planned_date, 'upcoming')}
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: 'var(--neutral-700)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {operation.label ?? operation.category_name ?? 'Opération planifiée'}
+                        </span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 500,
+                              fontFamily: 'var(--font-mono)',
+                              textAlign: 'right',
+                              whiteSpace: 'nowrap',
+                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                            }}
+                          >
+                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          )
+        ) : generalMergedRows.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>
             Aucune operation
           </motion.div>
         ) : (
           <div>
-            {filtered.map((t) => {
-              const label = displayTxnLabel(t)
-              const category = displayTxnCategoryName(t)
-              const amount = signedAmount(t)
+            {generalMergedRows.map((row, index) => {
+              const prevRow = index > 0 ? generalMergedRows[index - 1] : null
+              const prevKey = prevRow?.dateKey ?? null
+              const curMonth = row.dateKey.slice(0, 7)
+              const prevMonth = prevKey?.slice(0, 7) ?? null
+              const monthChanged = prevMonth !== curMonth
+              const hasSeparator = monthChanged
 
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setDetailsTxn(t)}
+              let monthRowsCount = 0
+              let monthRowsSum = 0
+              if (monthChanged) {
+                let j = index
+                while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
+                  monthRowsCount++
+                  const r = generalMergedRows[j]
+                  const amt = r.source === 'transaction' ? signedAmount(r.transaction) : signedPlannedAmount(r.planned)
+                  monthRowsSum += amt
+                  j++
+                }
+              }
+
+              const separators = monthChanged && (
+                <div
                   style={{
-                    width: '100%',
-                    border: 'none',
-                    borderBottom: '1px solid var(--neutral-200)',
-                    background: 'transparent',
-                    display: 'grid',
-                    gridTemplateColumns: '42px 26px 1fr auto',
+                    display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: 'var(--space-3) var(--space-6)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'background-color var(--transition-fast)',
+                    padding: '10px var(--space-6) 3px',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                    }}
-                  >
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-                    {formatDateLabel(t.transaction_date)}
-                  </span>
-                  <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CategoryIcon iconKey={t.category?.icon_key ?? null} label={category} size={24} />
-                  </span>
+                >
                   <span
                     style={{
-                      fontSize: 13,
-                      fontWeight: 400,
-                      color: 'var(--neutral-700)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: 'var(--neutral-500)',
+                      letterSpacing: '0.01em',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {label}
+                    {formatMonthLabel(row.dateKey)}
                   </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
                   <span
                     style={{
-                      fontSize: 14,
-                      fontWeight: 400,
-                      fontFamily: 'var(--font-mono)',
-                      textAlign: 'right',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: 'var(--neutral-500)',
+                      letterSpacing: '0.01em',
                       whiteSpace: 'nowrap',
-                      color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
                     }}
                   >
-                    {formatCurrency(amount)}
+                    {formatCurrencyRounded(monthRowsSum)}
                   </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <div style={{ padding: '0 var(--space-6)' }}>
-          <div
-            style={{
-              borderBottom: '1px solid var(--neutral-200)',
-              paddingBottom: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)' }}>
-              Opérations planifiées
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>
-              {filteredPlannedOperations.length}
-            </span>
-          </div>
-
-          <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-            {PLANNED_FLOW_OPTIONS.map((option) => {
-              const selected = plannedFlowFilter === option.value
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setPlannedFlowFilter(option.value)}
-                  style={{
-                    border: selected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                    borderRadius: 'var(--radius-full)',
-                    background: selected ? 'var(--primary-50)' : 'var(--neutral-0)',
-                    color: selected ? 'var(--primary-700)' : 'var(--neutral-700)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {option.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {isPlannedLoading ? (
-          <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>Chargement…</div>
-        ) : filteredPlannedOperations.length === 0 ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>
-            Aucune opération planifiée
-          </motion.div>
-        ) : (
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            {filteredPlannedOperations.map((operation) => {
-              const amount = Math.abs(Number(operation.planned_amount ?? 0))
-              const flowLabel = PLANNED_FLOW_LABELS[operation.flow_type]
-              const impactLabel = PLANNED_BUDGET_IMPACT_LABELS[operation.budget_impact]
-              const recurringLabel = recurringLineLabel(operation)
-              const recurringMonthly = operation.is_recurring && operation.recurrence_frequency === 'monthly'
-              const flowColor = operation.flow_type === 'income'
-                ? 'var(--color-success)'
-                : operation.flow_type === 'expense'
-                  ? 'var(--color-error)'
-                  : operation.flow_type === 'savings'
-                    ? 'var(--viz-a)'
-                    : 'var(--neutral-600)'
-
-              return (
-                <div
-                  key={operation.id}
-                  style={{
-                    borderBottom: '1px solid var(--neutral-200)',
-                    padding: 'var(--space-3) var(--space-6)',
-                    display: 'grid',
-                    gap: 'var(--space-2)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)' }}>
-                      {formatDateLabel(operation.planned_date)}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: flowColor }}>
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                    <span style={{ fontSize: 13, color: 'var(--neutral-800)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {operation.label}
-                    </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: flowColor, border: `1px solid ${flowColor}`, borderRadius: 'var(--radius-full)', padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                      {flowLabel}
-                    </span>
-                  </div>
-
-                  {operation.merchant_name ? (
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-600)' }}>
-                      {`Marchand: ${operation.merchant_name}`}
-                    </p>
-                  ) : null}
-
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Impact budget: ${impactLabel}`}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Récurrent mensuel: ${recurringMonthly ? 'Oui' : 'Non'}`}
-                    </p>
-                    {recurringMonthly ? (
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700 }}>
-                        {recurringLabel}
-                      </p>
-                    ) : null}
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Catégorie: ${operation.category?.name ?? '—'}`}
-                    </p>
-                  </div>
                 </div>
               )
+
+              if (row.source === 'transaction') {
+                const transaction = row.transaction
+                const label = getTxLabel(transaction)
+                const category = displayTxnCategoryName(transaction)
+                const amount = signedAmount(transaction)
+                const isJoint = transaction.account?.name?.toLowerCase().includes('joint') ?? false
+
+                return (
+                  <Fragment key={row.id}>
+                    {separators}
+                    <button
+                      type="button"
+                      onClick={() => setDetailsTxn(transaction)}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'grid',
+                        gridTemplateColumns: '42px 26px 1fr auto',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'background-color var(--transition-fast)',
+                      }}
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 700, color: isJoint ? '#C9A26A' : 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
+                        {formatDateLabel(transaction.transaction_date)}
+                      </span>
+                      <span style={{
+                        width: 26, height: 26,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 400,
+                          color: 'var(--neutral-700)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 400,
+                          fontFamily: 'var(--font-mono)',
+                          textAlign: 'right',
+                          whiteSpace: 'nowrap',
+                          color: (transaction.flow_type === 'transfer' || transaction.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                        }}
+                      >
+                        {formatRowAmount(amount, transaction.flow_type, Number(transaction.amount) || 0)}
+                      </span>
+                    </button>
+                  </Fragment>
+                )
+              }
+
+              const planned = row.planned
+              const amount = signedPlannedAmount(planned)
+              const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
+
+              return (
+                <Fragment key={row.id}>
+                  {separators}
+                  <div
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      display: 'grid',
+                      gridTemplateColumns: '42px 26px 1fr auto',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
+                      {formatDateLabel(planned.planned_date)}
+                    </span>
+                    <span style={{
+                      width: 26, height: 26,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 400,
+                        color: 'var(--neutral-700)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {planned.label ?? categoryName}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 400,
+                        fontFamily: 'var(--font-mono)',
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                        color: (planned.flow_type === 'transfer' || planned.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                      }}
+                    >
+                      {formatRowAmount(amount, planned.flow_type, Number(planned.planned_personal_amount) || 0)}
+                    </span>
+                  </div>
+                </Fragment>
+              )
             })}
+            {!isPlannedMode && isGeneralPlannedLoading ? (
+              <div
+                style={{
+                  padding: 'var(--space-3) var(--space-6)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--neutral-500)',
+                  borderBottom: '1px solid var(--neutral-200)',
+                  background: 'var(--neutral-50)',
+                }}
+              >
+                Chargement des opérations planifiées…
+              </div>
+            ) : null}
           </div>
         )}
       </section>
@@ -1441,8 +2011,10 @@ export function Flux() {
 
       <Sheet open={showPeriodSheet} title="Periode" onClose={() => setShowPeriodSheet(false)}>
         <div style={{ display: 'grid', gap: 8 }}>
-          {PERIOD_OPTIONS.map((opt) => {
-            const supportsMode = ['week', 'month', 'quarter', 'year'].includes(opt.value)
+          {(isPlannedMode
+            ? PERIOD_OPTIONS.filter((opt) => opt.value === 'month' || opt.value === 'year')
+            : PERIOD_OPTIONS).map((opt) => {
+            const supportsMode = !isPlannedMode && ['week', 'month', 'quarter', 'year'].includes(opt.value)
             return (
               <div
                 key={opt.value}
@@ -1519,7 +2091,7 @@ export function Flux() {
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
                 padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
-                maxHeight: '78dvh',
+                maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
@@ -1533,9 +2105,30 @@ export function Flux() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
-                  {rootCategories.map((cat) => (
+                <div style={{ display: 'grid' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2) var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedParentCategoryId(null)
+                        setSelectedCategoryId(null)
+                        setShowHeaderCategorySheet(false)
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '5px 4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 4,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={32} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', lineHeight: 1.08, textAlign: 'center' }}>Toutes</span>
+                    </button>
+                    {orderedHeaderRootCategories.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
@@ -1547,43 +2140,18 @@ export function Flux() {
                       style={{
                         border: 'none',
                         background: 'transparent',
-                        padding: '6px 4px',
+                        padding: '5px 4px',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 5,
+                        gap: 4,
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
+                      <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={32} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'normal', lineHeight: 1.08, textAlign: 'center' }}>{headerCategoryLabel(cat.name)}</span>
                     </button>
-                  ))}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedParentCategoryId(null)
-                        setSelectedCategoryId(null)
-                        setShowHeaderCategorySheet(false)
-                      }}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '6px 4px',
-                        minWidth: 88,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 5,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                    </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1952,60 +2520,84 @@ export function Flux() {
                     </button>
                   </div>
 
-                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {(['all', 'variable', 'fixed'] as const).map(val => {
-                        const label = val === 'all' ? 'Tout' : (val === 'fixed' ? 'Fixe' : 'Variable');
-                        const isSelected = draftBudgetFilter === val;
-                        return (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setDraftBudgetFilter(val)}
-                            style={{
-                              padding: '6px 0',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: isSelected ? 'var(--primary-500)' : '#fff',
-                              color: isSelected ? '#fff' : 'var(--neutral-700)',
-                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-sm)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
+                    <div
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: 'var(--space-3)',
+                        background: 'var(--neutral-50)',
+                        opacity: draftFlow === 'planned' ? 0.45 : 1,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
+                      <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                        {(['all', 'variable', 'fixed'] as const).map(val => {
+                          const label = val === 'all' ? 'Tout' : (val === 'fixed' ? 'Fixe' : 'Variable');
+                          const isSelected = draftBudgetFilter === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => {
+                                if (draftFlow === 'planned') return
+                                setDraftBudgetFilter(val)
+                              }}
+                              disabled={draftFlow === 'planned'}
+                              style={{
+                                padding: '6px 0',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: isSelected ? 'var(--primary-500)' : '#fff',
+                                color: isSelected ? '#fff' : 'var(--neutral-700)',
+                                border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
+                                borderRadius: 'var(--radius-sm)',
+                                cursor: draftFlow === 'planned' ? 'default' : 'pointer'
+                              }}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {(['all', 'perso', 'joint'] as const).map(val => {
-                        const label = val === 'all' ? 'Tout' : (val === 'joint' ? 'Joint' : 'Perso');
-                        const isSelected = draftAccountFilter === val;
-                        return (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setDraftAccountFilter(val)}
-                            style={{
-                              padding: '6px 0',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: isSelected ? 'var(--primary-500)' : '#fff',
-                              color: isSelected ? '#fff' : 'var(--neutral-700)',
-                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-sm)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {label}
-                          </button>
-                        )
+                    <div
+                      style={{
+                        border: '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: 'var(--space-3)',
+                        background: 'var(--neutral-50)',
+                        opacity: draftFlow === 'planned' ? 0.45 : 1,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
+                      <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                        {(['all', 'perso', 'joint'] as const).map(val => {
+                          const label = val === 'all' ? 'Tout' : (val === 'joint' ? 'Joint' : 'Perso');
+                          const isSelected = draftAccountFilter === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => {
+                                if (draftFlow === 'planned') return
+                                setDraftAccountFilter(val)
+                              }}
+                              disabled={draftFlow === 'planned'}
+                              style={{
+                                padding: '6px 0',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: isSelected ? 'var(--primary-500)' : '#fff',
+                                color: isSelected ? '#fff' : 'var(--neutral-700)',
+                                border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
+                                borderRadius: 'var(--radius-sm)',
+                                cursor: draftFlow === 'planned' ? 'default' : 'pointer'
+                              }}
+                            >
+                              {label}
+                            </button>
+                          )
                       })}
                     </div>
                   </div>
@@ -2060,21 +2652,28 @@ export function Flux() {
                         gap: 'var(--space-3)',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <SegmentedToggle
-                          left="Fixe"
-                          right="Glissant"
-                          value={draftPeriodMode === 'current' ? 'left' : 'right'}
-                          onChange={(next) => setDraftPeriodMode(next === 'left' ? 'current' : 'rolling')}
-                        />
-                      </div>
+                      {draftFlow !== 'planned' ? (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <SegmentedToggle
+                            left="Fixe"
+                            right="Glissant"
+                            value={draftPeriodMode === 'current' ? 'left' : 'right'}
+                            onChange={(next) => setDraftPeriodMode(next === 'left' ? 'current' : 'rolling')}
+                          />
+                        </div>
+                      ) : null}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                        {[
-                          { value: 'day', label: 'Jour' },
-                          { value: 'week', label: 'Semaine' },
-                          { value: 'month', label: 'Mois' },
-                          { value: 'year', label: 'Année' },
-                        ].map((option) => (
+                        {(draftFlow === 'planned'
+                          ? [
+                              { value: 'month', label: 'Mois' },
+                              { value: 'year', label: 'Année' },
+                            ]
+                          : [
+                              { value: 'day', label: 'Jour' },
+                              { value: 'week', label: 'Semaine' },
+                              { value: 'month', label: 'Mois' },
+                              { value: 'year', label: 'Année' },
+                            ]).map((option) => (
                           <button
                             key={option.value}
                             type="button"
@@ -2127,7 +2726,7 @@ export function Flux() {
       <TransactionDetailsModal
         transaction={detailsTxn}
         categories={flowCategories ?? []}
-        transactionList={filtered}
+        transactionList={filteredTransactions}
         onNavigate={setDetailsTxn}
         onClose={() => setDetailsTxn(null)}
         showEditControls={true}
@@ -2137,6 +2736,41 @@ export function Flux() {
         open={showPlannedOperationModal}
         onClose={() => setShowPlannedOperationModal(false)}
       />
+
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            key="scroll-top"
+            type="button"
+            aria-label="Revenir en haut"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.12, ease: [0.34, 1.56, 0.64, 1] }}
+            style={{
+              position: 'fixed',
+              bottom: 'calc(var(--nav-height) + 16px)',
+              right: 16,
+              zIndex: 200,
+              width: 44,
+              height: 44,
+              borderRadius: 'var(--radius-full)',
+              border: 'none',
+              background: 'var(--primary-600)',
+              color: 'var(--neutral-0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(91,87,245,0.35)',
+              cursor: 'pointer',
+            }}
+            whileTap={{ scale: 0.9 }}
+          >
+            <ArrowUp size={20} strokeWidth={2.5} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

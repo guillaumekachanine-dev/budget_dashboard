@@ -22,6 +22,9 @@ import {
   getDaysRemainingInMonth,
   getMonthLabel,
   getCategoryColor,
+  formatCurrencyFloored,
+  formatCurrencyAdaptive,
+  getTxLabel,
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -30,41 +33,19 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { normalizeIconKey } from '@/lib/categoryIcons'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
+import { useTrajectoryData } from '@/features/home/hooks/useTrajectoryData'
 import type { PlannedOperationItem } from '@/features/home/types'
 import { budgetDb } from '@/lib/supabaseBudget'
-import { BUCKET_LABELS, BUCKET_COLORS, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
-import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.png";
-import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.png";
+import { BUCKET_LABELS, MONTH_LABELS_SHORT, PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
+import { Annual2026Hero } from '@/features/annual-analysis/components/Annual2026Hero'
+import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
+import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
+import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
-import percolIcon from "@/assets/icons/accounts/amundi_epargne.png";
-import cryptoIcon from "@/assets/icons/accounts/bitcoin.png";
-
-function formatMoneyInteger(amount: number): string {
-  if (!Number.isFinite(amount)) return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(0)
-
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.floor(amount))
-}
-
-function formatMoneyWithDecimals(amount: number): string {
-  if (!Number.isFinite(amount)) return '–'
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
+import percolIcon from "@/assets/icons/accounts/amundi_epargne.webp";
+import cryptoIcon from "@/assets/icons/accounts/bitcoin.webp";
 
 function formatPlannedDateShort(isoDate?: string | null): string {
   if (!isoDate) return '--/--'
@@ -80,36 +61,7 @@ function formatPlannedDateLong(isoDate?: string | null): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function plannedFlowTypeLabel(flowType?: PlannedOperationItem['flow_type']): string {
-  if (flowType === 'expense') return 'Dépense planifiée'
-  if (flowType === 'income') return 'Revenu planifié'
-  if (flowType === 'savings') return 'Épargne planifiée'
-  if (flowType === 'transfer') return 'Transfert planifié'
-  return '—'
-}
 
-function plannedBudgetBucketLabel(bucket?: string | null): string {
-  if (bucket === 'socle_fixe') return 'Socle fixe'
-  if (bucket === 'variable_essentielle') return 'Variable essentielle'
-  if (bucket === 'discretionnaire') return 'Discrétionnaire'
-  if (bucket === 'provision') return 'Provision'
-  if (bucket === 'epargne') return 'Épargne'
-  if (bucket === 'revenu') return 'Revenus'
-  if (bucket === 'hors_pilotage') return 'Hors pilotage'
-  return '—'
-}
-
-function normalizePlannedIconKey(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/['’]/g, '_')
-    .replace(/&/g, 'et')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .toLowerCase()
-}
 
 function plannedOperationIconKey(item: PlannedOperationItem): string | null {
   const candidates: string[] = []
@@ -131,7 +83,7 @@ function plannedOperationIconKey(item: PlannedOperationItem): string | null {
   }
 
   for (const candidate of candidates) {
-    const normalized = normalizePlannedIconKey(candidate)
+    const normalized = normalizeIconKey(candidate)
     if (iconAliases[normalized]) return iconAliases[normalized]
   }
 
@@ -153,7 +105,7 @@ function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDeta
   if (impactsRemainingUseful) {
     return {
       title: 'Impacte le reste utile',
-      text: 'Cette opération est un engagement additionnel : elle n’est pas déjà couverte par le budget du mois.',
+      text: `Cette opération est un engagement additionnel : elle n'est pas déjà couverte par le budget du mois.`,
       showMarker: true,
       amount: Number(item.remaining_useful_impact_amount ?? 0),
     }
@@ -161,8 +113,8 @@ function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDeta
 
   if (item.flow_type === 'savings') {
     return {
-      title: 'N’impacte pas une deuxième fois le reste utile',
-      text: 'Cette opération est une allocation d’épargne déjà prise en compte dans l’épargne prévue du mois.',
+      title: `N'impacte pas une deuxième fois le reste utile`,
+      text: `Cette opération est une allocation d'épargne déjà prise en compte dans l'épargne prévue du mois.`,
       showMarker: false,
       amount: null,
     }
@@ -180,7 +132,7 @@ function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDeta
   if (item.budget_impact === 'already_budgeted') {
     return {
       title: 'Déjà budgétisée',
-      text: 'Cette opération est déjà couverte par le budget du mois. Elle est affichée pour le suivi, mais elle n’est pas retirée une deuxième fois du reste utile.',
+      text: `Cette opération est déjà couverte par le budget du mois. Elle est affichée pour le suivi, mais elle n'est pas retirée une deuxième fois du reste utile.`,
       showMarker: false,
       amount: null,
     }
@@ -188,7 +140,7 @@ function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDeta
 
   return {
     title: 'Information uniquement',
-    text: 'Cette opération est affichée à titre informatif et n’impacte pas le reste utile.',
+    text: `Cette opération est affichée à titre informatif et n'impacte pas le reste utile.`,
     showMarker: false,
     amount: null,
   }
@@ -360,7 +312,7 @@ function DriftCategoryTransactionsModal({
                   categoryTransactions?.map((tx) => {
                     const d = new Date(`${tx.transaction_date}T00:00:00`)
                     const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-                    const label = (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
+                    const label = getTxLabel(tx)
                     return (
                       <button
                         key={tx.id}
@@ -388,7 +340,7 @@ function DriftCategoryTransactionsModal({
                       >
                         <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
-                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoneyInteger(Number(tx.amount))}</span>
+                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
                       </button>
                     )
                   })
@@ -415,11 +367,13 @@ export function Home() {
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: trajectorySummaries } = useBudgetSummaries(trajectoryYear, selectedTrajectoryMonth)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
+  const { data: trajectoryRpc } = useTrajectoryData(trajectoryYear, selectedTrajectoryMonth)
+  const { summary: annual2026Summary, buckets: annual2026Buckets } = useAnnual2026Analysis()
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
-  const trajectoryTotalBudget = trajectorySummaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
+  const trajectoryTotalBudget = trajectoryRpc?.total_budget ?? 0
 
-  const todayIso = now.toISOString().slice(0, 10)
+  const todayDate = now.toISOString().slice(0, 10)
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -438,10 +392,10 @@ export function Home() {
   })
   const trajectoryMonthStart = new Date(trajectoryYear, selectedTrajectoryMonth - 1, 1).toISOString().slice(0, 10)
   const trajectoryMonthEnd = new Date(trajectoryYear, selectedTrajectoryMonth, 0).toISOString().slice(0, 10)
-  const trajectoryDaysInMonth = new Date(trajectoryYear, selectedTrajectoryMonth, 0).getDate()
   const trajectoryIsCurrentMonth = now.getFullYear() === trajectoryYear && now.getMonth() + 1 === selectedTrajectoryMonth
-  const trajectoryDaysElapsed = trajectoryIsCurrentMonth ? now.getDate() : trajectoryDaysInMonth
-  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayIso : trajectoryMonthEnd
+  const trajectoryDaysInMonth = trajectoryRpc?.days_in_month ?? new Date(trajectoryYear, selectedTrajectoryMonth, 0).getDate()
+  const trajectoryDaysElapsed = trajectoryRpc?.days_elapsed ?? (trajectoryIsCurrentMonth ? now.getDate() : trajectoryDaysInMonth)
+  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayDate : trajectoryMonthEnd
   const { data: trajectoryMonthExpenseTxns } = useTransactions({
     startDate: trajectoryMonthStart,
     endDate: trajectoryMonthEnd,
@@ -450,7 +404,7 @@ export function Home() {
   const { data: recurringOperationsRows } = useQuery<RecurringOperationRow[]>({
     queryKey: ['home', 'recurring-operations', trajectoryYear, selectedTrajectoryMonth],
     queryFn: async () => {
-      const { data } = await budgetDb()
+      const { data } = await budgetDb
         .from('recurring_obligations')
         .select('id, due_day, starts_on, ends_on, is_active, recurrence_frequency')
       return (data ?? []) as RecurringOperationRow[]
@@ -478,16 +432,16 @@ export function Home() {
   const realToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso)
+      .filter((t) => t.transaction_date <= todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const plannedFuture = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.is_recurring && t.transaction_date > todayIso)
+      .filter((t) => t.is_recurring && t.transaction_date > todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const fallbackVariableBudget = useMemo(() => {
     const rows = summaries ?? []
@@ -506,30 +460,30 @@ export function Home() {
   const variableSpentToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'variable')
+      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'variable')
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const fixedChargesToDate = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso && t.budget_behavior === 'fixed')
+      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'fixed')
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const savingsContributionsToDate = useMemo(() => {
     const rows = monthSavingsTxns ?? []
     return rows
-      .filter((t) => t.transaction_date <= todayIso)
+      .filter((t) => t.transaction_date <= todayDate)
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthSavingsTxns, todayIso])
+  }, [monthSavingsTxns, todayDate])
 
   const certainUpcomingExpenses = useMemo(() => {
     const rows = monthExpenseTxns ?? []
     return rows
-      .filter((t) => t.transaction_date > todayIso && (t.is_recurring || t.budget_behavior === 'fixed'))
+      .filter((t) => t.transaction_date > todayDate && (t.is_recurring || t.budget_behavior === 'fixed'))
       .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayIso])
+  }, [monthExpenseTxns, todayDate])
 
   const resteUtile = useMemo(() => {
     return Math.max(0, totalBudget - realToDate - plannedFuture)
@@ -563,7 +517,7 @@ export function Home() {
           const categoryTxns = txns
             .filter(t => t.category_id === r.category.id && t.transaction_date <= trajectoryCutoffIso)
             .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-          
+
           let cumul = 0
           for (const t of categoryTxns) {
             cumul += Number(t.amount)
@@ -627,16 +581,6 @@ export function Home() {
     })
   }, [accountEntries])
 
-  useEffect(() => {
-    if (selectedAccountPresetId === 'ldds') {
-      setSelectedAccountPresetId('livret_a')
-      return
-    }
-    const mapped = mapPresetIdToDisplayed(selectedAccountPresetId ?? '')
-    if (mapped !== selectedAccountPresetId) {
-      setSelectedAccountPresetId(mapped)
-    }
-  }, [selectedAccountPresetId])
 
   useEffect(() => {
     if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal && !selectedPlannedOperation) return
@@ -743,18 +687,14 @@ export function Home() {
     () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
     [now],
   )
-  const consumedVariablePct = useMemo(() => {
-    if (variableBudgetMonthly <= 0) return 0
-    return (variableSpentToDate / variableBudgetMonthly) * 100
+  const { consumedVariablePct, consumedVariablePctClamped, consumedVariablePctDisplay } = useMemo(() => {
+    const pct = variableBudgetMonthly <= 0 ? 0 : (variableSpentToDate / variableBudgetMonthly) * 100
+    return {
+      consumedVariablePct: pct,
+      consumedVariablePctClamped: Math.max(0, Math.min(100, pct)),
+      consumedVariablePctDisplay: `${Math.round(pct)}%`,
+    }
   }, [variableBudgetMonthly, variableSpentToDate])
-  const consumedVariablePctClamped = useMemo(
-    () => Math.max(0, Math.min(100, consumedVariablePct)),
-    [consumedVariablePct],
-  )
-  const consumedVariablePctDisplay = useMemo(
-    () => `${Math.round(consumedVariablePct)}%`,
-    [consumedVariablePct],
-  )
   const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
   const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
@@ -781,7 +721,8 @@ export function Home() {
   }, [])
 
   const handleSelectAccountPreset = useCallback((presetId: string) => {
-    setSelectedAccountPresetId(presetId)
+    const normalized = presetId === 'ldds' ? 'livret_a' : mapPresetIdToDisplayed(presetId)
+    setSelectedAccountPresetId(normalized)
     setShowAccountsModal(false)
   }, [])
 
@@ -791,28 +732,25 @@ export function Home() {
 
   useEffect(() => {
     setShowTop5ExpensesInDrift(false)
-  }, [homeInsightsSlide, selectedTrajectoryMonth])
-
-  useEffect(() => {
     setSelectedPlannedDay(null)
-  }, [selectedTrajectoryMonth, homeInsightsSlide])
+  }, [homeInsightsSlide, selectedTrajectoryMonth])
 
   const heroMetrics = useMemo(
     () => [
-      { key: 'reste', label: 'Reste utile', value: formatMoneyInteger(resteUtile) },
-      { key: 'jour', label: 'Budget / jour', value: formatMoneyInteger(budgetParJour) },
-      { key: 'avenir', label: 'Dépenses à venir', value: formatMoneyInteger(plannedFuture) },
-      { key: 'fin', label: 'Fin de mois', value: formatMoneyInteger(previsionFinDeMois) },
+      { key: 'reste', label: 'Reste utile', value: formatCurrencyFloored(resteUtile) },
+      { key: 'jour', label: 'Budget / jour', value: formatCurrencyFloored(budgetParJour) },
+      { key: 'avenir', label: 'Dépenses à venir', value: formatCurrencyFloored(plannedFuture) },
+      { key: 'fin', label: 'Fin de mois', value: formatCurrencyFloored(previsionFinDeMois) },
     ],
     [budgetParJour, plannedFuture, previsionFinDeMois, resteUtile],
   )
 
   const mainCheckingHeroMetrics = useMemo(
     () => [
-      { key: 'variable-budget', label: 'Budget variable', value: formatMoneyInteger(variableBudgetMonthly) },
-      { key: 'variable-spent', label: 'Variable consommé', value: formatMoneyInteger(variableSpentToDate) },
-      { key: 'reste-utile-main', label: 'Reste utile', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
-      { key: 'daily-available', label: 'Disponible / jour', value: formatMoneyInteger(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
+      { key: 'variable-budget', label: 'Budget variable', value: formatCurrencyFloored(variableBudgetMonthly) },
+      { key: 'variable-spent', label: 'Variable consommé', value: formatCurrencyFloored(variableSpentToDate) },
+      { key: 'reste-utile-main', label: 'Reste utile', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
+      { key: 'daily-available', label: 'Disponible / jour', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
     ],
     [mainAccountDailyAvailable, mainAccountResteUtile, variableBudgetMonthly, variableSpentToDate],
   )
@@ -848,14 +786,14 @@ export function Home() {
   const latestSavingsDepositLabel = useMemo(() => {
     if (!isSavingsBooklet) return ''
     if (!latestSavingsDeposit) return 'Aucun versement'
-    return `${formatMoneyInteger(Number(latestSavingsDeposit.amount))} · ${formatDateShort(latestSavingsDeposit.transaction_date)}`
+    return `${formatCurrencyFloored(Number(latestSavingsDeposit.amount))} · ${formatDateShort(latestSavingsDeposit.transaction_date)}`
   }, [isSavingsBooklet, latestSavingsDeposit])
 
   const savingsInterestYtd2026 = useMemo(() => {
     if (!isSavingsBooklet) return 0
     const rows = selectedAccountTxns ?? []
     const hasExplicitInterest = rows.filter((txn) => {
-      if (txn.transaction_date < '2026-01-01' || txn.transaction_date > todayIso) return false
+      if (txn.transaction_date < '2026-01-01' || txn.transaction_date > todayDate) return false
       const label = `${txn.raw_label ?? ''} ${txn.normalized_label ?? ''} ${txn.merchant_name ?? ''}`
       return normalizeLabel(label).includes('interet')
     })
@@ -864,7 +802,7 @@ export function Home() {
     }
     const ytdRatio = Math.max(0, Math.min(1, (now.getMonth() + 1) / 12))
     return selectedBalance * (SAVINGS_INTEREST_RATE_BY_YEAR[2026] ?? 0.015) * ytdRatio
-  }, [isSavingsBooklet, now, selectedAccountTxns, selectedBalance, todayIso])
+  }, [isSavingsBooklet, now, selectedAccountTxns, selectedBalance, todayDate])
 
   const projectedInterest2027 = useMemo(() => {
     if (!isSavingsBooklet) return 0
@@ -876,8 +814,8 @@ export function Home() {
     () => [
       { key: 'statut', label: 'Statut', value: savingsStatusLabel },
       { key: 'versement', label: 'Dernier versement réalisé', value: latestSavingsDepositLabel },
-      { key: 'interets2026', label: 'Intérêts perçus début 2026', value: formatMoneyInteger(savingsInterestYtd2026) },
-      { key: 'projection2027', label: 'Projection intérêt 2027', value: formatMoneyInteger(projectedInterest2027) },
+      { key: 'interets2026', label: 'Intérêts perçus début 2026', value: formatCurrencyFloored(savingsInterestYtd2026) },
+      { key: 'projection2027', label: 'Projection intérêt 2027', value: formatCurrencyFloored(projectedInterest2027) },
     ],
     [latestSavingsDepositLabel, projectedInterest2027, savingsInterestYtd2026, savingsStatusLabel],
   )
@@ -1023,38 +961,79 @@ export function Home() {
     const plannedAmount = plannedOperation
       ? Number(plannedOperation.planned_personal_amount ?? plannedOperation.planned_amount)
       : null
-    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatMoneyWithDecimals(plannedAmount) : '–'
+    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatCurrencyAdaptive(plannedAmount) : '–'
   }, [getPlannedOperationFromDay])
 
   const trajectoryTooltipContent = useCallback((payload: any) => {
     if (!payload.active || !payload.payload?.length) return null
     const day = Number(payload.label)
     const actualValue = payload.payload.find((entry: any) => entry.dataKey === 'actual')?.value
+    const plannedValue = payload.payload.find((entry: any) => entry.dataKey === 'planned')?.value
     const hasPlannedOperation = getPlannedOperationFromDay(day) != null
+    const isOverBudget = actualValue != null && plannedValue != null && Number(actualValue) > Number(plannedValue)
     return (
-      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3, minWidth: 146 }}>
-        <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${day}`}</p>
-        <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${actualValue == null ? '—' : formatMoneyInteger(Number(actualValue))}`}</p>
+      <div style={{
+        background: 'rgba(255,255,255,0.97)',
+        border: '1px solid rgba(200,148,74,0.18)',
+        borderRadius: 14,
+        boxShadow: '0 8px 32px rgba(28,28,58,0.12), 0 2px 8px rgba(200,148,74,0.10)',
+        fontSize: 12,
+        padding: '10px 13px',
+        display: 'grid',
+        gap: 6,
+        minWidth: 156,
+        backdropFilter: 'blur(8px)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #C8944A, #D4A853)',
+            flexShrink: 0,
+            boxShadow: '0 0 6px rgba(200,148,74,0.5)',
+          }} />
+          <p style={{ margin: 0, fontWeight: 700, color: '#2C2A3A', fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{`Jour ${day}`}</p>
+        </div>
+        <div style={{ display: 'grid', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>Réel</p>
+            <p style={{
+              margin: 0,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              fontSize: 13,
+              color: isOverBudget ? '#C8944A' : '#2C2A3A',
+            }}>{actualValue == null ? '—' : formatCurrencyFloored(Number(actualValue))}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>Prévu</p>
+            <p style={{
+              margin: 0,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 500,
+              fontSize: 12,
+              color: '#3B7A8A',
+            }}>{plannedValue == null ? '—' : formatCurrencyFloored(Number(plannedValue))}</p>
+          </div>
+        </div>
         {hasPlannedOperation ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(day)}`}</p>
+          <div style={{ borderTop: '1px solid rgba(200,148,74,0.14)', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>{`Op. : ${plannedAmountLabelForDay(day)}`}</p>
             <button
               type="button"
-              aria-label="Voir le détail de l’opération planifiée"
+              aria-label="Voir le détail de l'opération planifiée"
               onClick={() => openPlannedOperationDetailsFromDay(day)}
               style={{
-                border: '1px solid var(--neutral-200)',
-                background: 'var(--neutral-0)',
-                color: 'var(--neutral-700)',
+                border: '1px solid rgba(200,148,74,0.3)',
+                background: 'rgba(200,148,74,0.06)',
+                color: '#C8944A',
                 borderRadius: 'var(--radius-sm)',
-                width: 30,
-                height: 24,
-                minWidth: 30,
-                minHeight: 24,
-                borderColor: 'var(--neutral-400)',
+                width: 28,
+                height: 22,
+                minWidth: 28,
+                minHeight: 22,
                 padding: 0,
                 cursor: 'pointer',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 800,
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1071,31 +1050,17 @@ export function Home() {
   }, [getPlannedOperationFromDay, openPlannedOperationDetailsFromDay, plannedAmountLabelForDay])
 
   const trajectoryData = useMemo(() => {
-    const txns = trajectoryMonthExpenseTxns ?? []
-    const daily = new Map<number, number>()
-    txns.forEach((t) => {
-      if (t.transaction_date < trajectoryMonthStart || t.transaction_date > trajectoryMonthEnd) return
-      const day = Number(t.transaction_date.slice(8, 10))
-      if (!Number.isFinite(day)) return
-      if (t.transaction_date > trajectoryCutoffIso) return
-      daily.set(day, (daily.get(day) ?? 0) + Number(t.amount))
-    })
-
-    let cumul = 0
-    return Array.from({ length: trajectoryDaysInMonth }, (_, i) => {
-      const day = i + 1
-      cumul += daily.get(day) ?? 0
-      const planned = trajectoryDaysInMonth > 0 ? (trajectoryTotalBudget / trajectoryDaysInMonth) * day : 0
-      return {
-        day,
-        planned,
-        plannedMarker: plannedMarkerDaySet.has(day) ? planned : null,
-        actual: day <= trajectoryDaysElapsed ? cumul : null,
-        overBudget: day <= trajectoryDaysElapsed && cumul > Math.max(0, Number(trajectoryTotalBudget ?? 0)) ? cumul : null,
-        delta: day <= trajectoryDaysElapsed ? cumul - planned : null,
-      }
-    })
-  }, [plannedMarkerDaySet, trajectoryCutoffIso, trajectoryDaysElapsed, trajectoryDaysInMonth, trajectoryMonthEnd, trajectoryMonthExpenseTxns, trajectoryMonthStart, trajectoryTotalBudget])
+    const rpcDays = trajectoryRpc?.days ?? []
+    const budget = trajectoryRpc?.total_budget ?? 0
+    return rpcDays.map((d) => ({
+      day: d.day,
+      planned: d.planned,
+      plannedMarker: plannedMarkerDaySet.has(d.day) ? d.planned : null,
+      actual: d.actual,
+      overBudget: d.actual != null && d.actual > Math.max(0, budget) ? d.actual : null,
+      delta: d.delta,
+    }))
+  }, [trajectoryRpc, plannedMarkerDaySet])
 
   const trajectoryDataByDay = useMemo(() => {
     const map = new Map<number, { planned: number; actual: number | null }>()
@@ -1106,11 +1071,10 @@ export function Home() {
   }, [trajectoryData])
 
   const trajectoryRealToDate = useMemo(() => {
-    const rows = trajectoryMonthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date <= trajectoryCutoffIso)
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [trajectoryCutoffIso, trajectoryMonthExpenseTxns])
+    const days = trajectoryRpc?.days ?? []
+    const last = [...days].reverse().find((d) => d.actual != null)
+    return last?.actual ?? 0
+  }, [trajectoryRpc?.days])
 
   const trajectoryPlannedToDate = useMemo(
     () => trajectoryDaysElapsed > 0 ? (trajectoryTotalBudget / trajectoryDaysInMonth) * trajectoryDaysElapsed : 0,
@@ -1192,8 +1156,8 @@ export function Home() {
     return driftRows.find((r) => r.id === selectedDriftCategoryId) ?? null
   }, [selectedDriftCategoryId, driftRows])
   const selectedDriftCategoryColor = useMemo(
-    () => getCategoryColor(selectedDriftCategoryMeta?.colorToken ?? null, 0),
-    [selectedDriftCategoryMeta?.colorToken],
+    () => getCategoryColor(selectedDriftCategoryMeta?.colorToken ?? null, 0, selectedDriftCategoryMeta?.name),
+    [selectedDriftCategoryMeta?.colorToken, selectedDriftCategoryMeta?.name],
   )
 
   const selectedDriftCategoryTransactions = useMemo(() => {
@@ -1205,7 +1169,7 @@ export function Home() {
   const trajectoryDeltaColor =
     trajectoryDeltaPct == null ? 'var(--neutral-500)' : trajectoryDeltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
   const monthlyBudgetCap = Math.max(0, Number(trajectoryTotalBudget ?? 0))
-  const monthlyBudgetCapLabel = formatMoneyInteger(monthlyBudgetCap)
+  const monthlyBudgetCapLabel = formatCurrencyFloored(monthlyBudgetCap)
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
   const heroPrimaryColor = accountVisualGroup === 'savings'
     ? 'var(--color-success)'
@@ -1267,10 +1231,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-success)',
           metrics: [
-            { key: 'solde-per', label: 'Solde', value: formatMoneyInteger(perBalance) },
+            { key: 'solde-per', label: 'Solde', value: formatCurrencyFloored(perBalance) },
             { key: 'liquidite-per', label: 'Liquidite', value: 'Bloque' },
             { key: 'perf-per', label: 'Performance', value: '+2,3%' },
-            { key: 'simulation-2026-per', label: 'Projection 2026', value: formatMoneyInteger(perBalance + 3000) },
+            { key: 'simulation-2026-per', label: 'Projection 2026', value: formatCurrencyFloored(perBalance + 3000) },
           ],
         },
       ]
@@ -1286,10 +1250,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-pea', label: 'Solde', value: formatMoneyInteger(peaBalance) },
+            { key: 'solde-pea', label: 'Solde', value: formatCurrencyFloored(peaBalance) },
             { key: 'liquidite-pea', label: 'Liquidite', value: 'Disponible' },
             { key: 'perf-pea', label: 'Performance', value: '+8,2%' },
-            { key: 'gain-pea', label: 'Gain realise', value: formatMoneyInteger(peaBalance * 0.082) },
+            { key: 'gain-pea', label: 'Gain realise', value: formatCurrencyFloored(peaBalance * 0.082) },
           ],
         },
         {
@@ -1301,10 +1265,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-percol', label: 'Solde', value: formatMoneyInteger(percolBalance) },
+            { key: 'solde-percol', label: 'Solde', value: formatCurrencyFloored(percolBalance) },
             { key: 'liquidite-percol', label: 'Liquidite', value: 'Bloque' },
             { key: 'perf-percol', label: 'Performance', value: '+1,5%' },
-            { key: 'gain-percol', label: 'Gain realise', value: formatMoneyInteger(percolBalance * 0.015) },
+            { key: 'gain-percol', label: 'Gain realise', value: formatCurrencyFloored(percolBalance * 0.015) },
           ],
         },
         {
@@ -1316,10 +1280,10 @@ export function Home() {
           txns: [],
           color: 'var(--color-warning)',
           metrics: [
-            { key: 'solde-crypto', label: 'Solde', value: formatMoneyInteger(cryptoBalance) },
+            { key: 'solde-crypto', label: 'Solde', value: formatCurrencyFloored(cryptoBalance) },
             { key: 'liquidite-crypto', label: 'Liquidite', value: 'Disponible' },
             { key: 'perf-crypto', label: 'Performance', value: '+45,2%' },
-            { key: 'gain-crypto', label: 'Gain realise', value: formatMoneyInteger(cryptoBalance * 0.452) },
+            { key: 'gain-crypto', label: 'Gain realise', value: formatCurrencyFloored(cryptoBalance * 0.452) },
           ],
         },
       ]
@@ -1374,11 +1338,11 @@ export function Home() {
                   <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
                   <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: `color-mix(in oklab, ${section.color} 58%, var(--neutral-900) 42%)` }}>
-                      {formatMoneyInteger(section.balance)}
+                      {formatCurrencyFloored(section.balance)}
                     </p>
                     {section.ceiling !== null && section.ceilingPct !== null ? (
                       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatMoneyInteger(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
+                        {`Plafond ${formatCurrencyFloored(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
                       </p>
                     ) : null}
                   </div>
@@ -1478,7 +1442,7 @@ export function Home() {
                     lineHeight: 1.1,
                     letterSpacing: '-0.02em',
                   }}>
-                    {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                    {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                   </p>
                   <p style={{
                     margin: '4px 0 0',
@@ -1495,11 +1459,11 @@ export function Home() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', alignItems: 'start' }}>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>variable</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableBudgetMonthly).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(variableBudgetMonthly).replace(/\s+€/, '€')}</p>
                     </div>
                     <div style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>consommé</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(variableSpentToDate).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.9)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(variableSpentToDate).replace(/\s+€/, '€')}</p>
                     </div>
                     <button
                       type="button"
@@ -1508,7 +1472,7 @@ export function Home() {
                       style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
                     >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>reste utile</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(resteUtileDisplay).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(resteUtileDisplay).replace(/\s+€/, '€')}</p>
                     </button>
                     <button
                       type="button"
@@ -1517,7 +1481,7 @@ export function Home() {
                       style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
                     >
                       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>budget/jour</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatMoneyInteger(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'rgba(255,213,80,0.95)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatCurrencyFloored(budgetPerDayDisplay).replace(/\s+€/, '€')}</p>
                     </button>
                   </div>
                 </div>
@@ -1542,11 +1506,11 @@ export function Home() {
                         color: heroAmountColor,
                       }}
                     >
-                      {formatMoneyInteger(selectedAccount?.current_balance ?? 0)}
+                      {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                     </p>
                     {isSavingsBooklet && savingsBookletCeiling ? (
                       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatMoneyInteger(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
+                        {`Plafond ${formatCurrencyFloored(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
                       </p>
                     ) : null}
                   </div>
@@ -1701,16 +1665,16 @@ export function Home() {
               </div>
             </div>
 
-            <div style={{ height: 300 }}>
+            <div style={{ height: 400 }}>
               {isMainCheckingAccount ? (
                 <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
                   <div
                     style={{
                       minHeight: 0,
-                      overflow: 'hidden',
                       borderRadius: 'var(--radius-lg)',
-                      border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-0)',
+                      border: '1px solid rgba(200,148,74,0.14)',
+                      background: 'linear-gradient(160deg, rgba(255,253,248,1) 0%, rgba(255,255,255,1) 60%)',
+                      boxShadow: '0 2px 16px rgba(200,148,74,0.06)',
                     }}
                   >
                     <div
@@ -1722,7 +1686,7 @@ export function Home() {
                         transition: 'transform 420ms ease',
                       }}
                     >
-                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)' }}>
+                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)', paddingBottom: 'var(--space-3)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
                           <div />
                           {!isSavingsBooklet && !isPER && !isPEA ? (
@@ -1734,6 +1698,7 @@ export function Home() {
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart
                             data={trajectoryData}
+                            margin={{ top: 6, right: 4, left: 0, bottom: 0 }}
                             onClick={(state: any) => {
                               const day = Number(state?.activeLabel)
                               if (plannedMarkerDays.includes(day)) {
@@ -1744,47 +1709,94 @@ export function Home() {
                             }}
                           >
                             <defs>
+                              {/* Gradient principal : or chaud → transparent */}
                               <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
-                                <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                                <stop offset="0%" stopColor="#C8944A" stopOpacity={0.28} />
+                                <stop offset="55%" stopColor="#C8944A" stopOpacity={0.08} />
+                                <stop offset="100%" stopColor="#C8944A" stopOpacity={0} />
                               </linearGradient>
+                              {/* Gradient zone dépassement : ambre foncé */}
+                              <linearGradient id="overBudgetFillHome" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#C8944A" stopOpacity={0.22} />
+                                <stop offset="100%" stopColor="#C8944A" stopOpacity={0.06} />
+                              </linearGradient>
+                              {/* Glow sur la ligne actual */}
+                              <filter id="glowAmber" x="-20%" y="-60%" width="140%" height="220%">
+                                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                                <feMerge>
+                                  <feMergeNode in="blur" />
+                                  <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                              </filter>
                             </defs>
-                            <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                            <YAxis
-                              tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                            <CartesianGrid
+                              stroke="rgba(120,118,140,0.10)"
+                              strokeDasharray="0"
+                              vertical={false}
+                              strokeWidth={1}
+                            />
+                            <XAxis
+                              dataKey="day"
+                              tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
                               axisLine={false}
                               tickLine={false}
-                              width={54}
-                              tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                              interval={4}
+                              tickMargin={6}
                             />
-                            <Tooltip content={trajectoryTooltipContent} />
+                            <YAxis
+                              tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
+                              axisLine={false}
+                              tickLine={false}
+                              width={48}
+                              tickFormatter={(value) => formatCurrencyFloored(Number(value))}
+                              tickCount={4}
+                            />
+                            <Tooltip content={trajectoryTooltipContent} cursor={{ stroke: 'rgba(200,148,74,0.25)', strokeWidth: 1.5, strokeDasharray: '3 3' }} />
+                            {/* Ligne budget max : fine, bleue pétrole, très discrète */}
                             <ReferenceLine
                               y={monthlyBudgetCap}
-                              stroke="var(--neutral-400)"
-                              strokeDasharray="3 4"
-                              strokeOpacity={0.55}
+                              stroke="rgba(59,122,138,0.4)"
+                              strokeDasharray="5 4"
+                              strokeWidth={1.2}
                               ifOverflow="extendDomain"
                               label={{
                                 value: monthlyBudgetCapLabel,
                                 position: 'left',
-                                fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
-                                fontSize: 11,
+                                fill: 'rgba(59,122,138,0.75)',
+                                fontSize: 10,
+                                fontFamily: 'var(--font-mono)',
                                 textAnchor: 'end',
-                                dx: -2,
+                                dx: -3,
                               }}
                             />
-                            <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                            {/* Ligne verticale "aujourd'hui" */}
+                            <ReferenceLine
+                              x={trajectoryDaysElapsed}
+                              stroke="rgba(200,148,74,0.20)"
+                              strokeWidth={1.5}
+                              strokeDasharray="2 4"
+                            />
+                            {/* Courbe planifiée : bleu pétrole, tirets fins */}
+                            <Line
+                              type="monotone"
+                              dataKey="planned"
+                              stroke="#3B7A8A"
+                              strokeWidth={1.5}
+                              dot={false}
+                              strokeDasharray="5 4"
+                              strokeOpacity={0.7}
+                            />
+                            {/* Zone dépassement : ambre doux */}
                             <Area
                               type="monotone"
                               dataKey="overBudget"
                               baseValue={monthlyBudgetCap}
                               stroke="none"
-                              fill="var(--color-error)"
-                              fillOpacity={0.14}
+                              fill="url(#overBudgetFillHome)"
                               connectNulls={false}
                               isAnimationActive={false}
                             />
+                            {/* Marqueurs opérations planifiées */}
                             {plannedMarkerDays.map((day) => (
                               <ReferenceDot
                                 key={`planned-segment-${day}`}
@@ -1795,32 +1807,44 @@ export function Home() {
                                 shape={(props: any) => {
                                   const { cx, cy } = props
                                   return (
-                                    <line
-                                      x1={cx}
-                                      y1={cy - 7}
-                                      x2={cx}
-                                      y2={cy + 7}
-                                      stroke="var(--neutral-700)"
-                                      strokeWidth={1.9}
-                                      strokeLinecap="round"
-                                      opacity={0.92}
-                                    />
+                                    <g>
+                                      <line
+                                        x1={cx}
+                                        y1={cy - 8}
+                                        x2={cx}
+                                        y2={cy + 8}
+                                        stroke="rgba(59,122,138,0.6)"
+                                        strokeWidth={1.5}
+                                        strokeLinecap="round"
+                                      />
+                                      <circle cx={cx} cy={cy} r={2.5} fill="#3B7A8A" fillOpacity={0.5} />
+                                    </g>
                                   )
                                 }}
                               />
                             ))}
-                            <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+                            {/* Courbe réelle : or/ambre, trait épais avec glow subtil */}
+                            <Area
+                              type="monotone"
+                              dataKey="actual"
+                              stroke="#C8944A"
+                              strokeWidth={2.5}
+                              fill="url(#actualFillHome)"
+                              dot={false}
+                              connectNulls={false}
+                              activeDot={{ r: 4, fill: '#C8944A', stroke: '#fff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px rgba(200,148,74,0.6))' }}
+                            />
                           </AreaChart>
                         </ResponsiveContainer>
                         {selectedPlannedDay != null && getPlannedOperationFromDay(selectedPlannedDay) ? (
                           <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3 }}>
                             <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
-                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatMoneyInteger(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
+                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatCurrencyFloored(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
                               <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(selectedPlannedDay)}`}</p>
                               <button
                                 type="button"
-                                aria-label="Voir le détail de l’opération planifiée"
+                                aria-label="Voir le détail de l'opération planifiée"
                                 onClick={() => openPlannedOperationDetailsFromDay(selectedPlannedDay)}
                                 style={{
                                   border: '1px solid var(--neutral-200)',
@@ -1882,7 +1906,7 @@ export function Home() {
                                   const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
                                   return (
                                     <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                                      {`#${idx + 1}. ${row.name} - ${formatMoneyInteger(row.spent)} - `}
+                                      {`#${idx + 1}. ${row.name} - ${formatCurrencyFloored(row.spent)} - `}
                                       <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                                         {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
                                       </span>
@@ -1896,7 +1920,7 @@ export function Home() {
                           <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                             {driftRows.map((row) => {
                               const drift = Number(row.driftPct ?? 0)
-                              
+
                               return (
                                 <button
                                   key={row.id}
@@ -1927,10 +1951,10 @@ export function Home() {
                                   }}
                                 >
                                   {/* Date de dépassement */}
-                                  <span style={{ 
-                                    fontSize: 10, 
-                                    color: 'var(--neutral-400)', 
-                                    fontFamily: 'var(--font-mono)', 
+                                  <span style={{
+                                    fontSize: 10,
+                                    color: 'var(--neutral-400)',
+                                    fontFamily: 'var(--font-mono)',
                                     flexShrink: 0,
                                     width: 32,
                                     textAlign: 'left'
@@ -1944,27 +1968,27 @@ export function Home() {
                                   </span>
 
                                   {/* Nom de catégorie */}
-                                  <span style={{ 
-                                    flex: 1, 
-                                    minWidth: 0, 
-                                    overflow: 'hidden', 
-                                    textOverflow: 'ellipsis', 
-                                    whiteSpace: 'nowrap', 
-                                    fontSize: 12, 
-                                    fontWeight: 'var(--font-weight-regular)', 
-                                    color: 'var(--neutral-800)' 
+                                  <span style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    fontSize: 12,
+                                    fontWeight: 'var(--font-weight-regular)',
+                                    color: 'var(--neutral-800)'
                                   }}>
-                                    {`${row.name} - ${formatMoneyInteger(row.spent)}`}
+                                    {`${row.name} - ${formatCurrencyFloored(row.spent)}`}
                                   </span>
 
                                   {/* Drift Percentage */}
-                                  <span style={{ 
-                                    fontSize: 12, 
-                                    fontWeight: 'var(--font-weight-semibold)', 
-                                    color: 'var(--color-error)', 
-                                    fontFamily: 'var(--font-mono)', 
-                                    whiteSpace: 'nowrap', 
-                                    flexShrink: 0 
+                                  <span style={{
+                                    fontSize: 12,
+                                    fontWeight: 'var(--font-weight-semibold)',
+                                    color: 'var(--color-error)',
+                                    fontFamily: 'var(--font-mono)',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0
                                   }}>
                                     +{drift.toFixed(0)}%
                                   </span>
@@ -1989,7 +2013,7 @@ export function Home() {
                                 const dateStr = formatPlannedDateShort(displayDate)
                                 const rawAmount = op.planned_personal_amount ?? op.planned_amount
                                 const hasAmount = Number.isFinite(Number(rawAmount))
-                                const amountStr = hasAmount ? formatMoneyWithDecimals(Number(rawAmount)) : '–'
+                                const amountStr = hasAmount ? formatCurrencyAdaptive(Number(rawAmount)) : '–'
                                 const isAdditionalCommitmentExpense = op.flow_type === 'expense' && op.budget_impact === 'additional_commitment'
                                 const impactsRemainingUseful = isAdditionalCommitmentExpense
                                   && (op.impacts_remaining_useful === true || Number(op.remaining_useful_impact_amount ?? 0) > 0)
@@ -2098,7 +2122,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2108,7 +2132,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Solde modélisé']}
+                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Solde modélisé']}
                       labelFormatter={(label) => `2026 · ${label}`}
                     />
                     <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
@@ -2124,7 +2148,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2134,7 +2158,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number) => [formatMoneyInteger(Number(value)), 'Fonds projetés']}
+                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Fonds projetés']}
                       labelFormatter={(label) => `Année ${label}`}
                     />
                     <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
@@ -2150,7 +2174,7 @@ export function Home() {
                       axisLine={false}
                       tickLine={false}
                       width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
                     />
                     <Tooltip
                       contentStyle={{
@@ -2160,7 +2184,7 @@ export function Home() {
                         boxShadow: 'var(--shadow-sm)',
                         fontSize: 12,
                       }}
-                      formatter={(value: number, name: string) => [formatMoneyInteger(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
+                      formatter={(value: number, name: string) => [formatCurrencyFloored(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
                       labelFormatter={(label) => `Année ${label}`}
                     />
                     <Line type="monotone" dataKey="yearlyInterest" name="Intérêts annuels" stroke="var(--primary-500)" strokeWidth={2.5} dot={false} />
@@ -2169,46 +2193,78 @@ export function Home() {
                 </ResponsiveContainer>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trajectoryData}>
+                  <AreaChart data={trajectoryData} margin={{ top: 6, right: 4, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--primary-500)" stopOpacity={0.22} />
-                        <stop offset="100%" stopColor="var(--primary-500)" stopOpacity={0} />
+                      <linearGradient id="actualFillHomeAlt" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#C8944A" stopOpacity={0.28} />
+                        <stop offset="55%" stopColor="#C8944A" stopOpacity={0.08} />
+                        <stop offset="100%" stopColor="#C8944A" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="overBudgetFillHomeAlt" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#C8944A" stopOpacity={0.22} />
+                        <stop offset="100%" stopColor="#C8944A" stopOpacity={0.06} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
+                    <CartesianGrid
+                      stroke="rgba(120,118,140,0.10)"
+                      strokeDasharray="0"
+                      vertical={false}
+                      strokeWidth={1}
+                    />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
                       axisLine={false}
                       tickLine={false}
-                      width={54}
-                      tickFormatter={(value) => formatMoneyInteger(Number(value))}
+                      interval={4}
+                      tickMargin={6}
                     />
-                    <Tooltip content={trajectoryTooltipContent} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={48}
+                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
+                      tickCount={4}
+                    />
+                    <Tooltip content={trajectoryTooltipContent} cursor={{ stroke: 'rgba(200,148,74,0.25)', strokeWidth: 1.5, strokeDasharray: '3 3' }} />
                     <ReferenceLine
                       y={monthlyBudgetCap}
-                      stroke="var(--neutral-400)"
-                      strokeDasharray="3 4"
-                      strokeOpacity={0.55}
+                      stroke="rgba(59,122,138,0.4)"
+                      strokeDasharray="5 4"
+                      strokeWidth={1.2}
                       ifOverflow="extendDomain"
                       label={{
                         value: monthlyBudgetCapLabel,
                         position: 'left',
-                        fill: 'color-mix(in oklab, var(--color-error) 62%, var(--neutral-500) 38%)',
-                        fontSize: 11,
+                        fill: 'rgba(59,122,138,0.75)',
+                        fontSize: 10,
+                        fontFamily: 'var(--font-mono)',
                         textAnchor: 'end',
-                        dx: -2,
+                        dx: -3,
                       }}
                     />
-                    <Line type="monotone" dataKey="planned" stroke="var(--color-warning)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                    <ReferenceLine
+                      x={trajectoryDaysElapsed}
+                      stroke="rgba(200,148,74,0.20)"
+                      strokeWidth={1.5}
+                      strokeDasharray="2 4"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="planned"
+                      stroke="#3B7A8A"
+                      strokeWidth={1.5}
+                      dot={false}
+                      strokeDasharray="5 4"
+                      strokeOpacity={0.7}
+                    />
                     <Area
                       type="monotone"
                       dataKey="overBudget"
                       baseValue={monthlyBudgetCap}
                       stroke="none"
-                      fill="var(--color-error)"
-                      fillOpacity={0.14}
+                      fill="url(#overBudgetFillHomeAlt)"
                       connectNulls={false}
                       isAnimationActive={false}
                     />
@@ -2222,21 +2278,32 @@ export function Home() {
                         shape={(props: any) => {
                           const { cx, cy } = props
                           return (
-                            <line
-                              x1={cx}
-                              y1={cy - 7}
-                              x2={cx}
-                              y2={cy + 7}
-                              stroke="var(--neutral-700)"
-                              strokeWidth={1.9}
-                              strokeLinecap="round"
-                              opacity={0.92}
-                            />
+                            <g>
+                              <line
+                                x1={cx}
+                                y1={cy - 8}
+                                x2={cx}
+                                y2={cy + 8}
+                                stroke="rgba(59,122,138,0.6)"
+                                strokeWidth={1.5}
+                                strokeLinecap="round"
+                              />
+                              <circle cx={cx} cy={cy} r={2.5} fill="#3B7A8A" fillOpacity={0.5} />
+                            </g>
                           )
                         }}
                       />
                     ))}
-                    <Area type="monotone" dataKey="actual" stroke="var(--primary-500)" strokeWidth={2.3} fill="url(#actualFillHome)" dot={false} connectNulls={false} />
+                    <Area
+                      type="monotone"
+                      dataKey="actual"
+                      stroke="#C8944A"
+                      strokeWidth={2.5}
+                      fill="url(#actualFillHomeAlt)"
+                      dot={false}
+                      connectNulls={false}
+                      activeDot={{ r: 4, fill: '#C8944A', stroke: '#fff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px rgba(200,148,74,0.6))' }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -2250,156 +2317,15 @@ export function Home() {
         </motion.section>
       ) : null}
 
-      {/* ── Pilotage par bucket ─────────────────────────────────────────── */}
-      {isMainCheckingAccount && dailyPayload && dailyPayload.by_bucket.length > 0 ? (
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
+      {/* ── Budget hero 2026 ─────────────────────────────────────────────── */}
+      {isMainCheckingAccount && annual2026Summary && annual2026Buckets.length > 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.18 }}
-          style={{ padding: '0 var(--space-6)' }}
+          transition={{ duration: 0.3, delay: 0.15 }}
         >
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
-            <p style={{ margin: '0 0 var(--space-3)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              Pilotage par bucket
-            </p>
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              {PILOTAGE_BUCKET_ORDER.map((bucketId) => {
-                const row = dailyPayload.by_bucket.find((b) => b.budget_bucket === bucketId)
-                if (!row) return null
-                const pct = row.budget_amount > 0 ? Math.min(100, (row.actual_amount / row.budget_amount) * 100) : 0
-                const isOver = row.variance_amount > 0
-                const barColor = isOver ? 'var(--color-error)' : BUCKET_COLORS[bucketId] ?? 'var(--primary-500)'
-                const label = BUCKET_LABELS[bucketId] ?? bucketId
-                return (
-                  <div
-                    key={bucketId}
-                    style={{
-                      background: 'var(--neutral-0)',
-                      border: '1px solid var(--neutral-200)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: 'var(--space-3)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>{label}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoneyInteger(row.actual_amount)} / {formatMoneyInteger(row.budget_amount)}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: isOver ? 'var(--color-error)' : 'var(--color-success)' }}>
-                          {row.variance_pct != null ? `${isOver ? '+' : ''}${(row.variance_pct * 100).toFixed(0)}%` : '—'}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 'var(--radius-full)', background: barColor, transition: 'width 400ms ease' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                        Reste : {row.remaining_amount >= 0 ? '' : '−'}{formatMoneyInteger(Math.abs(row.remaining_amount))}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>
-                        {row.transaction_count} opération{row.transaction_count > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </motion.section>
-      ) : null}
-
-      {/* ── Écarts par catégorie ────────────────────────────────────────── */}
-      {isMainCheckingAccount && dailyPayload && dailyPayload.by_category.length > 0 ? (
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.22 }}
-          style={{ padding: '0 var(--space-6)' }}
-        >
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
-            <p style={{ margin: '0 0 var(--space-3)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              Écarts par catégorie
-            </p>
-            <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              {[...dailyPayload.by_category]
-                .filter((c) => c.actual_amount > 0 || c.budget_amount > 0)
-                .sort((a, b) => {
-                  if (a.variance_amount > 0 && b.variance_amount <= 0) return -1
-                  if (b.variance_amount > 0 && a.variance_amount <= 0) return 1
-                  if (a.remaining_amount < 0 && b.remaining_amount >= 0) return -1
-                  if (b.remaining_amount < 0 && a.remaining_amount >= 0) return 1
-                  return b.actual_amount - a.actual_amount
-                })
-                .slice(0, 12)
-                .map((cat, idx, arr) => {
-                  const isOver = cat.variance_amount > 0
-                  const bucketLabel = BUCKET_LABELS[cat.budget_bucket] ?? cat.budget_bucket
-                  return (
-                    <div
-                      key={cat.category_id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto',
-                        gap: 'var(--space-2)',
-                        padding: 'var(--space-3)',
-                        borderBottom: idx < arr.length - 1 ? '1px solid var(--neutral-100)' : 'none',
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginBottom: 2 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {cat.category_name}
-                          </span>
-                          {cat.parent_category_name ? (
-                            <span style={{ fontSize: 10, color: 'var(--neutral-400)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              · {cat.parent_category_name}
-                            </span>
-                          ) : null}
-                        </div>
-                        <span style={{
-                          display: 'inline-block',
-                          fontSize: 9,
-                          fontWeight: 700,
-                          color: BUCKET_COLORS[cat.budget_bucket] ?? 'var(--primary-500)',
-                          background: `color-mix(in srgb, ${BUCKET_COLORS[cat.budget_bucket] ?? '#5B57F5'} 10%, transparent)`,
-                          borderRadius: 4,
-                          padding: '1px 5px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}>
-                          {bucketLabel}
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(48px, auto))', gap: 'var(--space-2)', alignItems: 'center', justifyItems: 'end' }}>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Budget</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', fontWeight: 600 }}>{cat.budget_amount > 0 ? formatMoneyInteger(cat.budget_amount) : '—'}</p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Consommé</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', fontWeight: 700 }}>{formatMoneyInteger(cat.actual_amount)}</p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Reste</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: cat.remaining_amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)', fontWeight: 600 }}>
-                            {cat.budget_amount > 0 ? formatMoneyInteger(cat.remaining_amount) : '—'}
-                          </p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Écart</p>
-                          <p style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: isOver ? 'var(--color-error)' : cat.variance_amount < 0 ? 'var(--color-success)' : 'var(--neutral-500)' }}>
-                            {cat.variance_pct != null ? `${isOver ? '+' : ''}${(cat.variance_pct * 100).toFixed(0)}%` : '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-            </div>
-          </div>
-        </motion.section>
+          <Annual2026Hero summary={annual2026Summary} buckets={annual2026Buckets} />
+        </motion.div>
       ) : null}
 
       <AnimatePresence>
@@ -2415,7 +2341,7 @@ export function Home() {
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="Détail de l’opération planifiée"
+              aria-label="Détail de l'opération planifiée"
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -2441,7 +2367,7 @@ export function Home() {
               {(() => {
                 const displayDate = selectedPlannedOperation.occurrence_date ?? selectedPlannedOperation.planned_date
                 const displayAmount = selectedPlannedOperation.planned_personal_amount ?? selectedPlannedOperation.planned_amount
-                const amountText = Number.isFinite(Number(displayAmount)) ? formatMoneyWithDecimals(Number(displayAmount)) : '–'
+                const amountText = Number.isFinite(Number(displayAmount)) ? formatCurrencyAdaptive(Number(displayAmount)) : '–'
                 const categoryLabel = selectedPlannedOperation.parent_category_name && selectedPlannedOperation.category_name
                   ? `${selectedPlannedOperation.parent_category_name} > ${selectedPlannedOperation.category_name}`
                   : (selectedPlannedOperation.category_name ?? 'Non catégorisé')
@@ -2469,7 +2395,7 @@ export function Home() {
                       </div>
                       <button
                         type="button"
-                        aria-label="Fermer le détail de l’opération planifiée"
+                        aria-label="Fermer le détail de l'opération planifiée"
                         onClick={() => setSelectedPlannedOperation(null)}
                         style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                       >
@@ -2489,7 +2415,7 @@ export function Home() {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Type</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedFlowTypeLabel(selectedPlannedOperation.flow_type)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{PLANNED_FLOW_LABELS[selectedPlannedOperation.flow_type] ?? '—'}</span>
                       </div>
                     </div>
 
@@ -2504,7 +2430,7 @@ export function Home() {
                       <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pilotage</p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Bloc de pilotage</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{plannedBudgetBucketLabel(selectedPlannedOperation.budget_bucket)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{BUCKET_LABELS[selectedPlannedOperation.budget_bucket ?? ''] ?? '—'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                         <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Récurrence</span>
@@ -2525,7 +2451,7 @@ export function Home() {
                             + €
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                            {formatMoneyWithDecimals(Math.max(0, Number(impactDetail.amount ?? 0)))}
+                            {formatCurrencyAdaptive(Math.max(0, Number(impactDetail.amount ?? 0)))}
                           </span>
                         </div>
                       ) : null}
@@ -2590,33 +2516,33 @@ export function Home() {
               <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenus encaissés</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(revenueAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(revenueAmountDisplay)}</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Montants protégés
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(fixedBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(fixedBudgetAmountDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(provisionBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(provisionBudgetAmountDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(savingsBudgetAmountDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(savingsBudgetAmountDisplay)}</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Déjà consommé
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(variableEssentialConsumedDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(variableEssentialConsumedDisplay)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatMoneyInteger(discretionaryConsumedDisplay)}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
                 </div>
               </div>
 
@@ -2634,10 +2560,10 @@ export function Home() {
                   Reste utile
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
-                  {formatMoneyInteger(resteUtileDisplay)}
+                  {formatCurrencyFloored(resteUtileDisplay)}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.92)', fontWeight: 700 }}>
-                  {`${formatMoneyInteger(budgetPerDayDisplay)} / jour`}
+                  {`${formatCurrencyFloored(budgetPerDayDisplay)} / jour`}
                 </p>
               </div>
 

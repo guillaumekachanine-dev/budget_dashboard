@@ -2,16 +2,19 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { AddTransactionModal } from '@/components/modals/AddTransactionModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
-import { StatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
+import { useStatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
 
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
 const Budgets = lazy(() => import('@/pages/Budgets').then((module) => ({ default: module.Budgets })))
 const Stats = lazy(() => import('@/pages/Stats').then((module) => ({ default: module.Stats })))
 const Login = lazy(() => import('@/pages/Login').then((module) => ({ default: module.Login })))
+// Lazy-loaded to keep react-hook-form out of the initial bundle (modal is rarely opened on first load)
+const AddTransactionModal = lazy(() =>
+  import('@/components/modals/AddTransactionModal').then((m) => ({ default: m.AddTransactionModal }))
+)
 
 function RouteFallback() {
   return (
@@ -26,14 +29,12 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const location = useLocation()
 
+  useStatsReferenceBootstrap({ userId: user?.id ?? null, enabled: !!user && location.pathname === '/stats' })
+
   useEffect(() => {
     forceUnlockDocumentScroll()
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search])
-
-  useEffect(() => {
-    forceUnlockDocumentScroll()
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('scrollRestoration' in window.history)) return
@@ -71,7 +72,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <StatsReferenceBootstrap userId={user.id} enabled />
 
       <main className="app-main">
         <Suspense fallback={<RouteFallback />}>

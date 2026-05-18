@@ -1,9 +1,7 @@
 import { motion } from 'framer-motion'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { Annual2026Hero } from './Annual2026Hero'
 import { Annual2026BudgetDNA } from './Annual2026BudgetDNA'
 import { Annual2026CategoryRanking, AnnualProjectionCard } from './Annual2026CategoryRanking'
-import { Annual2026MonthlyTable } from './Annual2026MonthlyTable'
 
 export function Annual2026Tab() {
   const {
@@ -13,7 +11,6 @@ export function Annual2026Tab() {
     buckets,
     categories,
     insights,
-    monthlyProfile,
   } = useAnnual2026Analysis()
   void insights
 
@@ -26,7 +23,7 @@ export function Annual2026Tab() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
-      style={{ display: 'grid', gap: 'var(--space-7)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
+      style={{ display: 'grid', gap: 'var(--space-6)', paddingBottom: 'calc(var(--space-8) + 56px)' }}
     >
       {/* Message d'avertissement si données statiques */}
       {error ? (
@@ -51,9 +48,7 @@ export function Annual2026Tab() {
       {/* 1ère partie : Vue d'ensemble - 2026 */}
       {summary && buckets.length > 0 ? (
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-          <Annual2026Hero summary={summary} buckets={buckets} />
           <SectionTitle title="Vue d'ensemble 2026" />
-          <Annual2026MonthlyTable monthlyProfile={monthlyProfile} />
           {categories.length > 0 ? <AnnualProjectionCard categories={categories} /> : null}
         </div>
       ) : null}

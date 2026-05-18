@@ -1,16 +1,14 @@
 import { budgetDb } from '@/lib/supabaseBudget'
-import { asSafeNumber, isValidUuid, resolvePeriodIdByYearMonth } from '@/features/stats/api/_shared'
+import { asSafeNumber, isValidUuid } from '@/features/stats/api/_shared'
 
 export async function getBudgetGlobalVariableForPeriod(
-  periodYear: number,
-  periodMonth: number,
+  periodId: string | null,
 ): Promise<number> {
-  const periodId = await resolvePeriodIdByYearMonth(periodYear, periodMonth)
   if (!isValidUuid(periodId)) {
     return 0
   }
 
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budgets')
     .select('amount')
     .eq('period_id', periodId)
