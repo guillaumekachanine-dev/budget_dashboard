@@ -7,7 +7,7 @@ import { Annual2026BlockMetrics } from '@/features/annual-analysis/components/An
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
 import { useCategoryRolling12mStats } from '@/features/budget/hooks/useCategoryRolling12mStats'
-import { categoryColorFromName, todayIso } from '@/lib/utils'
+import { categoryColorFromName } from '@/lib/utils'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -19,18 +19,6 @@ const DISPLAY_MODES = ['Métriques', 'Historique', 'Flux mensuels'] as const
 type DisplayModeIdx = 0 | 1 | 2
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-function pad2(n: number) { return String(n).padStart(2, '0') }
-
-function getPeriodRange(year: number, month: number) {
-  const now = new Date()
-  const today = todayIso()
-  const startDate = `${year}-${pad2(month)}-01`
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
-  if (isCurrentMonth) return { startDate, endDate: today }
-  const end = new Date(year, month, 0)
-  return { startDate, endDate: `${end.getFullYear()}-${pad2(end.getMonth() + 1)}-${pad2(end.getDate())}` }
-}
 
 // ─── main component ───────────────────────────────────────────────────────────
 
