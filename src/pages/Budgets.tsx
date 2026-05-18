@@ -45,8 +45,9 @@ import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
-import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
-import metriquesBudgetsIcon from '@/assets/icons/app/metriques_budgets.png'
+import enveloppesMensuellesIcon from '@/assets/icons/app/metriques_budgets.png'
+import projectionsAnnuellesIcon from '@/assets/icons/app/budgets_projections.png'
+import rechercheRapideIcon from '@/assets/icons/app/budgets_metriques.png'
 import analyticsIcon from '@/assets/icons/app/analytics.webp'
 import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
 import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
@@ -87,8 +88,8 @@ const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'legacy' | 'metriques'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
 const BUDGETS_TABS: BudgetsTabConfig[] = [
-  { id: 'enveloppes', label: 'Enveloppes', iconSrc: budgetsPeriodIcon },
-  { id: 'projections', label: 'Projections', iconSrc: blockProvisionsIcon },
+  { id: 'enveloppes', label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
+  { id: 'projections', label: 'Projections', iconSrc: projectionsAnnuellesIcon },
   { id: 'analytics', label: 'Analytics', iconSrc: analyticsIcon },
   { id: 'legacy', label: 'Legacy', iconSrc: blockFixeIcon },
 ]
@@ -865,9 +866,33 @@ export function Budgets() {
 
   const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
     setBudgetsTabId('legacy')
+    setSelectedBlockPage(null)
     setSelectedCat(categoryId)
     scrollViewportToTop()
-  }, [setSelectedCat, scrollViewportToTop])
+  }, [setSelectedBlockPage, setSelectedCat, scrollViewportToTop])
+
+  const handleEnveloppesBlockClick = useCallback((blockId: string) => {
+    setBudgetsTabId('legacy')
+    setSelectedCat('all')
+    if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision' || blockId === 'epargne') {
+      setSelectedBlockPage(blockId)
+    }
+    scrollViewportToTop()
+  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
+
+  const handleEnveloppesRevenueClick = useCallback(() => {
+    setBudgetsTabId('legacy')
+    setSelectedCat('all')
+    setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
+    scrollViewportToTop()
+  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
+
+  const handleReturnToEnveloppes = useCallback(() => {
+    setSelectedCat('all')
+    setSelectedBlockPage(null)
+    setBudgetsTabId('enveloppes')
+    scrollViewportToTop()
+  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -2233,7 +2258,7 @@ export function Budgets() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
-        title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Métriques' : activeBudgetsTab.label}
+        title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
         titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
         onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
         contentOffsetY={4}
@@ -2329,7 +2354,7 @@ export function Budgets() {
             <button
               type="button"
               onClick={() => setBudgetsTabId('metriques')}
-              aria-label="Aller aux métriques"
+              aria-label="Aller à la recherche rapide"
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -2342,7 +2367,7 @@ export function Budgets() {
                 minWidth: 'var(--touch-target-min)',
               }}
             >
-              <img src={metriquesBudgetsIcon} alt="Métriques" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} />
+              <img src={rechercheRapideIcon} alt="Recherche rapide" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} />
             </button>
           </div>
         ) : undefined}
@@ -2732,11 +2757,7 @@ export function Budgets() {
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      shouldFocusBlocksSectionRef.current = true
-                      setSelectedBlockPage(null)
-                      setActiveSlide(1)
-                    }}
+                    onClick={handleReturnToEnveloppes}
                     aria-label="Retour"
                     style={{
                       border: 'none',
@@ -2902,11 +2923,7 @@ export function Budgets() {
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedBlockPage(null)
-                      setActiveSlide(1)
-                      scrollViewportToTop()
-                    }}
+                    onClick={handleReturnToEnveloppes}
                     aria-label="Retour"
                     style={{
                       border: 'none',
@@ -3370,11 +3387,7 @@ export function Budgets() {
       {isCategoryMode ? (
         isVoyagesCategoryMode ? (
           <VoyagesFeaturePage
-            onBack={() => {
-              shouldFocusCategoriesSectionRef.current = true
-              setActiveSlide(0)
-              setSelectedCat('all')
-            }}
+            onBack={handleReturnToEnveloppes}
           />
         ) : (
           <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
@@ -3384,11 +3397,7 @@ export function Budgets() {
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <button
                       type="button"
-                      onClick={() => {
-                        shouldFocusCategoriesSectionRef.current = true
-                        setActiveSlide(0)
-                        setSelectedCat('all')
-                      }}
+                      onClick={handleReturnToEnveloppes}
                       aria-label="Retour"
                       style={{
                         border: 'none',
@@ -4669,6 +4678,8 @@ export function Budgets() {
       ) : budgetsTabId === 'enveloppes' ? (
         <EnveloppesTab
           onCategoryClick={handleEnveloppesCategoryClick}
+          onBlockClick={handleEnveloppesBlockClick}
+          onRevenueClick={handleEnveloppesRevenueClick}
         />
       ) : budgetsTabId === 'analytics' ? (
         <BudgetsAnalyticsTab />

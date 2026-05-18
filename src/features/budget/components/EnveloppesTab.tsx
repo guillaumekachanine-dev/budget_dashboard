@@ -11,6 +11,12 @@ import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePaylo
 import type { Category, Transaction } from '@/lib/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow } from '../types'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
+import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
+import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
+import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
+import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
+import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
+import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 
 // ─── local helpers ────────────────────────────────────────────────────────────
 
@@ -81,6 +87,43 @@ const BLOCK_COLORS: Record<string, string> = {
 }
 
 const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'provision', 'epargne']
+const SOCLE_LIST_LABELS: Record<string, string> = {
+  socle_fixe: 'Fixe',
+  variable_essentielle: 'Variable essentielle',
+  discretionnaire: 'Discrétionnaire',
+  provision: 'Provision',
+  epargne: 'Épargne',
+}
+const SOCLE_LIST_ICON_SRC: Record<string, string> = {
+  socle_fixe: blockFixeIcon,
+  variable_essentielle: blockVariableIcon,
+  discretionnaire: blockDiscretionnaireIcon,
+  provision: blockProvisionsIcon,
+  epargne: blockEpargneIcon,
+}
+const SOCLE_LIST_PROGRESS_COLORS: Record<string, string> = {
+  socle_fixe: 'var(--primary-500)',
+  variable_essentielle: '#4CC9F0',
+  discretionnaire: 'var(--color-error)',
+  provision: 'var(--viz-d)',
+  epargne: 'var(--color-warning)',
+}
+const CATEGORY_ORDER_MAP = new Map<string, number>(CATEGORY_DISPLAY_ORDER.map((key, i) => [key, i]))
+const PILOTAGE_BUCKET_ORDER_MAP = new Map<string, number>(PILOTAGE_BUCKETS.map((key, i) => [key, i]))
+
+function sortPieByCategoryOrder(a: PieDatum, b: PieDatum): number {
+  const aRank = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(a.name)) ?? 999
+  const bRank = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(b.name)) ?? 999
+  if (aRank !== bRank) return aRank - bRank
+  return a.name.localeCompare(b.name, 'fr')
+}
+
+function sortPieByBucketOrder(a: PieDatum, b: PieDatum): number {
+  const aRank = PILOTAGE_BUCKET_ORDER_MAP.get(a.id) ?? 999
+  const bRank = PILOTAGE_BUCKET_ORDER_MAP.get(b.id) ?? 999
+  if (aRank !== bRank) return aRank - bRank
+  return a.name.localeCompare(b.name, 'fr')
+}
 
 // ─── sub-components ───────────────────────────────────────────────────────────
 
@@ -191,16 +234,32 @@ interface SubModalProps {
   name: string
   iconKey: string | null
   color: string
-  amount: number
+  consumedAmount: number
   budgetAmount: number
+  headerMetricLabel: 'Consommé' | 'Budgétisé'
+  headerMetricAmount: number
   transactions: Transaction[]
   loading: boolean
   onSelectTransaction: (tx: Transaction) => void
   categoryById: Map<string, Category>
 }
 
-function SubModal({ open, onClose, name, iconKey, color, amount, budgetAmount, transactions, loading, onSelectTransaction, categoryById }: SubModalProps) {
-  const remaining = budgetAmount - amount
+function SubModal({
+  open,
+  onClose,
+  name,
+  iconKey,
+  color,
+  consumedAmount,
+  budgetAmount,
+  headerMetricLabel,
+  headerMetricAmount,
+  transactions,
+  loading,
+  onSelectTransaction,
+  categoryById,
+}: SubModalProps) {
+  const remaining = budgetAmount - consumedAmount
   const remainingLabel = budgetAmount > 0
     ? (remaining >= 0 ? `Restant ${formatCurrencyFloored(remaining)}` : `Dépassé ${formatCurrencyFloored(Math.abs(remaining))}`)
     : null
@@ -239,7 +298,7 @@ function SubModal({ open, onClose, name, iconKey, color, amount, budgetAmount, t
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.82)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>
-                        Consommé {formatCurrencyFloored(amount)}
+                        {headerMetricLabel} {formatCurrencyFloored(headerMetricAmount)}
                       </span>
                       {remainingLabel && (
                         <>
@@ -311,18 +370,16 @@ interface CategoryDetailsSectionProps {
 }
 
 function CategoryDetailsSection({ rows, categoryById, onCategoryClick }: CategoryDetailsSectionProps) {
-  const orderMap = new Map<string, number>(CATEGORY_DISPLAY_ORDER.map((key, i) => [key, i]))
-
   const sorted = useMemo(() => {
     return [...rows]
       .filter((row) => Number(row.budget_amount) > 0 || Number(row.actual_amount) > 0)
       .sort((a, b) => {
-        const ra = orderMap.get(normalizeCategoryLabel(a.parent_category_name)) ?? 999
-        const rb = orderMap.get(normalizeCategoryLabel(b.parent_category_name)) ?? 999
+        const ra = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(a.parent_category_name)) ?? 999
+        const rb = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(b.parent_category_name)) ?? 999
         if (ra !== rb) return ra - rb
         return a.parent_category_name.localeCompare(b.parent_category_name, 'fr')
       })
-  }, [rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rows])
 
   if (sorted.length === 0) return null
 
@@ -359,7 +416,7 @@ function CategoryDetailsSection({ rows, categoryById, onCategoryClick }: Categor
                 display: 'grid',
                 gridTemplateColumns: '44px 1fr',
                 gap: 'var(--space-4)',
-                alignItems: 'start',
+                alignItems: 'center',
                 width: '100%',
                 border: 'none',
                 background: 'transparent',
@@ -372,27 +429,27 @@ function CategoryDetailsSection({ rows, categoryById, onCategoryClick }: Categor
               onMouseLeave={onCategoryClick ? (e) => { e.currentTarget.style.opacity = '1' } : undefined}
             >
               {/* Icon */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <CategoryIcon iconKey={iconKey} label={row.parent_category_name} size={44} />
               </div>
 
               {/* Content */}
-              <div style={{ display: 'grid', gap: 'var(--space-1)', minWidth: 0 }}>
+              <div style={{ display: 'grid', gap: 'var(--space-1)', minWidth: 0, minHeight: 44, alignContent: 'center' }}>
                 {/* Row 1: name + consumed% | restant/dépassé */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'baseline' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {row.parent_category_name}
                     <span style={{ fontWeight: 500, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-xs)' }}>
                       {' '}- {formatCurrencyFloored(actualAmount).replace(/\s+€/, '€')} ({actualPct}%)
                     </span>
                   </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', fontWeight: 700, color: rightColor, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  <p style={{ margin: 0, fontSize: '12px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: rightColor, flexShrink: 0, whiteSpace: 'nowrap' }}>
                     {rightLabel}
                   </p>
                 </div>
 
                 {/* Progress bar */}
-                <div style={{ width: '100%', height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden', marginTop: 3 }}>
                   <div style={{ width: `${progressPct}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: isOverBudget ? 'var(--color-error)' : 'var(--primary-500)', transition: 'width var(--transition-base)' }} />
                 </div>
               </div>
@@ -421,15 +478,28 @@ interface ModalTarget {
   amount: number
   budgetAmount: number
   color: string
+  headerMetricLabel: 'Consommé' | 'Budgétisé'
+  headerMetricAmount: number
+}
+
+interface SocleListRow {
+  id: string
+  label: string
+  budgetAmount: number
+  actualAmount: number
+  color: string
+  iconSrc: string
 }
 
 export interface EnveloppesTabProps {
   onCategoryClick?: (categoryId: string) => void
+  onBlockClick?: (blockId: string) => void
+  onRevenueClick?: () => void
 }
 
 type ViewMode = 'categories' | 'socles'
 
-export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
+export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }: EnveloppesTabProps) {
   const { data: categories = [] } = useCategories()
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
@@ -490,7 +560,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
       payloadByParentCategory
         .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.actual_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
-        .sort((a, b) => b.value - a.value),
+        .sort(sortPieByCategoryOrder),
     [payloadByParentCategory],
   )
 
@@ -499,7 +569,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
       payloadByParentCategory
         .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.budget_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
-        .sort((a, b) => b.value - a.value),
+        .sort(sortPieByCategoryOrder),
     [payloadByParentCategory],
   )
 
@@ -511,7 +581,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
           if (!row || Number(row.actual_amount) <= 0) return []
           return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.actual_amount), color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)' }]
         })
-        .sort((a, b) => b.value - a.value),
+        .sort(sortPieByBucketOrder),
     [payloadByBucket],
   )
 
@@ -523,7 +593,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
           if (!row || Number(row.budget_amount) <= 0) return []
           return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.budget_amount), color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)' }]
         })
-        .sort((a, b) => b.value - a.value),
+        .sort(sortPieByBucketOrder),
     [payloadByBucket],
   )
 
@@ -534,6 +604,35 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
   const budgetTotal = useMemo(() => budgetPieData.reduce((s, d) => s + d.value, 0), [budgetPieData])
 
   const top5 = useMemo(() => realPieData.slice(0, 5), [realPieData])
+  const socleListRows = useMemo<SocleListRow[]>(
+    () =>
+      PILOTAGE_BUCKETS.flatMap((bucket) => {
+        const row = payloadByBucket[bucket]
+        if (!row) return []
+        const budgetAmount = Number(row.budget_amount ?? 0)
+        const actualAmount = Number(row.actual_amount ?? 0)
+        if (budgetAmount <= 0 && actualAmount <= 0) return []
+        return [{
+          id: bucket,
+          label: SOCLE_LIST_LABELS[bucket] ?? (BUCKET_LABELS[bucket] ?? bucket),
+          budgetAmount,
+          actualAmount,
+          color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)',
+          iconSrc: SOCLE_LIST_ICON_SRC[bucket] ?? blockFixeIcon,
+        }]
+      }),
+    [payloadByBucket],
+  )
+  const monthlyCommitmentsTarget = useMemo(
+    () => socleListRows.reduce((sum, row) => sum + row.budgetAmount, 0),
+    [socleListRows],
+  )
+  const revenueBucket = payloadByBucket.revenu ?? null
+  const selectedMonthRevenueAmount = Math.max(0, Number(revenueBucket?.actual_amount ?? 0))
+  const revenueCoveragePct = monthlyCommitmentsTarget > 0 ? (selectedMonthRevenueAmount / monthlyCommitmentsTarget) * 100 : 0
+  const revenueProgressPct = Math.min(100, Math.max(0, Math.round(revenueCoveragePct)))
+  const isRevenueAboveTarget = selectedMonthRevenueAmount > monthlyCommitmentsTarget
+  const revenueSurplusPct = monthlyCommitmentsTarget > 0 ? ((selectedMonthRevenueAmount - monthlyCommitmentsTarget) / monthlyCommitmentsTarget) * 100 : null
 
   // ── transactions for modal ────────────────────────────────────────────────
 
@@ -555,7 +654,14 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
     setSelectedEntry({ id, name, realAmount, budgetAmount, color })
   }
 
-  function handleDonutClick(id: string, name: string, realAmount: number, budgetAmount: number, color: string) {
+  function handleDonutClick(
+    id: string,
+    name: string,
+    realAmount: number,
+    budgetAmount: number,
+    color: string,
+    clickedFrom: 'real' | 'budget',
+  ) {
     selectEntry(id, name, realAmount, budgetAmount, color)
     if (viewMode === 'categories') {
       setModalTarget({
@@ -565,6 +671,8 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
         amount: realAmount,
         budgetAmount,
         color,
+        headerMetricLabel: clickedFrom === 'budget' ? 'Budgétisé' : 'Consommé',
+        headerMetricAmount: clickedFrom === 'budget' ? budgetAmount : realAmount,
       })
     }
   }
@@ -626,6 +734,12 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
   // ── render ────────────────────────────────────────────────────────────────
 
   const monthLabel = `${MONTHS_FR_FULL[month - 1]} ${String(year).slice(2)}`
+  const selectedRealAmountLabel = selectedEntry
+    ? formatCurrencyFloored(selectedEntry.realAmount).replace(/\s+€/g, '€')
+    : ''
+  const selectedBudgetAmountLabel = selectedEntry
+    ? formatCurrencyFloored(selectedEntry.budgetAmount).replace(/\s+€/g, '€')
+    : ''
 
   return (
     <div>
@@ -756,6 +870,18 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
         <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
           Enveloppes budgétaires
         </h2>
+        <p
+          style={{
+            margin: '-6px 0 0',
+            textAlign: 'center',
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 700,
+            color: 'var(--neutral-700)',
+            letterSpacing: '0.01em',
+          }}
+        >
+          mensuelles
+        </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
           <button type="button" onClick={() => setViewMode('categories')} style={{ ...toggleBtnStyle(viewMode === 'categories'), textAlign: 'center' }}>
             Catégories
@@ -780,7 +906,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
             centerLabel="consommé"
             onSliceClick={(id, name, value, color) => {
               const budgetEntry = budgetPieData.find((d) => d.id === id)
-              handleDonutClick(id, name, value, budgetEntry?.value ?? 0, color)
+              handleDonutClick(id, name, value, budgetEntry?.value ?? 0, color, 'real')
             }}
           />
         </div>
@@ -797,7 +923,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
             centerLabel="budgétisés"
             onSliceClick={(id, name, value, color) => {
               const realEntry = realPieData.find((d) => d.id === id)
-              handleDonutClick(id, name, realEntry?.value ?? 0, value, color)
+              handleDonutClick(id, name, realEntry?.value ?? 0, value, color, 'budget')
             }}
           />
         </div>
@@ -822,7 +948,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
                 {selectedEntry.name}
               </p>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.4 }}>
-                {formatCurrencyFloored(selectedEntry.realAmount)}
+                {selectedRealAmountLabel}
               </p>
             </>
           ) : (
@@ -840,8 +966,9 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
                 fontSize: 'var(--font-size-xs)',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
-                color: deltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)',
-                background: deltaPct > 0 ? 'color-mix(in oklab, var(--color-error) 12%, transparent)' : 'color-mix(in oklab, var(--color-success) 12%, transparent)',
+                color: deltaPct > 0 ? '#9F2D2D' : '#1F6E4A',
+                background: deltaPct > 0 ? 'color-mix(in oklab, #9F2D2D 16%, #FFFFFF 84%)' : 'color-mix(in oklab, #1F6E4A 16%, #FFFFFF 84%)',
+                border: '1px solid color-mix(in oklab, var(--neutral-900) 58%, transparent)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '2px 6px',
                 whiteSpace: 'nowrap',
@@ -860,7 +987,7 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
                 {selectedEntry.name}
               </p>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.4 }}>
-                {formatCurrencyFloored(selectedEntry.budgetAmount)}
+                {selectedBudgetAmountLabel}
               </p>
             </>
           ) : (
@@ -950,11 +1077,180 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
       </div>
 
       {/* ── details section ── */}
-      <CategoryDetailsSection
-        rows={payloadByParentCategory}
-        categoryById={categoryById}
-        onCategoryClick={onCategoryClick}
-      />
+      {viewMode === 'categories' ? (
+        <CategoryDetailsSection
+          rows={payloadByParentCategory}
+          categoryById={categoryById}
+          onCategoryClick={onCategoryClick}
+        />
+      ) : (
+        <section style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
+          <h3 style={{ margin: '0 0 var(--space-5) 0', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
+            Répartition par blocs
+          </h3>
+          <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
+            {socleListRows.map((row) => {
+              const consumptionRatio = row.budgetAmount > 0 ? row.actualAmount / row.budgetAmount : 0
+              const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
+              const variance = row.budgetAmount - row.actualAmount
+              const isOverBudget = variance < 0
+              const isSavingsBlock = row.id === 'epargne'
+              const isSavingsPositive = isSavingsBlock && row.actualAmount > 0
+              const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+              const leftMetricLabel = isSavingsBlock ? 'Épargné' : 'Consommé'
+              const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
+              const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+              const rightMetricColor = isSavingsBlock
+                ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
+                : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+              const rightMetricText = isSavingsBlock
+                ? `Reste ${formatCurrencyFloored(variance)}`
+                : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => {
+                    onBlockClick?.(row.id)
+                  }}
+                  style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 'var(--space-5)', minWidth: 0, width: '100%', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                    <span aria-hidden="true" style={{ width: 56, height: 56, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img
+                        src={row.iconSrc}
+                        alt={`Icône bloc ${row.label}`}
+                        width={42}
+                        height={42}
+                        loading="lazy"
+                        decoding="async"
+                        style={{ display: 'block', objectFit: 'contain' }}
+                      />
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {`Socle ${row.label.toLowerCase()}`}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                        {formatCurrencyFloored(row.budgetAmount)}
+                      </p>
+                    </div>
+
+                    <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${progressPct}%`,
+                          height: '100%',
+                          borderRadius: 'var(--radius-pill)',
+                          background: SOCLE_LIST_PROGRESS_COLORS[row.id] ?? row.color,
+                          transition: 'width var(--transition-base)',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: leftMetricColor, fontFamily: 'var(--font-mono)', fontWeight: isSavingsPositive ? 700 : 400 }}>
+                        {leftMetricLabel} {formatCurrencyFloored(row.actualAmount).replace(/\s+€/, '€')} <span style={{ color: leftMetricPctColor }}>({progressPct}%)</span>
+                      </p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: rightMetricColor, fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+                        {rightMetricText}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                onRevenueClick?.()
+              }}
+              style={{
+                marginTop: 'var(--space-3)',
+                paddingTop: 'var(--space-6)',
+                borderTop: '1px solid var(--neutral-300)',
+                display: 'grid',
+                gridTemplateColumns: '56px 1fr',
+                gap: 'var(--space-5)',
+                minWidth: 0,
+                width: '100%',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderBottom: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                textAlign: 'left',
+                paddingLeft: 0,
+                paddingRight: 0,
+                paddingBottom: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                <span aria-hidden="true" style={{ width: 56, height: 56, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img
+                    src={blockRevenusIcon}
+                    alt="Icône bloc Revenus"
+                    width={42}
+                    height={42}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ display: 'block', objectFit: 'contain' }}
+                  />
+                </span>
+              </div>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                  <p style={{ margin: 0, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Socle revenus</span>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      Hors enveloppe dépenses
+                    </span>
+                  </p>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                    {formatCurrencyFloored(selectedMonthRevenueAmount)}
+                  </p>
+                </div>
+
+                <div style={{ width: '100%', height: 'var(--space-2)', borderRadius: 'var(--radius-pill)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${revenueProgressPct}%`,
+                      height: '100%',
+                      borderRadius: 'var(--radius-pill)',
+                      background: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--primary-500)',
+                      transition: 'width var(--transition-base)',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                    {formatCurrencyFloored(selectedMonthRevenueAmount).replace(/\s+€/, '€')} <span style={{ color: 'var(--neutral-500)' }}>({revenueProgressPct}%)</span>
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-xs)',
+                      color: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--neutral-500)',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: isRevenueAboveTarget ? 700 : 400,
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isRevenueAboveTarget
+                      ? `Dépassement +${Math.round(revenueSurplusPct ?? 0)}%`
+                      : `Cible ${formatCurrencyFloored(monthlyCommitmentsTarget)}`}
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ── modals ── */}
       <SubModal
@@ -963,8 +1259,10 @@ export function EnveloppesTab({ onCategoryClick }: EnveloppesTabProps) {
         name={modalTarget?.name ?? ''}
         iconKey={modalTarget?.iconKey ?? null}
         color={modalTarget?.color ?? 'var(--primary-500)'}
-        amount={modalTarget?.amount ?? 0}
+        consumedAmount={modalTarget?.amount ?? 0}
         budgetAmount={modalTarget?.budgetAmount ?? 0}
+        headerMetricLabel={modalTarget?.headerMetricLabel ?? 'Consommé'}
+        headerMetricAmount={modalTarget?.headerMetricAmount ?? 0}
         transactions={modalTransactions}
         loading={loadingModalTx}
         onSelectTransaction={handleSelectTransaction}
