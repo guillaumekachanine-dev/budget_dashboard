@@ -1,29 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronDown } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceDot,
-  ReferenceLine,
-} from 'recharts'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import {
   getCurrentPeriod,
   getDaysRemainingInMonth,
-  getMonthLabel,
   getCategoryColor,
   formatCurrencyFloored,
-  formatCurrencyAdaptive,
   getTxLabel,
 } from '@/lib/utils'
 import type { AccountWithBalance } from '@/lib/types'
@@ -33,116 +18,12 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
-import { normalizeIconKey } from '@/lib/categoryIcons'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
-import { useTrajectoryData } from '@/features/home/hooks/useTrajectoryData'
-import type { PlannedOperationItem } from '@/features/home/types'
-import { budgetDb } from '@/lib/supabaseBudget'
-import { BUCKET_LABELS, MONTH_LABELS_SHORT, PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
 import percolIcon from "@/assets/icons/accounts/amundi_epargne.webp";
 import cryptoIcon from "@/assets/icons/accounts/bitcoin.webp";
-
-function formatPlannedDateShort(isoDate?: string | null): string {
-  if (!isoDate) return '--/--'
-  const date = new Date(`${isoDate}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return '--/--'
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-}
-
-function formatPlannedDateLong(isoDate?: string | null): string {
-  if (!isoDate) return '--/--'
-  const date = new Date(`${isoDate}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return '--/--'
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-
-
-function plannedOperationIconKey(item: PlannedOperationItem): string | null {
-  const candidates: string[] = []
-  if (item.parent_category_name && item.category_name) {
-    candidates.push(`${item.parent_category_name}_${item.category_name}`)
-  }
-  if (item.category_name) candidates.push(item.category_name)
-  if (item.parent_category_name) candidates.push(item.parent_category_name)
-  if (item.label) candidates.push(item.label)
-
-  if (!candidates.length) return null
-
-  const iconAliases: Record<string, string> = {
-    frais_bancaires_impots_frais_bancaires: 'taxes_frais_frais_bancaires',
-    frais_bancaires: 'taxes_frais_frais_bancaires',
-    cotisations_bancaires: 'taxes_frais_frais_bancaires',
-    loyer_credit: 'logement_loyer_credit',
-    virement_loyer: 'logement_loyer_credit',
-  }
-
-  for (const candidate of candidates) {
-    const normalized = normalizeIconKey(candidate)
-    if (iconAliases[normalized]) return iconAliases[normalized]
-  }
-
-  return candidates[0]
-}
-
-type PlannedImpactDetail = {
-  title: string
-  text: string
-  showMarker: boolean
-  amount: number | null
-}
-
-function buildPlannedImpactDetail(item: PlannedOperationItem): PlannedImpactDetail {
-  const isAdditionalCommitmentExpense = item.flow_type === 'expense' && item.budget_impact === 'additional_commitment'
-  const impactsRemainingUseful = isAdditionalCommitmentExpense
-    && (item.impacts_remaining_useful === true || Number(item.remaining_useful_impact_amount ?? 0) > 0)
-
-  if (impactsRemainingUseful) {
-    return {
-      title: 'Impacte le reste utile',
-      text: `Cette opération est un engagement additionnel : elle n'est pas déjà couverte par le budget du mois.`,
-      showMarker: true,
-      amount: Number(item.remaining_useful_impact_amount ?? 0),
-    }
-  }
-
-  if (item.flow_type === 'savings') {
-    return {
-      title: `N'impacte pas une deuxième fois le reste utile`,
-      text: `Cette opération est une allocation d'épargne déjà prise en compte dans l'épargne prévue du mois.`,
-      showMarker: false,
-      amount: null,
-    }
-  }
-
-  if (item.flow_type === 'transfer') {
-    return {
-      title: 'Hors pilotage',
-      text: 'Ce transfert interne est exclu du calcul du reste utile.',
-      showMarker: false,
-      amount: null,
-    }
-  }
-
-  if (item.budget_impact === 'already_budgeted') {
-    return {
-      title: 'Déjà budgétisée',
-      text: `Cette opération est déjà couverte par le budget du mois. Elle est affichée pour le suivi, mais elle n'est pas retirée une deuxième fois du reste utile.`,
-      showMarker: false,
-      amount: null,
-    }
-  }
-
-  return {
-    title: 'Information uniquement',
-    text: `Cette opération est affichée à titre informatif et n'impacte pas le reste utile.`,
-    showMarker: false,
-    amount: null,
-  }
-}
 
 type HomeAccountPreset = {
   id: string
@@ -156,18 +37,6 @@ type HomeAccountPreset = {
 type HomeAccountEntry = {
   preset: HomeAccountPreset
   account: AccountWithBalance | null
-}
-
-type RecurringOperationRow = {
-  id: string
-  due_day?: number | null
-  day_of_month?: number | null
-  operation_day?: number | null
-  planned_day?: number | null
-  starts_on?: string | null
-  ends_on?: string | null
-  is_active?: boolean | null
-  recurrence_frequency?: string | null
 }
 
 type AccountVisualGroup = 'checking' | 'savings' | 'invest'
@@ -240,7 +109,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
   2027: 0.015,
 }
 
-const PROJECTION_SAVINGS_RATE = 0.015
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 
 function DriftCategoryTransactionsModal({
@@ -354,21 +222,12 @@ function DriftCategoryTransactionsModal({
 
 export function Home() {
   const { year, month } = getCurrentPeriod()
-  const trajectoryYear = 2026
   const now = new Date()
-  const maxTrajectoryMonth = now.getFullYear() <= trajectoryYear
-    ? (now.getFullYear() < trajectoryYear ? 12 : now.getMonth() + 1)
-    : 12
-  const [selectedTrajectoryMonth, setSelectedTrajectoryMonth] = useState<number>(Math.min(Math.max(month, 1), maxTrajectoryMonth))
-  const [showTrajectoryMonthMenu, setShowTrajectoryMonthMenu] = useState(false)
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
-  const { data: trajectorySummaries } = useBudgetSummaries(trajectoryYear, selectedTrajectoryMonth)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
-  const { data: trajectoryRpc } = useTrajectoryData(trajectoryYear, selectedTrajectoryMonth)
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
-  const trajectoryTotalBudget = trajectoryRpc?.total_budget ?? 0
 
   const todayDate = now.toISOString().slice(0, 10)
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
@@ -386,27 +245,6 @@ export function Home() {
     startDate: monthStart,
     endDate: monthEnd,
     flowType: 'savings',
-  })
-  const trajectoryMonthStart = new Date(trajectoryYear, selectedTrajectoryMonth - 1, 1).toISOString().slice(0, 10)
-  const trajectoryMonthEnd = new Date(trajectoryYear, selectedTrajectoryMonth, 0).toISOString().slice(0, 10)
-  const trajectoryIsCurrentMonth = now.getFullYear() === trajectoryYear && now.getMonth() + 1 === selectedTrajectoryMonth
-  const trajectoryDaysInMonth = trajectoryRpc?.days_in_month ?? new Date(trajectoryYear, selectedTrajectoryMonth, 0).getDate()
-  const trajectoryDaysElapsed = trajectoryRpc?.days_elapsed ?? (trajectoryIsCurrentMonth ? now.getDate() : trajectoryDaysInMonth)
-  const trajectoryCutoffIso = trajectoryIsCurrentMonth ? todayDate : trajectoryMonthEnd
-  const { data: trajectoryMonthExpenseTxns } = useTransactions({
-    startDate: trajectoryMonthStart,
-    endDate: trajectoryMonthEnd,
-    flowType: 'expense',
-  })
-  const { data: recurringOperationsRows } = useQuery<RecurringOperationRow[]>({
-    queryKey: ['home', 'recurring-operations', trajectoryYear, selectedTrajectoryMonth],
-    queryFn: async () => {
-      const { data } = await budgetDb
-        .from('recurring_obligations')
-        .select('id, due_day, starts_on, ends_on, is_active, recurrence_frequency')
-      return (data ?? []) as RecurringOperationRow[]
-    },
-    staleTime: 60_000,
   })
   const { data: homeBudgetLines } = useQuery<{
     categoryLines: BudgetLineWithCategory[]
@@ -498,23 +336,19 @@ export function Home() {
   }, [daysElapsed, daysInMonth, plannedFuture, realToDate])
 
   const driftCategories = useMemo(() => {
-    const rows = trajectorySummaries ?? []
-    const txns = trajectoryMonthExpenseTxns ?? []
-
+    const rows = summaries ?? []
+    const txns = monthExpenseTxns ?? []
     return rows
       .filter((r) => r.budget_amount > 0)
       .map((r) => {
         const budget = Number(r.budget_amount)
         const spent = Number(r.spent_amount)
         const driftPct = (spent / budget) * 100 - 100
-
-        // Calculer la date de dépassement
         let exceedDateStr = null
         if (driftPct >= 0) {
           const categoryTxns = txns
-            .filter(t => t.category_id === r.category.id && t.transaction_date <= trajectoryCutoffIso)
+            .filter(t => t.category_id === r.category.id && t.transaction_date <= todayDate)
             .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-
           let cumul = 0
           for (const t of categoryTxns) {
             cumul += Number(t.amount)
@@ -525,7 +359,6 @@ export function Home() {
             }
           }
         }
-
         return {
           id: r.category.id,
           name: r.category.name,
@@ -533,13 +366,13 @@ export function Home() {
           colorToken: r.category.color_token,
           spent: r.spent_amount,
           driftPct,
-          exceedDate: exceedDateStr
+          exceedDate: exceedDateStr,
         }
       })
       .filter((r) => r.driftPct >= 0)
       .sort((a, b) => b.driftPct - a.driftPct)
       .slice(0, 6)
-  }, [trajectorySummaries, trajectoryMonthExpenseTxns, trajectoryCutoffIso])
+  }, [summaries, monthExpenseTxns, todayDate])
 
   const accountEntries = useMemo<HomeAccountEntry[]>(() => {
     const source = accounts ?? []
@@ -561,11 +394,8 @@ export function Home() {
   const [showAccountsModal, setShowAccountsModal] = useState(false)
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
-  const [trajectoryLinkError, setTrajectoryLinkError] = useState<string | null>(null)
   const [showTop5ExpensesInDrift, setShowTop5ExpensesInDrift] = useState(false)
-  const [selectedPlannedDay, setSelectedPlannedDay] = useState<number | null>(null)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
-  const [selectedPlannedOperation, setSelectedPlannedOperation] = useState<PlannedOperationItem | null>(null)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -578,11 +408,10 @@ export function Home() {
     })
   }, [accountEntries])
 
-
   useEffect(() => {
-    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal && !selectedPlannedOperation) return
+    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal) return
     return lockDocumentScroll()
-  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal, selectedPlannedOperation])
+  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal])
 
   useEffect(() => {
     if (!showResteUtileModal) return
@@ -592,21 +421,6 @@ export function Home() {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [showResteUtileModal])
-
-  useEffect(() => {
-    if (!selectedPlannedOperation) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedPlannedOperation(null)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [selectedPlannedOperation])
-
-  useEffect(() => {
-    if (!trajectoryLinkError) return
-    const timeoutId = window.setTimeout(() => setTrajectoryLinkError(null), 2200)
-    return () => window.clearTimeout(timeoutId)
-  }, [trajectoryLinkError])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -660,7 +474,6 @@ export function Home() {
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-  const [homeInsightsSlide, setHomeInsightsSlide] = useState<0 | 1 | 2>(0)
 
   const mainAccountResteUtile = useMemo(() => (
     selectedBalance
@@ -722,15 +535,6 @@ export function Home() {
     setSelectedAccountPresetId(normalized)
     setShowAccountsModal(false)
   }, [])
-
-  useEffect(() => {
-    if (!isMainCheckingAccount) setHomeInsightsSlide(0)
-  }, [isMainCheckingAccount])
-
-  useEffect(() => {
-    setShowTop5ExpensesInDrift(false)
-    setSelectedPlannedDay(null)
-  }, [homeInsightsSlide, selectedTrajectoryMonth])
 
   const heroMetrics = useMemo(
     () => [
@@ -852,255 +656,6 @@ export function Home() {
             ? savingsHeroMetrics
             : heroMetrics
 
-  const savingsInterestCurveData = useMemo(() => {
-    if (!isSavingsBooklet) return []
-    const currentYear = now.getFullYear()
-    const firstYear = currentYear - 9
-    const estimatedOpeningBalance = Math.max(0, Number(selectedAccount?.opening_balance ?? selectedBalance * 0.58))
-    const annualContribution = Math.max(0, (selectedBalance - estimatedOpeningBalance) / 10)
-    let capital = estimatedOpeningBalance
-    let cumulativeInterest = 0
-    return Array.from({ length: 10 }, (_, idx) => {
-      const yearValue = firstYear + idx
-      capital += annualContribution
-      const rate = SAVINGS_INTEREST_RATE_BY_YEAR[yearValue] ?? (yearValue <= 2025 ? 0.02 : 0.015)
-      const interest = capital * rate
-      cumulativeInterest += interest
-      capital += interest
-      return {
-        year: String(yearValue),
-        yearlyInterest: interest,
-        cumulativeInterest,
-      }
-    })
-  }, [isSavingsBooklet, now, selectedAccount?.opening_balance, selectedBalance])
-
-  const projectionSavingsData = useMemo(() => {
-    if (!isProjectionSavingsAccount) return []
-
-    const currentYear = new Date().getFullYear()
-    let projectedAmount = Math.max(0, selectedBalance)
-
-    return Array.from({ length: 10 }, (_, index) => {
-      const yearValue = currentYear + index + 1
-      projectedAmount = projectedAmount * (1 + PROJECTION_SAVINGS_RATE)
-      return {
-        year: String(yearValue),
-        projectedFunds: projectedAmount,
-      }
-    })
-  }, [isProjectionSavingsAccount, selectedBalance])
-
-  const plannedTrajectoryItems = useMemo(() => {
-    const rows = recurringOperationsRows ?? []
-    return rows
-      .filter((row) => {
-        const active = row.is_active ?? true
-        if (!active) return false
-        if (row.starts_on && row.starts_on > trajectoryMonthEnd) return false
-        if (row.ends_on && row.ends_on < trajectoryMonthStart) return false
-        return true
-      })
-      .map((row) => {
-        const dueDayCandidates = [
-          row.due_day,
-          row.day_of_month,
-          row.operation_day,
-          row.planned_day,
-        ]
-        const numericDay = dueDayCandidates.find((value) => Number.isFinite(Number(value)))
-        const day = Number(numericDay ?? NaN)
-        return {
-          row,
-          day,
-        }
-      })
-      .filter((item) => Number.isFinite(item.day) && item.day > 0 && item.day <= trajectoryDaysInMonth)
-  }, [recurringOperationsRows, trajectoryDaysInMonth, trajectoryMonthEnd, trajectoryMonthStart])
-
-  const plannedMarkerDays = useMemo(
-    () => Array.from(new Set(plannedTrajectoryItems.map((item) => item.day))).sort((a, b) => a - b),
-    [plannedTrajectoryItems],
-  )
-  const plannedMarkerDaySet = useMemo(() => new Set(plannedMarkerDays), [plannedMarkerDays])
-
-  const plannedOperationItemsByDay = useMemo(() => {
-    const map = new Map<number, PlannedOperationItem[]>()
-      ; (dailyPayload?.planned_operations?.items ?? []).forEach((item) => {
-        const date = item.occurrence_date ?? item.planned_date
-        if (!date) return
-        const day = Number(date.slice(8, 10))
-        if (!Number.isFinite(day) || day <= 0 || day > trajectoryDaysInMonth) return
-        const current = map.get(day) ?? []
-        current.push(item)
-        map.set(day, current)
-      })
-    return map
-  }, [dailyPayload?.planned_operations?.items, trajectoryDaysInMonth])
-
-  const getPlannedOperationFromDay = useCallback((day: number) => {
-    const directMatch = plannedOperationItemsByDay.get(day)?.[0] ?? null
-    if (directMatch) return directMatch
-    return (dailyPayload?.planned_operations?.items ?? []).find((item) => Number(item.recurrence_day_of_month ?? NaN) === day) ?? null
-  }, [dailyPayload?.planned_operations?.items, plannedOperationItemsByDay])
-
-  const openPlannedOperationDetailsFromDay = useCallback((day: number) => {
-    const plannedOperation = getPlannedOperationFromDay(day)
-    if (!plannedOperation) {
-      setTrajectoryLinkError('Détail indisponible pour cette opération planifiée.')
-      return
-    }
-    setSelectedPlannedOperation(plannedOperation)
-  }, [getPlannedOperationFromDay])
-
-  const plannedAmountLabelForDay = useCallback((day: number) => {
-    const plannedOperation = getPlannedOperationFromDay(day)
-    const plannedAmount = plannedOperation
-      ? Number(plannedOperation.planned_personal_amount ?? plannedOperation.planned_amount)
-      : null
-    return plannedAmount != null && Number.isFinite(plannedAmount) ? formatCurrencyAdaptive(plannedAmount) : '–'
-  }, [getPlannedOperationFromDay])
-
-  const trajectoryTooltipContent = useCallback((payload: any) => {
-    if (!payload.active || !payload.payload?.length) return null
-    const day = Number(payload.label)
-    const actualValue = payload.payload.find((entry: any) => entry.dataKey === 'actual')?.value
-    const plannedValue = payload.payload.find((entry: any) => entry.dataKey === 'planned')?.value
-    const hasPlannedOperation = getPlannedOperationFromDay(day) != null
-    const isOverBudget = actualValue != null && plannedValue != null && Number(actualValue) > Number(plannedValue)
-    return (
-      <div style={{
-        background: 'rgba(255,255,255,0.97)',
-        border: '1px solid rgba(200,148,74,0.18)',
-        borderRadius: 14,
-        boxShadow: '0 8px 32px rgba(28,28,58,0.12), 0 2px 8px rgba(200,148,74,0.10)',
-        fontSize: 12,
-        padding: '10px 13px',
-        display: 'grid',
-        gap: 6,
-        minWidth: 156,
-        backdropFilter: 'blur(8px)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #C8944A, #D4A853)',
-            flexShrink: 0,
-            boxShadow: '0 0 6px rgba(200,148,74,0.5)',
-          }} />
-          <p style={{ margin: 0, fontWeight: 700, color: '#2C2A3A', fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{`Jour ${day}`}</p>
-        </div>
-        <div style={{ display: 'grid', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>Réel</p>
-            <p style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 700,
-              fontSize: 13,
-              color: isOverBudget ? '#C8944A' : '#2C2A3A',
-            }}>{actualValue == null ? '—' : formatCurrencyFloored(Number(actualValue))}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>Prévu</p>
-            <p style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 500,
-              fontSize: 12,
-              color: '#3B7A8A',
-            }}>{plannedValue == null ? '—' : formatCurrencyFloored(Number(plannedValue))}</p>
-          </div>
-        </div>
-        {hasPlannedOperation ? (
-          <div style={{ borderTop: '1px solid rgba(200,148,74,0.14)', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, color: '#7A7A8C', fontSize: 11 }}>{`Op. : ${plannedAmountLabelForDay(day)}`}</p>
-            <button
-              type="button"
-              aria-label="Voir le détail de l'opération planifiée"
-              onClick={() => openPlannedOperationDetailsFromDay(day)}
-              style={{
-                border: '1px solid rgba(200,148,74,0.3)',
-                background: 'rgba(200,148,74,0.06)',
-                color: '#C8944A',
-                borderRadius: 'var(--radius-sm)',
-                width: 28,
-                height: 22,
-                minWidth: 28,
-                minHeight: 22,
-                padding: 0,
-                cursor: 'pointer',
-                fontSize: 11,
-                fontWeight: 800,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: 1,
-              }}
-            >
-              ↗
-            </button>
-          </div>
-        ) : null}
-      </div>
-    )
-  }, [getPlannedOperationFromDay, openPlannedOperationDetailsFromDay, plannedAmountLabelForDay])
-
-  const trajectoryData = useMemo(() => {
-    const rpcDays = trajectoryRpc?.days ?? []
-    const budget = trajectoryRpc?.total_budget ?? 0
-    return rpcDays.map((d) => ({
-      day: d.day,
-      planned: d.planned,
-      plannedMarker: plannedMarkerDaySet.has(d.day) ? d.planned : null,
-      actual: d.actual,
-      overBudget: d.actual != null && d.actual > Math.max(0, budget) ? d.actual : null,
-      delta: d.delta,
-    }))
-  }, [trajectoryRpc, plannedMarkerDaySet])
-
-  const trajectoryDataByDay = useMemo(() => {
-    const map = new Map<number, { planned: number; actual: number | null }>()
-    trajectoryData.forEach((row) => {
-      map.set(Number(row.day), { planned: Number(row.planned), actual: row.actual == null ? null : Number(row.actual) })
-    })
-    return map
-  }, [trajectoryData])
-
-  const trajectoryRealToDate = useMemo(() => {
-    const days = trajectoryRpc?.days ?? []
-    const last = [...days].reverse().find((d) => d.actual != null)
-    return last?.actual ?? 0
-  }, [trajectoryRpc?.days])
-
-  const trajectoryPlannedToDate = useMemo(
-    () => trajectoryDaysElapsed > 0 ? (trajectoryTotalBudget / trajectoryDaysInMonth) * trajectoryDaysElapsed : 0,
-    [trajectoryDaysElapsed, trajectoryDaysInMonth, trajectoryTotalBudget],
-  )
-
-  const trajectoryDeltaPct = useMemo(() => {
-    if (trajectoryPlannedToDate <= 0) return null
-    return ((trajectoryRealToDate - trajectoryPlannedToDate) / trajectoryPlannedToDate) * 100
-  }, [trajectoryPlannedToDate, trajectoryRealToDate])
-
-  const perProjection2026Data = useMemo(() => {
-    if (!isPER) return []
-
-    let modeledBalance = Math.max(0, Number(selectedAccount?.opening_balance ?? (selectedBalance - 3000)))
-    const contributionByMonth = new Set([6, 10, 12])
-
-    return MONTH_LABELS_SHORT.map((label, index) => {
-      const monthNumber = index + 1
-      if (contributionByMonth.has(monthNumber)) {
-        modeledBalance += 1000
-      }
-
-      return {
-        month: label,
-        balance: modeledBalance,
-      }
-    })
-  }, [isPER, selectedAccount?.opening_balance, selectedBalance])
 
   const driftRows = useMemo(
     () =>
@@ -1117,14 +672,14 @@ export function Home() {
   )
 
   const top5ExpenseRows = useMemo(() => {
-    const rows = trajectoryMonthExpenseTxns ?? []
+    const rows = monthExpenseTxns ?? []
     const categoryNameById = new Map<string, string>()
-      ; (trajectorySummaries ?? []).forEach((summary) => {
-        categoryNameById.set(summary.category.id, summary.category.name)
-      })
+    ;(summaries ?? []).forEach((summary) => {
+      categoryNameById.set(summary.category.id, summary.category.name)
+    })
     const spentByCategory = new Map<string, { id: string; name: string; spent: number }>()
     rows.forEach((txn) => {
-      if (txn.transaction_date > trajectoryCutoffIso || !txn.category_id) return
+      if (txn.transaction_date > todayDate || !txn.category_id) return
       const current = spentByCategory.get(txn.category_id)
       spentByCategory.set(txn.category_id, {
         id: txn.category_id,
@@ -1132,12 +687,10 @@ export function Home() {
         spent: (current?.spent ?? 0) + Number(txn.amount),
       })
     })
-
     const budgetsByCategory = new Map<string, number>()
-      ; (trajectorySummaries ?? []).forEach((summary) => {
-        budgetsByCategory.set(summary.category.id, Number(summary.budget_amount))
-      })
-
+    ;(summaries ?? []).forEach((summary) => {
+      budgetsByCategory.set(summary.category.id, Number(summary.budget_amount))
+    })
     return Array.from(spentByCategory.values())
       .sort((a, b) => b.spent - a.spent)
       .slice(0, 5)
@@ -1146,7 +699,7 @@ export function Home() {
         const driftPct = budget > 0 ? ((row.spent - budget) / budget) * 100 : 0
         return { ...row, driftPct }
       })
-  }, [trajectoryCutoffIso, trajectoryMonthExpenseTxns, trajectorySummaries])
+  }, [monthExpenseTxns, summaries, todayDate])
 
   const selectedDriftCategoryMeta = useMemo(() => {
     if (!selectedDriftCategoryId) return null
@@ -1159,14 +712,10 @@ export function Home() {
 
   const selectedDriftCategoryTransactions = useMemo(() => {
     if (!selectedDriftCategoryId) return null
-    const rows = trajectoryMonthExpenseTxns ?? []
+    const rows = monthExpenseTxns ?? []
     return rows.filter((t) => t.category_id === selectedDriftCategoryId)
-  }, [selectedDriftCategoryId, trajectoryMonthExpenseTxns])
+  }, [selectedDriftCategoryId, monthExpenseTxns])
 
-  const trajectoryDeltaColor =
-    trajectoryDeltaPct == null ? 'var(--neutral-500)' : trajectoryDeltaPct > 0 ? 'var(--color-error)' : 'var(--color-success)'
-  const monthlyBudgetCap = Math.max(0, Number(trajectoryTotalBudget ?? 0))
-  const monthlyBudgetCapLabel = formatCurrencyFloored(monthlyBudgetCap)
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
   const heroPrimaryColor = accountVisualGroup === 'savings'
     ? 'var(--color-success)'
@@ -1584,871 +1133,94 @@ export function Home() {
           transition={{ duration: 0.35, delay: 0.12 }}
           style={{ padding: '0 var(--space-6)' }}
         >
-          <div
-            style={{
-              maxWidth: 600,
-              margin: '0 auto',
-              padding: 'var(--space-1) 0',
-              borderBottom: '1px solid var(--neutral-200)',
-              display: 'grid',
-              gap: 'var(--space-2)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {isMainCheckingAccount
-                    ? (
-                      homeInsightsSlide === 0
-                        ? 'Consommé vs réel'
-                        : homeInsightsSlide === 1
-                          ? 'Catégories en dérive'
-                          : 'Opérations planifiées'
-                    )
-                    : isPEA
-                      ? "Évolution de l'indice ETF · 1 an · à faire plus tard"
-                      : isPER
-                        ? 'Évolution du solde · Simulation 2026 · +1000€ en juin, octobre et décembre'
-                        : isProjectionSavingsAccount
-                          ? 'Évolution des fonds · Projection sur 10 ans à 1,5%'
-                          : isSavingsBooklet
-                            ? 'Évolution des intérêts · Courbe sur 10 ans'
-                            : 'Trajectoire · Prévisions VS Réel'}
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <p style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+              Catégories en dérive
+            </p>
+            <div style={{ borderTop: '1px solid var(--neutral-200)' }}>
+              {loadingSummaries ? (
+                <p style={{ margin: 0, padding: 'var(--space-8) 0', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
+                  Chargement…
                 </p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', position: 'relative' }}>
-                {isMainCheckingAccount ? (
-                  <>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                      {getMonthLabel(trajectoryYear, selectedTrajectoryMonth)}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowTrajectoryMonthMenu((current) => !current)}
-                      aria-label="Choisir le mois de trajectoire"
-                      style={{ border: 'none', background: 'transparent', color: 'var(--neutral-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, minWidth: 20, minHeight: 20, cursor: 'pointer' }}
-                    >
-                      <ChevronDown size={14} style={{ transform: showTrajectoryMonthMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform var(--transition-base)' }} />
-                    </button>
-                  </>
-                ) : null}
-                {isMainCheckingAccount && showTrajectoryMonthMenu ? (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20, background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '6px', display: 'grid', gap: 2, minWidth: 160 }}>
-                    {Array.from({ length: maxTrajectoryMonth }, (_, idx) => idx + 1).map((m) => (
+              ) : driftRows.length === 0 ? (
+                <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) 0' }}>
+                  <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+                    Budget sous contrôle. Rien à signaler pour le moment.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
+                    style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', minHeight: 30, padding: '0 12px', background: 'var(--neutral-0)', color: 'var(--neutral-700)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    voir le top 5 catégories (dépenses)
+                  </button>
+                  {showTop5ExpensesInDrift ? (
+                    <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
+                      {top5ExpenseRows.map((row, idx) => {
+                        const drift = Number(row.driftPct ?? 0)
+                        const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                        return (
+                          <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                            {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
+                            <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                              {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                            </span>
+                          </p>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div>
+                  {driftRows.map((row) => {
+                    const drift = Number(row.driftPct ?? 0)
+                    return (
                       <button
-                        key={`trajectory-month-${m}`}
+                        key={row.id}
                         type="button"
                         onClick={() => {
-                          setSelectedTrajectoryMonth(m)
-                          setShowTrajectoryMonthMenu(false)
+                          setSelectedDriftCategoryId(row.id)
+                          setShowDriftCategoryModal(true)
                         }}
                         style={{
-                          border: 'none',
-                          borderRadius: 'var(--radius-sm)',
-                          background: selectedTrajectoryMonth === m ? 'var(--primary-50)' : 'transparent',
-                          color: selectedTrajectoryMonth === m ? 'var(--primary-700)' : 'var(--neutral-700)',
-                          textAlign: 'left',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          padding: '6px 8px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {getMonthLabel(trajectoryYear, m)}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div style={{ height: 400 }}>
-              {isMainCheckingAccount ? (
-                <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 'var(--space-2)' }}>
-                  <div
-                    style={{
-                      minHeight: 0,
-                      borderRadius: 'var(--radius-lg)',
-                      border: '1px solid rgba(200,148,74,0.14)',
-                      background: 'linear-gradient(160deg, rgba(255,253,248,1) 0%, rgba(255,255,255,1) 60%)',
-                      boxShadow: '0 2px 16px rgba(200,148,74,0.06)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        width: '300%',
-                        height: '100%',
-                        transform: `translateX(-${homeInsightsSlide * (100 / 3)}%)`,
-                        transition: 'transform 420ms ease',
-                      }}
-                    >
-                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2)', paddingBottom: 'var(--space-3)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-                          <div />
-                          {!isSavingsBooklet && !isPER && !isPEA ? (
-                            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: trajectoryDeltaColor, fontFamily: 'var(--font-mono)' }}>
-                              {trajectoryDeltaPct == null ? '—' : `${trajectoryDeltaPct > 0 ? '+' : ''}${trajectoryDeltaPct.toFixed(1)}%`}
-                            </p>
-                          ) : null}
-                        </div>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={trajectoryData}
-                            margin={{ top: 6, right: 4, left: 0, bottom: 0 }}
-                            onClick={(state: any) => {
-                              const day = Number(state?.activeLabel)
-                              if (plannedMarkerDays.includes(day)) {
-                                setSelectedPlannedDay(day)
-                              } else {
-                                setSelectedPlannedDay(null)
-                              }
-                            }}
-                          >
-                            <defs>
-                              {/* Gradient principal : or chaud → transparent */}
-                              <linearGradient id="actualFillHome" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#C8944A" stopOpacity={0.28} />
-                                <stop offset="55%" stopColor="#C8944A" stopOpacity={0.08} />
-                                <stop offset="100%" stopColor="#C8944A" stopOpacity={0} />
-                              </linearGradient>
-                              {/* Gradient zone dépassement : ambre foncé */}
-                              <linearGradient id="overBudgetFillHome" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#C8944A" stopOpacity={0.22} />
-                                <stop offset="100%" stopColor="#C8944A" stopOpacity={0.06} />
-                              </linearGradient>
-                              {/* Glow sur la ligne actual */}
-                              <filter id="glowAmber" x="-20%" y="-60%" width="140%" height="220%">
-                                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                                <feMerge>
-                                  <feMergeNode in="blur" />
-                                  <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                              </filter>
-                            </defs>
-                            <CartesianGrid
-                              stroke="rgba(120,118,140,0.10)"
-                              strokeDasharray="0"
-                              vertical={false}
-                              strokeWidth={1}
-                            />
-                            <XAxis
-                              dataKey="day"
-                              tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
-                              axisLine={false}
-                              tickLine={false}
-                              interval={4}
-                              tickMargin={6}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
-                              axisLine={false}
-                              tickLine={false}
-                              width={48}
-                              tickFormatter={(value) => formatCurrencyFloored(Number(value))}
-                              tickCount={4}
-                            />
-                            <Tooltip content={trajectoryTooltipContent} cursor={{ stroke: 'rgba(200,148,74,0.25)', strokeWidth: 1.5, strokeDasharray: '3 3' }} />
-                            {/* Ligne budget max : fine, bleue pétrole, très discrète */}
-                            <ReferenceLine
-                              y={monthlyBudgetCap}
-                              stroke="rgba(59,122,138,0.4)"
-                              strokeDasharray="5 4"
-                              strokeWidth={1.2}
-                              ifOverflow="extendDomain"
-                              label={{
-                                value: monthlyBudgetCapLabel,
-                                position: 'left',
-                                fill: 'rgba(59,122,138,0.75)',
-                                fontSize: 10,
-                                fontFamily: 'var(--font-mono)',
-                                textAnchor: 'end',
-                                dx: -3,
-                              }}
-                            />
-                            {/* Ligne verticale "aujourd'hui" */}
-                            <ReferenceLine
-                              x={trajectoryDaysElapsed}
-                              stroke="rgba(200,148,74,0.20)"
-                              strokeWidth={1.5}
-                              strokeDasharray="2 4"
-                            />
-                            {/* Courbe planifiée : bleu pétrole, tirets fins */}
-                            <Line
-                              type="monotone"
-                              dataKey="planned"
-                              stroke="#3B7A8A"
-                              strokeWidth={1.5}
-                              dot={false}
-                              strokeDasharray="5 4"
-                              strokeOpacity={0.7}
-                            />
-                            {/* Zone dépassement : ambre doux */}
-                            <Area
-                              type="monotone"
-                              dataKey="overBudget"
-                              baseValue={monthlyBudgetCap}
-                              stroke="none"
-                              fill="url(#overBudgetFillHome)"
-                              connectNulls={false}
-                              isAnimationActive={false}
-                            />
-                            {/* Marqueurs opérations planifiées */}
-                            {plannedMarkerDays.map((day) => (
-                              <ReferenceDot
-                                key={`planned-segment-${day}`}
-                                x={day}
-                                y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
-                                r={0}
-                                ifOverflow="visible"
-                                shape={(props: any) => {
-                                  const { cx, cy } = props
-                                  return (
-                                    <g>
-                                      <line
-                                        x1={cx}
-                                        y1={cy - 8}
-                                        x2={cx}
-                                        y2={cy + 8}
-                                        stroke="rgba(59,122,138,0.6)"
-                                        strokeWidth={1.5}
-                                        strokeLinecap="round"
-                                      />
-                                      <circle cx={cx} cy={cy} r={2.5} fill="#3B7A8A" fillOpacity={0.5} />
-                                    </g>
-                                  )
-                                }}
-                              />
-                            ))}
-                            {/* Courbe réelle : or/ambre, trait épais avec glow subtil */}
-                            <Area
-                              type="monotone"
-                              dataKey="actual"
-                              stroke="#C8944A"
-                              strokeWidth={2.5}
-                              fill="url(#actualFillHome)"
-                              dot={false}
-                              connectNulls={false}
-                              activeDot={{ r: 4, fill: '#C8944A', stroke: '#fff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px rgba(200,148,74,0.6))' }}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                        {selectedPlannedDay != null && getPlannedOperationFromDay(selectedPlannedDay) ? (
-                          <div style={{ marginTop: 'var(--space-2)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 12, boxShadow: 'var(--shadow-sm)', fontSize: 12, padding: '7px 9px', display: 'grid', gap: 3 }}>
-                            <p style={{ margin: 0, fontWeight: 700, color: 'var(--neutral-800)' }}>{`Jour ${selectedPlannedDay}`}</p>
-                            <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Réel: ${formatCurrencyFloored(Number(trajectoryDataByDay.get(selectedPlannedDay)?.actual ?? 0))}`}</p>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                              <p style={{ margin: 0, color: 'var(--neutral-700)' }}>{`Planifié: ${plannedAmountLabelForDay(selectedPlannedDay)}`}</p>
-                              <button
-                                type="button"
-                                aria-label="Voir le détail de l'opération planifiée"
-                                onClick={() => openPlannedOperationDetailsFromDay(selectedPlannedDay)}
-                                style={{
-                                  border: '1px solid var(--neutral-200)',
-                                  background: 'var(--neutral-0)',
-                                  color: 'var(--neutral-700)',
-                                  borderRadius: 'var(--radius-sm)',
-                                  width: 30,
-                                  height: 24,
-                                  minWidth: 30,
-                                  minHeight: 24,
-                                  borderColor: 'var(--neutral-400)',
-                                  padding: 0,
-                                  cursor: 'pointer',
-                                  fontSize: 12,
-                                  fontWeight: 800,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  lineHeight: 1,
-                                }}
-                              >
-                                ↗
-                              </button>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
-                        {loadingSummaries ? (
-                          <p style={{ margin: 0, height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-400)' }}>
-                            Chargement…
-                          </p>
-                        ) : driftRows.length === 0 ? (
-                          <div style={{ height: '100%', display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-                            <p style={{ margin: 0, textAlign: 'center', fontSize: 12, fontWeight: 'var(--font-weight-regular)', color: 'var(--neutral-500)', lineHeight: 1.5 }}>
-                              Rien à afficher le budget est sous contrôle. Pour le moment...
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
-                              style={{
-                                border: '1px solid var(--neutral-200)',
-                                borderRadius: 'var(--radius-full)',
-                                minHeight: 30,
-                                padding: '0 12px',
-                                background: 'var(--neutral-0)',
-                                color: 'var(--neutral-700)',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              voir le top 5 catégories (dépenses)
-                            </button>
-                            {showTop5ExpensesInDrift ? (
-                              <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
-                                {top5ExpenseRows.map((row, idx) => {
-                                  const drift = Number(row.driftPct ?? 0)
-                                  const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                                  return (
-                                    <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                                      {`#${idx + 1}. ${row.name} - ${formatCurrencyFloored(row.spent)} - `}
-                                      <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                                        {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                                      </span>
-                                    </p>
-                                  )
-                                })}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                            {driftRows.map((row) => {
-                              const drift = Number(row.driftPct ?? 0)
-
-                              return (
-                                <button
-                                  key={row.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDriftCategoryId(row.id)
-                                    setShowDriftCategoryModal(true)
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-2)',
-                                    minHeight: 36,
-                                    padding: '6px 0',
-                                    borderBottom: '1px solid var(--neutral-100)',
-                                    width: '100%',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    textAlign: 'left',
-                                    transition: 'background-color var(--transition-fast)',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'transparent'
-                                  }}
-                                >
-                                  {/* Date de dépassement */}
-                                  <span style={{
-                                    fontSize: 10,
-                                    color: 'var(--neutral-400)',
-                                    fontFamily: 'var(--font-mono)',
-                                    flexShrink: 0,
-                                    width: 32,
-                                    textAlign: 'left'
-                                  }}>
-                                    {row.exceedDate || '--/--'}
-                                  </span>
-
-                                  {/* Icône de catégorie */}
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
-                                  </span>
-
-                                  {/* Nom de catégorie */}
-                                  <span style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    fontSize: 12,
-                                    fontWeight: 'var(--font-weight-regular)',
-                                    color: 'var(--neutral-800)'
-                                  }}>
-                                    {`${row.name} - ${formatCurrencyFloored(row.spent)}`}
-                                  </span>
-
-                                  {/* Drift Percentage */}
-                                  <span style={{
-                                    fontSize: 12,
-                                    fontWeight: 'var(--font-weight-semibold)',
-                                    color: 'var(--color-error)',
-                                    fontFamily: 'var(--font-mono)',
-                                    whiteSpace: 'nowrap',
-                                    flexShrink: 0
-                                  }}>
-                                    +{drift.toFixed(0)}%
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Slide 3: Opérations planifiées */}
-                      <div style={{ flex: '0 0 calc(100% / 3)', minWidth: 0, padding: 'var(--space-2) var(--space-3)' }}>
-                        <div style={{ height: '100%', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                          {(dailyPayload?.planned_operations?.count ?? 0) === 0 ? (
-                            <p style={{ margin: 0, padding: 'var(--space-6) 0', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
-                              Aucune opération planifiée pour le moment
-                            </p>
-                          ) : (
-                            <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-                              {(dailyPayload?.planned_operations.items ?? []).map((op, idx) => {
-                                const displayDate = op.occurrence_date ?? op.planned_date
-                                const dateStr = formatPlannedDateShort(displayDate)
-                                const rawAmount = op.planned_personal_amount ?? op.planned_amount
-                                const hasAmount = Number.isFinite(Number(rawAmount))
-                                const amountStr = hasAmount ? formatCurrencyAdaptive(Number(rawAmount)) : '–'
-                                const isAdditionalCommitmentExpense = op.flow_type === 'expense' && op.budget_impact === 'additional_commitment'
-                                const impactsRemainingUseful = isAdditionalCommitmentExpense
-                                  && (op.impacts_remaining_useful === true || Number(op.remaining_useful_impact_amount ?? 0) > 0)
-                                return (
-                                  <button
-                                    type="button"
-                                    key={op.id ?? idx}
-                                    aria-label={`Voir le détail de ${String(op.label ?? 'cette opération planifiée')}`}
-                                    onClick={() => setSelectedPlannedOperation(op)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 'var(--space-2)',
-                                      padding: '8px 0',
-                                      borderBottom: '1px solid var(--neutral-100)',
-                                      borderTop: 'none',
-                                      borderLeft: 'none',
-                                      borderRight: 'none',
-                                      background: 'transparent',
-                                      width: '100%',
-                                      textAlign: 'left',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', width: 32 }}>{dateStr}</span>
-                                    <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                      <CategoryIcon iconKey={plannedOperationIconKey(op)} label={op.category_name ?? op.label} size={18} />
-                                    </span>
-                                    <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(op.label ?? '—')}</span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)' }}>
-                                      {impactsRemainingUseful ? (
-                                        <span
-                                          title="Impacte le reste utile"
-                                          aria-label="Impacte le reste utile"
-                                          style={{ fontSize: 10, fontWeight: 700, color: '#FFD550', letterSpacing: '0.02em' }}
-                                        >
-                                          + €
-                                        </span>
-                                      ) : null}
-                                      <span>{amountStr}</span>
-                                    </span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-1)' }}>
-                    {[0, 1, 2].map((idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        aria-label={idx === 0 ? 'Afficher la trajectoire' : idx === 1 ? 'Afficher les catégories en dérive' : 'Afficher les opérations planifiées'}
-                        onClick={() => setHomeInsightsSlide(idx as 0 | 1 | 2)}
-                        style={{
-                          padding: '16px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)',
+                          minHeight: 44,
+                          padding: '8px 0',
+                          borderBottom: '1px solid var(--neutral-100)',
+                          width: '100%',
                           border: 'none',
                           background: 'transparent',
                           cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          textAlign: 'left',
+                          transition: 'background-color var(--transition-fast)',
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                       >
-                        <div
-                          style={{
-                            width: homeInsightsSlide === idx ? 22 : 10,
-                            height: 10,
-                            borderRadius: 'var(--radius-full)',
-                            background: homeInsightsSlide === idx ? 'var(--primary-500)' : 'var(--neutral-300)',
-                            transition: 'width var(--transition-base), background-color var(--transition-fast)',
-                          }}
-                        />
+                        <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
+                          {row.exceedDate || '--/--'}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
+                          {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {`+${drift.toFixed(0)}%`}
+                        </span>
                       </button>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
-              ) : isPEA ? (
-                <div
-                  style={{
-                    height: '100%',
-                    display: 'grid',
-                    placeItems: 'center',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px dashed var(--neutral-300)',
-                    background: 'color-mix(in oklab, var(--color-warning) 8%, var(--neutral-0) 92%)',
-                    color: 'var(--neutral-700)',
-                    textAlign: 'center',
-                    padding: 'var(--space-5)',
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-                    Évolution de l'indice ETF sur 1 an: à faire plus tard
-                  </p>
-                </div>
-              ) : isPER ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={perProjection2026Data}>
-                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={54}
-                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--neutral-0)',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 12,
-                        boxShadow: 'var(--shadow-sm)',
-                        fontSize: 12,
-                      }}
-                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Solde modélisé']}
-                      labelFormatter={(label) => `2026 · ${label}`}
-                    />
-                    <Line type="monotone" dataKey="balance" name="Solde modélisé" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : isProjectionSavingsAccount ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={projectionSavingsData}>
-                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={54}
-                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--neutral-0)',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 12,
-                        boxShadow: 'var(--shadow-sm)',
-                        fontSize: 12,
-                      }}
-                      formatter={(value: number) => [formatCurrencyFloored(Number(value)), 'Fonds projetés']}
-                      labelFormatter={(label) => `Année ${label}`}
-                    />
-                    <Line type="monotone" dataKey="projectedFunds" name="Fonds projetés" stroke="var(--color-success)" strokeWidth={2.5} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : isSavingsBooklet ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={savingsInterestCurveData}>
-                    <CartesianGrid stroke="var(--neutral-200)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--neutral-400)' }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: 'var(--neutral-400)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={54}
-                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--neutral-0)',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 12,
-                        boxShadow: 'var(--shadow-sm)',
-                        fontSize: 12,
-                      }}
-                      formatter={(value: number, name: string) => [formatCurrencyFloored(Number(value)), name === 'yearlyInterest' ? 'Intérêts annuels' : 'Intérêts cumulés']}
-                      labelFormatter={(label) => `Année ${label}`}
-                    />
-                    <Line type="monotone" dataKey="yearlyInterest" name="Intérêts annuels" stroke="var(--primary-500)" strokeWidth={2.5} dot={false} />
-                    <Line type="monotone" dataKey="cumulativeInterest" name="Intérêts cumulés" stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trajectoryData} margin={{ top: 6, right: 4, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="actualFillHomeAlt" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#C8944A" stopOpacity={0.28} />
-                        <stop offset="55%" stopColor="#C8944A" stopOpacity={0.08} />
-                        <stop offset="100%" stopColor="#C8944A" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="overBudgetFillHomeAlt" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#C8944A" stopOpacity={0.22} />
-                        <stop offset="100%" stopColor="#C8944A" stopOpacity={0.06} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      stroke="rgba(120,118,140,0.10)"
-                      strokeDasharray="0"
-                      vertical={false}
-                      strokeWidth={1}
-                    />
-                    <XAxis
-                      dataKey="day"
-                      tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      interval={4}
-                      tickMargin={6}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: 'rgba(120,118,140,0.65)', fontFamily: 'var(--font-mono)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={48}
-                      tickFormatter={(value) => formatCurrencyFloored(Number(value))}
-                      tickCount={4}
-                    />
-                    <Tooltip content={trajectoryTooltipContent} cursor={{ stroke: 'rgba(200,148,74,0.25)', strokeWidth: 1.5, strokeDasharray: '3 3' }} />
-                    <ReferenceLine
-                      y={monthlyBudgetCap}
-                      stroke="rgba(59,122,138,0.4)"
-                      strokeDasharray="5 4"
-                      strokeWidth={1.2}
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: monthlyBudgetCapLabel,
-                        position: 'left',
-                        fill: 'rgba(59,122,138,0.75)',
-                        fontSize: 10,
-                        fontFamily: 'var(--font-mono)',
-                        textAnchor: 'end',
-                        dx: -3,
-                      }}
-                    />
-                    <ReferenceLine
-                      x={trajectoryDaysElapsed}
-                      stroke="rgba(200,148,74,0.20)"
-                      strokeWidth={1.5}
-                      strokeDasharray="2 4"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="planned"
-                      stroke="#3B7A8A"
-                      strokeWidth={1.5}
-                      dot={false}
-                      strokeDasharray="5 4"
-                      strokeOpacity={0.7}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="overBudget"
-                      baseValue={monthlyBudgetCap}
-                      stroke="none"
-                      fill="url(#overBudgetFillHomeAlt)"
-                      connectNulls={false}
-                      isAnimationActive={false}
-                    />
-                    {plannedMarkerDays.map((day) => (
-                      <ReferenceDot
-                        key={`planned-segment-secondary-${day}`}
-                        x={day}
-                        y={Number(trajectoryDataByDay.get(day)?.actual ?? trajectoryDataByDay.get(day)?.planned ?? 0)}
-                        r={0}
-                        ifOverflow="visible"
-                        shape={(props: any) => {
-                          const { cx, cy } = props
-                          return (
-                            <g>
-                              <line
-                                x1={cx}
-                                y1={cy - 8}
-                                x2={cx}
-                                y2={cy + 8}
-                                stroke="rgba(59,122,138,0.6)"
-                                strokeWidth={1.5}
-                                strokeLinecap="round"
-                              />
-                              <circle cx={cx} cy={cy} r={2.5} fill="#3B7A8A" fillOpacity={0.5} />
-                            </g>
-                          )
-                        }}
-                      />
-                    ))}
-                    <Area
-                      type="monotone"
-                      dataKey="actual"
-                      stroke="#C8944A"
-                      strokeWidth={2.5}
-                      fill="url(#actualFillHomeAlt)"
-                      dot={false}
-                      connectNulls={false}
-                      activeDot={{ r: 4, fill: '#C8944A', stroke: '#fff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px rgba(200,148,74,0.6))' }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
               )}
             </div>
-            {trajectoryLinkError ? (
-              <p style={{ margin: 0, marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--color-error)', textAlign: 'center' }}>
-                {trajectoryLinkError}
-              </p>
-            ) : null}
           </div>
         </motion.section>
       ) : null}
-
-      <AnimatePresence>
-        {selectedPlannedOperation ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedPlannedOperation(null)}
-              style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détail de l'opération planifiée"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--space-4)',
-                right: 'var(--space-4)',
-                top: '15%',
-                zIndex: 73,
-                maxWidth: 420,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-200)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-3)',
-              }}
-            >
-              {(() => {
-                const displayDate = selectedPlannedOperation.occurrence_date ?? selectedPlannedOperation.planned_date
-                const displayAmount = selectedPlannedOperation.planned_personal_amount ?? selectedPlannedOperation.planned_amount
-                const amountText = Number.isFinite(Number(displayAmount)) ? formatCurrencyAdaptive(Number(displayAmount)) : '–'
-                const categoryLabel = selectedPlannedOperation.parent_category_name && selectedPlannedOperation.category_name
-                  ? `${selectedPlannedOperation.parent_category_name} > ${selectedPlannedOperation.category_name}`
-                  : (selectedPlannedOperation.category_name ?? 'Non catégorisé')
-                const recurrenceLabel = selectedPlannedOperation.is_recurring
-                  ? (
-                    selectedPlannedOperation.recurrence_frequency === 'monthly' && selectedPlannedOperation.recurrence_day_of_month
-                      ? `Tous les mois, le ${selectedPlannedOperation.recurrence_day_of_month}`
-                      : 'Récurrent'
-                  )
-                  : 'Ponctuelle'
-                const impactDetail = buildPlannedImpactDetail(selectedPlannedOperation)
-
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {selectedPlannedOperation.label}
-                        </p>
-                        {selectedPlannedOperation.merchant_name && selectedPlannedOperation.merchant_name !== selectedPlannedOperation.label ? (
-                          <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>
-                            {selectedPlannedOperation.merchant_name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        aria-label="Fermer le détail de l'opération planifiée"
-                        onClick={() => setSelectedPlannedOperation(null)}
-                        style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-
-                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Informations principales</p>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Date prévue</span>
-                        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatPlannedDateLong(displayDate)}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Montant</span>
-                        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{amountText}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Type</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{PLANNED_FLOW_LABELS[selectedPlannedOperation.flow_type] ?? '—'}</span>
-                      </div>
-                    </div>
-
-                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catégorie</p>
-                      <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-800)' }}>
-                        {categoryLabel}
-                      </p>
-                    </div>
-
-                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: 'var(--neutral-50)' }}>
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pilotage</p>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Bloc de pilotage</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>{BUCKET_LABELS[selectedPlannedOperation.budget_bucket ?? ''] ?? '—'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Récurrence</span>
-                        <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700, textAlign: 'right' }}>{recurrenceLabel}</span>
-                      </div>
-                    </div>
-
-                    <div style={{ border: impactDetail.showMarker ? '1px solid color-mix(in oklab, #FFD550 70%, var(--neutral-200) 30%)' : '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)', background: impactDetail.showMarker ? 'color-mix(in oklab, #FFD550 14%, var(--neutral-0) 86%)' : 'var(--neutral-50)' }}>
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{impactDetail.title}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.4 }}>{impactDetail.text}</p>
-                      {impactDetail.showMarker ? (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                          <span
-                            title="Impacte le reste utile"
-                            aria-label="Impacte le reste utile"
-                            style={{ fontSize: 11, fontWeight: 800, color: '#C49200', letterSpacing: '0.02em' }}
-                          >
-                            + €
-                          </span>
-                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                            {formatCurrencyAdaptive(Math.max(0, Number(impactDetail.amount ?? 0)))}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </>
-                )
-              })()}
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showResteUtileModal ? (
