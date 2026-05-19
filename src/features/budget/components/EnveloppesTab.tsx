@@ -842,7 +842,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       </AnimatePresence>
 
       {/* ── title + toggle ── */}
-      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'calc(var(--space-2) * -1)', marginBottom: 'var(--space-3)' }}>
+      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginTop: 0, marginBottom: 'var(--space-3)' }}>
         <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
           Enveloppes budgétaires
         </h2>
@@ -879,7 +879,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       </div>
 
       {/* ── dual donut ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, marginTop: 'var(--space-5)' }}>
         {/* LEFT: Réel */}
         <div>
           <p style={{ margin: '0 0 var(--space-1)', textAlign: 'center', fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -1012,7 +1012,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
                 }}
               >
                 <div style={{ width: 14, height: 14, borderRadius: 'var(--radius-full)', background: entry.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--neutral-900)' : 'var(--neutral-700)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--neutral-900)' : 'var(--neutral-700)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {entry.name}
                 </span>
                 <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: isActive ? 'var(--neutral-900)' : 'var(--neutral-500)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -1050,7 +1050,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
                 }}
               >
                 <div style={{ width: 14, height: 14, borderRadius: 'var(--radius-full)', background: entry.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--neutral-900)' : 'var(--neutral-700)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--neutral-900)' : 'var(--neutral-700)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {entry.name}
                 </span>
                 <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: isActive ? 'var(--neutral-900)' : 'var(--neutral-500)', whiteSpace: 'nowrap', flexShrink: 0 }}>
