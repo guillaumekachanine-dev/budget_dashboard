@@ -185,7 +185,7 @@ const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
   { id: 'compte_crypto', label: 'Compte crypto', iconSrc: cryptoIcon, keywords: ['crypto', 'bitcoin'], missing: true },
 ]
 
-const VISIBLE_ACCOUNT_PRESET_IDS = new Set(['compte_principal', 'compte_joint', 'livret_a', 'placements'])
+const VISIBLE_ACCOUNT_PRESET_IDS = new Set(['compte_principal', 'compte_joint'])
 
 function mapPresetIdToDisplayed(presetId: string): string {
   if (presetId === 'per') {
@@ -2611,70 +2611,36 @@ export function Home() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
+                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
                 boxShadow: 'var(--shadow-lg)',
-                maxHeight: '78dvh',
-                overflowY: 'auto',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-4)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                  Sélectionner un compte
-                </p>
-                <button
-                  type="button"
-                  aria-label="Fermer"
-                  onClick={() => setShowAccountsModal(false)}
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    minWidth: 'var(--touch-target-min)',
-                    minHeight: 'var(--touch-target-min)',
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <div style={{ width: 28, height: 3, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '0 auto var(--space-2)' }} />
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-2)' }}>
                 {accountEntries.filter((entry) => VISIBLE_ACCOUNT_PRESET_IDS.has(entry.preset.id)).map((entry) => {
-                  const isActive = entry.preset.id === selectedAccountEntry?.preset.id || (entry.preset.id === 'placements' && selectedAccountEntry?.preset.id === 'placements')
+                  const isActive = entry.preset.id === selectedAccountEntry?.preset.id
                   return (
-                    <div key={entry.preset.id} style={{ display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleSelectAccountPreset(entry.preset.id)}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          padding: 0,
-                          cursor: 'pointer',
-                          display: 'grid',
-                          justifyItems: 'center',
-                          gap: 'var(--space-2)',
-                        }}
-                      >
-                        <img
-                          src={entry.preset.iconSrc}
-                          alt={entry.preset.label}
-                          width={44}
-                          height={44}
-                          style={{ width: 44, height: 44, objectFit: 'contain', transform: `scale(${entry.preset.iconScale ?? 1})` }}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <span style={{ fontSize: 11, lineHeight: 1.25, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center' }}>
-                          {entry.preset.missing ? `${entry.preset.label} (à créer)` : entry.preset.label}
-                        </span>
-                      </button>
-                    </div>
+                    <button
+                      key={entry.preset.id}
+                      type="button"
+                      onClick={() => handleSelectAccountPreset(entry.preset.id)}
+                      style={{
+                        border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
+                        background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '6px var(--space-2)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'background 150ms ease, border-color 150ms ease',
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', whiteSpace: 'nowrap' }}>
+                        {entry.preset.label}
+                      </span>
+                    </button>
                   )
                 })}
               </div>
