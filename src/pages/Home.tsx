@@ -39,8 +39,6 @@ import { useTrajectoryData } from '@/features/home/hooks/useTrajectoryData'
 import type { PlannedOperationItem } from '@/features/home/types'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { BUCKET_LABELS, MONTH_LABELS_SHORT, PLANNED_FLOW_LABELS } from '@/features/annual-analysis/components/_constants'
-import { Annual2026Hero } from '@/features/annual-analysis/components/Annual2026Hero'
-import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
@@ -368,7 +366,6 @@ export function Home() {
   const { data: trajectorySummaries } = useBudgetSummaries(trajectoryYear, selectedTrajectoryMonth)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: trajectoryRpc } = useTrajectoryData(trajectoryYear, selectedTrajectoryMonth)
-  const { summary: annual2026Summary, buckets: annual2026Buckets } = useAnnual2026Analysis()
 
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
   const trajectoryTotalBudget = trajectoryRpc?.total_budget ?? 0
@@ -2315,17 +2312,6 @@ export function Home() {
             ) : null}
           </div>
         </motion.section>
-      ) : null}
-
-      {/* ── Budget hero 2026 ─────────────────────────────────────────────── */}
-      {isMainCheckingAccount && annual2026Summary && annual2026Buckets.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.15 }}
-        >
-          <Annual2026Hero summary={annual2026Summary} buckets={annual2026Buckets} />
-        </motion.div>
       ) : null}
 
       <AnimatePresence>

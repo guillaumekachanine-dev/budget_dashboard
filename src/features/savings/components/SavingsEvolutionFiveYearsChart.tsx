@@ -1161,155 +1161,136 @@ export function SavingsEvolutionFiveYearsChart() {
                   }}
                 />
                 <h3 style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                  Opérations{isAllPortfoliosSelected ? '' : ` · ${visibleSeries[0]?.shortLabel ?? ''}`}
+                  {isAllPortfoliosSelected ? 'Portefeuilles' : `Opérations · ${visibleSeries[0]?.shortLabel ?? ''}`}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setShowAllOpsModal(true) }}
-                title="Voir la liste complète des opérations"
-                style={{
-                  border: '1px solid var(--neutral-200)',
-                  background: 'var(--neutral-0)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '2px 5px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  color: 'var(--primary)',
-                  fontSize: 9,
-                  fontWeight: 500,
-                  flexShrink: 0,
-                }}
-              >
-                Liste ({operationEventsForList.length})
-              </button>
+              {!isAllPortfoliosSelected ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowAllOpsModal(true) }}
+                  title="Voir la liste complète des opérations"
+                  style={{
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '2px 5px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: 'var(--primary)',
+                    fontSize: 9,
+                    fontWeight: 500,
+                    flexShrink: 0,
+                  }}
+                >
+                  Liste ({operationEventsForList.length})
+                </button>
+              ) : null}
             </div>
 
-            {operationEventsForList.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-5) 0' }}>
-                Aucune opération enregistrée
-              </p>
-            ) : (
-              <div style={{ marginTop: 'var(--space-3)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', columnGap: '14px', padding: '0 6px 4px', borderBottom: '1px solid var(--neutral-100)', lineHeight: 1 }}>
-                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'left' }}>Date</span>
-                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'inline-grid', gridTemplateColumns: '12px auto', columnGap: 6, alignItems: 'center', justifyItems: 'start' }}>
-                    <span aria-hidden="true" style={{ width: 12, height: 12, display: 'inline-block' }} />
-                    <span>Nature</span>
-                  </span>
-                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, alignItems: 'center', justifyItems: 'start', justifySelf: 'center', textAlign: 'left' }}>
-                    <span aria-hidden="true" style={{ width: 9, display: 'inline-block', visibility: 'hidden', fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', lineHeight: 1, textAlign: 'center' }}>+</span>
-                    <span>Montant</span>
-                  </span>
-                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right', justifySelf: 'end' }}>Total</span>
-                </div>
-
-                {shouldGroupOperationsByAccount ? (
-                  operationGroupsForList.map((group, groupIdx) => (
-                    <div
-                      key={group.accountKey}
-                      style={{ marginTop: groupIdx === 0 ? 'var(--space-2)' : 'var(--space-3)' }}
+            {isAllPortfoliosSelected ? (
+              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-2)' }}>
+                {orderedLegendSeries.map((entry) => (
+                  <div
+                    key={entry.key}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: '6px 8px',
+                      borderBottom: '1px solid var(--neutral-100)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    <img
+                      src={entry.iconSrc}
+                      alt=""
+                      aria-hidden="true"
+                      style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'var(--neutral-800)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: '0 6px 6px' }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          {group.accountLabel}
-                        </span>
-                        <span style={{ flex: 1, height: 1, background: 'var(--neutral-150)' }} />
-                      </div>
-                      {group.events.map((event, idx) => {
-                        const seriesEntry = styledSeriesMap.get(event.account_key)
-                        const isInterest = event.nature === 'intérêts'
-                        const isPlacement = seriesEntry?.family === 'placements'
-                        const natureLabel = isInterest ? 'Intérêts' : (isPlacement ? 'Placement' : 'Virement')
-                        const natureIconSrc = isInterest ? epargneInteretsIcon : (isPlacement ? epargnePlacementIcon : epargneVirementIcon)
-                        const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
-                        const amountAbs = formatCurrency(Math.abs(event.amount))
-                        const cumulativeTotal = opsCumulativeByEventId.get(event.id) ?? 0
-
-                        return (
-                          <div
-                            key={event.id}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                              columnGap: '14px',
-                              padding: '7px 6px',
-                              borderBottom: idx < group.events.length - 1 ? '1px solid var(--neutral-50)' : 'none',
-                              alignItems: 'center',
-                              lineHeight: 1,
-                            }}
-                          >
-                            <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, lineHeight: 1 }}>
-                              {formatOperationDate(event.transaction_date)}
-                            </span>
-                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, justifySelf: 'start', display: 'inline-grid', gridTemplateColumns: '12px auto', alignItems: 'center', columnGap: 6 }}>
-                              <span style={{ width: 12, height: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <img src={natureIconSrc} alt="" aria-hidden="true" style={{ width: 10, height: 10, objectFit: 'contain', display: 'block' }} />
-                              </span>
-                              {natureLabel}
-                            </span>
-                            <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'left', color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, justifyContent: 'start', alignItems: 'center', justifySelf: 'center' }}>
-                              <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>
-                                {amountSign || '+'}
-                              </span>
-                              <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
-                            </span>
-                            <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', textAlign: 'right', justifySelf: 'end', whiteSpace: 'nowrap', lineHeight: 1 }}>
-                              {formatCurrency(cumulativeTotal)}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))
-                ) : (
-                  operationEventsForList.map((event, idx) => {
-                    const seriesEntry = styledSeriesMap.get(event.account_key)
-                    const isInterest = event.nature === 'intérêts'
-                    const isPlacement = seriesEntry?.family === 'placements'
-                    const natureLabel = isInterest ? 'Intérêts' : (isPlacement ? 'Placement' : 'Virement')
-                    const natureIconSrc = isInterest ? epargneInteretsIcon : (isPlacement ? epargnePlacementIcon : epargneVirementIcon)
-                    const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
-                    const amountAbs = formatCurrency(Math.abs(event.amount))
-                    const cumulativeTotal = opsCumulativeByEventId.get(event.id) ?? 0
-
-                    return (
-                      <div
-                        key={event.id}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                          columnGap: '14px',
-                          padding: '7px 6px',
-                          borderBottom: idx < operationEventsForList.length - 1 ? '1px solid var(--neutral-50)' : 'none',
-                          alignItems: 'center',
-                          lineHeight: 1,
-                        }}
-                      >
-                        <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, lineHeight: 1 }}>
-                          {formatOperationDate(event.transaction_date)}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, justifySelf: 'start', display: 'inline-grid', gridTemplateColumns: '12px auto', alignItems: 'center', columnGap: 6 }}>
-                          <span style={{ width: 12, height: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <img src={natureIconSrc} alt="" aria-hidden="true" style={{ width: 10, height: 10, objectFit: 'contain', display: 'block' }} />
-                          </span>
-                          {natureLabel}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'left', color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, justifyContent: 'start', alignItems: 'center', justifySelf: 'center' }}>
-                          <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>
-                            {amountSign || '+'}
-                          </span>
-                          <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', textAlign: 'right', justifySelf: 'end', whiteSpace: 'nowrap', lineHeight: 1 }}>
-                          {formatCurrency(cumulativeTotal)}
-                        </span>
-                      </div>
-                    )
-                  })
-                )}
+                      {resolveListLabel(entry.shortLabel)}
+                    </span>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <>
+                {operationEventsForList.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-5) 0' }}>
+                    Aucune opération enregistrée
+                  </p>
+                ) : (
+                  <div style={{ marginTop: 'var(--space-3)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', columnGap: '14px', padding: '0 6px 4px', borderBottom: '1px solid var(--neutral-100)', lineHeight: 1 }}>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'left' }}>Date</span>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'inline-grid', gridTemplateColumns: '12px auto', columnGap: 6, alignItems: 'center', justifyItems: 'start' }}>
+                        <span aria-hidden="true" style={{ width: 12, height: 12, display: 'inline-block' }} />
+                        <span>Nature</span>
+                      </span>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, alignItems: 'center', justifyItems: 'start', justifySelf: 'center', textAlign: 'left' }}>
+                        <span aria-hidden="true" style={{ width: 9, display: 'inline-block', visibility: 'hidden', fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', lineHeight: 1, textAlign: 'center' }}>+</span>
+                        <span>Montant</span>
+                      </span>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right', justifySelf: 'end' }}>Total</span>
+                    </div>
+
+                    {operationEventsForList.map((event, idx) => {
+                      const seriesEntry = styledSeriesMap.get(event.account_key)
+                      const isInterest = event.nature === 'intérêts'
+                      const isPlacement = seriesEntry?.family === 'placements'
+                      const natureLabel = isInterest ? 'Intérêts' : (isPlacement ? 'Placement' : 'Virement')
+                      const natureIconSrc = isInterest ? epargneInteretsIcon : (isPlacement ? epargnePlacementIcon : epargneVirementIcon)
+                      const amountSign = event.amount > 0 ? '+' : event.amount < 0 ? '-' : ''
+                      const amountAbs = formatCurrency(Math.abs(event.amount))
+                      const cumulativeTotal = opsCumulativeByEventId.get(event.id) ?? 0
+
+                      return (
+                        <div
+                          key={event.id}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                            columnGap: '14px',
+                            padding: '7px 6px',
+                            borderBottom: idx < operationEventsForList.length - 1 ? '1px solid var(--neutral-50)' : 'none',
+                            alignItems: 'center',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, lineHeight: 1 }}>
+                            {formatOperationDate(event.transaction_date)}
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, justifySelf: 'start', display: 'inline-grid', gridTemplateColumns: '12px auto', alignItems: 'center', columnGap: 6 }}>
+                            <span style={{ width: 12, height: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <img src={natureIconSrc} alt="" aria-hidden="true" style={{ width: 10, height: 10, objectFit: 'contain', display: 'block' }} />
+                            </span>
+                            {natureLabel}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'left', color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, justifyContent: 'start', alignItems: 'center', justifySelf: 'center' }}>
+                            <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>
+                              {amountSign || '+'}
+                            </span>
+                            <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', textAlign: 'right', justifySelf: 'end', whiteSpace: 'nowrap', lineHeight: 1 }}>
+                            {formatCurrency(cumulativeTotal)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (

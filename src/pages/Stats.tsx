@@ -11,11 +11,9 @@ import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceD
 import { Annual2025Tab } from '@/features/annual-analysis/components/Annual2025Tab'
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { StatsTotalNeedCard } from '@/features/stats/components/StatsTotalNeedCard'
 import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
 import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
-import { FinancialSecurityCard } from '@/features/savings/components/FinancialSecurityCard'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
@@ -187,7 +185,7 @@ export function Stats() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
-        title="Analytics"
+        title={activeTabId === 'epargne' ? 'Epargne' : 'Analytics'}
         rightSlot={activeTabId === 'analytics_2025' ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', marginTop: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -246,19 +244,6 @@ export function Stats() {
               {lastUpdateHeaderText}
             </p>
           </div>
-        ) : activeTabId === 'epargne' ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: 'var(--font-weight-extrabold)',
-              color: 'var(--neutral-0)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Epargne
-          </p>
         ) : activeTabId === 'optimisation' ? (
           <p
             style={{
@@ -272,7 +257,7 @@ export function Stats() {
           >
             Optimisation
           </p>
-        ) : (
+        ) : activeTabId === 'epargne' ? null : (
           <HeaderPeriodMenu
             buttonLabel={monthButtonLabel}
             buttonAriaLabel="Choisir une période Stats"
@@ -329,17 +314,8 @@ export function Stats() {
           <SavingsPlanning2026Section />
           <StatsMajorSectionHeading title="Capital investi" />
           <SavingsEvolutionFiveYearsChart />
-          <FinancialSecurityCard />
           <StatsMajorSectionHeading title="Performance" />
           <SavingsPortfoliosListSection />
-
-          {snapshot ? (
-            <StatsTotalNeedCard
-              totalExpenseBudget={snapshot.budgetSummary.totalExpenseBudget}
-              totalSavingsBudget={snapshot.savingsSummary.totalSavingsBudget}
-              totalMonthlyNeed={snapshot.totalMonthlyNeed}
-            />
-          ) : null}
         </motion.section>
       ) : null}
 
