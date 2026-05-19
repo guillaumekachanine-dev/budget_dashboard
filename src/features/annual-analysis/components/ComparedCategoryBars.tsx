@@ -9,6 +9,7 @@ import type { ComparedCategoryMetric, YtdCategoryRow } from '@/features/annual-a
 type Props = {
   metrics: ComparedCategoryMetric[]
   categoryRows: YtdCategoryRow[]
+  donutOnly?: boolean
 }
 
 const MAX_VISIBLE = 7
@@ -72,11 +73,11 @@ function isSavingsCategory(value: string): boolean {
   return normalized === 'epargne' || normalized.startsWith('epargne ')
 }
 
-export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
+export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false }: Props) {
   const [expandedCategoryNameModal, setExpandedCategoryNameModal] = useState<string | null>(null)
   const [isDonutDetailsModalOpen, setIsDonutDetailsModalOpen] = useState(false)
   const [selectedCategoryNameModal, setSelectedCategoryNameModal] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<CategoryViewMode>('bars')
+  const [viewMode, setViewMode] = useState<CategoryViewMode>(donutOnly ? 'donuts' : 'bars')
   const [selectedDonutCategoryFromList, setSelectedDonutCategoryFromList] = useState<string | null>(null)
   const { data: categories = [] } = useCategories('expense')
   const categoryVisualByName = useMemo(() => {
@@ -118,7 +119,9 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
   }, [achatsDiversMetric, barMetrics])
   const shown = barMetrics.slice(0, MAX_VISIBLE)
   const categorySeries = useMemo(() => (
-    metrics.map((metric, index) => {
+    metrics
+      .filter((metric) => !isSavingsCategory(metric.parent_category_name))
+      .map((metric, index) => {
       const visual = categoryVisualByName.get(normalizeCategoryLabel(metric.parent_category_name))
       return {
         name: metric.parent_category_name,
@@ -127,7 +130,7 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
         color: visual?.color ?? getCategoryColor(null, index, metric.parent_category_name),
         iconKey: visual?.iconKey ?? metric.parent_category_name,
       }
-    })
+      })
   ), [metrics, categoryVisualByName])
   const donut2025 = useMemo<DonutEntry[]>(
     () => {
@@ -237,6 +240,8 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
       : []
   ), [selectedCategoryMetric, subcategoriesByParent])
 
+  const effectiveViewMode: CategoryViewMode = donutOnly ? 'donuts' : viewMode
+
   if (metrics.length === 0) return null
 
   return (
@@ -256,36 +261,61 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
             Dépenses par catégorie
           </p>
         </div>
-        <div style={switchStyle} role="tablist" aria-label="Sélecteur d’affichage dépenses par catégorie">
+        {donutOnly ? (
           <button
             type="button"
-            role="tab"
-            aria-selected={viewMode === 'bars'}
-            onClick={() => setViewMode('bars')}
+            onClick={() => setIsDonutDetailsModalOpen(true)}
             style={{
-              ...switchButtonStyle,
-              ...(viewMode === 'bars' ? switchButtonActiveStyle : null),
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              width: 'fit-content',
+              padding: '6px 10px',
+              borderRadius: 'var(--radius-md)',
+              border: '1.5px solid #5B57F5',
+              background: 'transparent',
+              color: '#5B57F5',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              flexShrink: 0,
             }}
           >
-            <LayoutGrid size={14} color={viewMode === 'bars' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
+            Liste
+            <ChevronRight size={12} strokeWidth={2.5} />
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'donuts'}
-            onClick={() => setViewMode('donuts')}
-            style={{
-              ...switchButtonStyle,
-              ...(viewMode === 'donuts' ? switchButtonActiveStyle : null),
-            }}
-          >
-            <PieChartIcon size={14} color={viewMode === 'donuts' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
-          </button>
-        </div>
+        ) : (
+          <div style={switchStyle} role="tablist" aria-label="Sélecteur d’affichage dépenses par catégorie">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'bars'}
+              onClick={() => setViewMode('bars')}
+              style={{
+                ...switchButtonStyle,
+                ...(viewMode === 'bars' ? switchButtonActiveStyle : null),
+              }}
+            >
+              <LayoutGrid size={14} color={viewMode === 'bars' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'donuts'}
+              onClick={() => setViewMode('donuts')}
+              style={{
+                ...switchButtonStyle,
+                ...(viewMode === 'donuts' ? switchButtonActiveStyle : null),
+              }}
+            >
+              <PieChartIcon size={14} color={viewMode === 'donuts' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ minHeight: 0 }}>
-        {viewMode === 'bars' ? (
+        {effectiveViewMode === 'bars' ? (
           <div style={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr', rowGap: 'var(--space-3)' }}>
             <div
               aria-hidden
@@ -589,17 +619,35 @@ export function ComparedCategoryBars({ metrics, categoryRows }: Props) {
 
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
               {barMetrics.map((metric, index) => (
-                <CategoryRow
-                  key={`full-${metric.parent_category_name}`}
-                  metric={metric}
-                  maxVal={barScaleMax}
-                  visual={categoryVisualByName.get(normalizeCategoryLabel(metric.parent_category_name))}
-                  colorIndex={index}
-                  subcategoryRows={subcategoriesByParent.get(normalizeCategoryLabel(metric.parent_category_name)) ?? []}
-                  isExpanded={expandedCategoryNameModal === metric.parent_category_name}
-                  onToggle={() => setExpandedCategoryNameModal((prev) => (prev === metric.parent_category_name ? null : metric.parent_category_name))}
-                  expandable
-                />
+                donutOnly ? (
+                  <CategoryRow
+                    key={`full-${metric.parent_category_name}`}
+                    metric={metric}
+                    maxVal={barScaleMax}
+                    visual={categoryVisualByName.get(normalizeCategoryLabel(metric.parent_category_name))}
+                    colorIndex={index}
+                    subcategoryRows={subcategoriesByParent.get(normalizeCategoryLabel(metric.parent_category_name)) ?? []}
+                    isExpanded={false}
+                    expandable={false}
+                    rowClickable
+                    onRowClick={() => {
+                      setIsDonutDetailsModalOpen(false)
+                      setSelectedCategoryNameModal(metric.parent_category_name)
+                    }}
+                  />
+                ) : (
+                  <CategoryRow
+                    key={`full-${metric.parent_category_name}`}
+                    metric={metric}
+                    maxVal={barScaleMax}
+                    visual={categoryVisualByName.get(normalizeCategoryLabel(metric.parent_category_name))}
+                    colorIndex={index}
+                    subcategoryRows={subcategoriesByParent.get(normalizeCategoryLabel(metric.parent_category_name)) ?? []}
+                    isExpanded={expandedCategoryNameModal === metric.parent_category_name}
+                    onToggle={() => setExpandedCategoryNameModal((prev) => (prev === metric.parent_category_name ? null : metric.parent_category_name))}
+                    expandable
+                  />
+                )
               ))}
             </div>
           </div>

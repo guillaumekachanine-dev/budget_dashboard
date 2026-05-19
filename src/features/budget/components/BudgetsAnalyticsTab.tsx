@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
+import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
+import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
 import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
+import { ComparedVelocityCard } from '@/features/annual-analysis/components/ComparedVelocityCard'
+import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
 
 type ComparisonYear = 2024 | 2025 | 2026
 type YearSide = 'left' | 'right'
 type InsightId = 'savings' | 'income'
+type RepartitionInsightId = 'achats-divers' | 'transport'
+
+const REPARTITION_SLIDE_FRAME_HEIGHT = 438
+const SECTION_BORDER_WIDTH = '4px'
+const DEEP_YELLOW = '#B8860B'
 
 const YEAR_OPTIONS: Array<{ year: ComparisonYear; disabled?: boolean }> = [
   { year: 2024, disabled: true },
@@ -33,6 +42,41 @@ const FLUX_INSIGHTS = {
   },
 }
 
+const REPARTITION_INSIGHTS = {
+  achatsDivers: {
+    id: 'achats-divers' as const,
+    titleValue: '−29%',
+    titleSuffix: 'achats div.',
+    subtitle: "trompe-l'oeil induit par les dépenses exceptionnelles de mars 2025",
+    detailBody:
+      "La baisse apparente est biaisée par un outlier en mars 2025. À base comparable, le rythme mensuel 2026 sur ce poste reste plus élevé.",
+    accentColor: '#FFAB2E',
+    metrics: {
+      total2025: 4122,
+      total2026: 2936,
+      exceptional2025: 2213,
+      adjustedBase2025: 1909,
+      adjustedMonthly2025: 636,
+      monthly2026: 734,
+      deltaPct: 15,
+    },
+  },
+  transport: {
+    id: 'transport' as const,
+    titleValue: '×8',
+    titleSuffix: 'transport',
+    subtitle: 'de nouvelles catégories structurelles et ponctuelles impactent le budget 2026',
+    detailBody:
+      "Le transport devient un poste structurel en 2026, avec une hausse régulière sur les premiers mois et un poids plus significatif dans le budget opérationnel.",
+    accentColor: '#FC5A5A',
+    topDivergences: [
+      { category: 'transport', deltaPct: 701, y2025: 93, y2026: 701 },
+      { category: 'abonnements', deltaPct: 158, y2025: 166, y2026: 428 },
+      { category: "retrait d'espèces", deltaPct: 69, y2025: 1410, y2026: 2380 },
+    ] as const,
+  },
+}
+
 type SavingsKpiRow = {
   label: string
   y2025: number
@@ -53,7 +97,20 @@ export function BudgetsAnalyticsTab() {
   })
   const [openYearMenu, setOpenYearMenu] = useState<YearSide | null>(null)
   const [expandedInsightId, setExpandedInsightId] = useState<InsightId | null>(null)
+  const [expandedRepartitionInsightId, setExpandedRepartitionInsightId] = useState<RepartitionInsightId | null>(null)
   const yearRowRef = useRef<HTMLDivElement | null>(null)
+  const { annualTotals } = useAnnual2025Analysis()
+  const {
+    loading: comparedLoading,
+    error: comparedError,
+    flows2025,
+    flows2026,
+    projectedExpense2025,
+    projectedExpense2026,
+    medianMonthly2025,
+    medianMonthly2026,
+    remainingMonths,
+  } = useComparedAnalysis()
 
   useEffect(() => {
     if (!openYearMenu) return
@@ -236,6 +293,111 @@ export function BudgetsAnalyticsTab() {
           </div>
         </div>
       </section>
+
+      {!comparedLoading && !comparedError ? (
+        <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <ComparedVelocityCard
+              income2025Ytd={flows2025?.income_total ?? 0}
+              income2026Ytd={flows2026?.income_total ?? 0}
+              annualIncome2025={annualTotals?.income_total_year ?? null}
+              expense2025={flows2025?.expense_total ?? 0}
+              expense2026={flows2026?.expense_total ?? 0}
+              projected2025={projectedExpense2025}
+              projected2026={projectedExpense2026}
+              medianMonthly2025={medianMonthly2025}
+              medianMonthly2026={medianMonthly2026}
+              remainingMonths={remainingMonths}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      <MajorSectionHeading title="Analyse de la répartition" marginTop="0" />
+
+      <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1A1206 0%, #221705 100%)',
+              borderRadius: 'var(--radius-2xl)',
+              padding: 'var(--space-4)',
+              boxShadow: 'var(--shadow-card)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: -64,
+                right: -64,
+                width: 180,
+                height: 180,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255,171,46,0.22) 0%, transparent 72%)',
+                pointerEvents: 'none',
+              }}
+            />
+
+            <p
+              style={{
+                margin: '0 0 var(--space-3)',
+                fontSize: 11,
+                fontWeight: 800,
+                color: 'rgba(255,255,255,0.74)',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Insights
+            </p>
+
+            <motion.div
+              layout
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'stretch' }}
+            >
+              <RepartitionInsightCard
+                titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
+                titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
+                subtitle={REPARTITION_INSIGHTS.achatsDivers.subtitle}
+                accentColor={REPARTITION_INSIGHTS.achatsDivers.accentColor}
+                titleSuffixFontSize="clamp(12px, 3.2vw, 16px)"
+                isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
+                onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                  prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
+                ))}
+              />
+              <RepartitionInsightCard
+                titleValue={REPARTITION_INSIGHTS.transport.titleValue}
+                titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
+                subtitle={REPARTITION_INSIGHTS.transport.subtitle}
+                accentColor={REPARTITION_INSIGHTS.transport.accentColor}
+                isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
+                onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                  prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
+                ))}
+              />
+
+              <AnimatePresence initial={false}>
+                {expandedRepartitionInsightId ? (
+                  <ExpandedRepartitionInsightPanel
+                    key={expandedRepartitionInsightId}
+                    insightId={expandedRepartitionInsightId}
+                    detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
+                      ? REPARTITION_INSIGHTS.achatsDivers.detailBody
+                      : REPARTITION_INSIGHTS.transport.detailBody}
+                  />
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      <RepartitionComparisonSection />
     </section>
   )
 }
@@ -498,6 +660,667 @@ function ExpandedInsightPanel({
   )
 }
 
+function RepartitionInsightCard({
+  titleValue,
+  titleSuffix,
+  subtitle,
+  accentColor,
+  titleSuffixFontSize,
+  isExpanded,
+  onToggle,
+}: {
+  titleValue: string
+  titleSuffix: string
+  subtitle: string
+  accentColor: string
+  titleSuffixFontSize?: string
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <motion.article
+      layout
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      style={{
+        border: '1px solid rgba(255,255,255,0.2)',
+        borderRadius: 'var(--radius-xl)',
+        background: 'color-mix(in oklab, #2B2010 78%, #FFFFFF 22%)',
+        padding: 'var(--space-3)',
+        textAlign: 'left',
+        display: 'grid',
+        gap: 'var(--space-2)',
+        minHeight: 122,
+        height: '100%',
+        boxShadow: isExpanded ? '0 0 0 1px rgba(255,255,255,0.18), 0 12px 24px rgba(22,16,8,0.24)' : 'none',
+      }}
+    >
+      <p style={{ margin: 0, lineHeight: 1.1, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6 }}>
+        <span
+          style={{
+            fontSize: 'clamp(18px, 5.8vw, 28px)',
+            fontWeight: 'var(--font-weight-extrabold)',
+            color: accentColor,
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {titleValue}
+        </span>
+        <span
+          style={{
+            fontSize: titleSuffixFontSize ?? 'clamp(14px, 4vw, 20px)',
+            fontWeight: 'var(--font-weight-bold)',
+            color: 'var(--neutral-0)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {titleSuffix}
+        </span>
+      </p>
+
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          lineHeight: 1.35,
+          color: 'rgba(255,255,255,0.9)',
+          fontWeight: 'var(--font-weight-semibold)',
+        }}
+      >
+        {subtitle}
+      </p>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
+        aria-expanded={isExpanded}
+        style={{
+          marginTop: 'auto',
+          border: 'none',
+          background: 'transparent',
+          padding: '4px 0 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 0,
+            height: 0,
+            borderLeft: '8px solid transparent',
+            borderRight: '8px solid transparent',
+            borderTop: '12px solid rgba(255,255,255,0.95)',
+            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 180ms ease',
+          }}
+        />
+      </button>
+    </motion.article>
+  )
+}
+
+function ExpandedRepartitionInsightPanel({
+  insightId,
+  detailBody,
+}: {
+  insightId: RepartitionInsightId
+  detailBody: string
+}) {
+  return (
+    <motion.section
+      layout
+      initial={{ opacity: 0, y: -8, scaleY: 0.96 }}
+      animate={{ opacity: 1, y: 0, scaleY: 1 }}
+      exit={{ opacity: 0, y: -8, scaleY: 0.96 }}
+      transition={{ duration: 0.24, ease: 'easeOut' }}
+      style={{
+        gridColumn: '1 / -1',
+        transformOrigin: 'top center',
+        border: '1px solid rgba(255,255,255,0.2)',
+        borderRadius: 'var(--radius-xl)',
+        background: 'color-mix(in oklab, #2B2010 78%, #FFFFFF 22%)',
+        padding: 'var(--space-4)',
+        display: 'grid',
+        gap: 'var(--space-3)',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          lineHeight: 1.5,
+          color: 'rgba(255,255,255,0.92)',
+        }}
+      >
+        {detailBody}
+      </p>
+
+      {insightId === REPARTITION_INSIGHTS.achatsDivers.id ? <AchatsDiversExpandedContent /> : null}
+      {insightId === REPARTITION_INSIGHTS.transport.id ? <TransportExpandedContent /> : null}
+    </motion.section>
+  )
+}
+
+function TransportExpandedContent() {
+  const rows = REPARTITION_INSIGHTS.transport.topDivergences
+  const maxValue = Math.max(...rows.flatMap((row) => [row.y2025, row.y2026]), 1)
+
+  return (
+    <div
+      style={{
+        borderRadius: 'var(--radius-xl)',
+        background: '#FFFFFF',
+        border: '1px solid #D7DAE2',
+        boxShadow: '0 1px 2px rgba(19, 28, 45, 0.06)',
+        padding: 'var(--space-3)',
+        display: 'grid',
+        gap: 'var(--space-3)',
+      }}
+    >
+      <div style={{ display: 'grid', gap: 6 }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700, color: '#353A4A' }}>
+          Top 3 divergences YTD
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <LegendDot color="#5C6276" label="2025" />
+          <LegendDot color="#2ED47A" label="2026" />
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 'var(--space-2)',
+          alignItems: 'end',
+          minWidth: 0,
+        }}
+      >
+        {rows.map((row) => {
+          const h2025 = Math.max((row.y2025 / maxValue) * 124, 8)
+          const h2026 = Math.max((row.y2026 / maxValue) * 124, 8)
+
+          return (
+            <div key={row.category} style={{ minWidth: 0, display: 'grid', gap: 6, justifyItems: 'center' }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: '#C74335',
+                  fontFamily: 'var(--font-mono)',
+                  lineHeight: 1,
+                }}
+              >
+                +{row.deltaPct}%
+              </span>
+
+              <div style={{ height: 130, display: 'flex', alignItems: 'end', gap: 8 }}>
+                <span
+                  style={{
+                    width: 18,
+                    height: h2025,
+                    borderRadius: '6px 6px 0 0',
+                    background: '#5C6276',
+                  }}
+                />
+                <span
+                  style={{
+                    width: 18,
+                    height: h2026,
+                    borderRadius: '6px 6px 0 0',
+                    background: '#2ED47A',
+                  }}
+                />
+              </div>
+
+              <p
+                style={{
+                  margin: 0,
+                  minHeight: 30,
+                  textAlign: 'center',
+                  fontSize: 10,
+                  lineHeight: 1.25,
+                  fontWeight: 700,
+                  color: '#5B6070',
+                  textTransform: 'none',
+                }}
+              >
+                {row.category}
+              </p>
+
+              <p
+                style={{
+                  margin: 0,
+                  textAlign: 'center',
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  color: '#3F4454',
+                  fontFamily: 'var(--font-mono)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {formatCompactCurrency(row.y2025)} / {formatCompactCurrency(row.y2026)}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function RepartitionComparisonSection() {
+  const [activeSlide, setActiveSlide] = useState<0 | 1>(1)
+  const {
+    loading,
+    error,
+    fluxMetrics,
+    categoryMetrics,
+    bucketMetrics,
+    categoryRows,
+  } = useComparedAnalysis()
+
+  return (
+    <section style={{ display: 'grid', gap: 0 }}>
+      <div
+        style={{
+          position: 'relative',
+          height: REPARTITION_SLIDE_FRAME_HEIGHT,
+          marginTop: 0,
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 'max(var(--space-6), calc((100% - 600px) / 2))',
+            width: SECTION_BORDER_WIDTH,
+            background: DEEP_YELLOW,
+            borderRadius: 'var(--radius-full)',
+            pointerEvents: 'none',
+            zIndex: 4,
+          }}
+        />
+        {loading ? (
+          <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', height: '100%' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', height: '100%' }}>
+              <div style={{
+                height: '100%',
+                borderRadius: 'var(--radius-2xl)',
+                background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
+              }} />
+            </div>
+          </section>
+        ) : null}
+
+        {!loading && error ? (
+          <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', height: '100%' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto' }}>
+              <div style={{
+                minHeight: '100%',
+                padding: 'var(--space-4)',
+                borderRadius: 'var(--radius-xl)',
+                background: 'color-mix(in oklab, var(--color-error) 6%, var(--neutral-0) 94%)',
+                border: '1px solid color-mix(in oklab, var(--color-error) 20%, transparent 80%)',
+              }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-error)' }}>
+                  Erreur de chargement
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
+                  {error}
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {!loading && !error ? (
+          <>
+            <div style={{ position: 'absolute', inset: 0, opacity: activeSlide === 0 ? 1 : 0, pointerEvents: activeSlide === 0 ? 'auto' : 'none' }}>
+              <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', height: '100%' }}>
+                <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                  <ComparedBucketChart metrics={bucketMetrics} fluxMetrics={fluxMetrics} barsOnly />
+                </div>
+              </section>
+            </div>
+            <div style={{ position: 'absolute', inset: 0, opacity: activeSlide === 1 ? 1 : 0, pointerEvents: activeSlide === 1 ? 'auto' : 'none' }}>
+              <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', height: '100%' }}>
+                <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                  <ComparedCategoryBars metrics={categoryMetrics} categoryRows={categoryRows} donutOnly />
+                </div>
+              </section>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <div style={{ padding: '0 var(--space-6)', marginTop: 'var(--space-3)' }}>
+        <div style={{
+          maxWidth: 600,
+          margin: '0 auto',
+          padding: 4,
+          borderRadius: 'var(--radius-full)',
+          background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
+          border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 4,
+        }}>
+          <button
+            type="button"
+            onClick={() => setActiveSlide(1)}
+            aria-label="Afficher la slide Répartition par catégorie"
+            aria-pressed={activeSlide === 1}
+            style={slideNavButtonStyle(activeSlide === 1)}
+          >
+            Catégories
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSlide(0)}
+            aria-label="Afficher la slide Répartition par bloc"
+            aria-pressed={activeSlide === 0}
+            style={slideNavButtonStyle(activeSlide === 0)}
+          >
+            Socles
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6A7082', fontSize: 11, fontWeight: 700 }}>
+      <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '999px', background: color }} />
+      {label}
+    </span>
+  )
+}
+
+function AchatsDiversExpandedContent() {
+  const {
+    total2025,
+    total2026,
+    exceptional2025,
+    adjustedBase2025,
+    adjustedMonthly2025,
+    monthly2026,
+    deltaPct,
+  } = REPARTITION_INSIGHTS.achatsDivers.metrics
+
+  const maxTotal = Math.max(total2025, total2026, 1)
+  const width2025Pct = (total2025 / maxTotal) * 100
+  const width2026Pct = (total2026 / maxTotal) * 100
+  const exceptionalPctWithin2025 = (exceptional2025 / total2025) * 100
+  const regularPctWithin2025 = 100 - exceptionalPctWithin2025
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: 'var(--space-3)',
+        borderRadius: 'var(--radius-xl)',
+        background: '#FFFFFF',
+        border: '1px solid #D7DAE2',
+        boxShadow: '0 1px 2px rgba(19, 28, 45, 0.06)',
+        padding: 'var(--space-3)',
+      }}
+    >
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <HorizontalBarRow
+          label="2025"
+          total={total2025}
+          widthPct={width2025Pct}
+          exceptionalPctWithinBar={exceptionalPctWithin2025}
+          regularPctWithinBar={regularPctWithin2025}
+        />
+        <HorizontalBarRow
+          label="2026"
+          total={total2026}
+          widthPct={width2026Pct}
+        />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+        <KpiTile
+          label="Achats div. 2025"
+          valueFontSize="var(--font-size-lg)"
+          value={formatCompactCurrency(total2025)}
+          note="dont 2213€ except."
+        />
+        <KpiTile
+          label="Achats div. 2026"
+          value={formatCompactCurrency(total2026)}
+          note="janvier-avril"
+        />
+        <KpiTile
+          label="Moy/mois 2025"
+          labelAccentLine="Ajusté"
+          labelAccentColor="#5B6070"
+          value={formatCompactCurrency(adjustedMonthly2025)}
+          note={`${formatCompactCurrency(adjustedBase2025)} hors dép.exceptionnelles`}
+        />
+        <KpiTile
+          label="Moy/mois 2026"
+          value={formatCompactCurrency(monthly2026)}
+          note="vs moyenne ajustée 2025"
+          notePrefixInline={`+${deltaPct}%`}
+          notePrefixColor="#D13A2A"
+          emphasize
+        />
+      </div>
+    </div>
+  )
+}
+
+function HorizontalBarRow({
+  label,
+  total,
+  widthPct,
+  exceptionalPctWithinBar,
+  regularPctWithinBar,
+}: {
+  label: string
+  total: number
+  widthPct: number
+  exceptionalPctWithinBar?: number
+  regularPctWithinBar?: number
+}) {
+  const hasExceptionalSplit = typeof exceptionalPctWithinBar === 'number' && typeof regularPctWithinBar === 'number'
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 800,
+          color: '#6B6F80',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
+        {label}
+      </span>
+
+      <div
+        style={{
+          height: 16,
+          borderRadius: 'var(--radius-full)',
+          background: '#E6E8EF',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            width: `${widthPct}%`,
+            height: '100%',
+            display: 'flex',
+            borderRadius: 'var(--radius-full)',
+            overflow: 'hidden',
+          }}
+        >
+          {hasExceptionalSplit ? (
+            <>
+              <span style={{ width: `${regularPctWithinBar}%`, background: '#51576A' }} />
+              <span
+                style={{
+                  width: `${exceptionalPctWithinBar}%`,
+                  background: '#D9A43B',
+                  borderLeft: '1px solid rgba(255,255,255,0.9)',
+                }}
+              />
+            </>
+          ) : (
+            <span style={{ width: '100%', background: '#5C6276' }} />
+          )}
+        </div>
+      </div>
+
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 800,
+          color: '#3F4454',
+          fontFamily: 'var(--font-mono)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {formatCompactCurrency(total)}
+      </span>
+    </div>
+  )
+}
+
+function KpiTile({
+  label,
+  labelAccentLine,
+  labelAccentColor,
+  headlineBadge,
+  headlineBadgeColor,
+  valueFontSize,
+  value,
+  note,
+  notePrefixInline,
+  notePrefixColor,
+  emphasize = false,
+}: {
+  label: string
+  labelAccentLine?: string
+  labelAccentColor?: string
+  headlineBadge?: string
+  headlineBadgeColor?: string
+  valueFontSize?: string
+  value: string
+  note: string
+  notePrefixInline?: string
+  notePrefixColor?: string
+  emphasize?: boolean
+}) {
+  return (
+    <div
+      style={{
+        border: emphasize ? '1px solid #8A7452' : '1px solid #7A808F',
+        borderRadius: 'var(--radius-lg)',
+        background: emphasize ? '#F4EBE0' : '#F3F5F9',
+        padding: '10px',
+        display: 'grid',
+        gap: 4,
+      }}
+    >
+      <div style={{ minHeight: 28, display: 'grid', alignContent: 'start', gap: 1 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            textTransform: 'none',
+            color: '#5B6070',
+            fontFamily: 'var(--font-sans)',
+            lineHeight: 1.2,
+          }}
+        >
+          {label}
+        </p>
+        {labelAccentLine ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              textTransform: 'none',
+              color: labelAccentColor ?? '#5B6070',
+              fontFamily: 'var(--font-sans)',
+              lineHeight: 1.2,
+            }}
+          >
+            {labelAccentLine}
+          </p>
+        ) : null}
+      </div>
+      {headlineBadge ? (
+        <p
+          style={{
+          margin: 0,
+          marginTop: 0,
+          fontSize: 20,
+          fontWeight: 800,
+          lineHeight: 1,
+          color: headlineBadgeColor ?? '#D13A2A',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {headlineBadge}
+        </p>
+      ) : null}
+      <p
+        style={{
+          margin: 0,
+          marginTop: 2,
+          fontSize: valueFontSize ?? 'var(--font-size-xl)',
+          fontWeight: 'var(--font-weight-extrabold)',
+          color: '#2F3443',
+          fontFamily: 'var(--font-mono)',
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </p>
+      <p
+        style={{
+          margin: 0,
+          minHeight: 30,
+          fontSize: 11,
+          color: emphasize ? '#7B6749' : '#596074',
+          lineHeight: 1.3,
+        }}
+      >
+        {notePrefixInline ? (
+          <span style={{ color: notePrefixColor ?? '#D13A2A', fontWeight: 800 }}>
+            {notePrefixInline}
+          </span>
+        ) : null}
+        {notePrefixInline ? ' ' : ''}
+        {note}
+      </p>
+    </div>
+  )
+}
+
 function SavingsInsightKpis() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [activeBarId, setActiveBarId] = useState<string | null>(null)
@@ -749,5 +1572,22 @@ function yearOptionStyle(disabled?: boolean): CSSProperties {
     textAlign: 'center',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.6 : 1,
+  }
+}
+
+function slideNavButtonStyle(active: boolean): CSSProperties {
+  return {
+    border: active ? '1px solid color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)' : '1px solid transparent',
+    background: active ? 'var(--neutral-0)' : 'transparent',
+    color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+    borderRadius: 'var(--radius-full)',
+    padding: '6px 8px',
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: '0.04em',
+    textTransform: 'none',
+    cursor: 'pointer',
+    transition: 'all 160ms ease',
+    whiteSpace: 'nowrap',
   }
 }

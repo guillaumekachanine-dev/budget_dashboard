@@ -10,7 +10,6 @@ import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } fr
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import type { Category, Transaction } from '@/lib/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow } from '../types'
-import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
@@ -743,29 +742,6 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
 
   return (
     <div>
-      {/* ── month selector button ── */}
-      <div style={{ padding: '0 var(--page-gutter)', marginBottom: 'var(--space-3)' }}>
-        <button
-          type="button"
-          onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            border: 'none',
-            background: 'transparent',
-            padding: '2px 0',
-            cursor: 'pointer',
-          }}
-        >
-          <img src={budgetsPeriodIcon} alt="" width={20} height={20} style={{ objectFit: 'contain', flexShrink: 0 }} />
-          <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)', lineHeight: 1 }}>
-            {monthLabel}
-          </span>
-          <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginLeft: 2, flexShrink: 0 }} />
-        </button>
-      </div>
-
       {/* ── month picker modal ── */}
       <AnimatePresence>
         {showMonthModal && (
@@ -866,13 +842,22 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       </AnimatePresence>
 
       {/* ── title + toggle ── */}
-      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'calc(var(--space-2) * -1)', marginBottom: 'var(--space-3)' }}>
         <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
           Enveloppes budgétaires
         </h2>
-        <p
+        <button
+          type="button"
+          onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
+          aria-label="Choisir une période"
           style={{
-            margin: '-6px 0 0',
+            border: 'none',
+            background: 'transparent',
+            padding: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
             textAlign: 'center',
             fontSize: 'var(--font-size-sm)',
             fontWeight: 700,
@@ -880,8 +865,9 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
             letterSpacing: '0.01em',
           }}
         >
-          mensuelles
-        </p>
+          {monthLabel}
+          <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
+        </button>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
           <button type="button" onClick={() => setViewMode('categories')} style={{ ...toggleBtnStyle(viewMode === 'categories'), textAlign: 'center' }}>
             Catégories

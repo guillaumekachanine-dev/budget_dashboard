@@ -84,7 +84,7 @@ export function Stats() {
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
 
-  const [activeTabId, setActiveTabId] = useState<StatsTabId>('analytics_2025')
+  const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [selectedAnalyticsYear, setSelectedAnalyticsYear] = useState<2024 | 2025>(2025)
   const [showTabModal, setShowTabModal] = useState(false)
   const [showHeaderPeriodMenu, setShowHeaderPeriodMenu] = useState(false)

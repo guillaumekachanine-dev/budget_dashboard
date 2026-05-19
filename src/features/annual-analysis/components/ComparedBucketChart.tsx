@@ -79,6 +79,7 @@ const BLOCK_ICON_BY_BUCKET: Record<string, string | null> = {
 type Props = {
   metrics: ComparedBucketMetric[]
   fluxMetrics: ComparedFluxMetric[]
+  barsOnly?: boolean
 }
 
 function formatVariation(value: number): string {
@@ -191,7 +192,7 @@ function CappedBarShape({
 
 // ─── Component principal ──────────────────────────────────────────────────────
 
-export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
+export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: Props) {
   const [viewMode,      setViewMode]      = useState<ViewMode>('bars')
   const [clickedBucket, setClickedBucket] = useState<string | null>(null)
   const [clickedCoord,  setClickedCoord]  = useState<{ x: number; y: number } | null>(null)
@@ -331,6 +332,8 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
     setClickedCoord(null)
   }
 
+  const effectiveViewMode: ViewMode = barsOnly ? 'bars' : viewMode
+
   return (
     <>
       <div style={{
@@ -349,7 +352,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)' }}>
               Dépenses YTD par bloc
             </p>
-            {viewMode === 'bars' ? (
+            {effectiveViewMode === 'bars' ? (
               <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                 {headerLegend.map(({ label, color, border }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -383,56 +386,81 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
             )}
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Sélecteur d'affichage du graphique des dépenses YTD par bloc"
-            style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--neutral-100)', borderRadius: 'var(--radius-lg)', padding: 2, gap: 2, flexShrink: 0 }}
-          >
+          {barsOnly ? (
             <button
               type="button"
-              role="tab"
-              aria-selected={viewMode === 'bars'}
-              aria-label="Graphique comparatif à barres verticales"
-              onClick={() => toggleViewMode('bars')}
+              onClick={() => { void openDetailForBucket(clickedBucket ?? 'socle_fixe') }}
               style={{
-                border: 'none',
-                background: viewMode === 'bars' ? 'var(--neutral-0)' : 'transparent',
-                color: viewMode === 'bars' ? 'var(--primary-600)' : 'var(--neutral-500)',
-                width: 30,
-                height: 26,
-                borderRadius: 'calc(var(--radius-lg) - 2px)',
-                cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: viewMode === 'bars' ? 'var(--shadow-sm)' : 'none',
-              }}
-            >
-              <BarChart3 size={14} />
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'allocation'}
-              aria-label="Répartition linéaire par bloc"
-              onClick={() => toggleViewMode('allocation')}
-              style={{
-                border: 'none',
-                background: viewMode === 'allocation' ? 'var(--neutral-0)' : 'transparent',
-                color: viewMode === 'allocation' ? 'var(--primary-600)' : 'var(--neutral-500)',
-                width: 30,
-                height: 26,
-                borderRadius: 'calc(var(--radius-lg) - 2px)',
+                gap: 4,
+                width: 'fit-content',
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-md)',
+                border: '1.5px solid #5B57F5',
+                background: 'transparent',
+                color: '#5B57F5',
+                fontSize: 11,
+                fontWeight: 700,
                 cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: viewMode === 'allocation' ? 'var(--shadow-sm)' : 'none',
+                flexShrink: 0,
               }}
             >
-              <Rows3 size={14} />
+              Détails
+              <ChevronRight size={12} strokeWidth={2.5} />
             </button>
-          </div>
+          ) : (
+            <div
+              role="tablist"
+              aria-label="Sélecteur d'affichage du graphique des dépenses YTD par bloc"
+              style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--neutral-100)', borderRadius: 'var(--radius-lg)', padding: 2, gap: 2, flexShrink: 0 }}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'bars'}
+                aria-label="Graphique comparatif à barres verticales"
+                onClick={() => toggleViewMode('bars')}
+                style={{
+                  border: 'none',
+                  background: viewMode === 'bars' ? 'var(--neutral-0)' : 'transparent',
+                  color: viewMode === 'bars' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                  width: 30,
+                  height: 26,
+                  borderRadius: 'calc(var(--radius-lg) - 2px)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: viewMode === 'bars' ? 'var(--shadow-sm)' : 'none',
+                }}
+              >
+                <BarChart3 size={14} />
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'allocation'}
+                aria-label="Répartition linéaire par bloc"
+                onClick={() => toggleViewMode('allocation')}
+                style={{
+                  border: 'none',
+                  background: viewMode === 'allocation' ? 'var(--neutral-0)' : 'transparent',
+                  color: viewMode === 'allocation' ? 'var(--primary-600)' : 'var(--neutral-500)',
+                  width: 30,
+                  height: 26,
+                  borderRadius: 'calc(var(--radius-lg) - 2px)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: viewMode === 'allocation' ? 'var(--shadow-sm)' : 'none',
+                }}
+              >
+                <Rows3 size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{
@@ -444,7 +472,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics }: Props) {
           alignItems: 'flex-end',
           paddingBottom: 'var(--space-2)',
         }}>
-          {viewMode === 'bars' ? (
+          {effectiveViewMode === 'bars' ? (
             <>
               {/* Wrapper relatif : permet de positionner le tooltip custom en absolu */}
               <div style={{ position: 'relative', height: CONTENT_HEIGHT, width: '100%' }}>

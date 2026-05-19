@@ -2351,6 +2351,26 @@ export function Budgets() {
                 {headerPeriodLabel}
               </button>
             )}
+            {budgetsTabId === 'enveloppes' ? (
+              <button
+                type="button"
+                onClick={() => setBudgetsTabId('analytics')}
+                aria-label="Aller à l’onglet Analytics"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 'var(--touch-target-min)',
+                  minWidth: 'var(--touch-target-min)',
+                }}
+              >
+                <img src={analyticsIcon} alt="Analytics" width={32} height={32} style={{ display: 'block', objectFit: 'contain' }} />
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setBudgetsTabId('metriques')}
@@ -2367,7 +2387,7 @@ export function Budgets() {
                 minWidth: 'var(--touch-target-min)',
               }}
             >
-              <img src={rechercheRapideIcon} alt="Recherche rapide" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} />
+              <img src={rechercheRapideIcon} alt="Recherche rapide" width={32} height={32} style={{ display: 'block', objectFit: 'contain' }} />
             </button>
           </div>
         ) : undefined}

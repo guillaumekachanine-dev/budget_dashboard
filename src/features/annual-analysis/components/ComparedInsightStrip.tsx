@@ -33,6 +33,13 @@ type Props = {
   accentColor: string
   stripBg: string
   labelColor?: string
+  marginTop?: string
+  frameRadius?: string
+  framePadding?: string
+  frameGap?: string
+  chipMinHeight?: number
+  chipRadius?: string
+  chipPadding?: string
 }
 
 // ─── Badge colors ─────────────────────────────────────────────────────────────
@@ -46,7 +53,19 @@ const BADGE_COLOR: Record<InsightLevel, string> = {
 
 // ─── Strip ────────────────────────────────────────────────────────────────────
 
-export function ComparedInsightStrip({ insights, accentColor, stripBg, labelColor }: Props) {
+export function ComparedInsightStrip({
+  insights,
+  accentColor,
+  stripBg,
+  labelColor,
+  marginTop,
+  frameRadius,
+  framePadding,
+  frameGap,
+  chipMinHeight,
+  chipRadius,
+  chipPadding,
+}: Props) {
   const [openId, setOpenId] = useState<string | null>(null)
   const openInsight = insights.find((i) => i.id === openId) ?? null
 
@@ -60,7 +79,7 @@ export function ComparedInsightStrip({ insights, accentColor, stripBg, labelColo
       <div
         style={{
           padding: '0 var(--space-6)',
-          marginTop: 'var(--space-3)',
+          marginTop: marginTop ?? 'var(--space-3)',
           width: '100%',
           boxSizing: 'border-box',
         }}
@@ -96,11 +115,11 @@ export function ComparedInsightStrip({ insights, accentColor, stripBg, labelColo
           <div
             style={{
               background: stripBg,
-              borderRadius: 'var(--radius-xl)',
-              padding: '10px',
+              borderRadius: frameRadius ?? 'var(--radius-xl)',
+              padding: framePadding ?? '10px',
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
-              gap: '8px',
+              gap: frameGap ?? '8px',
             }}
           >
             {insights.map((insight) => (
@@ -108,6 +127,9 @@ export function ComparedInsightStrip({ insights, accentColor, stripBg, labelColo
                 key={insight.id}
                 insight={insight}
                 onClick={() => setOpenId(insight.id)}
+                minHeight={chipMinHeight}
+                borderRadius={chipRadius}
+                padding={chipPadding}
               />
             ))}
           </div>
@@ -133,9 +155,15 @@ export function ComparedInsightStrip({ insights, accentColor, stripBg, labelColo
 function InsightChip({
   insight,
   onClick,
+  minHeight,
+  borderRadius,
+  padding,
 }: {
   insight: InsightData
   onClick: () => void
+  minHeight?: number
+  borderRadius?: string
+  padding?: string
 }) {
   const badgeColor = BADGE_COLOR[insight.level]
 
@@ -146,8 +174,8 @@ function InsightChip({
       style={{
         background: 'rgba(255,255,255,0.07)',
         border: '1px solid rgba(255,255,255,0.10)',
-        borderRadius: '10px',
-        padding: '10px 10px 10px 11px',
+        borderRadius: borderRadius ?? '10px',
+        padding: padding ?? '10px 10px 10px 11px',
         display: 'flex',
         flexDirection: 'column',
         gap: '3px',
@@ -158,6 +186,7 @@ function InsightChip({
         overflow: 'hidden',
         WebkitTapHighlightColor: 'transparent',
         transition: 'background 150ms ease',
+        minHeight: minHeight ?? undefined,
       }}
     >
       {/* Expand dot */}
