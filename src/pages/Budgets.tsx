@@ -85,13 +85,12 @@ const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 
-type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'legacy' | 'metriques'
+type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'metriques'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
 const BUDGETS_TABS: BudgetsTabConfig[] = [
   { id: 'enveloppes', label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
   { id: 'projections', label: 'Projections', iconSrc: projectionsAnnuellesIcon },
   { id: 'analytics', label: 'Analytics', iconSrc: analyticsIcon },
-  { id: 'legacy', label: 'Legacy', iconSrc: blockFixeIcon },
 ]
 
 interface BudgetBlockLineItem {
@@ -790,11 +789,13 @@ export function Budgets() {
 
   const handleBudgetsTabSelect = useCallback((tabId: BudgetsTabId) => {
     setBudgetsTabId(tabId)
+    setSelectedCat('all')
+    setSelectedBlockPage(null)
     setShowBudgetsTabModal(false)
     setShowHeaderPeriodMenu(false)
     setShowSlideThreeScopeSheet(false)
     setShowCatSheet(false)
-  }, [])
+  }, [setSelectedBlockPage, setSelectedCat])
 
   const handleAnalyticsRefresh = useCallback(async () => {
     if (analyticsRefreshing) return
@@ -865,14 +866,12 @@ export function Budgets() {
   }, [cancelSmoothScroll, cancelTopTravelSnap])
 
   const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
-    setBudgetsTabId('legacy')
     setSelectedBlockPage(null)
     setSelectedCat(categoryId)
     scrollViewportToTop()
   }, [setSelectedBlockPage, setSelectedCat, scrollViewportToTop])
 
   const handleEnveloppesBlockClick = useCallback((blockId: string) => {
-    setBudgetsTabId('legacy')
     setSelectedCat('all')
     if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision' || blockId === 'epargne') {
       setSelectedBlockPage(blockId)
@@ -881,7 +880,6 @@ export function Budgets() {
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleEnveloppesRevenueClick = useCallback(() => {
-    setBudgetsTabId('legacy')
     setSelectedCat('all')
     setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
     scrollViewportToTop()
@@ -2009,6 +2007,7 @@ export function Budgets() {
   const isExpenseBlockPage = selectedBlockPage != null
   const isBlockMode = isExpenseBlockPage || isRevenueBlockPage
   const isCategoryMode = selectedCat !== 'all' && !isBlockMode
+  const isDetailMode = selectedCat !== 'all' || selectedBlockPage != null || isRevenueBlockPage
   const isRootMode = selectedCat === 'all' && !isBlockMode
   const showExtendedSlides = isRootMode
   const slideCount = showExtendedSlides ? 3 : 2
@@ -2258,9 +2257,9 @@ export function Budgets() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
-        title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
-        titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
-        onTitleClick={budgetsTabId === 'legacy' ? handleHeaderTitleReset : undefined}
+        title={isDetailMode ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
+        titleAriaLabel={isDetailMode ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
+        onTitleClick={isDetailMode ? handleHeaderTitleReset : undefined}
         contentOffsetY={4}
         titleAfter={budgetsTabId === 'analytics' ? (
           <button
@@ -2314,7 +2313,7 @@ export function Budgets() {
         onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
         rightSlot={budgetsTabId !== 'metriques' && budgetsTabId !== 'analytics' ? (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            {budgetsTabId === 'legacy' && (
+            {isDetailMode && (
               <button
                 type="button"
                 onClick={() => {
@@ -2373,7 +2372,7 @@ export function Budgets() {
         ) : undefined}
       />
 
-      {(budgetsTabId === 'enveloppes' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') && (() => {
+      {!isDetailMode && (budgetsTabId === 'enveloppes' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') && (() => {
         const CIRCULAR_TABS = [
           { id: 'enveloppes' as const, label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
           { id: 'projections' as const, label: 'Projections', iconSrc: projectionsAnnuellesIcon },
@@ -2437,7 +2436,7 @@ export function Budgets() {
         )
       })()}
 
-      {budgetsTabId === 'legacy' ? (
+      {isDetailMode ? (
       <>
       {showHeaderPeriodMenu && isSlideOneOrTwoMode ? (
         <div

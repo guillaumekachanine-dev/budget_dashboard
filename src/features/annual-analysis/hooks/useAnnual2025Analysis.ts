@@ -2,13 +2,42 @@ import { useQuery } from '@tanstack/react-query'
 import type {
   Annual2025Analysis,
   Annual2025InsightRow,
+  Annual2025YearlyBucketRow,
+  Annual2025YearlyCategoryRow,
   AnnualTotalsPayload,
   MonthlyProfilePoint,
   Top5CategoryItem,
 } from '@/features/annual-analysis/types'
-import { getAnnual2025Insights } from '@/features/annual-analysis/api/getAnnual2025Insights'
-import { getAnnual2025YearlyBuckets } from '@/features/annual-analysis/api/getAnnual2025YearlyBuckets'
-import { getAnnual2025YearlyParentCategories } from '@/features/annual-analysis/api/getAnnual2025YearlyParentCategories'
+import { budgetDb } from '@/lib/supabaseBudget'
+
+async function getAnnual2025Insights(): Promise<Annual2025InsightRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_insights')
+    .select('insight_key, insight_level, value_text, value_numeric, payload')
+  if (error) throw new Error(`getAnnual2025Insights failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025InsightRow[]
+}
+
+async function getAnnual2025YearlyBuckets(): Promise<Annual2025YearlyBucketRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_yearly_bucket_summary')
+    .select('analysis_year, budget_bucket, amount_total_year, share_of_year_expense_pct, rank_in_year')
+    .eq('analysis_year', 2025)
+    .order('rank_in_year', { ascending: true })
+  if (error) throw new Error(`getAnnual2025YearlyBuckets failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025YearlyBucketRow[]
+}
+
+async function getAnnual2025YearlyParentCategories(): Promise<Annual2025YearlyCategoryRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_yearly_category_summary')
+    .select('category_name, category_level, amount_total_year, share_of_year_expense_pct, rank_in_year, analysis_year')
+    .eq('analysis_year', 2025)
+    .eq('category_level', 'parent')
+    .order('rank_in_year', { ascending: true })
+  if (error) throw new Error(`getAnnual2025YearlyParentCategories failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025YearlyCategoryRow[]
+}
 
 function asNumber(v: unknown): number {
   const n = Number(v)
