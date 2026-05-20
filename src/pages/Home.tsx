@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, TriangleAlert } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
@@ -220,6 +220,284 @@ function DriftCategoryTransactionsModal({
   )
 }
 
+type DriftRowShape = { id: string; name: string; spent: number; driftPct: number; iconKey: string | null; colorToken: string | null; exceedDate: string | null }
+type Top5RowShape = { id: string; name: string; spent: number; driftPct: number }
+
+function DriftsModal({
+  open,
+  onClose,
+  driftRows,
+  top5ExpenseRows,
+  loadingSummaries,
+  onCategoryClick,
+}: {
+  open: boolean
+  onClose: () => void
+  driftRows: DriftRowShape[]
+  top5ExpenseRows: Top5RowShape[]
+  loadingSummaries: boolean
+  onCategoryClick: (id: string) => void
+}) {
+  const [showTop5, setShowTop5] = useState(false)
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(13,13,31,0.52)' }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 201,
+              display: 'grid',
+              placeItems: 'center',
+              padding: 'var(--space-4)',
+              pointerEvents: 'none',
+            }}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 20, opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              style={{
+                width: 'min(520px, 100%)',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-2xl)',
+                maxHeight: 'min(80dvh, calc(100dvh - var(--space-8)))',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: 'var(--shadow-lg)',
+                pointerEvents: 'auto',
+              }}
+            >
+              <div
+                style={{
+                  padding: 'var(--space-4) var(--space-5)',
+                  borderBottom: '1px solid var(--neutral-150)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 'var(--space-3)',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <TriangleAlert size={17} color="var(--color-warning)" />
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                    Catégories en dérive
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Fermer"
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    minWidth: 34,
+                    minHeight: 34,
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {loadingSummaries ? (
+                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
+                    Chargement…
+                  </p>
+                ) : driftRows.length === 0 ? (
+                  <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
+                    <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+                      Budget sous contrôle. Rien à signaler pour le moment.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowTop5((c) => !c)}
+                      style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', minHeight: 30, padding: '0 12px', background: 'var(--neutral-0)', color: 'var(--neutral-700)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      {showTop5 ? 'masquer' : 'voir le top 5 catégories (dépenses)'}
+                    </button>
+                    {showTop5 ? (
+                      <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
+                        {top5ExpenseRows.map((row, idx) => {
+                          const drift = Number(row.driftPct ?? 0)
+                          const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                          return (
+                            <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                              {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
+                              <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                              </span>
+                            </p>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div style={{ padding: '0 var(--space-5)' }}>
+                    {driftRows.map((row) => {
+                      const drift = Number(row.driftPct ?? 0)
+                      return (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => onCategoryClick(row.id)}
+                          style={{
+                            border: 'none',
+                            borderBottom: '1px solid var(--neutral-100)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-2)',
+                            minHeight: 44,
+                            padding: '8px 0',
+                            width: '100%',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background-color var(--transition-fast)',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        >
+                          <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
+                            {row.exceedDate ?? '--/--'}
+                          </span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
+                            {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {`+${drift.toFixed(0)}%`}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+function DriftsTile({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire — voir le détail`}
+      style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1',
+        border: '1px solid var(--neutral-200)',
+        background: 'var(--neutral-0)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-card)',
+        cursor: 'pointer',
+        overflow: 'hidden',
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
+        e.currentTarget.style.transform = 'translateY(-1px)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
+        e.currentTarget.style.transform = 'translateY(0)'
+      }}
+    >
+      {/* Titre */}
+      <p
+        style={{
+          margin: 0,
+          padding: '10px 12px 0',
+          fontSize: 10,
+          fontWeight: 800,
+          color: 'var(--neutral-600)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.09em',
+          textAlign: 'left',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        Dérives
+      </p>
+
+      {/* Pictogramme avertissement en arrière-plan */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        <TriangleAlert
+          size={84}
+          color="var(--color-warning)"
+          style={{ opacity: 0.13 }}
+        />
+      </div>
+
+      {/* Nombre en grand */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 'clamp(36px, 10vw, 52px)',
+            fontWeight: 900,
+            fontFamily: 'var(--font-mono)',
+            lineHeight: 1,
+            color: count > 0 ? 'var(--color-error)' : 'var(--color-success)',
+          }}
+        >
+          {count}
+        </span>
+      </div>
+    </button>
+  )
+}
+
 export function Home() {
   const { year, month } = getCurrentPeriod()
   const now = new Date()
@@ -369,7 +647,7 @@ export function Home() {
           exceedDate: exceedDateStr,
         }
       })
-      .filter((r) => r.driftPct >= 0)
+      .filter((r) => r.driftPct > 0)
       .sort((a, b) => b.driftPct - a.driftPct)
       .slice(0, 6)
   }, [summaries, monthExpenseTxns, todayDate])
@@ -394,7 +672,7 @@ export function Home() {
   const [showAccountsModal, setShowAccountsModal] = useState(false)
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
-  const [showTop5ExpensesInDrift, setShowTop5ExpensesInDrift] = useState(false)
+  const [showDriftsModal, setShowDriftsModal] = useState(false)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
 
   useEffect(() => {
@@ -409,18 +687,21 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showAccountsModal && !showDriftCategoryModal && !showResteUtileModal) return
+    if (!showAccountsModal && !showDriftCategoryModal && !showDriftsModal && !showResteUtileModal) return
     return lockDocumentScroll()
-  }, [showAccountsModal, showDriftCategoryModal, showResteUtileModal])
+  }, [showAccountsModal, showDriftCategoryModal, showDriftsModal, showResteUtileModal])
 
   useEffect(() => {
-    if (!showResteUtileModal) return
+    if (!showResteUtileModal && !showDriftsModal) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowResteUtileModal(false)
+      if (event.key === 'Escape') {
+        setShowResteUtileModal(false)
+        setShowDriftsModal(false)
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal])
+  }, [showResteUtileModal, showDriftsModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1133,91 +1414,22 @@ export function Home() {
           transition={{ duration: 0.35, delay: 0.12 }}
           style={{ padding: '0 var(--space-6)' }}
         >
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
-            <p style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-              Catégories en dérive
-            </p>
-            <div style={{ borderTop: '1px solid var(--neutral-200)' }}>
-              {loadingSummaries ? (
-                <p style={{ margin: 0, padding: 'var(--space-8) 0', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
-                  Chargement…
-                </p>
-              ) : driftRows.length === 0 ? (
-                <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) 0' }}>
-                  <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
-                    Budget sous contrôle. Rien à signaler pour le moment.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowTop5ExpensesInDrift((current) => !current)}
-                    style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', minHeight: 30, padding: '0 12px', background: 'var(--neutral-0)', color: 'var(--neutral-700)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    voir le top 5 catégories (dépenses)
-                  </button>
-                  {showTop5ExpensesInDrift ? (
-                    <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
-                      {top5ExpenseRows.map((row, idx) => {
-                        const drift = Number(row.driftPct ?? 0)
-                        const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                        return (
-                          <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                            {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
-                            <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                              {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                            </span>
-                          </p>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div>
-                  {driftRows.map((row) => {
-                    const drift = Number(row.driftPct ?? 0)
-                    return (
-                      <button
-                        key={row.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDriftCategoryId(row.id)
-                          setShowDriftCategoryModal(true)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 'var(--space-2)',
-                          minHeight: 44,
-                          padding: '8px 0',
-                          borderBottom: '1px solid var(--neutral-100)',
-                          width: '100%',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'background-color var(--transition-fast)',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                      >
-                        <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
-                          {row.exceedDate || '--/--'}
-                        </span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
-                        </span>
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
-                          {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {`+${drift.toFixed(0)}%`}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+          <div
+            style={{
+              maxWidth: 600,
+              margin: '0 auto',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 'var(--space-3)',
+            }}
+          >
+            {/* Emplacement gauche — libre pour les prochaines tuiles */}
+            <div />
+            {/* Tuile Dérives — droite */}
+            <DriftsTile
+              count={driftRows.length}
+              onClick={() => setShowDriftsModal(true)}
+            />
           </div>
         </motion.section>
       ) : null}
@@ -1406,6 +1618,18 @@ export function Home() {
           </>
         ) : null}
       </AnimatePresence>
+
+      <DriftsModal
+        open={showDriftsModal}
+        onClose={() => setShowDriftsModal(false)}
+        driftRows={driftRows}
+        top5ExpenseRows={top5ExpenseRows}
+        loadingSummaries={loadingSummaries}
+        onCategoryClick={(id) => {
+          setSelectedDriftCategoryId(id)
+          setShowDriftCategoryModal(true)
+        }}
+      />
 
       <DriftCategoryTransactionsModal
         open={showDriftCategoryModal}
