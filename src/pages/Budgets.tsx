@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -2256,7 +2256,7 @@ export function Budgets() {
   }, [dataDisplayMode, selectedBlockPage])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques') ? 'var(--space-2)' : 'var(--space-5)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
         title={budgetsTabId === 'legacy' ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
         titleAriaLabel={budgetsTabId === 'legacy' ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
@@ -2351,26 +2351,6 @@ export function Budgets() {
                 {headerPeriodLabel}
               </button>
             )}
-            {budgetsTabId === 'enveloppes' ? (
-              <button
-                type="button"
-                onClick={() => setBudgetsTabId('analytics')}
-                aria-label="Aller à l’onglet Analytics"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  padding: 0,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: 'var(--touch-target-min)',
-                  minWidth: 'var(--touch-target-min)',
-                }}
-              >
-                <img src={analyticsIcon} alt="Analytics" width={32} height={32} style={{ display: 'block', objectFit: 'contain' }} />
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={() => setBudgetsTabId('metriques')}
@@ -2392,6 +2372,70 @@ export function Budgets() {
           </div>
         ) : undefined}
       />
+
+      {(budgetsTabId === 'enveloppes' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') && (() => {
+        const CIRCULAR_TABS = [
+          { id: 'enveloppes' as const, label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
+          { id: 'projections' as const, label: 'Projections', iconSrc: projectionsAnnuellesIcon },
+          { id: 'analytics' as const, label: 'Analytics', iconSrc: analyticsIcon },
+        ]
+        const currentIdx = CIRCULAR_TABS.findIndex((t) => t.id === budgetsTabId)
+        const prevTab = CIRCULAR_TABS[(currentIdx - 1 + CIRCULAR_TABS.length) % CIRCULAR_TABS.length]
+        const nextTab = CIRCULAR_TABS[(currentIdx + 1) % CIRCULAR_TABS.length]
+        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
+        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
+        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
+        const btnBase = {
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          minHeight: 'var(--touch-target-min)',
+        } as const
+        const TAB_TITLES: Record<string, string> = {
+          enveloppes: 'Enveloppes budgétaires',
+          projections: 'Projections annuelles',
+          analytics: 'Analyse comparée',
+        }
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto',
+            alignItems: 'center',
+            paddingLeft: 'var(--page-gutter)',
+            paddingRight: 'var(--page-gutter)',
+            marginTop: '-8px',
+          }}>
+            {/* Left: ◀ triangle outermost, then icon */}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId(prevTab.id)}
+              aria-label={`Aller à ${prevTab.label}`}
+              style={btnBase}
+            >
+              <div style={triLeft} />
+              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+            </button>
+            {/* Centered title */}
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              {TAB_TITLES[budgetsTabId]}
+            </h2>
+            {/* Right: icon, then ▶ triangle outermost */}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId(nextTab.id)}
+              aria-label={`Aller à ${nextTab.label}`}
+              style={btnBase}
+            >
+              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+              <div style={triRight} />
+            </button>
+          </div>
+        )
+      })()}
 
       {budgetsTabId === 'legacy' ? (
       <>

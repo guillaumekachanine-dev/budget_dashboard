@@ -843,9 +843,6 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
 
       {/* ── title + toggle ── */}
       <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginTop: 0, marginBottom: 'var(--space-3)' }}>
-        <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
-          Enveloppes budgétaires
-        </h2>
         <button
           type="button"
           onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
@@ -985,7 +982,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       </div>
 
       {/* ── category lists ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--neutral-100)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--neutral-100)', marginTop: 'var(--space-4)' }}>
         {/* Left: Réel list */}
         <div style={{ borderRight: '1px solid var(--neutral-100)' }}>
           {top5.map((entry) => {

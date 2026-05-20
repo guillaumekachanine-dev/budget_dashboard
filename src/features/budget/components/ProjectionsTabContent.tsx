@@ -442,10 +442,6 @@ export function ProjectionsTabContent() {
   return (
     <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
-      <h2 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
-        Projection annuelle globale
-      </h2>
-
       {/* Dark navy container — same design language as "projections annuelles comparées" */}
       <div style={{
         background: 'linear-gradient(135deg, #1e1c4a 0%, #2d2a6e 100%)',
