@@ -67,7 +67,7 @@ function StatsMajorSectionHeading({ title }: { title: string }) {
   )
 }
 
-export function Stats() {
+export function Epargne() {
   const {
     snapshot,
     loading,

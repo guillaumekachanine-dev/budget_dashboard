@@ -9,7 +9,7 @@ import { useStatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsRefe
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
 const Budgets = lazy(() => import('@/pages/Budgets').then((module) => ({ default: module.Budgets })))
-const Stats = lazy(() => import('@/pages/Stats').then((module) => ({ default: module.Stats })))
+const Epargne = lazy(() => import('@/pages/Epargne').then((module) => ({ default: module.Epargne })))
 const Login = lazy(() => import('@/pages/Login').then((module) => ({ default: module.Login })))
 // Lazy-loaded to keep react-hook-form out of the initial bundle (modal is rarely opened on first load)
 const AddTransactionModal = lazy(() =>
@@ -29,7 +29,7 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const location = useLocation()
 
-  useStatsReferenceBootstrap({ userId: user?.id ?? null, enabled: !!user && location.pathname === '/stats' })
+  useStatsReferenceBootstrap({ userId: user?.id ?? null, enabled: !!user && location.pathname === '/epargne' })
 
   useEffect(() => {
     forceUnlockDocumentScroll()
@@ -80,10 +80,10 @@ export default function App() {
             <Route path="/flux"     element={<Flux />} />
             <Route path="/activite" element={<Navigate to="/flux" replace />} />
             <Route path="/budgets"  element={<Budgets />} />
-            <Route path="/stats"    element={<Stats />} />
+            <Route path="/epargne"  element={<Epargne />} />
             {/* Redirections des anciens chemins */}
-            <Route path="/charts"   element={<Navigate to="/stats" replace />} />
-            <Route path="/epargne"  element={<Navigate to="/stats" replace />} />
+            <Route path="/stats"    element={<Navigate to="/epargne" replace />} />
+            <Route path="/charts"   element={<Navigate to="/epargne" replace />} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

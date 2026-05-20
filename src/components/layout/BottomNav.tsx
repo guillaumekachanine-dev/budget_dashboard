@@ -14,7 +14,7 @@ const LEFT_ITEMS = [
 
 const RIGHT_ITEMS = [
   { to: '/budgets', icon: FolderOpen, label: 'Budgets' },
-  { to: '/stats', icon: BarChart2, label: 'Stats' },
+  { to: '/epargne', icon: BarChart2, label: 'Épargne' },
 ]
 
 type NavItemProps = {
