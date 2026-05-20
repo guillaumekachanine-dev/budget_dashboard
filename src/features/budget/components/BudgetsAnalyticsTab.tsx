@@ -147,78 +147,66 @@ export function BudgetsAnalyticsTab() {
 
   return (
     <section style={{ width: '100%', boxSizing: 'border-box', display: 'grid', gap: 'var(--space-6)' }}>
-      <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
-          <div
+      {/* ── controls: period info (plain) + year selectors ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: '0 var(--page-gutter)', marginBottom: 'var(--space-3)' }}>
+        {/* Period — plain text, no badge */}
+        <span
+          style={{
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 700,
+            color: 'var(--neutral-700)',
+            letterSpacing: '0.01em',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Janvier → Avril (4 mois)
+        </span>
+
+        {/* Year selectors — keep dropdown functionality, same visual position as toggles */}
+        <div
+          ref={yearRowRef}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 'var(--space-2)',
+            position: 'relative',
+            zIndex: 8,
+          }}
+        >
+          <YearSelector
+            label="Année gauche"
+            value={comparisonYears.left}
+            open={openYearMenu === 'left'}
+            onToggle={() => setOpenYearMenu((prev) => (prev === 'left' ? null : 'left'))}
+            onSelect={(year) => selectYear('left', year)}
+            buttonWidth={92}
+            buttonHeight={36}
+          />
+          <span
             style={{
-              maxWidth: 258,
-              margin: '0 auto',
-              background:
-                'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 85%, #000 15%) 0%, color-mix(in oklab, var(--color-warning) 68%, #000 32%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
-              padding: '8px var(--space-4)',
-              borderRadius: 'var(--radius-lg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--neutral-500)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              width: 24,
+              textAlign: 'center',
             }}
           >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: '#fff',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Janvier -&gt; Avril (4 mois)
-            </span>
-          </div>
-
-          <div
-            ref={yearRowRef}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 'var(--space-2)',
-              position: 'relative',
-              zIndex: 8,
-            }}
-          >
-            <YearSelector
-              label="Année gauche"
-              value={comparisonYears.left}
-              open={openYearMenu === 'left'}
-              onToggle={() => setOpenYearMenu((prev) => (prev === 'left' ? null : 'left'))}
-              onSelect={(year) => selectYear('left', year)}
-            />
-
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: 'var(--neutral-500)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                width: 24,
-                textAlign: 'center',
-              }}
-            >
-              VS
-            </span>
-
-            <YearSelector
-              label="Année droite"
-              value={comparisonYears.right}
-              open={openYearMenu === 'right'}
-              onToggle={() => setOpenYearMenu((prev) => (prev === 'right' ? null : 'right'))}
-              onSelect={(year) => selectYear('right', year)}
-            />
-          </div>
+            VS
+          </span>
+          <YearSelector
+            label="Année droite"
+            value={comparisonYears.right}
+            open={openYearMenu === 'right'}
+            onToggle={() => setOpenYearMenu((prev) => (prev === 'right' ? null : 'right'))}
+            onSelect={(year) => selectYear('right', year)}
+            buttonWidth={92}
+            buttonHeight={36}
+          />
         </div>
-      </section>
+      </div>
 
       <MajorSectionHeading title="Analyse des flux" marginTop="0" />
 
@@ -408,12 +396,16 @@ function YearSelector({
   open,
   onToggle,
   onSelect,
+  buttonWidth = 118,
+  buttonHeight = 34,
 }: {
   label: string
   value: ComparisonYear
   open: boolean
   onToggle: () => void
   onSelect: (year: ComparisonYear) => void
+  buttonWidth?: number
+  buttonHeight?: number
 }) {
   return (
     <div style={{ position: 'relative' }}>
@@ -423,8 +415,8 @@ function YearSelector({
         aria-expanded={open}
         onClick={onToggle}
         style={{
-          minWidth: 118,
-          height: 34,
+          minWidth: buttonWidth,
+          height: buttonHeight,
           borderRadius: 'var(--radius-md)',
           border: '1px solid color-mix(in oklab, var(--primary-500) 24%, var(--neutral-200) 76%)',
           background: 'var(--neutral-0)',
