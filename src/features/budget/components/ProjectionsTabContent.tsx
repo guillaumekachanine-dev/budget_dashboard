@@ -31,38 +31,6 @@ type CalcModalConfig = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function DarkToggle({ mode, onChange }: { mode: DisplayMode; onChange: (m: DisplayMode) => void }) {
-  function btn(active: boolean): React.CSSProperties {
-    return {
-      border: active ? '1.5px solid rgba(255,255,255,0.30)' : '1.5px solid transparent',
-      background: active ? 'rgba(255,255,255,0.16)' : 'transparent',
-      color: active ? '#fff' : 'rgba(255,255,255,0.45)',
-      borderRadius: 'var(--radius-md)',
-      padding: 'var(--space-2) var(--space-4)',
-      fontSize: 'var(--font-size-sm)',
-      fontWeight: 700,
-      cursor: 'pointer',
-      transition: 'all var(--transition-base)',
-      minHeight: 34,
-      textAlign: 'center' as const,
-    }
-  }
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 3,
-      background: 'rgba(255,255,255,0.07)',
-      borderRadius: 'var(--radius-md)',
-      padding: '3px',
-      width: 224,
-    }}>
-      <button type="button" onClick={() => onChange('depenses')} style={btn(mode === 'depenses')}>Dépenses</button>
-      <button type="button" onClick={() => onChange('revenus')} style={btn(mode === 'revenus')}>Revenus</button>
-    </div>
-  )
-}
 
 function DarkSlideToggle({ slide, onChange }: { slide: CostProjectionSlide; onChange: (s: CostProjectionSlide) => void }) {
   function btn(active: boolean): React.CSSProperties {
