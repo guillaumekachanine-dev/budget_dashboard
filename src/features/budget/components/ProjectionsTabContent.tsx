@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
 import { AnnualProjectionSectionConnected, type ProjectionViewMode } from '@/features/annual-analysis/components/AnnualCostProjection2026'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
-import { getMonthShortLabel } from '@/features/annual-analysis/components/_constants'
+import { getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
+import type { BudgetRevenueAnalytics } from '@/features/budget/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -271,18 +273,165 @@ function CalcModal({ config, onClose }: { config: CalcModalConfig | null; onClos
   )
 }
 
+// ─── Revenue 2026 histogram ───────────────────────────────────────────────────
+
+const REV_GREEN = '#2ED47A'
+
+interface Rev2026Point {
+  month: string
+  value: number
+  isProjected: boolean
+}
+
+function RevBarShape(props: {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  payload?: Rev2026Point
+  [key: string]: unknown
+}) {
+  const { x = 0, y = 0, width = 0, height = 0, payload } = props
+  const h = Math.max(0, height)
+  if (h === 0) return null
+  if (!payload?.isProjected) {
+    return <rect x={x} y={y} width={width} height={h} fill={REV_GREEN} rx={3} ry={3} />
+  }
+  return (
+    <rect
+      x={x + 1}
+      y={y}
+      width={Math.max(0, width - 2)}
+      height={h}
+      fill="rgba(46,212,122,0.15)"
+      stroke={REV_GREEN}
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      rx={3}
+      ry={3}
+    />
+  )
+}
+
+function RevenueSection2026({
+  revenueData,
+  ytdMonths,
+}: {
+  revenueData: BudgetRevenueAnalytics | null
+  ytdMonths: number
+}) {
+  const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
+  const currentMonthRevenue = series2026.length > 0 ? series2026[series2026.length - 1].revenue_amount : 0
+  const avg2526 = revenueData?.avgMonthlyRevenue2025_2026 ?? 0
+  const avg6m = revenueData?.avgMonthlyRevenueLast6M ?? 0
+  const projectedValue = avg6m > 0 ? avg6m : avg2526
+
+  const chartData: Rev2026Point[] = MONTH_LABELS_SHORT.map((label, idx) => {
+    const m = idx + 1
+    const isProjected = m > ytdMonths
+    const actual = series2026.find(p => parseInt(p.month_start.slice(5, 7), 10) === m)
+    return {
+      month: label,
+      value: isProjected ? projectedValue : (actual?.revenue_amount ?? 0),
+      isProjected,
+    }
+  })
+
+  const maxVal = Math.max(...chartData.map(d => d.value), 1000)
+  const yMax = Math.ceil(maxVal / 500) * 500 + 500
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      {/* ── 3 KPI tiles ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+        {([
+          { label: 'Mois en cours', value: currentMonthRevenue },
+          { label: 'Moy. 2025-26', value: avg2526 },
+          { label: 'Moy. 6 mois', value: avg6m },
+        ] as { label: string; value: number }[]).map(({ label, value }) => (
+          <div
+            key={label}
+            style={{
+              background: 'var(--neutral-0)',
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-2) var(--space-3)',
+              minHeight: 48,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              alignItems: 'flex-start',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+              {label}
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+              {fmt(value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── 2026 monthly histogram ── */}
+      <div style={{
+        background: 'var(--neutral-0)',
+        border: '1px solid var(--neutral-200)',
+        borderRadius: 'var(--radius-md)',
+        padding: 'var(--space-3) var(--space-3) var(--space-2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em' }}>
+            Revenus 2026
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+              <span style={{ display: 'inline-block', width: 10, height: 8, background: REV_GREEN, borderRadius: 2 }} />
+              Réel
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+              <span style={{ display: 'inline-block', width: 10, height: 8, background: 'rgba(46,212,122,0.15)', border: `1.5px dashed ${REV_GREEN}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
+              Projeté
+            </span>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 9, fill: '#9090a8' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis hide domain={[0, yMax]} />
+            <Bar
+              dataKey="value"
+              shape={<RevBarShape />}
+              maxBarSize={24}
+              isAnimationActive={false}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ProjectionsTabContent() {
   const [mode, setMode] = useState<DisplayMode>('depenses')
   const [costProjectionSlide, setCostProjectionSlide] = useState<CostProjectionSlide>('categories')
   const [activeModal, setActiveModal] = useState<CalcModalConfig | null>(null)
+  const [projMonth, setProjMonth] = useState<number | null>(null) // null = full year 2026
+  const [showPeriodModal, setShowPeriodModal] = useState(false)
 
   const { summary, categories } = useAnnual2026Analysis()
   const { data: projection } = useAnnualProjectionOverview2026(2026)
   const { data: revenueData } = useBudgetRevenueAnalytics()
 
   const now = new Date()
+  const currentMonth = now.getMonth() + 1
   const ytdMonths = summary?.ytdMonths ?? Math.min(now.getMonth() + 1, 12)
   const remainingMonths = 12 - ytdMonths
   const currentMonthLabel = getMonthShortLabel(ytdMonths)
@@ -437,12 +586,158 @@ export function ProjectionsTabContent() {
     note: 'Projection optimiste basée uniquement sur le rythme YTD 2026, sans correction ni régression.',
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const periodLabel = projMonth === null ? '2026' : `${MONTHS_FR_FULL_PROJ[projMonth - 1]} 26`
+
+  function toggleBtnStyle(active: boolean): React.CSSProperties {
+    return {
+      border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
+      background: active ? 'var(--primary-50)' : 'var(--neutral-0)',
+      color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+      borderRadius: 'var(--radius-md)',
+      padding: 'var(--space-2) var(--space-4)',
+      fontSize: 'var(--font-size-sm)',
+      fontWeight: 700,
+      cursor: 'pointer',
+      transition: 'all var(--transition-base)',
+      minHeight: 36,
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <>
+      {/* ── period picker modal ── */}
+      <AnimatePresence>
+        {showPeriodModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPeriodModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner une période"
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--page-gutter)',
+                right: 'var(--page-gutter)',
+                top: '25vh',
+                zIndex: 61,
+                maxWidth: 320,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-2xl)',
+                padding: 'var(--space-4)',
+                boxShadow: '0 8px 40px rgba(13,13,31,0.18)',
+              }}
+            >
+              {/* Full year option */}
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <button
+                  type="button"
+                  onClick={() => { setProjMonth(null); setShowPeriodModal(false) }}
+                  style={{
+                    width: '100%',
+                    padding: '8px var(--space-3)',
+                    border: projMonth === null ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                    borderRadius: 'var(--radius-md)',
+                    background: projMonth === null ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                    color: projMonth === null ? 'var(--primary-600)' : 'var(--neutral-700)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-base)',
+                    textAlign: 'center',
+                  } as React.CSSProperties}
+                >
+                  2026 — Année complète
+                </button>
+              </div>
+              {/* Month grid: 4 × 3 — past months disabled */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {MONTH_LABELS_SHORT.map((lbl, idx) => {
+                  const m = idx + 1
+                  const disabled = m < currentMonth
+                  const isSelected = projMonth === m
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => { setProjMonth(m); setShowPeriodModal(false) }}
+                      style={{
+                        padding: '7px 4px',
+                        border: isSelected ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: isSelected ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : 'var(--neutral-50)',
+                        color: disabled ? 'var(--neutral-300)' : isSelected ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        fontSize: 11,
+                        fontWeight: isSelected ? 700 : 500,
+                        cursor: disabled ? 'default' : 'pointer',
+                        transition: 'all var(--transition-base)',
+                      }}
+                    >
+                      {lbl}
+                    </button>
+                  )
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-      {/* Dark navy container — same design language as "projections annuelles comparées" */}
+      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+
+        {/* ── period + mode controls (mirrors EnveloppesTab layout) ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+          <button
+            type="button"
+            onClick={() => setShowPeriodModal(true)}
+            aria-label="Choisir une période"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer',
+              textAlign: 'center',
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 700,
+              color: 'var(--neutral-700)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            {periodLabel}
+            <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
+            <button type="button" onClick={() => setMode('revenus')} style={{ ...toggleBtnStyle(mode === 'revenus'), textAlign: 'center' }}>Revenus</button>
+            <button type="button" onClick={() => setMode('depenses')} style={{ ...toggleBtnStyle(mode === 'depenses'), textAlign: 'center' }}>Dépenses</button>
+          </div>
+        </div>
+
+        {/* ── Revenue 2026 KPIs + histogram — revenus mode only ── */}
+        {mode === 'revenus' && (
+          <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} />
+        )}
+
+        {/* Dark navy container — same design language as "projections annuelles comparées" */}
       <div style={{
         background: 'linear-gradient(135deg, #1e1c4a 0%, #2d2a6e 100%)',
         borderRadius: 'var(--radius-xl)',
@@ -460,11 +755,6 @@ export function ProjectionsTabContent() {
           background: 'radial-gradient(ellipse at 80% 20%, rgba(91,87,245,0.25) 0%, transparent 65%)',
           pointerEvents: 'none',
         }} />
-
-        {/* Toggle — inside the frame, centered at top */}
-        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-          <DarkToggle mode={mode} onChange={setMode} />
-        </div>
 
         {/* 2×2 card grid */}
         {mode === 'depenses' ? (
@@ -615,7 +905,8 @@ export function ProjectionsTabContent() {
         />
       </div>
 
-      <CalcModal config={activeModal} onClose={() => setActiveModal(null)} />
-    </div>
+        <CalcModal config={activeModal} onClose={() => setActiveModal(null)} />
+      </div>
+    </>
   )
 }
