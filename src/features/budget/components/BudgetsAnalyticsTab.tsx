@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown } from 'lucide-react'
+import { ArrowUpCircle, Car, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-react'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
 import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
@@ -27,15 +27,15 @@ const FLUX_INSIGHTS = {
   savings: {
     id: 'savings' as const,
     titleValue: '-87%',
-    titleSuffix: 'épargne',
+    titleSuffix: 'épargne YTD',
     subtitle: "Le ciseau dépenses/revenus a fortement impacté l'épargne début 2026",
     detailBody:
       "La baisse d'épargne provient principalement de la compression des revenus alors que le socle de dépenses reste présent. Ce signal oriente d'abord les actions vers la stabilisation des entrées, avant la réduction fine de dépenses.",
   },
   income: {
     id: 'income' as const,
-    titleValue: '-81%',
-    titleSuffix: 'revenus',
+    titleValue: '÷2',
+    titleSuffix: 'revenus 2026',
     subtitle: 'Hors janvier, les revenus ont fait -81% versus 2025',
     detailBody:
       "Le delta est concentré sur février à avril. La comparaison annuelle brute masque cette chute hors pic de janvier. L'analyse des flux mensuels confirme un déficit de revenus récurrents sur la période.",
@@ -210,75 +210,37 @@ export function BudgetsAnalyticsTab() {
 
       <MajorSectionHeading title="Analyse des flux" marginTop="0" />
 
-      <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          <div
-            style={{
-              background: 'linear-gradient(140deg, #1A1730 0%, #2D2B6B 45%, #3D3AB8 100%)',
-              borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-4)',
-              boxShadow: 'var(--shadow-card)',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
+      <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <motion.div
+            layout
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
           >
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                top: -72,
-                right: -72,
-                width: 200,
-                height: 200,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(91,87,245,0.28) 0%, transparent 72%)',
-                pointerEvents: 'none',
-              }}
+            <InsightCard
+              icon="savings"
+              titleValue={FLUX_INSIGHTS.savings.titleValue}
+              titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
+              isExpanded={expandedInsightId === 'savings'}
+              onToggle={() => setExpandedInsightId((prev) => (prev === 'savings' ? null : 'savings'))}
+            />
+            <InsightCard
+              icon="income"
+              titleValue={FLUX_INSIGHTS.income.titleValue}
+              titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
+              isExpanded={expandedInsightId === 'income'}
+              onToggle={() => setExpandedInsightId((prev) => (prev === 'income' ? null : 'income'))}
             />
 
-            <p
-              style={{
-                margin: '0 0 var(--space-3)',
-                fontSize: 11,
-                fontWeight: 800,
-                color: 'rgba(255,255,255,0.74)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Insights
-            </p>
-
-            <motion.div
-              layout
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'stretch' }}
-            >
-              <InsightCard
-                titleValue={FLUX_INSIGHTS.savings.titleValue}
-                titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
-                subtitle={FLUX_INSIGHTS.savings.subtitle}
-                isExpanded={expandedInsightId === 'savings'}
-                onToggle={() => setExpandedInsightId((prev) => (prev === 'savings' ? null : 'savings'))}
-              />
-              <InsightCard
-                titleValue={FLUX_INSIGHTS.income.titleValue}
-                titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
-                subtitle={FLUX_INSIGHTS.income.subtitle}
-                isExpanded={expandedInsightId === 'income'}
-                onToggle={() => setExpandedInsightId((prev) => (prev === 'income' ? null : 'income'))}
-              />
-
-              <AnimatePresence initial={false}>
-                {expandedInsightId ? (
-                  <ExpandedInsightPanel
-                    insightId={expandedInsightId}
-                    detailBody={FLUX_INSIGHTS[expandedInsightId].detailBody}
-                  />
-                ) : null}
-              </AnimatePresence>
-            </motion.div>
-          </div>
+            <AnimatePresence initial={false}>
+              {expandedInsightId ? (
+                <ExpandedInsightPanel
+                  insightId={expandedInsightId}
+                  detailBody={FLUX_INSIGHTS[expandedInsightId].detailBody}
+                />
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </section>
 
@@ -296,6 +258,7 @@ export function BudgetsAnalyticsTab() {
               medianMonthly2025={medianMonthly2025}
               medianMonthly2026={medianMonthly2026}
               remainingMonths={remainingMonths}
+              containerVariant="neutral"
             />
           </div>
         </section>
@@ -303,85 +266,44 @@ export function BudgetsAnalyticsTab() {
 
       <MajorSectionHeading title="Analyse de la répartition" marginTop="0" />
 
-      <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #1A1206 0%, #221705 100%)',
-              borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-4)',
-              boxShadow: 'var(--shadow-card)',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
+      <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <motion.div
+            layout
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
           >
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                top: -64,
-                right: -64,
-                width: 180,
-                height: 180,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,171,46,0.22) 0%, transparent 72%)',
-                pointerEvents: 'none',
-              }}
+            <RepartitionInsightCard
+              icon="shopping"
+              titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
+              titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
+              isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
+              onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
+              ))}
+            />
+            <RepartitionInsightCard
+              icon="transport"
+              titleValue={REPARTITION_INSIGHTS.transport.titleValue}
+              titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
+              isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
+              onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
+              ))}
             />
 
-            <p
-              style={{
-                margin: '0 0 var(--space-3)',
-                fontSize: 11,
-                fontWeight: 800,
-                color: 'rgba(255,255,255,0.74)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Insights
-            </p>
-
-            <motion.div
-              layout
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'stretch' }}
-            >
-              <RepartitionInsightCard
-                titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
-                titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
-                subtitle={REPARTITION_INSIGHTS.achatsDivers.subtitle}
-                accentColor={REPARTITION_INSIGHTS.achatsDivers.accentColor}
-                titleSuffixFontSize="clamp(12px, 3.2vw, 16px)"
-                isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
-                onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                  prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
-                ))}
-              />
-              <RepartitionInsightCard
-                titleValue={REPARTITION_INSIGHTS.transport.titleValue}
-                titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
-                subtitle={REPARTITION_INSIGHTS.transport.subtitle}
-                accentColor={REPARTITION_INSIGHTS.transport.accentColor}
-                isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
-                onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                  prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
-                ))}
-              />
-
-              <AnimatePresence initial={false}>
-                {expandedRepartitionInsightId ? (
-                  <ExpandedRepartitionInsightPanel
-                    key={expandedRepartitionInsightId}
-                    insightId={expandedRepartitionInsightId}
-                    detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
-                      ? REPARTITION_INSIGHTS.achatsDivers.detailBody
-                      : REPARTITION_INSIGHTS.transport.detailBody}
-                  />
-                ) : null}
-              </AnimatePresence>
-            </motion.div>
-          </div>
+            <AnimatePresence initial={false}>
+              {expandedRepartitionInsightId ? (
+                <ExpandedRepartitionInsightPanel
+                  key={expandedRepartitionInsightId}
+                  insightId={expandedRepartitionInsightId}
+                  detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
+                    ? REPARTITION_INSIGHTS.achatsDivers.detailBody
+                    : REPARTITION_INSIGHTS.transport.detailBody}
+                />
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </section>
 
@@ -423,7 +345,6 @@ function YearSelector({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
           cursor: 'pointer',
           padding: '0 var(--space-3)',
         }}
@@ -431,7 +352,6 @@ function YearSelector({
         <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-800)', lineHeight: 1 }}>
           {value}
         </span>
-        <ChevronDown size={14} color="var(--neutral-600)" />
       </button>
 
       <AnimatePresence>
@@ -473,70 +393,83 @@ function YearSelector({
 }
 
 function InsightCard({
+  icon,
   titleValue,
   titleSuffix,
-  subtitle,
   isExpanded,
   onToggle,
 }: {
+  icon: 'savings' | 'income'
   titleValue: string
   titleSuffix: string
-  subtitle: string
   isExpanded: boolean
   onToggle: () => void
 }) {
+  const Icon = icon === 'savings' ? PiggyBank : ArrowUpCircle
+  const iconStyle =
+    icon === 'savings'
+      ? {
+          background: 'color-mix(in oklab, #FFAB2E 20%, white 80%)',
+          color: '#FFAB2E',
+        }
+      : {
+          background: 'color-mix(in oklab, #7C3AED 20%, white 80%)',
+          color: '#7C3AED',
+        }
+
   return (
     <motion.article
       layout
       transition={{ duration: 0.22, ease: 'easeOut' }}
       style={{
-        border: '1px solid rgba(255,255,255,0.22)',
-        borderRadius: 'var(--radius-xl)',
-        background: 'color-mix(in oklab, #2D2B6B 74%, #FFFFFF 26%)',
-        padding: 'var(--space-3)',
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        padding: 'var(--space-2) var(--space-1)',
         textAlign: 'left',
         display: 'grid',
-        gap: 'var(--space-2)',
-        minHeight: 122,
+        gap: 'var(--space-1)',
+        minHeight: 114,
         height: '100%',
-        boxShadow: isExpanded ? '0 0 0 1px rgba(255,255,255,0.2), 0 12px 24px rgba(13,13,31,0.22)' : 'none',
+        boxShadow: 'none',
       }}
     >
-      <p style={{ margin: 0, lineHeight: 1.1, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
         <span
+          aria-hidden="true"
           style={{
-            fontSize: 'clamp(18px, 5.8vw, 28px)',
-            fontWeight: 'var(--font-weight-extrabold)',
-            color: '#FC5A5A',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '-0.01em',
+            width: 44,
+            height: 44,
+            borderRadius: 'var(--radius-full)',
+            background: iconStyle.background,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: iconStyle.color,
+            flexShrink: 0,
           }}
         >
-          {titleValue}
+          <Icon size={22} strokeWidth={2.2} color={iconStyle.color} />
         </span>
-        <span
-          style={{
-            fontSize: 'clamp(14px, 4vw, 20px)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: 'var(--neutral-0)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {titleSuffix}
-        </span>
-      </p>
+        <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: '#FC5A5A', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+            {titleValue}
+          </p>
+          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+            {titleSuffix}
+          </p>
+        </div>
+      </div>
 
-      <p
+      <div
+        aria-hidden="true"
         style={{
-          margin: 0,
-          fontSize: 11,
-          lineHeight: 1.35,
-          color: 'rgba(255,255,255,0.93)',
-          fontWeight: 'var(--font-weight-semibold)',
+          height: 1,
+          width: 'calc(100% - 44px - var(--space-2))',
+          marginLeft: 'calc(44px + var(--space-2))',
+          background: 'var(--neutral-700)',
         }}
-      >
-        {subtitle}
-      </p>
+      />
 
       <button
         type="button"
@@ -544,24 +477,19 @@ function InsightCard({
         aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
         aria-expanded={isExpanded}
         style={{
-          marginTop: 'auto',
           border: 'none',
           background: 'transparent',
-          padding: '4px 0 0',
+          padding: '2px 0 0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
         }}
       >
-        <span
-          aria-hidden="true"
+        <ChevronDown
+          size={24}
+          color="var(--neutral-600)"
           style={{
-            width: 0,
-            height: 0,
-            borderLeft: '8px solid transparent',
-            borderRight: '8px solid transparent',
-            borderTop: '12px solid rgba(255,255,255,0.95)',
             transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 180ms ease',
           }}
@@ -591,9 +519,9 @@ function ExpandedInsightPanel({
       style={{
         gridColumn: '1 / -1',
         transformOrigin: 'top center',
-        border: '1px solid rgba(255,255,255,0.22)',
+        border: '1px solid var(--neutral-700)',
         borderRadius: 'var(--radius-xl)',
-        background: 'color-mix(in oklab, #2D2B6B 74%, #FFFFFF 26%)',
+        background: 'var(--neutral-100)',
         padding: 'var(--space-4)',
         display: 'grid',
         gap: 'var(--space-3)',
@@ -604,7 +532,7 @@ function ExpandedInsightPanel({
           margin: 0,
           fontSize: 11,
           lineHeight: 1.5,
-          color: 'rgba(255,255,255,0.9)',
+          color: 'var(--neutral-900)',
         }}
       >
         {detailBody}
@@ -619,7 +547,7 @@ function ExpandedInsightPanel({
               style={{
                 height: 220,
                 borderRadius: 'var(--radius-xl)',
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 25%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.08) 75%)',
+                background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
                 backgroundSize: '200% 100%',
                 animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
               }}
@@ -627,7 +555,7 @@ function ExpandedInsightPanel({
           ) : null}
 
           {!loading && error ? (
-            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.86)' }}>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)' }}>
               Erreur de chargement du graphique.
             </p>
           ) : null}
@@ -653,74 +581,83 @@ function ExpandedInsightPanel({
 }
 
 function RepartitionInsightCard({
+  icon,
   titleValue,
   titleSuffix,
-  subtitle,
-  accentColor,
-  titleSuffixFontSize,
   isExpanded,
   onToggle,
 }: {
+  icon: 'shopping' | 'transport'
   titleValue: string
   titleSuffix: string
-  subtitle: string
-  accentColor: string
-  titleSuffixFontSize?: string
   isExpanded: boolean
   onToggle: () => void
 }) {
+  const Icon = icon === 'shopping' ? ShoppingBag : Car
+  const iconStyle =
+    icon === 'shopping'
+      ? {
+          background: 'color-mix(in oklab, #FFAB2E 20%, white 80%)',
+          color: '#FFAB2E',
+        }
+      : {
+          background: 'color-mix(in oklab, #7C3AED 20%, white 80%)',
+          color: '#7C3AED',
+        }
+
   return (
     <motion.article
       layout
       transition={{ duration: 0.22, ease: 'easeOut' }}
       style={{
-        border: '1px solid rgba(255,255,255,0.2)',
-        borderRadius: 'var(--radius-xl)',
-        background: 'color-mix(in oklab, #2B2010 78%, #FFFFFF 22%)',
-        padding: 'var(--space-3)',
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        padding: 'var(--space-2) var(--space-1)',
         textAlign: 'left',
         display: 'grid',
-        gap: 'var(--space-2)',
-        minHeight: 122,
+        gap: 'var(--space-1)',
+        minHeight: 114,
         height: '100%',
-        boxShadow: isExpanded ? '0 0 0 1px rgba(255,255,255,0.18), 0 12px 24px rgba(22,16,8,0.24)' : 'none',
+        boxShadow: 'none',
       }}
     >
-      <p style={{ margin: 0, lineHeight: 1.1, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
         <span
+          aria-hidden="true"
           style={{
-            fontSize: 'clamp(18px, 5.8vw, 28px)',
-            fontWeight: 'var(--font-weight-extrabold)',
-            color: accentColor,
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '-0.01em',
+            width: 44,
+            height: 44,
+            borderRadius: 'var(--radius-full)',
+            background: iconStyle.background,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: iconStyle.color,
+            flexShrink: 0,
           }}
         >
-          {titleValue}
+          <Icon size={22} strokeWidth={2.2} color={iconStyle.color} />
         </span>
-        <span
-          style={{
-            fontSize: titleSuffixFontSize ?? 'clamp(14px, 4vw, 20px)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: 'var(--neutral-0)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {titleSuffix}
-        </span>
-      </p>
+        <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: '#FC5A5A', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+            {titleValue}
+          </p>
+          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+            {titleSuffix}
+          </p>
+        </div>
+      </div>
 
-      <p
+      <div
+        aria-hidden="true"
         style={{
-          margin: 0,
-          fontSize: 11,
-          lineHeight: 1.35,
-          color: 'rgba(255,255,255,0.9)',
-          fontWeight: 'var(--font-weight-semibold)',
+          height: 1,
+          width: 'calc(100% - 44px - var(--space-2))',
+          marginLeft: 'calc(44px + var(--space-2))',
+          background: 'var(--neutral-700)',
         }}
-      >
-        {subtitle}
-      </p>
+      />
 
       <button
         type="button"
@@ -728,24 +665,19 @@ function RepartitionInsightCard({
         aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
         aria-expanded={isExpanded}
         style={{
-          marginTop: 'auto',
           border: 'none',
           background: 'transparent',
-          padding: '4px 0 0',
+          padding: '2px 0 0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
         }}
       >
-        <span
-          aria-hidden="true"
+        <ChevronDown
+          size={24}
+          color="var(--neutral-600)"
           style={{
-            width: 0,
-            height: 0,
-            borderLeft: '8px solid transparent',
-            borderRight: '8px solid transparent',
-            borderTop: '12px solid rgba(255,255,255,0.95)',
             transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 180ms ease',
           }}
@@ -772,9 +704,9 @@ function ExpandedRepartitionInsightPanel({
       style={{
         gridColumn: '1 / -1',
         transformOrigin: 'top center',
-        border: '1px solid rgba(255,255,255,0.2)',
+        border: '1px solid var(--neutral-700)',
         borderRadius: 'var(--radius-xl)',
-        background: 'color-mix(in oklab, #2B2010 78%, #FFFFFF 22%)',
+        background: 'var(--neutral-100)',
         padding: 'var(--space-4)',
         display: 'grid',
         gap: 'var(--space-3)',
@@ -785,7 +717,7 @@ function ExpandedRepartitionInsightPanel({
           margin: 0,
           fontSize: 11,
           lineHeight: 1.5,
-          color: 'rgba(255,255,255,0.92)',
+          color: 'var(--neutral-900)',
         }}
       >
         {detailBody}
@@ -1351,7 +1283,7 @@ function SavingsInsightKpis() {
                 display: 'grid',
                 gap: 'var(--space-2)',
                 alignItems: 'end',
-                borderBottom: '1px solid rgba(255,255,255,0.12)',
+                borderBottom: '1px solid var(--neutral-300)',
                 paddingBottom: 'var(--space-2)',
               }}
             >
@@ -1401,7 +1333,7 @@ function SavingsInsightKpis() {
                       2025 · {formatCompactCurrency(row.y2025)}
                     </span>
                   ) : null}
-                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>2025</span>
+                  <span style={{ fontSize: 9, color: 'var(--neutral-700)', fontWeight: 700 }}>2025</span>
                   <span
                     style={{
                       width: 22,
@@ -1449,7 +1381,7 @@ function SavingsInsightKpis() {
                       2026 · {formatCompactCurrency(row.y2026)}
                     </span>
                   ) : null}
-                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>2026</span>
+                  <span style={{ fontSize: 9, color: 'var(--neutral-700)', fontWeight: 700 }}>2026</span>
                   <span
                     style={{
                       width: 22,
@@ -1466,7 +1398,7 @@ function SavingsInsightKpis() {
                   margin: 0,
                   fontSize: 10,
                   lineHeight: 1.2,
-                  color: 'rgba(255,255,255,0.88)',
+                  color: 'var(--neutral-900)',
                   fontWeight: 'var(--font-weight-semibold)',
                   fontStyle: 'italic',
                   transform: 'rotate(-12deg)',

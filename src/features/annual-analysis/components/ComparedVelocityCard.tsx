@@ -17,6 +17,7 @@ type Props = {
   medianMonthly2025: number | null
   medianMonthly2026: number | null
   remainingMonths: number
+  containerVariant?: 'indigo' | 'neutral'
 }
 
 export function ComparedVelocityCard({
@@ -30,6 +31,7 @@ export function ComparedVelocityCard({
   medianMonthly2025,
   medianMonthly2026,
   remainingMonths,
+  containerVariant = 'indigo',
 }: Props) {
   const [openExpenseModal, setOpenExpenseModal] = useState<null | '2025' | '2026'>(null)
   const [isIncome2025ModalOpen, setIsIncome2025ModalOpen] = useState(false)
@@ -54,28 +56,32 @@ export function ComparedVelocityCard({
 
   const totalIncome2025 = annualIncome2025 ?? REAL_2025_ANNUAL
   const projectedIncome2026 = income2026Ytd + (ASSURED_INCOME_2026_MONTHLY * ASSURED_INCOME_2026_MONTHS)
+  const isNeutralContainer = containerVariant === 'neutral'
 
   return (
     <>
       <div style={{
-        background: 'linear-gradient(135deg, #1e1c4a 0%, #2d2a6e 100%)',
+        background: isNeutralContainer ? 'transparent' : 'linear-gradient(135deg, #1e1c4a 0%, #2d2a6e 100%)',
+        border: isNeutralContainer ? '1px solid var(--neutral-300)' : 'none',
         borderRadius: 'var(--radius-xl)',
         padding: 'var(--space-5)',
         position: 'relative',
         overflow: 'hidden',
       }}>
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(ellipse at 80% 20%, rgba(91,87,245,0.25) 0%, transparent 65%)',
-          pointerEvents: 'none',
-        }} />
+        {!isNeutralContainer ? (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at 80% 20%, rgba(91,87,245,0.25) 0%, transparent 65%)',
+            pointerEvents: 'none',
+          }} />
+        ) : null}
 
         <p style={{
           margin: '0 0 var(--space-4)',
           fontSize: 'var(--font-size-sm)',
           fontWeight: 700,
-          color: '#fff',
+          color: isNeutralContainer ? 'var(--neutral-900)' : '#fff',
           position: 'relative',
         }}>
           Projection des revenus
@@ -84,7 +90,7 @@ export function ComparedVelocityCard({
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          gap: 'var(--space-3)',
+          gap: 'var(--space-4)',
           marginBottom: 'var(--space-4)',
           alignItems: 'stretch',
         }}>
@@ -96,6 +102,7 @@ export function ComparedVelocityCard({
             accentColor="rgba(99, 241, 171, 0.95)"
             cardBg="rgba(46,212,122,0.12)"
             valueColor="#FFFFFF"
+            neutralStyle={isNeutralContainer}
             onClick={() => setIsIncome2025ModalOpen(true)}
           />
           <RevenueProjectionItem
@@ -106,6 +113,7 @@ export function ComparedVelocityCard({
             accentColor="rgba(255, 176, 120, 0.95)"
             cardBg="rgba(255,171,46,0.12)"
             valueColor="#FFFFFF"
+            neutralStyle={isNeutralContainer}
             onClick={() => setIsIncome2026ModalOpen(true)}
           />
         </div>
@@ -115,7 +123,7 @@ export function ComparedVelocityCard({
             margin: '0 0 var(--space-4)',
             fontSize: 'var(--font-size-sm)',
             fontWeight: 700,
-            color: '#fff',
+            color: isNeutralContainer ? 'var(--neutral-900)' : '#fff',
             position: 'relative',
           }}>
             Célérité de dépenses · Projection fin d'année
@@ -124,7 +132,7 @@ export function ComparedVelocityCard({
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: 'var(--space-3)',
+            gap: 'var(--space-4)',
             marginBottom: 'var(--space-4)',
             alignItems: 'stretch',
           }}>
@@ -135,6 +143,7 @@ export function ComparedVelocityCard({
               accentColor="rgba(255,171,46,0.9)"
               cardBg="rgba(255,171,46,0.10)"
               projColor="rgba(255,255,255,0.9)"
+              neutralStyle={isNeutralContainer}
               onClick={() => setOpenExpenseModal('2025')}
             />
             <VelocityItem
@@ -144,13 +153,14 @@ export function ComparedVelocityCard({
               accentColor="rgba(76,201,240,0.9)"
               cardBg="rgba(76,201,240,0.11)"
               projColor="#fff"
+              neutralStyle={isNeutralContainer}
               onClick={() => setOpenExpenseModal('2026')}
             />
           </div>
         </div>
 
         <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: isNeutralContainer ? '1px solid var(--neutral-300)' : '1px solid rgba(255,255,255,0.1)',
           paddingTop: 'var(--space-3)',
           display: 'flex',
           flexDirection: 'column',
@@ -159,7 +169,7 @@ export function ComparedVelocityCard({
         }}>
           {delta != null && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+              <p style={{ margin: 0, fontSize: 11, color: isNeutralContainer ? 'var(--neutral-600)' : 'rgba(255,255,255,0.5)' }}>
                 Écart de projection{' '}
                 <span style={{ opacity: 0.55, fontSize: 10 }}>2025 vs 2026</span>
               </p>
@@ -189,7 +199,7 @@ export function ComparedVelocityCard({
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+            <p style={{ margin: 0, fontSize: 11, color: isNeutralContainer ? 'var(--neutral-600)' : 'rgba(255,255,255,0.5)' }}>
               Atterrissage réel 2025
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -197,7 +207,7 @@ export function ComparedVelocityCard({
                 fontSize: 'var(--font-size-sm)',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
-                color: '#fff',
+                color: isNeutralContainer ? 'var(--neutral-900)' : '#fff',
               }}>
                 {fmt(REAL_2025_ANNUAL)}
               </span>
@@ -259,6 +269,7 @@ function RevenueProjectionItem({
   accentColor,
   cardBg,
   valueColor,
+  neutralStyle = false,
   onClick,
 }: {
   title: string
@@ -268,6 +279,7 @@ function RevenueProjectionItem({
   accentColor: string
   cardBg: string
   valueColor: string
+  neutralStyle?: boolean
   onClick?: () => void
 }) {
   const cardStyle: CSSProperties = {
@@ -276,26 +288,28 @@ function RevenueProjectionItem({
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
     gap: 2,
-    background: cardBg,
+    background: neutralStyle ? 'var(--neutral-100)' : cardBg,
     borderRadius: 'var(--radius-lg)',
     padding: 'var(--space-3)',
-    border: `1px solid ${accentColor.replace('0.95', '0.24')}`,
+    border: 'none',
+    borderTop: neutralStyle ? '1px solid var(--neutral-700)' : `1px solid ${accentColor.replace('0.95', '0.24')}`,
     textAlign: 'left' as const,
     width: '100%',
+    minHeight: 112,
   }
 
   const content = (
     <>
-      <p style={{ margin: '0 0 var(--space-1)', fontSize: 9, fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <p style={{ margin: '0 0 var(--space-1)', fontSize: 9, fontWeight: 700, color: neutralStyle ? 'var(--neutral-700)' : accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {title}
       </p>
-      <p style={{ margin: '0 0 4px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.55)' }}>
+      <p style={{ margin: '0 0 4px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: neutralStyle ? 'var(--neutral-700)' : 'rgba(255,255,255,0.55)' }}>
         {fmt(ytdAmount)} encaissés
       </p>
-      <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: valueColor, lineHeight: 1 }}>
+      <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: neutralStyle ? 'var(--neutral-900)' : valueColor, lineHeight: 1 }}>
         {annualAmount != null ? fmt(annualAmount) : '\u00A0'}
       </p>
-      <p style={{ margin: '4px 0 0', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
+      <p style={{ margin: '4px 0 0', fontSize: 9, color: neutralStyle ? 'var(--neutral-600)' : 'rgba(255,255,255,0.35)' }}>
         {annualCaption}
       </p>
     </>
@@ -327,6 +341,7 @@ function VelocityItem({
   accentColor,
   cardBg,
   projColor,
+  neutralStyle = false,
   onClick,
 }: {
   year: string
@@ -335,6 +350,7 @@ function VelocityItem({
   accentColor: string
   cardBg: string
   projColor: string
+  neutralStyle?: boolean
   onClick: () => void
 }) {
   return (
@@ -345,29 +361,31 @@ function VelocityItem({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-start',
-        background: cardBg,
+        background: neutralStyle ? 'var(--neutral-100)' : cardBg,
         borderRadius: 'var(--radius-lg)',
         padding: 'var(--space-3)',
         cursor: 'pointer',
-        border: `1px solid ${accentColor.replace('0.9', '0.2').replace('0.10', '0.2').replace('0.11', '0.2')}`,
+        border: 'none',
+        borderTop: neutralStyle ? '1px solid var(--neutral-700)' : `1px solid ${accentColor.replace('0.9', '0.2').replace('0.10', '0.2').replace('0.11', '0.2')}`,
         transition: 'background 150ms ease, border-color 150ms ease',
         textAlign: 'left',
         width: '100%',
         outline: 'none',
+        minHeight: 112,
       }}
     >
-      <p style={{ margin: '0 0 var(--space-1)', fontSize: 9, fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <p style={{ margin: '0 0 var(--space-1)', fontSize: 9, fontWeight: 700, color: neutralStyle ? 'var(--neutral-700)' : accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {year} · YTD réel
       </p>
-      <p style={{ margin: '0 0 4px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.55)' }}>
+      <p style={{ margin: '0 0 4px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: neutralStyle ? 'var(--neutral-700)' : 'rgba(255,255,255,0.55)' }}>
         {fmt(ytd)} dépensés
       </p>
       {projected != null && (
-        <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: projColor, lineHeight: 1 }}>
+        <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: neutralStyle ? 'var(--neutral-900)' : projColor, lineHeight: 1 }}>
           {fmt(projected)}
         </p>
       )}
-      <p style={{ margin: '4px 0 0', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
+      <p style={{ margin: '4px 0 0', fontSize: 9, color: neutralStyle ? 'var(--neutral-600)' : 'rgba(255,255,255,0.35)' }}>
         projeté fin d'année
       </p>
     </button>

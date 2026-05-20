@@ -172,6 +172,8 @@ async function fetchBudgetRevenueAnalytics(
     }))
     .sort((a, b) => b.total_amount - a.total_amount)
 
+  const normalizedTransactions = transactionRows.map(toRevenueTransaction)
+
   return {
     selectedMonthRevenue: Number(selectedMonthPoint?.revenue_amount ?? 0),
     selectedMonthTransactionCount: Number(selectedMonthPoint?.transaction_count ?? 0),
@@ -181,7 +183,8 @@ async function fetchBudgetRevenueAnalytics(
     minMonthlyRevenue: monthlyAmounts.length ? Math.min(...monthlyAmounts) : 0,
     monthlySeries,
     bySource,
-    lastTransactions: transactionRows.map(toRevenueTransaction).slice(0, 10),
+    allTransactions: normalizedTransactions,
+    lastTransactions: normalizedTransactions.slice(0, 10),
   }
 }
 

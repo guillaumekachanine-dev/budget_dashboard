@@ -1,251 +1,43 @@
 import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
-import { AnnualProjectionSectionConnected, type ProjectionViewMode } from '@/features/annual-analysis/components/AnnualCostProjection2026'
+import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
+import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
-import type { BudgetRevenueAnalytics } from '@/features/budget/types'
-import { useBudgetRevenueSources2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
+import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
+import type { BudgetRevenueAnalytics, BudgetRevenueTransaction } from '@/features/budget/types'
+import { useBudgetRevenueSources2026, type RevenuSource2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type DisplayMode = 'depenses' | 'revenus'
-type CostProjectionSlide = 'categories' | 'global'
+type ExpenseSlide = 0 | 1
+type ExpenseKpiModalKey = 'ytd' | 'gap' | 'projection' | null
+type ExpenseMonthlyMetric = { period_month: number; expense_total: number }
 
-const CYAN = '#0EA5C3'
-
-type CalcStep = { label: string; value: number | null }
-
-type CalcModalConfig = {
-  title: string
-  subtitle: string
-  steps: CalcStep[]
-  totalLabel: string
-  totalValue: number | null
-  note: string
+interface ExpenseHistoryPoint {
+  month: number
+  monthLabel: string
+  amount: number
+  budget: number
+  avg12m: number
+  median12m: number
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 
-function DarkSlideToggle({ slide, onChange }: { slide: CostProjectionSlide; onChange: (s: CostProjectionSlide) => void }) {
-  function btn(active: boolean): React.CSSProperties {
-    return {
-      border: active ? '1.5px solid var(--neutral-800)' : '1.5px solid var(--neutral-300)',
-      background: active ? 'var(--neutral-800)' : 'var(--neutral-0)',
-      color: active ? 'var(--neutral-0)' : 'var(--neutral-700)',
-      borderRadius: 'var(--radius-md)',
-      padding: 'var(--space-2) var(--space-4)',
-      fontSize: 'var(--font-size-sm)',
-      fontWeight: 700,
-      cursor: 'pointer',
-      transition: 'all var(--transition-base)',
-      minHeight: 34,
-      textAlign: 'center' as const,
-    }
-  }
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 3,
-      background: 'var(--neutral-100)',
-      borderRadius: 'var(--radius-md)',
-      padding: '3px',
-      width: 224,
-    }}>
-      <button type="button" onClick={() => onChange('categories')} style={btn(slide === 'categories')}>Catégories</button>
-      <button type="button" onClick={() => onChange('global')} style={btn(slide === 'global')}>Global</button>
-    </div>
-  )
-}
-
-function DarkKpiCard({
-  accentColor,
-  cardBg,
-  borderColor,
-  title,
-  subAmount,
-  subLabel,
-  amount,
-  caption,
-  onClick,
-}: {
-  accentColor: string
-  cardBg: string
-  borderColor: string
-  title: string
-  subAmount?: number | null
-  subLabel?: string
-  amount: number | null
-  caption: string
-  onClick?: () => void
-}) {
-  const TAG = onClick ? 'button' : 'div'
-  return (
-    <TAG
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 2,
-        background: cardBg,
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-3)',
-        border: `1px solid ${borderColor}`,
-        textAlign: 'left' as const,
-        width: '100%',
-        cursor: onClick ? 'pointer' : undefined,
-        transition: 'filter 140ms ease',
-      } as React.CSSProperties}
-    >
-      <p style={{ margin: '0 0 3px', fontSize: 9, fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1.2 }}>
-        {title}
-      </p>
-      {subAmount != null && subLabel ? (
-        <p style={{ margin: '0 0 2px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.42)' }}>
-          {fmt(subAmount)} {subLabel}
-        </p>
-      ) : null}
-      <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1 }}>
-        {amount != null ? fmt(amount) : '—'}
-      </p>
-      <p style={{ margin: '4px 0 0', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
-        {caption}
-      </p>
-    </TAG>
-  )
-}
-
-function SummaryRow({
-  label,
-  amount,
-  pct,
-  positiveIsGood = false,
-}: {
-  label: string
-  amount: number | null
-  pct: number | null
-  positiveIsGood?: boolean
-}) {
-  const isGood = pct == null ? null : (positiveIsGood ? pct > 0 : pct < 0)
-  const amountColor = '#fff'
-  const pillText = isGood == null ? null : isGood ? 'rgba(46,212,122,0.9)' : 'rgba(252,90,90,0.85)'
-  const pillBg = isGood == null ? null : isGood ? 'rgba(46,212,122,0.12)' : 'rgba(252,90,90,0.12)'
-  const arrow = pct == null ? '' : pct > 0 ? '▲' : '▼'
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-      <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 1.3 }}>
-        {label}
-      </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: amountColor, whiteSpace: 'nowrap' }}>
-          {amount != null ? fmt(amount) : '—'}
-        </span>
-        {pct != null && pillText && pillBg ? (
-          <span style={{ fontSize: 10, fontWeight: 700, color: pillText, background: pillBg, borderRadius: 'var(--radius-full)', padding: '2px 7px', whiteSpace: 'nowrap' }}>
-            {arrow} {Math.abs(pct).toFixed(1)}%
-          </span>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-function CalcModal({ config, onClose }: { config: CalcModalConfig | null; onClose: () => void }) {
-  return (
-    <AnimatePresence>
-      {config && (
-        <>
-          <motion.div
-            key="overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.52)' }}
-          />
-          <motion.div
-            key="modal"
-            initial={{ scale: 0.94, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.94, opacity: 0 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              left: 'var(--page-gutter)',
-              right: 'var(--page-gutter)',
-              top: '25vh',
-              zIndex: 81,
-              maxWidth: 340,
-              margin: '0 auto',
-              background: 'var(--neutral-0)',
-              borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-5)',
-              boxShadow: '0 12px 48px rgba(13,13,31,0.22)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 'var(--space-1)' }}>
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-                {config.title}
-              </h3>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-              >
-                <X size={13} />
-              </button>
-            </div>
-            <p style={{ margin: '0 0 var(--space-3)', fontSize: 11, color: 'var(--neutral-500)', fontWeight: 500, lineHeight: 1.3 }}>
-              {config.subtitle}
-            </p>
-            <div style={{ height: 2, background: 'linear-gradient(90deg, var(--primary-400) 0%, var(--primary-200) 100%)', borderRadius: 2, marginBottom: 'var(--space-3)' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-              {config.steps.map((step, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 'var(--radius-full)', border: '1.5px solid var(--primary-300)', color: 'var(--primary-600)', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {idx + 1}
-                  </span>
-                  <span style={{ flex: 1, fontSize: 12, color: 'var(--neutral-700)', fontWeight: 500, lineHeight: 1.3 }}>{step.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                    {step.value != null ? fmt(step.value) : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 1, borderTop: '1.5px dashed var(--neutral-200)', marginBottom: 'var(--space-3)' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-4)' }}>
-              <span style={{ width: 20, textAlign: 'center', fontSize: 14, fontWeight: 800, color: CYAN, flexShrink: 0 }}>=</span>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>{config.totalLabel}</span>
-              <span style={{ fontSize: 15, fontWeight: 800, color: CYAN, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                {config.totalValue != null ? fmt(config.totalValue) : '—'}
-              </span>
-            </div>
-            <p style={{ margin: '0 0 var(--space-4)', fontSize: 11, color: 'var(--neutral-500)', lineHeight: 1.5 }}>{config.note}</p>
-            <button type="button" onClick={onClose} style={{ width: '100%', padding: '12px var(--space-4)', background: 'color-mix(in oklab, var(--primary-300) 55%, var(--neutral-0) 45%)', border: 'none', borderRadius: 'var(--radius-xl)', color: 'var(--neutral-900)', fontSize: 'var(--font-size-sm)', fontWeight: 700, cursor: 'pointer' }}>
-              Fermer
-            </button>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
-}
-
 // ─── Revenue 2026 histogram ───────────────────────────────────────────────────
 
 const REV_GREEN = '#2ED47A'
 const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD69D', '#94E3B7', '#B9EED1']
+const SCENARIO_1_COLOR = '#D58A83'
+const SCENARIO_2_COLOR = '#15A9A1'
 
 /** Map known revenue-source names to semantic colours. Falls back to the green palette. */
 function resolveSourceColor(name: string, fallbackIndex: number): string {
@@ -258,10 +50,73 @@ function resolveSourceColor(name: string, fallbackIndex: number): string {
   return REV_GREENS[fallbackIndex % REV_GREENS.length]
 }
 
+function addProjectedAmountToSources(
+  sources: RevenuSource2026[],
+  matchers: string[],
+  amount: number,
+  fallbackName: string,
+) {
+  if (!(amount > 0)) return
+
+  const matcher = (value: string) => matchers.some((token) => value.includes(token))
+  const target = sources.find((source) => matcher(source.name.toLowerCase()))
+  if (target) {
+    target.value += amount
+    return
+  }
+
+  sources.push({
+    id: `${fallbackName.toLowerCase().replace(/\s+/g, '-')}-projection`,
+    name: fallbackName,
+    parentName: 'Projection',
+    value: amount,
+  })
+}
+
 interface Rev2026Point {
+  monthOrder: number
   month: string
   value: number
   isProjected: boolean
+  color: string
+}
+
+interface RevenueMonthGroup {
+  monthKey: string
+  monthLabel: string
+  total: number
+  transactions: BudgetRevenueTransaction[]
+}
+
+type RevenueKpiModalKey = 'ytd' | 'scenario1' | 'scenario2' | null
+type RevenueDisplayMode = 'real_ytd' | 'scenario1' | 'scenario2'
+type RevenueProjectionMode = 'scenario1' | 'scenario2'
+
+interface RevenueKpiModalConfig {
+  title: string
+  subtitle?: string
+  accentColor: string
+  lines: Array<{ label: string; value: string }>
+  totalLabel: string
+  totalValue: string
+}
+
+function capitalizeFirst(text: string): string {
+  if (!text) return text
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`
+}
+
+function formatTxDateDayMonth(value: string): string {
+  if (!value) return '—'
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' }).format(date)
+}
+
+function formatMonthYearFromKey(monthKey: string): string {
+  const date = new Date(`${monthKey}-01T00:00:00`)
+  if (Number.isNaN(date.getTime())) return monthKey
+  return capitalizeFirst(new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(date))
 }
 
 function RevBarShape(props: {
@@ -273,10 +128,11 @@ function RevBarShape(props: {
   [key: string]: unknown
 }) {
   const { x = 0, y = 0, width = 0, height = 0, payload } = props
+  const fillColor = payload?.color ?? REV_GREEN
   const h = Math.max(0, height)
   if (h === 0) return null
   if (!payload?.isProjected) {
-    return <rect x={x} y={y} width={width} height={h} fill={REV_GREEN} rx={3} ry={3} />
+    return <rect x={x} y={y} width={width} height={h} fill={fillColor} rx={3} ry={3} />
   }
   return (
     <rect
@@ -284,13 +140,204 @@ function RevBarShape(props: {
       y={y}
       width={Math.max(0, width - 2)}
       height={h}
-      fill="rgba(46,212,122,0.15)"
-      stroke={REV_GREEN}
+      fill="color-mix(in oklab, var(--neutral-0) 82%, transparent)"
+      stroke={fillColor}
       strokeWidth={1.5}
       strokeDasharray="5 3"
       rx={3}
       ry={3}
     />
+  )
+}
+
+function RevenueTransactionsYtdModal({
+  groups,
+  onClose,
+}: {
+  groups: RevenueMonthGroup[]
+  onClose: () => void
+}) {
+  return (
+    <>
+      <motion.div
+        key="revenues-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.52)' }}
+      />
+      <motion.div
+        key="revenues-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Transactions revenus 2026 YTD"
+        initial={{ scale: 0.94, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.94, opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          left: 'var(--page-gutter)',
+          right: 'var(--page-gutter)',
+          top: '8vh',
+          bottom: '8vh',
+          zIndex: 91,
+          maxWidth: 640,
+          margin: '0 auto',
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-2xl)',
+          padding: 'var(--space-4)',
+          boxShadow: '0 12px 48px rgba(13,13,31,0.22)',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, lineHeight: 1.2 }}>
+            Transactions revenus 2026 YTD
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+        <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'color-mix(in oklab, var(--color-success) 30%, var(--neutral-0) 70%)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+            <span>Date</span>
+            <span style={{ paddingLeft: 'var(--space-1)' }}>Libellé / catégorie</span>
+            <span>Montant</span>
+          </div>
+          <div style={{ display: 'grid' }}>
+            {groups.length > 0 ? groups.map((group) => (
+              <div key={group.monthKey} style={{ display: 'grid' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', borderTop: '1px solid color-mix(in oklab, var(--neutral-700) 55%, transparent)', background: 'color-mix(in oklab, var(--neutral-200) 42%, var(--neutral-0) 58%)', padding: '6px var(--space-3)' }}>
+                  <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontWeight: 700, letterSpacing: '0.02em' }}>{group.monthLabel}</span>
+                  <span style={{ fontSize: 10, color: 'var(--neutral-800)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{fmt(group.total)}</span>
+                </div>
+                {group.transactions.map((tx) => (
+                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                      {formatTxDateDayMonth(tx.transaction_date)}
+                    </span>
+                    <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.label || '—'}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.category_name ?? '—'}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      {fmt(tx.pilotage_amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )) : (
+              <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+                Aucune transaction de revenus sur 2026.
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </>
+  )
+}
+
+function RevenueKpiDetailModal({
+  config,
+  onClose,
+}: {
+  config: RevenueKpiModalConfig
+  onClose: () => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(10,10,30,0.6)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'var(--space-5)',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-xl)',
+          padding: 'var(--space-5)',
+          maxWidth: 340,
+          width: '100%',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div style={{ marginBottom: 'var(--space-4)', borderBottom: `2px solid ${config.accentColor}`, paddingBottom: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>
+            {config.title}
+          </p>
+          {config.subtitle ? (
+            <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>
+              {config.subtitle}
+            </p>
+          ) : null}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {config.lines.map((line) => (
+            <div key={line.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-600)', fontWeight: 500 }}>
+                {line.label} :
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', flexShrink: 0 }}>
+                {line.value}
+              </span>
+            </div>
+          ))}
+          <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 14, color: 'var(--neutral-900)', fontWeight: 700 }}>
+              {config.totalLabel} :
+            </span>
+            <span style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-mono)', color: config.accentColor, flexShrink: 0 }}>
+              {config.totalValue}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            width: '100%',
+            padding: '9px 0',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            background: config.accentColor,
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            marginTop: 'var(--space-4)',
+          }}
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -303,23 +350,45 @@ function RevenueSection2026({
 }) {
   const [revSlide, setRevSlide] = useState(0)
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [selectedRevenueBar, setSelectedRevenueBar] = useState<Rev2026Point | null>(null)
+  const [showRevenueTransactionsModal, setShowRevenueTransactionsModal] = useState(false)
+  const [activeRevenueKpiModal, setActiveRevenueKpiModal] = useState<RevenueKpiModalKey>(null)
+  const [histogramProjectionMode, setHistogramProjectionMode] = useState<RevenueProjectionMode>('scenario1')
+  const [revenueDisplayMode, setRevenueDisplayMode] = useState<RevenueDisplayMode>('real_ytd')
+  const [showRevenueDisplayPicker, setShowRevenueDisplayPicker] = useState(false)
   const { data: rawSources } = useBudgetRevenueSources2026()
 
   // ── Histogram data ────────────────────────────────────────────────────────
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
-  const currentMonthRevenue = series2026.length > 0 ? series2026[series2026.length - 1].revenue_amount : 0
-  const avg2526 = revenueData?.avgMonthlyRevenue2025_2026 ?? 0
-  const avg6m = revenueData?.avgMonthlyRevenueLast6M ?? 0
-  const projectedValue = avg6m > 0 ? avg6m : avg2526
+  const guaranteedMonthlyIncome = 3338
+  const salaryAndPrimeMonthlyIncome = 6500
+  const scenario2UnemploymentMonths = 4
+  const scenario2SalaryMonths = 3
+  const remainingMonths = Math.max(0, 12 - ytdMonths)
+  const ytdRevenue2026 = series2026.reduce((sum, row) => sum + Number(row.revenue_amount ?? 0), 0)
+  const projectedScenario1 = ytdRevenue2026 + guaranteedMonthlyIncome * remainingMonths
+  const projectedScenario2 = ytdRevenue2026 + guaranteedMonthlyIncome * scenario2UnemploymentMonths + salaryAndPrimeMonthlyIncome * scenario2SalaryMonths
+  const assuredStartMonthLabel = MONTH_LABELS_SHORT[Math.max(0, Math.min(11, ytdMonths))] ?? 'juin'
+  const assuredPeriodLabel = `${assuredStartMonthLabel.toLowerCase()}-déc. (${remainingMonths} mois)`
+  const activeScenarioColor = histogramProjectionMode === 'scenario1' ? SCENARIO_1_COLOR : SCENARIO_2_COLOR
+
+  const projectedRevenueForMonth = (month: number) => {
+    if (histogramProjectionMode === 'scenario1') return guaranteedMonthlyIncome
+    if (month >= 6 && month <= 9) return guaranteedMonthlyIncome
+    if (month >= 10 && month <= 12) return salaryAndPrimeMonthlyIncome
+    return 0
+  }
 
   const chartData: Rev2026Point[] = MONTH_LABELS_SHORT.map((label, idx) => {
     const m = idx + 1
     const isProjected = m > ytdMonths
     const actual = series2026.find(p => parseInt(p.month_start.slice(5, 7), 10) === m)
     return {
+      monthOrder: m,
       month: label,
-      value: isProjected ? projectedValue : (actual?.revenue_amount ?? 0),
+      value: isProjected ? projectedRevenueForMonth(m) : (actual?.revenue_amount ?? 0),
       isProjected,
+      color: activeScenarioColor,
     }
   })
 
@@ -327,7 +396,47 @@ function RevenueSection2026({
   const yMax = Math.ceil(maxVal / 500) * 500 + 500
 
   // ── Donut data (2026 only) ────────────────────────────────────────────────
-  const donutData = rawSources.map((s, i) => ({
+  const scenarioSourceValues = useMemo(() => {
+    const baseSources = rawSources.map((source) => ({ ...source }))
+
+    if (revenueDisplayMode === 'scenario1') {
+      addProjectedAmountToSources(
+        baseSources,
+        ['chômage', 'chomage', 'indemnité', 'indemnite'],
+        guaranteedMonthlyIncome * remainingMonths,
+        'Indemnités chômage',
+      )
+    }
+
+    if (revenueDisplayMode === 'scenario2') {
+      addProjectedAmountToSources(
+        baseSources,
+        ['chômage', 'chomage', 'indemnité', 'indemnite'],
+        guaranteedMonthlyIncome * scenario2UnemploymentMonths,
+        'Indemnités chômage',
+      )
+      addProjectedAmountToSources(
+        baseSources,
+        ['salaire', 'prime'],
+        salaryAndPrimeMonthlyIncome * scenario2SalaryMonths,
+        'Salaire + primes',
+      )
+    }
+
+    return baseSources
+      .filter((source) => source.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [
+    guaranteedMonthlyIncome,
+    rawSources,
+    remainingMonths,
+    revenueDisplayMode,
+    salaryAndPrimeMonthlyIncome,
+    scenario2SalaryMonths,
+    scenario2UnemploymentMonths,
+  ])
+
+  const donutData = scenarioSourceValues.map((s, i) => ({
     ...s,
     color: resolveSourceColor(s.name, i),
   }))
@@ -335,12 +444,116 @@ function RevenueSection2026({
   const selectedSource = selectedSourceId
     ? (donutData.find(d => d.id === selectedSourceId) ?? null)
     : null
+  const allTransactions2026 = useMemo(
+    () =>
+      (revenueData?.allTransactions ?? [])
+        .filter((tx) => tx.transaction_date.startsWith('2026-'))
+        .sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)),
+    [revenueData],
+  )
+  const revenueTransactionGroups2026 = useMemo<RevenueMonthGroup[]>(() => {
+    const groups: RevenueMonthGroup[] = []
+
+    for (const tx of allTransactions2026) {
+      const monthKey = tx.transaction_date.slice(0, 7)
+      if (!monthKey) continue
+
+      const lastGroup = groups[groups.length - 1]
+      if (!lastGroup || lastGroup.monthKey !== monthKey) {
+        groups.push({
+          monthKey,
+          monthLabel: formatMonthYearFromKey(monthKey),
+          total: Number(tx.pilotage_amount ?? 0),
+          transactions: [tx],
+        })
+        continue
+      }
+
+      lastGroup.total += Number(tx.pilotage_amount ?? 0)
+      lastGroup.transactions.push(tx)
+    }
+
+    return groups
+  }, [allTransactions2026])
 
   const SLIDE_TITLES = ['Revenus 2026', 'Sources de revenus 2026'] as const
+  const revenueDisplayOptions = {
+    real_ytd: { label: 'Réel YTD', color: 'var(--neutral-700)' },
+    scenario1: { label: '#1', color: SCENARIO_1_COLOR },
+    scenario2: { label: '#2', color: SCENARIO_2_COLOR },
+  } as const
+  const revenueKpiModalConfig = useMemo<RevenueKpiModalConfig | null>(() => {
+    if (!activeRevenueKpiModal) return null
+
+    if (activeRevenueKpiModal === 'ytd') {
+      return {
+        title: 'détail du calcul - 2026',
+        subtitle: 'revenus 2026 YTD',
+        accentColor: '#FFAB2E',
+        lines: [
+          { label: 'revenus encaissés 2026', value: fmt(ytdRevenue2026) },
+          { label: 'période couverte', value: `janv.-${getMonthShortLabel(ytdMonths).toLowerCase()} (${ytdMonths} mois)` },
+          { label: 'source', value: 'transactions réelles' },
+        ],
+        totalLabel: 'revenus 2026 YTD',
+        totalValue: fmt(ytdRevenue2026),
+      }
+    }
+
+    if (activeRevenueKpiModal === 'scenario1') {
+      return {
+        title: 'SCENARIO #1 - détails du calcul',
+        accentColor: SCENARIO_1_COLOR,
+        lines: [
+          { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
+          { label: 'revenus assurés', value: `${fmt(guaranteedMonthlyIncome)}/mois (Chômage)` },
+          { label: 'période concernée', value: assuredPeriodLabel },
+        ],
+        totalLabel: 'Projection #1',
+        totalValue: fmt(projectedScenario1),
+      }
+    }
+
+    return {
+      title: 'SCENARIO #2 - détails du calcul',
+      accentColor: SCENARIO_2_COLOR,
+      lines: [
+        { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
+        { label: 'indemnités chômage', value: `${fmt(guaranteedMonthlyIncome)} × ${scenario2UnemploymentMonths}(juin-sept.)` },
+        { label: 'salaire + primes', value: `${fmt(salaryAndPrimeMonthlyIncome)} × ${scenario2SalaryMonths} (oct.-déc.)` },
+      ],
+      totalLabel: 'Projection #2',
+      totalValue: fmt(projectedScenario2),
+    }
+  }, [
+    activeRevenueKpiModal,
+    assuredPeriodLabel,
+    guaranteedMonthlyIncome,
+    projectedScenario1,
+    projectedScenario2,
+    salaryAndPrimeMonthlyIncome,
+    scenario2SalaryMonths,
+    scenario2UnemploymentMonths,
+    ytdMonths,
+    ytdRevenue2026,
+  ])
 
   function handleSlide(idx: number) {
     setRevSlide(idx)
     setSelectedSourceId(null)
+    setSelectedRevenueBar(null)
+    setShowRevenueDisplayPicker(false)
+  }
+
+  function handleDisplayModeSelect(mode: RevenueDisplayMode) {
+    setRevenueDisplayMode(mode)
+    setSelectedSourceId(null)
+    setShowRevenueDisplayPicker(false)
+  }
+
+  function handleHistogramProjectionToggle() {
+    setSelectedRevenueBar(null)
+    setHistogramProjectionMode((prev) => (prev === 'scenario1' ? 'scenario2' : 'scenario1'))
   }
 
   return (
@@ -349,22 +562,45 @@ function RevenueSection2026({
       {/* ── 3 KPI tiles — always above carousel ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
         {([
-          { label: 'Mois en cours', value: currentMonthRevenue },
-          { label: 'Moy. 2025-26', value: avg2526 },
-          { label: 'Moy. 6 mois', value: avg6m },
-        ] as { label: string; value: number }[]).map(({ label, value }) => (
-          <div
+          {
+            key: 'ytd' as const,
+            label: 'Revenus YTD',
+            value: ytdRevenue2026,
+            borderColor: 'var(--neutral-200)',
+            background: 'var(--neutral-0)',
+          },
+          {
+            key: 'scenario1' as const,
+            label: 'Scenario #1',
+            value: projectedScenario1,
+            borderColor: `color-mix(in oklab, ${SCENARIO_1_COLOR} 70%, var(--neutral-200) 30%)`,
+            background: `color-mix(in oklab, ${SCENARIO_1_COLOR} 12%, var(--neutral-0) 88%)`,
+          },
+          {
+            key: 'scenario2' as const,
+            label: 'Scenario #2',
+            value: projectedScenario2,
+            borderColor: `color-mix(in oklab, ${SCENARIO_2_COLOR} 70%, var(--neutral-200) 30%)`,
+            background: `color-mix(in oklab, ${SCENARIO_2_COLOR} 12%, var(--neutral-0) 88%)`,
+          },
+        ]).map(({ key, label, value, borderColor, background }) => (
+          <button
             key={label}
+            type="button"
+            onClick={() => setActiveRevenueKpiModal(key)}
             style={{
-              background: 'var(--neutral-0)',
-              border: '1px solid var(--neutral-200)',
+              background,
+              border: `1.5px solid ${borderColor}`,
               borderRadius: 'var(--radius-md)',
               padding: 'var(--space-2) var(--space-3)',
-              minHeight: 48,
+              minHeight: 58,
               display: 'flex',
               flexDirection: 'column',
               gap: 4,
-              alignItems: 'flex-start',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              textAlign: 'center',
             }}
           >
             <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
@@ -373,7 +609,7 @@ function RevenueSection2026({
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
               {fmt(value)}
             </p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -385,20 +621,178 @@ function RevenueSection2026({
         padding: 'var(--space-3)',
       }}>
         {/* Card header — title + conditional legend */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em' }}>
-            {SLIDE_TITLES[revSlide]}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 'var(--space-2)' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+              {SLIDE_TITLES[revSlide]}
+            </p>
+            {revSlide === 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowRevenueTransactionsModal(true)}
+                style={{
+                  border: '1px solid var(--neutral-300)',
+                  background: 'var(--neutral-100)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--neutral-700)',
+                  padding: '3px var(--space-2)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                }}
+              >
+                Détails
+              </button>
+            ) : null}
+          </div>
           {revSlide === 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-                <span style={{ display: 'inline-block', width: 10, height: 8, background: REV_GREEN, borderRadius: 2 }} />
-                Réel
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-                <span style={{ display: 'inline-block', width: 10, height: 8, background: 'rgba(46,212,122,0.15)', border: `1.5px dashed ${REV_GREEN}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
-                Projeté
-              </span>
+            <div style={{ display: 'grid', justifyItems: 'end', gap: 6 }}>
+              <button
+                type="button"
+                onClick={handleHistogramProjectionToggle}
+                style={{
+                  border: '1px solid var(--neutral-300)',
+                  background: 'var(--neutral-100)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: histogramProjectionMode === 'scenario1' ? SCENARIO_1_COLOR : SCENARIO_2_COLOR,
+                  padding: '3px var(--space-2)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {histogramProjectionMode === 'scenario1' ? 'Scenario #1' : 'Scenario #2'}
+              </button>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 8, background: activeScenarioColor, borderRadius: 2 }} />
+                  Réel
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 8, background: 'color-mix(in oklab, var(--neutral-0) 82%, transparent)', border: `1.5px dashed ${activeScenarioColor}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
+                  Projeté
+                </span>
+              </div>
+            </div>
+          ) : revSlide === 1 ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowRevenueDisplayPicker((prev) => !prev)}
+                aria-label="Choisir un affichage des sources de revenus"
+                style={{
+                  border: '1px solid var(--neutral-300)',
+                  background: 'var(--neutral-100)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: revenueDisplayOptions[revenueDisplayMode].color,
+                  padding: '3px var(--space-2)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span>
+                  {revenueDisplayMode === 'real_ytd'
+                    ? 'Réel YTD'
+                    : revenueDisplayMode === 'scenario1'
+                      ? 'Scenario #1'
+                      : 'Scenario #2'}
+                </span>
+                <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
+              </button>
+              <AnimatePresence>
+                {showRevenueDisplayPicker ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.16 }}
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      minWidth: 164,
+                      background: 'var(--neutral-0)',
+                      border: '1px solid var(--neutral-200)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: '0 8px 30px rgba(13,13,31,0.16)',
+                      padding: '4px',
+                      display: 'grid',
+                      gap: 2,
+                      zIndex: 3,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleDisplayModeSelect('real_ytd')}
+                      style={{
+                        width: '100%',
+                        padding: '7px var(--space-2)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        background: revenueDisplayMode === 'real_ytd' ? 'var(--neutral-150)' : 'transparent',
+                        color: 'var(--neutral-800)',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      Réel YTD
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDisplayModeSelect('scenario1')}
+                      style={{
+                        width: '100%',
+                        padding: '7px var(--space-2)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        background: revenueDisplayMode === 'scenario1' ? `color-mix(in oklab, ${SCENARIO_1_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
+                        color: SCENARIO_1_COLOR,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      Scenario #1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDisplayModeSelect('scenario2')}
+                      style={{
+                        width: '100%',
+                        padding: '7px var(--space-2)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        background: revenueDisplayMode === 'scenario2' ? `color-mix(in oklab, ${SCENARIO_2_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
+                        color: SCENARIO_2_COLOR,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      Scenario #2
+                    </button>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
           ) : null}
         </div>
@@ -414,9 +808,66 @@ function RevenueSection2026({
           }}>
 
             {/* ── Slide 0: Monthly histogram ── */}
-            <div style={{ width: '50%', flexShrink: 0, height: '100%' }}>
+            <div style={{ width: '50%', flexShrink: 0, height: '100%', position: 'relative' }}>
+              {selectedRevenueBar ? (
+                <div
+                  onClick={(event) => event.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    left: 6,
+                    zIndex: 3,
+                    background: 'var(--neutral-0)',
+                    border: '1px solid var(--neutral-200)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: 'var(--shadow-card)',
+                    padding: '10px 12px',
+                    minWidth: 156,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRevenueBar(null)}
+                    aria-label="Fermer"
+                    style={{
+                      position: 'absolute',
+                      top: 6,
+                      right: 6,
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--neutral-400)',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    <X size={11} />
+                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', columnGap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35, paddingRight: 14 }}>
+                      {selectedRevenueBar.month}
+                    </span>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      {selectedRevenueBar.monthOrder}/12
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>
+                      {selectedRevenueBar.isProjected
+                        ? histogramProjectionMode === 'scenario1'
+                          ? 'Scenario #1'
+                          : 'Scenario #2'
+                        : 'Réel 2026'}
+                    </span>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
+                      {fmt(selectedRevenueBar.value)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
+                <BarChart data={chartData} margin={{ top: 56, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
                   <XAxis
                     dataKey="month"
                     tick={{ fontSize: 9, fill: '#9090a8' }}
@@ -429,13 +880,22 @@ function RevenueSection2026({
                     shape={<RevBarShape />}
                     maxBarSize={24}
                     isAnimationActive={false}
+                    onClick={(data, index) => {
+                      const payload = (data as { payload?: Rev2026Point } | null)?.payload ?? null
+                      const fallback = typeof index === 'number' ? chartData[index] ?? null : null
+                      const next = payload ?? fallback
+                      if (!next) return
+                      setSelectedRevenueBar((prev) =>
+                        prev && prev.monthOrder === next.monthOrder ? null : next,
+                      )
+                    }}
                   />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             {/* ── Slide 1: Sources donut (2026 only) ── */}
-            <div style={{ width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
               {/* Pie area */}
               <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
                 {selectedSource ? (
@@ -494,6 +954,7 @@ function RevenueSection2026({
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              <div aria-hidden="true" style={{ height: 'var(--space-6)', flexShrink: 0 }} />
               {/* Legend grid */}
               <div style={{
                 flex: 1,
@@ -589,6 +1050,382 @@ function RevenueSection2026({
         </div>
 
       </div>
+
+      <AnimatePresence>
+        {showRevenueTransactionsModal && (
+          <RevenueTransactionsYtdModal
+            groups={revenueTransactionGroups2026}
+            onClose={() => setShowRevenueTransactionsModal(false)}
+          />
+        )}
+      </AnimatePresence>
+      {revenueKpiModalConfig ? (
+        <RevenueKpiDetailModal
+          config={revenueKpiModalConfig}
+          onClose={() => setActiveRevenueKpiModal(null)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function formatSignedPercent(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const rounded = Math.round(value * 10) / 10
+  const sign = rounded > 0 ? '+' : ''
+  return `${sign}${rounded.toFixed(1)}%`
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function formatMonthFullFr(month: number): string {
+  const date = new Date(2026, Math.max(0, month - 1), 1)
+  return new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(date)
+}
+
+function ExpenseSection2026({
+  ytdExpenseClosedMonths,
+  ytdBudgetClosedMonths,
+  projectedExpense2026,
+  monthlyMetrics,
+  completedMonths,
+}: {
+  ytdExpenseClosedMonths: number
+  ytdBudgetClosedMonths: number
+  projectedExpense2026: number | null
+  monthlyMetrics: ExpenseMonthlyMetric[]
+  completedMonths: number
+}) {
+  const [expenseSlide, setExpenseSlide] = useState<ExpenseSlide>(0)
+  const [activeExpenseKpiModal, setActiveExpenseKpiModal] = useState<ExpenseKpiModalKey>(null)
+  const [selectedExpenseHistoryBar, setSelectedExpenseHistoryBar] = useState<ExpenseHistoryPoint | null>(null)
+  const gapYtdPct = ytdBudgetClosedMonths > 0
+    ? ((ytdExpenseClosedMonths - ytdBudgetClosedMonths) / ytdBudgetClosedMonths) * 100
+    : null
+  const gapColor = gapYtdPct == null
+    ? 'var(--neutral-600)'
+    : gapYtdPct > 0
+      ? 'var(--color-negative)'
+      : 'var(--color-positive)'
+  const historyBudgetPerMonth = completedMonths > 0 ? ytdBudgetClosedMonths / completedMonths : 0
+  const expenseHistoryRows = useMemo<ExpenseHistoryPoint[]>(() => {
+    const monthCount = Math.max(1, completedMonths)
+    const rows = Array.from({ length: monthCount }, (_, index) => {
+      const month = index + 1
+      const monthMetric = monthlyMetrics.find((metric) => Number(metric.period_month) === month)
+      return {
+        month,
+        monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
+        amount: Number(monthMetric?.expense_total ?? 0),
+        budget: historyBudgetPerMonth,
+        avg12m: 0,
+        median12m: 0,
+      }
+    })
+    const values = rows.map((row) => row.amount)
+    const avg12m = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+    const median12m = median(values)
+    return rows.map((row) => ({ ...row, avg12m, median12m }))
+  }, [completedMonths, historyBudgetPerMonth, monthlyMetrics])
+  const historyAvg12m = expenseHistoryRows[0]?.avg12m ?? 0
+  const historyMedian12m = expenseHistoryRows[0]?.median12m ?? 0
+  const historyYMax = useMemo(() => {
+    const maxVal = Math.max(
+      1000,
+      ...expenseHistoryRows.map((row) => row.amount),
+      historyBudgetPerMonth,
+      historyAvg12m,
+      historyMedian12m,
+    )
+    return Math.ceil(maxVal / 500) * 500 + 500
+  }, [expenseHistoryRows, historyAvg12m, historyBudgetPerMonth, historyMedian12m])
+  const historyLegend = [
+    { key: 'budget_2026', label: 'Budget 2026', color: '#EF4444' },
+    { key: 'avg_12m', label: 'Moyenne (12M)', color: '#7C4DFF' },
+    { key: 'median_12m', label: 'Médiane (12M)', color: '#FFB300' },
+  ] as const
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+        <button
+          type="button"
+          onClick={() => setActiveExpenseKpiModal('ytd')}
+          style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 58, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'pointer' }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+            Dépenses YTD
+          </p>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+            {fmt(ytdExpenseClosedMonths)}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveExpenseKpiModal('gap')}
+          style={{ background: 'color-mix(in oklab, var(--color-warning) 10%, var(--neutral-0) 90%)', border: '1.5px solid color-mix(in oklab, var(--color-warning) 72%, var(--neutral-200) 28%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 58, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'pointer' }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+            écart YTD
+          </p>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: gapColor, lineHeight: 1 }}>
+            {formatSignedPercent(gapYtdPct)}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveExpenseKpiModal('projection')}
+          style={{ background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)', border: '1.5px solid color-mix(in oklab, var(--primary-500) 72%, var(--neutral-200) 28%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 58, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'pointer' }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+            projection 2026
+          </p>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+            {projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}
+          </p>
+        </button>
+      </div>
+
+      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
+        <AnimatePresence mode="wait" initial={false}>
+          {expenseSlide === 0 ? (
+            <motion.div
+              key="expense-slide-category"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AnnualProjectionSectionConnected
+                viewMode="category"
+                hideModeToggle
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="expense-slide-year"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AnnualProjectionSectionConnected
+                viewMode="year"
+                hideModeToggle
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)', marginTop: 8 }}>
+          {([0, 1] as const).map((idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => setExpenseSlide(idx)}
+              aria-label={`Slide dépenses ${idx + 1} sur 2`}
+              style={{ minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', border: 'none', padding: 0, background: 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all var(--transition-base)' }}
+            >
+              <span
+                aria-hidden="true"
+                style={{ display: 'block', width: idx === expenseSlide ? 14 : 8, height: idx === expenseSlide ? 14 : 8, borderRadius: 'var(--radius-full)', background: idx === expenseSlide ? 'var(--primary-500)' : 'var(--neutral-300)', transition: 'all var(--transition-base)' }}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {activeExpenseKpiModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveExpenseKpiModal(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'rgba(13,13,31,0.52)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Détail KPI dépenses"
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 97,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 'var(--space-4)',
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: 'min(92vw, 760px)',
+                  maxHeight: '86vh',
+                  overflowY: 'auto',
+                  background: 'var(--neutral-0)',
+                  borderRadius: 'var(--radius-2xl)',
+                  padding: 'var(--space-4)',
+                  boxShadow: '0 12px 48px rgba(13,13,31,0.22)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                  <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, lineHeight: 1.2 }}>
+                    {activeExpenseKpiModal === 'ytd'
+                      ? 'Dépenses 2026 YTD'
+                      : activeExpenseKpiModal === 'gap'
+                        ? 'écart YTD - détail'
+                        : 'projection 2026 - détail'}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setActiveExpenseKpiModal(null)}
+                    style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+
+                {activeExpenseKpiModal === 'ytd' ? (
+                  <div style={{ maxWidth: 640, margin: '0 auto', width: '100%' }}>
+                    <div style={{ width: '100%', height: 340, position: 'relative' }}>
+                      {selectedExpenseHistoryBar ? (
+                        <div
+                          onClick={(event) => event.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            top: 8,
+                            left: 8,
+                            zIndex: 2,
+                            background: 'var(--neutral-0)',
+                            border: '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-lg)',
+                            boxShadow: 'var(--shadow-card)',
+                            padding: '10px 12px',
+                            minWidth: 160,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedExpenseHistoryBar(null)}
+                            aria-label="Fermer"
+                            style={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--neutral-400)',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            <X size={11} />
+                          </button>
+                          <p style={{ margin: 0, paddingRight: 14, fontSize: 12, color: 'var(--neutral-900)', fontWeight: 800 }}>
+                            {formatMonthFullFr(selectedExpenseHistoryBar.month)}
+                          </p>
+                          <div style={{ display: 'grid', gap: 2, marginTop: 4 }}>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 12, alignItems: 'center' }}>
+                              <span>Réel</span>
+                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.amount)}</strong>
+                            </p>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 12, alignItems: 'center' }}>
+                              <span>Moy. 12m</span>
+                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.avg12m)}</strong>
+                            </p>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 12, alignItems: 'center' }}>
+                              <span>Méd. 12m</span>
+                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.median12m)}</strong>
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={expenseHistoryRows} margin={{ top: 10, right: 6, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
+                          <XAxis dataKey="monthLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: 'var(--neutral-500)' }}
+                            tickFormatter={(value) => fmt(Number(value))}
+                            width={68}
+                            domain={[0, historyYMax]}
+                            tickCount={5}
+                          />
+                          <ReferenceLine y={historyBudgetPerMonth} stroke="#EF4444" strokeWidth={2} />
+                          <ReferenceLine y={historyAvg12m} stroke="#7C4DFF" strokeWidth={2} strokeDasharray="4 4" />
+                          <ReferenceLine y={historyMedian12m} stroke="#FFB300" strokeWidth={2} strokeDasharray="4 4" />
+                          <Bar
+                            dataKey="amount"
+                            fill="var(--primary-500)"
+                            radius={[8, 8, 0, 0]}
+                            maxBarSize={40}
+                            onClick={(data, index) => {
+                              const payload = (data as { payload?: ExpenseHistoryPoint } | null)?.payload ?? null
+                              const fallback = typeof index === 'number' ? expenseHistoryRows[index] ?? null : null
+                              const next = payload ?? fallback
+                              if (!next) return
+                              setSelectedExpenseHistoryBar((prev) =>
+                                prev && prev.month === next.month ? null : next,
+                              )
+                            }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'nowrap', fontSize: 9, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>
+                      {historyLegend.map((item) => (
+                        <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                          <span>{item.label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : activeExpenseKpiModal === 'gap' ? (
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                      Dépenses réelles YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdExpenseClosedMonths)}</strong>
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                      Budget YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdBudgetClosedMonths)}</strong>
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                      Ecart: <strong style={{ fontFamily: 'var(--font-mono)', color: gapColor }}>{formatSignedPercent(gapYtdPct)}</strong>
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                      Dépenses YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdExpenseClosedMonths)}</strong>
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                      Projection totale fin 2026: <strong style={{ fontFamily: 'var(--font-mono)' }}>{projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }
@@ -597,170 +1434,29 @@ function RevenueSection2026({
 
 export function ProjectionsTabContent() {
   const [mode, setMode] = useState<DisplayMode>('depenses')
-  const [costProjectionSlide, setCostProjectionSlide] = useState<CostProjectionSlide>('categories')
-  const [activeModal, setActiveModal] = useState<CalcModalConfig | null>(null)
   const [projMonth, setProjMonth] = useState<number | null>(null) // null = full year 2026
   const [showPeriodModal, setShowPeriodModal] = useState(false)
 
-  const { summary, categories } = useAnnual2026Analysis()
-  const { data: projection } = useAnnualProjectionOverview2026(2026)
+  const { summary } = useAnnual2026Analysis()
   const { data: revenueData } = useBudgetRevenueAnalytics()
+  const { data: projection } = useAnnualProjectionOverview2026(2026)
+  const { data: monthlyMetrics = [] } = useQuery({
+    queryKey: ['monthly-metrics', 2026],
+    queryFn: () => getMonthlyMetrics(2026),
+    staleTime: 5 * 60 * 1000,
+  })
 
   const now = new Date()
   const currentMonth = now.getMonth() + 1
   const ytdMonths = summary?.ytdMonths ?? Math.min(now.getMonth() + 1, 12)
-  const remainingMonths = 12 - ytdMonths
-  const currentMonthLabel = getMonthShortLabel(ytdMonths)
-
-  // ── Dépenses ────────────────────────────────────────────────────────────────
-
-  const consumedYtd = useMemo(
-    () => categories.reduce((sum, cat) => sum + cat.ytdActual, 0),
-    [categories],
+  const completedMonths = Math.max(0, currentMonth - 1)
+  const ytdExpenseClosedMonths = useMemo(
+    () => monthlyMetrics
+      .filter((row) => Number(row.period_month) >= 1 && Number(row.period_month) <= completedMonths)
+      .reduce((sum, row) => sum + Number(row.expense_total ?? 0), 0),
+    [completedMonths, monthlyMetrics],
   )
-  const budgetYtd = summary?.ytdBudgetTotal ?? 0
-  const annualBudget = summary ? summary.totalMonthlyBudget * 12 : 0
-  const projectedTotal = projection?.projectedTotalExpensesAmount ?? null
-  const avgMonthlyConsumed = ytdMonths > 0 ? consumedYtd / ytdMonths : 0
-  const projectedFromAvg = consumedYtd + avgMonthlyConsumed * remainingMonths
-
-  const gapYtdPct = budgetYtd > 0 ? ((consumedYtd - budgetYtd) / budgetYtd) * 100 : null
-  const gapAnnualPct = projectedTotal != null && annualBudget > 0
-    ? ((projectedTotal - annualBudget) / annualBudget) * 100
-    : null
-
-  // ── Revenus ─────────────────────────────────────────────────────────────────
-
-  const revenueMetrics = useMemo(() => {
-    if (!revenueData) {
-      return {
-        ytdRevenue: null, avgMonthly6m: null, scenario1: null, scenario2: null,
-        gapRevYtdVs2025Pct: null, gapS2Vs2025TotalPct: null, ytd2025SamePeriod: null,
-      }
-    }
-
-    const series2026 = revenueData.monthlySeries.filter(p => p.month_start.startsWith('2026'))
-    const series2025 = revenueData.monthlySeries.filter(p => p.month_start.startsWith('2025'))
-
-    const ytd = series2026.reduce((sum, p) => sum + p.revenue_amount, 0)
-    const avg = revenueData.avgMonthlyRevenueLast6M
-    const s1 = projection?.projectedRevenueAmount ?? null
-    const s2 = ytd > 0 && ytdMonths > 0 ? ytd + (ytd / ytdMonths) * remainingMonths : null
-
-    const ytd2025SamePeriod = series2025.slice(0, ytdMonths).reduce((sum, p) => sum + p.revenue_amount, 0)
-    const total2025Revenue = series2025.reduce((sum, p) => sum + p.revenue_amount, 0)
-
-    const gapRevYtdVs2025Pct = ytd2025SamePeriod > 0 ? ((ytd - ytd2025SamePeriod) / ytd2025SamePeriod) * 100 : null
-    const gapS2Vs2025TotalPct = s2 != null && total2025Revenue > 0 ? ((s2 - total2025Revenue) / total2025Revenue) * 100 : null
-
-    return { ytdRevenue: ytd, avgMonthly6m: avg, scenario1: s1, scenario2: s2, gapRevYtdVs2025Pct, gapS2Vs2025TotalPct, ytd2025SamePeriod }
-  }, [revenueData, projection, ytdMonths, remainingMonths])
-
-  const { ytdRevenue, avgMonthly6m, scenario1, scenario2, gapRevYtdVs2025Pct, gapS2Vs2025TotalPct, ytd2025SamePeriod } = revenueMetrics
-  const legacyProjectionViewMode: ProjectionViewMode = costProjectionSlide === 'categories' ? 'category' : 'year'
-
-  // ── Modal configs ────────────────────────────────────────────────────────────
-
-  const MODAL_CONSOMME: CalcModalConfig = {
-    title: 'Consommé YTD · 2026',
-    subtitle: `Dépenses réelles Jan–${currentMonthLabel} (${ytdMonths} mois)`,
-    steps: [
-      { label: `Dépenses réelles Jan–${currentMonthLabel}`, value: consumedYtd },
-      { label: 'Mois écoulés', value: ytdMonths },
-      { label: 'Moyenne mensuelle réelle', value: avgMonthlyConsumed },
-    ],
-    totalLabel: 'Total consommé YTD',
-    totalValue: consumedYtd,
-    note: 'Somme des dépenses réelles sur tous les mois écoulés depuis le 1er janvier 2026, toutes catégories confondues.',
-  }
-
-  const MODAL_BUDGET_YTD: CalcModalConfig = {
-    title: 'Budget YTD · 2026',
-    subtitle: `Budget mensuel 2026 × ${ytdMonths} mois écoulés`,
-    steps: [
-      { label: 'Budget mensuel 2026', value: summary?.totalMonthlyBudget ?? null },
-      { label: `× ${ytdMonths} mois écoulés (Jan–${currentMonthLabel})`, value: budgetYtd },
-    ],
-    totalLabel: 'Budget théorique YTD',
-    totalValue: budgetYtd,
-    note: 'Budget théorique cumulé sur les mois écoulés. Compare le rythme réel au plan budgétaire mensuel.',
-  }
-
-  const MODAL_PROJECTION: CalcModalConfig = {
-    title: 'Projection fin 2026',
-    subtitle: `YTD réel + rythme moyen × ${remainingMonths} mois restants`,
-    steps: [
-      { label: `Consommé réel Jan–${currentMonthLabel} (${ytdMonths} mois)`, value: consumedYtd },
-      { label: 'Moyenne mensuelle réelle', value: avgMonthlyConsumed },
-      { label: `Projection ${remainingMonths} mois restants`, value: avgMonthlyConsumed * remainingMonths },
-    ],
-    totalLabel: 'Projection fin d\'année',
-    totalValue: projectedTotal ?? projectedFromAvg,
-    note: 'Projection basée sur le rythme de dépenses réel. La vue SQL peut utiliser une médiane pour neutraliser les mois exceptionnels.',
-  }
-
-  const MODAL_BUDGET_ANNUEL: CalcModalConfig = {
-    title: 'Budget annuel 2026',
-    subtitle: 'Budget mensuel 2026 × 12 mois',
-    steps: [
-      { label: 'Budget mensuel 2026', value: summary?.totalMonthlyBudget ?? null },
-      { label: '× 12 mois', value: annualBudget },
-    ],
-    totalLabel: 'Budget annuel 2026',
-    totalValue: annualBudget,
-    note: 'Enveloppe budgétaire totale prévue pour l\'année 2026, calculée sur la base du budget mensuel défini.',
-  }
-
-  const MODAL_REVENUS_YTD: CalcModalConfig = {
-    title: 'Revenus YTD · 2026',
-    subtitle: `Revenus encaissés Jan–${currentMonthLabel} (${ytdMonths} mois)`,
-    steps: [
-      { label: `Revenus réels Jan–${currentMonthLabel}`, value: ytdRevenue },
-      { label: `Revenus 2025 même période (${ytdMonths} mois)`, value: ytd2025SamePeriod },
-      { label: 'Écart vs 2025', value: ytdRevenue != null && ytd2025SamePeriod != null ? ytdRevenue - ytd2025SamePeriod : null },
-    ],
-    totalLabel: 'Total revenus YTD',
-    totalValue: ytdRevenue,
-    note: 'Somme des revenus encaissés depuis le 1er janvier 2026, comparée à la même période en 2025.',
-  }
-
-  const MODAL_MOY_REVENUS: CalcModalConfig = {
-    title: 'Moyenne mensuelle des revenus',
-    subtitle: 'Moyenne calculée sur les 6 derniers mois',
-    steps: [
-      { label: 'Revenus cumulés (6 derniers mois)', value: avgMonthly6m != null ? avgMonthly6m * 6 : null },
-      { label: 'Nombre de mois', value: 6 },
-      { label: 'Moyenne mensuelle résultante', value: avgMonthly6m },
-    ],
-    totalLabel: 'Moyenne mensuelle (6M)',
-    totalValue: avgMonthly6m,
-    note: 'Moyenne des 6 derniers mois de revenus pour lisser les mois atypiques (bonus exceptionnels, etc.).',
-  }
-
-  const MODAL_SCENARIO1: CalcModalConfig = {
-    title: 'Scénario 1 — Revenus projetés',
-    subtitle: 'Projection annuelle via vue SQL',
-    steps: [
-      { label: `Revenus Jan–${currentMonthLabel} (${ytdMonths} mois)`, value: ytdRevenue },
-      { label: `Projection ${remainingMonths} mois restants (SQL)`, value: scenario1 != null && ytdRevenue != null ? scenario1 - ytdRevenue : null },
-    ],
-    totalLabel: 'Revenus projetés fin 2026',
-    totalValue: scenario1,
-    note: 'Projection basée sur la vue SQL. Peut utiliser la médiane ou un rythme 6M pour estimer les mois restants.',
-  }
-
-  const MODAL_SCENARIO2: CalcModalConfig = {
-    title: 'Scénario 2 — Projection haute',
-    subtitle: 'Extrapolation pure du rythme YTD 2026',
-    steps: [
-      { label: `Revenus YTD réels (${ytdMonths} mois)`, value: ytdRevenue },
-      { label: `Moyenne YTD (÷ ${ytdMonths} mois)`, value: ytdRevenue != null && ytdMonths > 0 ? ytdRevenue / ytdMonths : null },
-      { label: `× ${remainingMonths} mois restants`, value: ytdRevenue != null && ytdMonths > 0 ? (ytdRevenue / ytdMonths) * remainingMonths : null },
-    ],
-    totalLabel: 'Projection haute fin 2026',
-    totalValue: scenario2,
-    note: 'Projection optimiste basée uniquement sur le rythme YTD 2026, sans correction ni régression.',
-  }
+  const ytdBudgetClosedMonths = (summary?.totalMonthlyBudget ?? 0) * completedMonths
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -912,176 +1608,16 @@ export function ProjectionsTabContent() {
         {mode === 'revenus' && (
           <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} />
         )}
-
-        {/* Dark navy container — same design language as "projections annuelles comparées" */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1e1c4a 0%, #2d2a6e 100%)',
-        borderRadius: 'var(--radius-xl)',
-        padding: 'var(--space-5)',
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-4)',
-      }}>
-        {/* Subtle radial glow */}
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(ellipse at 80% 20%, rgba(91,87,245,0.25) 0%, transparent 65%)',
-          pointerEvents: 'none',
-        }} />
-
-        {/* 2×2 card grid */}
-        {mode === 'depenses' ? (
-          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-            <DarkKpiCard
-              accentColor="rgba(252,90,90,0.9)"
-              cardBg="rgba(252,90,90,0.10)"
-              borderColor="rgba(252,90,90,0.20)"
-              title="2026 · Consommé YTD"
-              amount={consumedYtd}
-              caption={`Jan–${currentMonthLabel} · ${ytdMonths} mois`}
-              onClick={() => setActiveModal(MODAL_CONSOMME)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(91,87,245,0.9)"
-              cardBg="rgba(91,87,245,0.10)"
-              borderColor="rgba(91,87,245,0.22)"
-              title="2026 · Budget YTD"
-              amount={budgetYtd}
-              caption={`objectif ${ytdMonths} mois`}
-              onClick={() => setActiveModal(MODAL_BUDGET_YTD)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(255,171,46,0.9)"
-              cardBg="rgba(255,171,46,0.10)"
-              borderColor="rgba(255,171,46,0.22)"
-              title="2026 · Projection"
-              subAmount={consumedYtd}
-              subLabel="YTD"
-              amount={projectedTotal ?? projectedFromAvg}
-              caption="projeté fin d'année"
-              onClick={() => setActiveModal(MODAL_PROJECTION)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(76,201,240,0.9)"
-              cardBg="rgba(76,201,240,0.10)"
-              borderColor="rgba(76,201,240,0.22)"
-              title="2026 · Budget Annuel"
-              subAmount={summary?.totalMonthlyBudget ?? null}
-              subLabel="/mois"
-              amount={annualBudget}
-              caption="enveloppe annuelle"
-              onClick={() => setActiveModal(MODAL_BUDGET_ANNUEL)}
-            />
-          </div>
-        ) : (
-          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-            <DarkKpiCard
-              accentColor="rgba(99,241,171,0.95)"
-              cardBg="rgba(46,212,122,0.12)"
-              borderColor="rgba(99,241,171,0.22)"
-              title="2026 · Revenus YTD"
-              subAmount={ytd2025SamePeriod}
-              subLabel="en 2025"
-              amount={ytdRevenue}
-              caption={`Jan–${currentMonthLabel} · ${ytdMonths} mois`}
-              onClick={() => setActiveModal(MODAL_REVENUS_YTD)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(255,171,46,0.9)"
-              cardBg="rgba(255,171,46,0.10)"
-              borderColor="rgba(255,171,46,0.20)"
-              title="2026 · Moy. mensuelle"
-              amount={avgMonthly6m}
-              caption="6 derniers mois"
-              onClick={() => setActiveModal(MODAL_MOY_REVENUS)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(76,201,240,0.9)"
-              cardBg="rgba(76,201,240,0.11)"
-              borderColor="rgba(76,201,240,0.20)"
-              title="2026 · Scénario 1"
-              subAmount={ytdRevenue}
-              subLabel="YTD"
-              amount={scenario1}
-              caption="projection SQL"
-              onClick={() => setActiveModal(MODAL_SCENARIO1)}
-            />
-            <DarkKpiCard
-              accentColor="rgba(180,140,255,0.9)"
-              cardBg="rgba(150,120,230,0.10)"
-              borderColor="rgba(180,140,255,0.20)"
-              title="2026 · Scénario 2"
-              subAmount={ytdRevenue}
-              subLabel="YTD"
-              amount={scenario2}
-              caption="rythme YTD · optimiste"
-              onClick={() => setActiveModal(MODAL_SCENARIO2)}
-            />
-          </div>
+        {mode === 'depenses' && (
+          <ExpenseSection2026
+            ytdExpenseClosedMonths={ytdExpenseClosedMonths}
+            ytdBudgetClosedMonths={ytdBudgetClosedMonths}
+            projectedExpense2026={projection?.projectedTotalExpensesAmount ?? null}
+            monthlyMetrics={monthlyMetrics}
+            completedMonths={completedMonths}
+          />
         )}
 
-        {/* Summary rows — separated by a divider line, same pattern as ComparedVelocityCard */}
-        <div style={{
-          position: 'relative',
-          borderTop: '1px solid rgba(255,255,255,0.10)',
-          paddingTop: 'var(--space-3)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}>
-          {mode === 'depenses' ? (
-            <>
-              <SummaryRow
-                label="Dépenses YTD 2026"
-                amount={consumedYtd}
-                pct={gapYtdPct}
-                positiveIsGood={false}
-              />
-              <SummaryRow
-                label="Projection dépenses 2026"
-                amount={projectedTotal ?? projectedFromAvg}
-                pct={gapAnnualPct}
-                positiveIsGood={false}
-              />
-            </>
-          ) : (
-            <>
-              <SummaryRow
-                label="Revenus YTD 2026"
-                amount={ytdRevenue}
-                pct={gapRevYtdVs2025Pct}
-                positiveIsGood={true}
-              />
-              <SummaryRow
-                label="Projection haute revenus 2026"
-                amount={scenario2}
-                pct={gapS2Vs2025TotalPct}
-                positiveIsGood={true}
-              />
-            </>
-          )}
-        </div>
-      </div>
-
-      <h2 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
-        Projection coûts annuels
-      </h2>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <DarkSlideToggle slide={costProjectionSlide} onChange={setCostProjectionSlide} />
-        </div>
-
-        <AnnualProjectionSectionConnected
-          viewMode={legacyProjectionViewMode}
-          hideModeToggle
-        />
-      </div>
-
-        <CalcModal config={activeModal} onClose={() => setActiveModal(null)} />
       </div>
     </>
   )

@@ -31,6 +31,8 @@ interface Annual2026BlockMetricsProps {
   displayMode?: MetricsDisplayMode
   compactMobile?: boolean
   rollingStats?: CategoryRolling12mStats[]
+  excludeCurrentMonthFromHistory?: boolean
+  hideBudgetLineInHistoryTooltip?: boolean
 }
 
 interface CategoryRow {
@@ -130,10 +132,9 @@ function monthFromPeriod(period: string): number | null {
   return idx + 1
 }
 
-function periodMonths(period: string): number[] {
+function periodMonths(period: string, lastMonth: number): number[] {
   const month = monthFromPeriod(period)
   if (month != null) return [month]
-  const lastMonth = getActiveYearMonth()
   return Array.from({ length: lastMonth }, (_, index) => index + 1)
 }
 
@@ -174,10 +175,11 @@ function getNiceStep(value: number): number {
   return 10 * magnitude
 }
 
-function getActiveYearMonth(): number {
+function getActiveYearMonth(excludeCurrentMonth = false): number {
   const now = new Date()
   if (now.getFullYear() !== YEAR_2026) return 12
-  return Math.max(1, Math.min(12, now.getMonth() + 1))
+  const currentMonth = Math.max(1, Math.min(12, now.getMonth() + 1))
+  return excludeCurrentMonth ? Math.max(1, currentMonth - 1) : currentMonth
 }
 
 const ALLOWED_BUCKETS: BudgetBucketId[] = [
@@ -487,6 +489,8 @@ export function Annual2026BlockMetrics({
   displayMode = 'tableau',
   compactMobile = false,
   rollingStats = [],
+  excludeCurrentMonthFromHistory = false,
+  hideBudgetLineInHistoryTooltip = false,
 }: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
   const [selectedBlock, setSelectedBlock] = useState<string>(STRICT_EXPENSE_BUCKETS[0] as string)
@@ -510,13 +514,17 @@ export function Annual2026BlockMetrics({
     setSelectedPeriod(period)
   }, [period])
 
-  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, getActiveYearMonth()).map((label) => FULL_MONTH_LABEL_BY_SHORT[label] ?? label)]
-  const selectedMonths = useMemo(() => periodMonths(selectedPeriod), [selectedPeriod])
+  const activeYearMonth = useMemo(
+    () => getActiveYearMonth(excludeCurrentMonthFromHistory),
+    [excludeCurrentMonthFromHistory],
+  )
+
+  const periods = ['2026', ...MONTH_LABELS_SHORT.slice(0, activeYearMonth).map((label) => FULL_MONTH_LABEL_BY_SHORT[label] ?? label)]
+  const selectedMonths = useMemo(() => periodMonths(selectedPeriod, activeYearMonth), [activeYearMonth, selectedPeriod])
 
   const yearMonths = useMemo(() => {
-    const lastMonth = getActiveYearMonth()
-    return Array.from({ length: lastMonth }, (_, i) => i + 1)
-  }, [])
+    return Array.from({ length: activeYearMonth }, (_, i) => i + 1)
+  }, [activeYearMonth])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['budget-metrics-categories'],
@@ -1193,9 +1201,11 @@ export function Annual2026BlockMetrics({
       >
         <p style={{ margin: 0, fontSize: 13, color: 'var(--neutral-900)', fontWeight: 800 }}>{monthLabelFull}</p>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>Réel: <strong>{fmtCurrencyCompact(Number(row.amount ?? 0))}</strong></p>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
-          Budget 26: <strong>{fmtCurrencyCompact(Number(row.budget ?? 0))}</strong>
-        </p>
+        {!hideBudgetLineInHistoryTooltip ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
+            Budget 26: <strong>{fmtCurrencyCompact(Number(row.budget ?? 0))}</strong>
+          </p>
+        ) : null}
         <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)' }}>
           Moy. 12m: <strong>{row.avg12m == null ? '—' : fmtCurrencyCompact(Number(row.avg12m))}</strong>
         </p>

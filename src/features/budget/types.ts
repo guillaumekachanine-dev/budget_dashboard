@@ -203,5 +203,6 @@ export interface BudgetRevenueAnalytics {
   minMonthlyRevenue: number
   monthlySeries: BudgetRevenueMonthlyPoint[]
   bySource: BudgetRevenueSource[]
+  allTransactions: BudgetRevenueTransaction[]
   lastTransactions: BudgetRevenueTransaction[]
 }
