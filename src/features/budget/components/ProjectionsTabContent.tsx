@@ -279,6 +279,17 @@ function CalcModal({ config, onClose }: { config: CalcModalConfig | null; onClos
 const REV_GREEN = '#2ED47A'
 const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD69D', '#94E3B7', '#B9EED1']
 
+/** Map known revenue-source names to semantic colours. Falls back to the green palette. */
+function resolveSourceColor(name: string, fallbackIndex: number): string {
+  const n = name.toLowerCase()
+  if (n.includes('salaire'))                                     return '#F0B429' // doré/or
+  if (n.includes('prime'))                                       return '#C8D3DC' // argenté vif
+  if (n.includes('remboursement'))                               return '#10B981' // vert émeraude
+  if (n.includes('chômage') || n.includes('chomage') || n.includes('indemnité') || n.includes('indemnite')) return '#2E5FD4' // bleu roi
+  if (n.includes('autre'))                                       return '#C45A72' // rouge carmin pâle
+  return REV_GREENS[fallbackIndex % REV_GREENS.length]
+}
+
 interface Rev2026Point {
   month: string
   value: number
@@ -350,7 +361,7 @@ function RevenueSection2026({
   // ── Donut data (2026 only) ────────────────────────────────────────────────
   const donutData = rawSources.map((s, i) => ({
     ...s,
-    color: REV_GREENS[i % REV_GREENS.length],
+    color: resolveSourceColor(s.name, i),
   }))
   const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
   const selectedSource = selectedSourceId
@@ -425,7 +436,7 @@ function RevenueSection2026({
         </div>
 
         {/* Slides container */}
-        <div style={{ overflow: 'hidden', height: 220 }}>
+        <div style={{ overflow: 'hidden', height: 290 }}>
           <div style={{
             display: 'flex',
             width: '200%',
@@ -458,7 +469,7 @@ function RevenueSection2026({
             {/* ── Slide 1: Sources donut (2026 only) ── */}
             <div style={{ width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {/* Pie area */}
-              <div style={{ height: 148, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
+              <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
                 {selectedSource ? (
                   <div style={{
                     position: 'absolute',
@@ -484,16 +495,16 @@ function RevenueSection2026({
                     </span>
                   </div>
                 ) : null}
-                <ResponsiveContainer width="100%" height={148}>
+                <ResponsiveContainer width="100%" height={188}>
                   <PieChart>
                     <Pie
                       data={donutData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
-                      cy="56%"
-                      innerRadius={44}
-                      outerRadius={72}
+                      cy="54%"
+                      innerRadius={54}
+                      outerRadius={86}
                       paddingAngle={2}
                       onClick={(slice: unknown) => {
                         const s = slice as { id?: string; payload?: { id?: string } } | null
