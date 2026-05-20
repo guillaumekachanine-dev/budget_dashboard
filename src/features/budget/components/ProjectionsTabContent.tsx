@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
@@ -9,6 +9,7 @@ import { AnnualProjectionSectionConnected, type ProjectionViewMode } from '@/fea
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import type { BudgetRevenueAnalytics } from '@/features/budget/types'
+import { useBudgetRevenueSources2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,7 @@ function CalcModal({ config, onClose }: { config: CalcModalConfig | null; onClos
 // ─── Revenue 2026 histogram ───────────────────────────────────────────────────
 
 const REV_GREEN = '#2ED47A'
+const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD69D', '#94E3B7', '#B9EED1']
 
 interface Rev2026Point {
   month: string
@@ -320,6 +322,11 @@ function RevenueSection2026({
   revenueData: BudgetRevenueAnalytics | null
   ytdMonths: number
 }) {
+  const [revSlide, setRevSlide] = useState(0)
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const { data: rawSources } = useBudgetRevenueSources2026()
+
+  // ── Histogram data ────────────────────────────────────────────────────────
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
   const currentMonthRevenue = series2026.length > 0 ? series2026[series2026.length - 1].revenue_amount : 0
   const avg2526 = revenueData?.avgMonthlyRevenue2025_2026 ?? 0
@@ -340,9 +347,27 @@ function RevenueSection2026({
   const maxVal = Math.max(...chartData.map(d => d.value), 1000)
   const yMax = Math.ceil(maxVal / 500) * 500 + 500
 
+  // ── Donut data (2026 only) ────────────────────────────────────────────────
+  const donutData = rawSources.map((s, i) => ({
+    ...s,
+    color: REV_GREENS[i % REV_GREENS.length],
+  }))
+  const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
+  const selectedSource = selectedSourceId
+    ? (donutData.find(d => d.id === selectedSourceId) ?? null)
+    : null
+
+  const SLIDE_TITLES = ['Revenus 2026', 'Sources de revenus 2026'] as const
+
+  function handleSlide(idx: number) {
+    setRevSlide(idx)
+    setSelectedSourceId(null)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      {/* ── 3 KPI tiles ── */}
+
+      {/* ── 3 KPI tiles — always above carousel ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
         {([
           { label: 'Mois en cours', value: currentMonthRevenue },
@@ -373,45 +398,217 @@ function RevenueSection2026({
         ))}
       </div>
 
-      {/* ── 2026 monthly histogram ── */}
+      {/* ── Carousel card ── */}
       <div style={{
         background: 'var(--neutral-0)',
         border: '1px solid var(--neutral-200)',
         borderRadius: 'var(--radius-md)',
-        padding: 'var(--space-3) var(--space-3) var(--space-2)',
+        padding: 'var(--space-3)',
       }}>
+        {/* Card header — title + conditional legend */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em' }}>
-            Revenus 2026
+            {SLIDE_TITLES[revSlide]}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-              <span style={{ display: 'inline-block', width: 10, height: 8, background: REV_GREEN, borderRadius: 2 }} />
-              Réel
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-              <span style={{ display: 'inline-block', width: 10, height: 8, background: 'rgba(46,212,122,0.15)', border: `1.5px dashed ${REV_GREEN}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
-              Projeté
-            </span>
+          {revSlide === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+                <span style={{ display: 'inline-block', width: 10, height: 8, background: REV_GREEN, borderRadius: 2 }} />
+                Réel
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
+                <span style={{ display: 'inline-block', width: 10, height: 8, background: 'rgba(46,212,122,0.15)', border: `1.5px dashed ${REV_GREEN}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
+                Projeté
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Slides container */}
+        <div style={{ overflow: 'hidden', height: 220 }}>
+          <div style={{
+            display: 'flex',
+            width: '200%',
+            height: '100%',
+            transform: `translateX(-${50 * revSlide}%)`,
+            transition: 'transform 300ms ease',
+          }}>
+
+            {/* ── Slide 0: Monthly histogram ── */}
+            <div style={{ width: '50%', flexShrink: 0, height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 9, fill: '#9090a8' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis hide domain={[0, yMax]} />
+                  <Bar
+                    dataKey="value"
+                    shape={<RevBarShape />}
+                    maxBarSize={24}
+                    isAnimationActive={false}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* ── Slide 1: Sources donut (2026 only) ── */}
+            <div style={{ width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {/* Pie area */}
+              <div style={{ height: 148, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
+                {selectedSource ? (
+                  <div style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    maxWidth: '86%',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    boxShadow: 'var(--shadow-card)',
+                    padding: '4px 8px',
+                    display: 'grid',
+                    justifyItems: 'center',
+                    gap: 1,
+                    zIndex: 1,
+                  }}>
+                    <span style={{ fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                      {selectedSource.name}
+                    </span>
+                    <span style={{ fontSize: 11, lineHeight: 1.2, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                      {fmt(selectedSource.value)}
+                    </span>
+                  </div>
+                ) : null}
+                <ResponsiveContainer width="100%" height={148}>
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="56%"
+                      innerRadius={44}
+                      outerRadius={72}
+                      paddingAngle={2}
+                      onClick={(slice: unknown) => {
+                        const s = slice as { id?: string; payload?: { id?: string } } | null
+                        const inner = (s?.payload ?? s) as { id?: string } | null
+                        const id = inner?.id ?? null
+                        setSelectedSourceId(prev => prev === id ? null : id)
+                      }}
+                    >
+                      {donutData.map((entry) => (
+                        <Cell
+                          key={entry.id}
+                          fill={entry.color}
+                          fillOpacity={selectedSourceId && selectedSourceId !== entry.id ? 0.55 : 0.96}
+                          stroke={selectedSourceId === entry.id ? 'var(--neutral-900)' : 'var(--neutral-0)'}
+                          strokeWidth={selectedSourceId === entry.id ? 2 : 1}
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Legend grid */}
+              <div style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: 6,
+                alignContent: 'start',
+              }}>
+                {donutData.map((entry) => (
+                  <button
+                    key={`${entry.id}-legend`}
+                    type="button"
+                    onClick={() => setSelectedSourceId(prev => prev === entry.id ? null : entry.id)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      display: 'grid',
+                      gridTemplateColumns: '10px minmax(0, 1fr)',
+                      gap: 6,
+                      alignItems: 'center',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      opacity: selectedSourceId && selectedSourceId !== entry.id ? 0.6 : 1,
+                    }}
+                  >
+                    <span style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 'var(--radius-full)',
+                      background: entry.color,
+                      border: '1px solid color-mix(in oklab, var(--neutral-900) 18%, transparent)',
+                      flexShrink: 0,
+                      display: 'block',
+                    }} />
+                    <span style={{
+                      minWidth: 0,
+                      fontSize: 10,
+                      lineHeight: 1.2,
+                      color: 'var(--neutral-700)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      fontWeight: 700,
+                    }}>
+                      {`${entry.name} (${donutTotal > 0 ? Math.round((entry.value / donutTotal) * 100) : 0}%)`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
-            <XAxis
-              dataKey="month"
-              tick={{ fontSize: 9, fill: '#9090a8' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis hide domain={[0, yMax]} />
-            <Bar
-              dataKey="value"
-              shape={<RevBarShape />}
-              maxBarSize={24}
-              isAnimationActive={false}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+
+        {/* ── Dot slide selector (matches bloc revenus pattern) ── */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)', marginTop: 8 }}>
+          {([0, 1] as const).map((idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSlide(idx)}
+              aria-label={`Slide ${idx + 1} sur 2`}
+              style={{
+                minWidth: 'var(--touch-target-min)',
+                minHeight: 'var(--touch-target-min)',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                padding: 0,
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all var(--transition-base)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'block',
+                  width: idx === revSlide ? 14 : 8,
+                  height: idx === revSlide ? 14 : 8,
+                  borderRadius: 'var(--radius-full)',
+                  background: idx === revSlide ? 'var(--primary-500)' : 'var(--neutral-300)',
+                  transition: 'all var(--transition-base)',
+                }}
+              />
+            </button>
+          ))}
+        </div>
+
       </div>
     </div>
   )
