@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
