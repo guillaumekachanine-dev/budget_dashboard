@@ -7,6 +7,7 @@ import { ComparedMonthlyChart } from '@/features/annual-analysis/components/Comp
 import { ComparedVelocityCard } from '@/features/annual-analysis/components/ComparedVelocityCard'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
+import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
 
 type ComparisonYear = 2024 | 2025 | 2026
 type YearSide = 'left' | 'right'
@@ -308,6 +309,13 @@ export function BudgetsAnalyticsTab() {
       </section>
 
       <RepartitionComparisonSection />
+
+      <MajorSectionHeading title="Flux mensuels" marginTop="0" />
+      <MonthlyFlowsAnalysisCard
+        year={2026}
+        showInternalViewToggle
+        variant="standalone"
+      />
     </section>
   )
 }
