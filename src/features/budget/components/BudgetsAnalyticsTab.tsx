@@ -535,16 +535,23 @@ function ExpandedInsightPanel({
         gap: 'var(--space-3)',
       }}
     >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: 'var(--neutral-900)',
-        }}
-      >
-        {detailBody}
-      </p>
+      {insightId === 'savings' ? (
+        <ul style={{ margin: 0, padding: '0 0 0 var(--space-4)', display: 'grid', gap: 'var(--space-1)' }}>
+          {[
+            'Compression importante des revenus (-81% hors janvier)',
+            'Maintien, et même augmentation des dépenses (+9,3%)',
+            'Conséquence : -87% d’épargne sur le début d’année',
+          ].map((line) => (
+            <li key={line} style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
+          {detailBody}
+        </p>
+      )}
 
       {insightId === 'savings' ? <SavingsInsightKpis /> : null}
 
