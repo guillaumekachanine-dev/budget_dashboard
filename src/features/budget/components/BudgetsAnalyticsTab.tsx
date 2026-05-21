@@ -4,6 +4,7 @@ import { ArrowUpCircle, Car, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
 import { ComparedVelocityCard } from '@/features/annual-analysis/components/ComparedVelocityCard'
+import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
@@ -513,7 +514,7 @@ function ExpandedInsightPanel({
   insightId: InsightId
   detailBody: string
 }) {
-  const { loading, error, flows2025, flows2026 } = useComparedAnalysis()
+  const { loading, error, flows2025, flows2026, fluxMetrics } = useComparedAnalysis()
   const { annualTotals } = useAnnual2025Analysis()
 
   const ASSURED_MONTHLY = 3334
@@ -554,19 +555,6 @@ function ExpandedInsightPanel({
             </li>
           ))}
         </ul>
-      ) : insightId === 'income' ? (
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-1)' }}>
-          {[
-            'Aucun salaire perçu sur la période février–avril',
-            'Postes de dépenses structurels nouveaux (enfant, transport…)',
-            'Projection pessimiste : revenus 2026 divisés par 2 vs 2025',
-          ].map((line) => (
-            <li key={line} style={{ display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
-              <span style={{ color: 'var(--primary-500)', fontSize: 8, flexShrink: 0 }}>▶</span>
-              {line}
-            </li>
-          ))}
-        </ul>
       ) : (
         <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
           {detailBody}
@@ -578,7 +566,7 @@ function ExpandedInsightPanel({
       {insightId === 'income' ? (
         loading ? (
           <div style={{
-            height: 112,
+            height: 280,
             borderRadius: 'var(--radius-xl)',
             background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
             backgroundSize: '200% 100%',
@@ -587,14 +575,28 @@ function ExpandedInsightPanel({
         ) : error ? (
           <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)' }}>Erreur de chargement.</p>
         ) : (
-          <IncomeProjectionCards
-            income2025Ytd={income2025Ytd}
-            annualIncome2025={annualIncome2025}
-            income2026Ytd={income2026Ytd}
-            projectedIncome2026={projectedIncome2026}
-            assuredMonthlyIncome={ASSURED_MONTHLY}
-            assuredMonths={ASSURED_MONTHS}
-          />
+          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <IncomeProjectionCards
+              income2025Ytd={income2025Ytd}
+              annualIncome2025={annualIncome2025}
+              income2026Ytd={income2026Ytd}
+              projectedIncome2026={projectedIncome2026}
+              assuredMonthlyIncome={ASSURED_MONTHLY}
+              assuredMonths={ASSURED_MONTHS}
+            />
+            <ComparedMonthlyChart
+              flows2025={flows2025}
+              flows2026={flows2026}
+              fluxMetrics={fluxMetrics}
+              minHeight={320}
+              mode="insight"
+              title="Flux mensuels comparés"
+              allowedMetrics={['income', 'savings', 'expense']}
+              defaultEnabledMetrics={['income']}
+              maxEnabledMetrics={1}
+              forceBothYears
+            />
+          </div>
         )
       ) : null}
     </motion.section>
@@ -1312,7 +1314,7 @@ function IncomeProjectionCards({
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none' }}
         >
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--primary-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            2025 – Revenus YTD
+            2025 – Revenus
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
             {formatCompactCurrency(income2025Ytd)} encaissés
@@ -1320,7 +1322,6 @@ function IncomeProjectionCards({
           <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {annualIncome2025 != null ? formatCompactCurrency(annualIncome2025) : '—'}
           </p>
-          <p style={{ margin: '3px 0 0', fontSize: 9, color: 'var(--neutral-500)' }}>revenus totaux 2025</p>
         </button>
 
         {/* 2026 card */}
@@ -1344,7 +1345,7 @@ function IncomeProjectionCards({
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none' }}
         >
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#EA580C', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            2026 – Revenus YTD
+            2026 – Projection
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
             {formatCompactCurrency(income2026Ytd)} encaissés
@@ -1352,7 +1353,6 @@ function IncomeProjectionCards({
           <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {formatCompactCurrency(projectedIncome2026)}
           </p>
-          <p style={{ margin: '3px 0 0', fontSize: 9, color: 'var(--neutral-500)' }}>revenus totaux 2026</p>
         </button>
       </div>
 
