@@ -4,6 +4,8 @@ import { X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.png'
+import planning2026Icon from '@/assets/icons/app/epargne_planning_2026.png'
+import performanceIcon from '@/assets/icons/app/epargne_performance.png'
 import epargneIcon from '@/assets/icons/categories/epargne.webp'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
@@ -16,56 +18,20 @@ import { SavingsPortfoliosListSection } from '@/features/savings/components/Savi
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
-type StatsTabId = 'optimisation' | 'epargne'
+type StatsTabId = 'epargne' | 'planning_2026' | 'performance' | 'optimisation'
 type StatsTabConfig = {
   id: StatsTabId
   label: string
   iconSrc: string
 }
 const STATS_TABS: StatsTabConfig[] = [
-  { id: 'epargne', label: 'épargne', iconSrc: epargneIcon },
-  { id: 'optimisation', label: 'optimisation', iconSrc: optimisationIcon },
+  { id: 'epargne', label: 'Épargne', iconSrc: epargneIcon },
+  { id: 'planning_2026', label: 'Planning 2026', iconSrc: planning2026Icon },
+  { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
+  { id: 'optimisation', label: 'Optimisation', iconSrc: optimisationIcon },
 ]
-function StatsMajorSectionHeading({ title }: { title: string }) {
-  return (
-    <StatsSection>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-        <div
-          aria-hidden="true"
-          style={{
-            height: 2,
-            width: '100%',
-            background: 'var(--neutral-900)',
-            borderRadius: 'var(--radius-full)',
-          }}
-        />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 0,
-              height: 0,
-              borderTop: '8px solid transparent',
-              borderBottom: '8px solid transparent',
-              borderLeft: '14px solid var(--neutral-900)',
-              flexShrink: 0,
-            }}
-          />
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-lg)',
-              fontWeight: 'var(--font-weight-bold)',
-              color: 'var(--neutral-900)',
-            }}
-          >
-            {title}
-          </h3>
-        </div>
-      </div>
-    </StatsSection>
-  )
-}
+
+type PerformanceViewMode = 'performance' | 'capital_investi'
 
 export function Epargne() {
   const {
@@ -80,7 +46,7 @@ export function Epargne() {
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [showTabModal, setShowTabModal] = useState(false)
-  const [showSavingsAllocationModal, setShowSavingsAllocationModal] = useState(false)
+  const [performanceViewMode, setPerformanceViewMode] = useState<PerformanceViewMode>('performance')
   const hasAppliedDefaultPeriodRef = useRef(false)
 
   const activeTab = useMemo(
@@ -122,29 +88,25 @@ export function Epargne() {
     return lockDocumentScroll()
   }, [showTabModal])
 
-  useEffect(() => {
-    if (!showSavingsAllocationModal) return
-    return lockDocumentScroll()
-  }, [showSavingsAllocationModal])
+  function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
+    return {
+      border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
+      background: active ? 'var(--primary-50)' : 'var(--neutral-0)',
+      color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+      borderRadius: 'var(--radius-md)',
+      padding: 'var(--space-2) var(--space-4)',
+      fontSize: 'var(--font-size-sm)',
+      fontWeight: 700,
+      cursor: 'pointer',
+      transition: 'all var(--transition-base)',
+      minHeight: 36,
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
-        title={activeTabId === 'epargne' ? 'Epargne' : 'Analytics'}
-        rightSlot={activeTabId === 'optimisation' ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: 'var(--font-weight-extrabold)',
-              color: 'var(--neutral-0)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Optimisation
-          </p>
-        ) : null}
+        title={activeTab.label}
         actionIcon={(
           <img
             src={activeTab.iconSrc}
@@ -159,6 +121,58 @@ export function Epargne() {
         actionAriaLabel="Choisir un onglet stats"
         onActionClick={handleToggleTabModal}
       />
+
+      {(() => {
+        const currentIdx = STATS_TABS.findIndex((tab) => tab.id === activeTabId)
+        const prevTab = STATS_TABS[(currentIdx - 1 + STATS_TABS.length) % STATS_TABS.length]
+        const nextTab = STATS_TABS[(currentIdx + 1) % STATS_TABS.length]
+        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
+        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
+        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
+        const btnBase = {
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          minHeight: 'var(--touch-target-min)',
+        } as const
+
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto',
+            alignItems: 'center',
+            paddingLeft: 'var(--page-gutter)',
+            paddingRight: 'var(--page-gutter)',
+            marginTop: '-8px',
+          }}>
+            <button
+              type="button"
+              onClick={() => setActiveTabId(prevTab.id)}
+              aria-label={`Aller à ${prevTab.label}`}
+              style={btnBase}
+            >
+              <div style={triLeft} />
+              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+            </button>
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              {activeTab.label}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setActiveTabId(nextTab.id)}
+              aria-label={`Aller à ${nextTab.label}`}
+              style={btnBase}
+            >
+              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+              <div style={triRight} />
+            </button>
+          </div>
+        )
+      })()}
 
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
@@ -181,14 +195,40 @@ export function Epargne() {
       ) : null}
 
       {activeTab.id === 'epargne' ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'calc(var(--space-2) * -1)' }}>
+          <SavingsHeroCard />
+          <SavingsAllocationDonut />
+        </motion.section>
+      ) : null}
+
+      {activeTab.id === 'planning_2026' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
-          <SavingsHeroCard onOpenAllocationModal={() => setShowSavingsAllocationModal(true)} />
-          <StatsMajorSectionHeading title="Planning épargne 2026" />
           <SavingsPlanning2026Section />
-          <StatsMajorSectionHeading title="Capital investi" />
-          <SavingsEvolutionFiveYearsChart />
-          <StatsMajorSectionHeading title="Performance" />
-          <SavingsPortfoliosListSection />
+        </motion.section>
+      ) : null}
+
+      {activeTab.id === 'performance' ? (
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <div style={{ padding: '0 var(--page-gutter)', display: 'flex', justifyContent: 'center', marginBottom: 'calc(var(--space-2) * -1)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 260 }}>
+              <button
+                type="button"
+                onClick={() => setPerformanceViewMode('performance')}
+                style={{ ...performanceToggleBtnStyle(performanceViewMode === 'performance'), textAlign: 'center', textTransform: 'capitalize' }}
+              >
+                performance
+              </button>
+              <button
+                type="button"
+                onClick={() => setPerformanceViewMode('capital_investi')}
+                style={{ ...performanceToggleBtnStyle(performanceViewMode === 'capital_investi'), textAlign: 'center', textTransform: 'capitalize' }}
+              >
+                capital investi
+              </button>
+            </div>
+          </div>
+
+          {performanceViewMode === 'performance' ? <SavingsPortfoliosListSection /> : <SavingsEvolutionFiveYearsChart />}
         </motion.section>
       ) : null}
 
@@ -254,7 +294,7 @@ export function Epargne() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
@@ -292,74 +332,6 @@ export function Epargne() {
             </motion.div>
           </>
         ) : null}
-
-        {showSavingsAllocationModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowSavingsAllocationModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(13,13,31,0.48)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Répartition de l'épargne"
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 10, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 71,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 'var(--space-3)',
-                pointerEvents: 'none',
-              }}
-            >
-              <div
-                style={{
-                  position: 'relative',
-                  width: 'min(700px, 100%)',
-                  maxHeight: 'calc(100dvh - 2 * var(--space-3))',
-                  overflowY: 'auto',
-                  pointerEvents: 'auto',
-                }}
-              >
-                <button
-                  type="button"
-                  aria-label="Fermer la répartition de l'épargne"
-                  onClick={() => setShowSavingsAllocationModal(false)}
-                  style={{
-                    position: 'absolute',
-                    top: 'var(--space-2)',
-                    right: 'var(--space-5)',
-                    zIndex: 2,
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    borderRadius: 'var(--radius-sm)',
-                    width: 28,
-                    height: 28,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: 'var(--neutral-600)',
-                  }}
-                >
-                  <X size={14} />
-                </button>
-                <SavingsAllocationDonut />
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-
       </AnimatePresence>
     </div>
   )

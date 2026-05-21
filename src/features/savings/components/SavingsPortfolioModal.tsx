@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { BarChart2, CalendarDays, Compass, PiggyBank, Shield, Target, ArrowDownToLine, X } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { CalendarDays, Compass, Coins, BadgeCheck, TriangleAlert } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, ReferenceLine, Legend } from 'recharts'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
@@ -36,17 +36,7 @@ function normalizeStr(value: string): string {
     .trim()
 }
 
-type RiskLevel = { label: string; color: string }
 type TrendSignal = { label: string; color: string }
-
-function mapRiskLevel(riskLevel: string | null, isLivret: boolean): RiskLevel {
-  if (isLivret) return { label: 'Nul', color: '#2ED47A' }
-  switch (riskLevel) {
-    case 'low': return { label: 'Faible', color: '#3B82F6' }
-    case 'high': return { label: 'Élevé', color: '#FC5A5A' }
-    default: return { label: 'Modéré', color: '#FFAB2E' }
-  }
-}
 
 function resolveTrend(label: string): TrendSignal {
   const n = normalizeStr(label)
@@ -58,18 +48,6 @@ function resolveTrend(label: string): TrendSignal {
   if (n.includes('peg') || n.includes('capgemini')) return { label: 'Surveiller', color: '#FFAB2E' }
   if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return { label: 'Réduire', color: '#FC5A5A' }
   return { label: 'Continuer', color: '#2ED47A' }
-}
-
-function resolveObjectif2026(label: string): string {
-  const n = normalizeStr(label)
-  if (n.includes('livret a')) return 'Conserver le plafond'
-  if (n.includes('ldds')) return 'Atteindre 12 000 €'
-  if (n.includes('lep')) return 'Atteindre 10 000 €'
-  if (n.includes('pea')) return '3 600 € · 300 €/mois'
-  if (n.includes('per') || n.includes('plan epargne retraite')) return '4 000 € · TMI 30 %'
-  if (n.includes('peg') || n.includes('capgemini')) return 'Max abondement · 1 200 €'
-  if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return 'HODL — pas de renforcement'
-  return '—'
 }
 
 function resolveAdvice(label: string, family: string, recommendedAction: string | null): string {
@@ -139,12 +117,6 @@ function fmtSignedPercentCompact(value: number, digits = 1): string {
   return `${abs}%`
 }
 
-function fmtDate(s: string): string {
-  const d = new Date(s)
-  if (Number.isNaN(d.getTime())) return s
-  return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
-}
-
 function fmtMonthYear(value: Date): string {
   return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: '2-digit' }).format(value)
 }
@@ -195,6 +167,22 @@ export function SavingsPortfolioModal({
 
   const grade = resolveGrade(investAccount?.quality_status ?? null, account.family)
   const advice = resolveAdvice(account.label, account.family, investAccount?.recommended_action ?? null)
+  const normalizedAccountLabel = useMemo(() => normalizeStr(account.label), [account.label])
+  const isLivretAModal = useMemo(() => normalizedAccountLabel.includes('livret a'), [normalizedAccountLabel])
+  const isLddsModal = useMemo(() => normalizedAccountLabel.includes('ldds'), [normalizedAccountLabel])
+  const isPeaModal = useMemo(() => normalizedAccountLabel.includes('pea'), [normalizedAccountLabel])
+  const isPegModal = useMemo(
+    () => normalizedAccountLabel.includes('peg') || normalizedAccountLabel.includes('capgemini'),
+    [normalizedAccountLabel],
+  )
+  const isBitcoinModal = useMemo(
+    () => normalizedAccountLabel.includes('bitcoin') || normalizedAccountLabel.includes('btc') || normalizedAccountLabel.includes('crypto'),
+    [normalizedAccountLabel],
+  )
+  const isPerModal = useMemo(
+    () => normalizedAccountLabel.includes('per') || normalizedAccountLabel.includes('plan epargne retraite'),
+    [normalizedAccountLabel],
+  )
 
   const totalGain: number | null = accountIsLivret
     ? totalInterests
@@ -238,24 +226,12 @@ export function SavingsPortfolioModal({
     return (now.getFullYear() - openedAt.getFullYear()) * 12 + (now.getMonth() - openedAt.getMonth())
   }, [openedAt])
 
-  const lastDeposit = useMemo(() => {
-    return [...accountEventsAsc]
-      .reverse()
-      .find((e) => e.amount > 0 && e.nature !== 'intérêts') ?? null
-  }, [accountEventsAsc])
-
-  const amount2026 = useMemo(() => {
-    const total = accountEvents
-      .filter((e) => e.year === '2026' && e.amount > 0 && e.nature !== 'intérêts')
-      .reduce((sum, e) => sum + e.amount, 0)
-    return total > 0 ? total : null
-  }, [accountEvents])
-
-  const risk = mapRiskLevel(account.risk_level ?? null, accountIsLivret)
   const trend = resolveTrend(account.label)
-  const objectif2026 = resolveObjectif2026(account.label)
+  const latestInterestEvent = useMemo(
+    () => accountEvents.find((event) => event.nature === 'intérêts') ?? null,
+    [accountEvents],
+  )
 
-  const [showIndexModal, setShowIndexModal] = useState(false)
   const handleReturnToList = () => {
     if (onReturnToList) {
       onReturnToList()
@@ -274,6 +250,40 @@ export function SavingsPortfolioModal({
     () => (totalCashIn > 0 ? currentAmount - totalCashIn : null),
     [currentAmount, totalCashIn],
   )
+
+  const placementYieldPct = useMemo(() => {
+    if (accountIsLivret) return null
+    return investAccount?.estimated_gain_vs_total_cash_in_pct ?? null
+  }, [accountIsLivret, investAccount?.estimated_gain_vs_total_cash_in_pct])
+
+  const placementStatus = useMemo(() => {
+    if (accountIsLivret) {
+      return { label: 'plafond atteint', color: '#2ED47A' }
+    }
+
+    const rate = placementYieldPct
+    if (rate == null || !Number.isFinite(rate)) {
+      return { label: 'stagnant', color: '#FFAB2E' }
+    }
+    if (rate > 3) return { label: 'rentable +', color: '#2ED47A' }
+    if (rate >= 1) return { label: 'rentable', color: '#5B57F5' }
+    if (rate >= -1 && rate <= 1) return { label: 'stagnant', color: '#FFAB2E' }
+    return { label: 'déficitaire', color: '#FC5A5A' }
+  }, [accountIsLivret, placementYieldPct])
+
+  const lastYieldAmount = useMemo(() => {
+    if (accountIsLivret) return latestInterestEvent?.amount ?? null
+    return kpiYtdGainAmount
+  }, [accountIsLivret, latestInterestEvent?.amount, kpiYtdGainAmount])
+
+  const strategyWord = useMemo(() => {
+    if (accountIsLivret) return { label: 'maintenir', color: '#2ED47A' }
+    if (placementStatus.label === 'rentable +') return { label: 'maintenir', color: '#2ED47A' }
+    if (placementStatus.label === 'rentable') return { label: 'surveiller', color: '#5B57F5' }
+    if (placementStatus.label === 'stagnant') return { label: 'surveiller', color: '#FFAB2E' }
+    if (placementStatus.label === 'déficitaire') return { label: 'réallouer', color: '#FC5A5A' }
+    return { label: trend.label.toLowerCase(), color: trend.color }
+  }, [accountIsLivret, placementStatus.label, trend.color, trend.label])
 
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
@@ -423,36 +433,27 @@ export function SavingsPortfolioModal({
         <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
           <section>
             <SectionHeading label="Activité" color={account.color} />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginTop: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px var(--space-4)', marginTop: 'var(--space-3)' }}>
               <IndicatorCell
-                icon={<CalendarDays size={14} strokeWidth={2} />}
+                icon={<CalendarDays size={16} strokeWidth={2} />}
                 value={openedAt
                   ? `${fmtMonthYear(openedAt)}${activeMonths != null ? ` (${activeMonths} mois)` : ''}`
                   : '—'}
               />
               <IndicatorCell
-                icon={<ArrowDownToLine size={14} strokeWidth={2} />}
-                value={lastDeposit
-                  ? `${fmtDate(lastDeposit.transaction_date)} · ${fmtEur(lastDeposit.amount)}`
-                  : '—'}
+                icon={<BadgeCheck size={16} strokeWidth={2} />}
+                value={placementStatus.label}
+                valueColor={placementStatus.color}
               />
               <IndicatorCell
-                icon={<PiggyBank size={14} strokeWidth={2} />}
-                value={amount2026 != null ? fmtEur(amount2026) : '—'}
+                icon={<Coins size={16} strokeWidth={2} />}
+                value={lastYieldAmount != null ? fmtSignedCompact(lastYieldAmount) : '—'}
+                valueColor={lastYieldAmount != null && lastYieldAmount < 0 ? '#FC5A5A' : '#2ED47A'}
               />
               <IndicatorCell
-                icon={<Target size={14} strokeWidth={2} />}
-                value={objectif2026}
-              />
-              <IndicatorCell
-                icon={<Shield size={14} strokeWidth={2} />}
-                value={risk.label}
-                valueColor={risk.color}
-              />
-              <IndicatorCell
-                icon={<Compass size={14} strokeWidth={2} />}
-                value={trend.label}
-                valueColor={trend.color}
+                icon={<Compass size={16} strokeWidth={2} />}
+                value={strategyWord.label}
+                valueColor={strategyWord.color}
               />
             </div>
           </section>
@@ -468,59 +469,7 @@ export function SavingsPortfolioModal({
         >
           <section>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <SectionHeading label="Performance" color={account.color} />
-                <button
-                  type="button"
-                  onClick={() => setShowIndexModal(true)}
-                  title="Voir l'évolution des indices"
-                  style={{
-                    border: '1px solid var(--color-warning)',
-                    background: 'var(--neutral-0)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '2px 5px',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    color: 'var(--primary)',
-                    fontSize: 9,
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}
-                >
-                  <BarChart2 size={10} strokeWidth={2} />
-                  Indices
-                </button>
-              </div>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 'var(--radius-sm)',
-                  background: `color-mix(in oklab, ${grade.color} 12%, var(--neutral-0) 88%)`,
-                  border: `2px solid ${grade.color}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  marginRight: 12,
-                }}
-                aria-label={`Note ${grade.grade}`}
-                title={`Note ${grade.grade} · ${grade.label}`}
-              >
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-mono)',
-                    color: grade.color,
-                    lineHeight: 1,
-                  }}
-                >
-                  {grade.grade}
-                </span>
-              </div>
+              <SectionHeading label="Performance" color={account.color} />
             </div>
 
             <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-3)' }}>
@@ -563,6 +512,11 @@ export function SavingsPortfolioModal({
                 />
               </div>
 
+              <IndexEvolutionSection
+                accountLabel={account.listLabel}
+                accountColor={account.color}
+              />
+
               <div
                 aria-hidden="true"
                 style={{
@@ -572,7 +526,7 @@ export function SavingsPortfolioModal({
                 }}
               />
 
-              <SectionHeading label="Conseil" color={account.color} />
+              <SectionHeading label="Stratégie" color={account.color} />
 
               {/* Expert advice */}
               <div
@@ -581,18 +535,150 @@ export function SavingsPortfolioModal({
                   border: '1px solid color-mix(in oklab, var(--primary-600) 42%, #324090 58%)',
                   borderRadius: 'var(--radius-xl)',
                   padding: 'var(--space-4)',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0,1fr) auto',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
                 }}
               >
-                <p
+                {isLivretAModal ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
+                      listStyleType: 'disc',
+                      listStylePosition: 'outside',
+                      display: 'grid',
+                      gap: 'var(--space-2)',
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <li>Maintenir l&apos;équivalent de 3 à 6 mois de dépenses essentielles</li>
+                    <li>Rediriger l&apos;excédent (au-delà du plafond de 22 950€) vers un PEA ou une assurance-vie pour optimiser le rendement sur le long terme.</li>
+                  </ul>
+                ) : isLddsModal ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
+                      listStyleType: 'disc',
+                      listStylePosition: 'outside',
+                      display: 'grid',
+                      gap: 'var(--space-2)',
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <li>Excellent complément d&apos;un Livret A déjà plafonné</li>
+                    <li>Liquidité totale pour l&apos;épargne de précaution.</li>
+                  </ul>
+                ) : isPeaModal ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
+                      listStyleType: 'disc',
+                      listStylePosition: 'outside',
+                      display: 'grid',
+                      gap: 'var(--space-2)',
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <li>Continuer la stratégie ETF passive initiée en 2025</li>
+                    <li>Augmenter l&apos;investissement sur ce portefeuille</li>
+                  </ul>
+                ) : isPegModal ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
+                      listStyleType: 'disc',
+                      listStylePosition: 'outside',
+                      display: 'grid',
+                      gap: 'var(--space-2)',
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <li>Apport de capital bloqué (sortie de l&apos;entreprise) + frais et supports peu optimisés</li>
+                    <li>Étudier le déblocage / la réallocation dès 2026</li>
+                  </ul>
+                ) : isBitcoinModal ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
+                      listStyleType: 'disc',
+                      listStylePosition: 'outside',
+                      display: 'grid',
+                      gap: 'var(--space-2)',
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <li>Limiter l&apos;exposition à 5-10% du patrimoine global (investissement possible en 2026)</li>
+                    <li>Sécurisation des clés privées (Ledger)</li>
+                  </ul>
+                ) : isPerModal ? (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)', color: 'rgba(255,255,255,0.92)' }}>
+                    <TriangleAlert size={16} color="#FC5A5A" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 'var(--font-size-sm)',
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Étudier rapidement le transfert du PER vers une enveloppe moins chargée en frais et plus ouverte aux ETF (PEA)
+                    </p>
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-sm)',
+                      color: 'rgba(255,255,255,0.9)',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {advice}
+                  </p>
+                )}
+
+                <div
+                  aria-label={`Note ${grade.grade}`}
+                  title={`Note ${grade.grade} · ${grade.label}`}
                   style={{
-                    margin: 0,
-                    fontSize: 'var(--font-size-sm)',
-                    color: 'rgba(255,255,255,0.9)',
-                    lineHeight: 1.6,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 'var(--radius-sm)',
+                    background: `color-mix(in oklab, ${grade.color} 12%, var(--neutral-0) 88%)`,
+                    border: `2.5px solid ${grade.color}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  {advice}
-                </p>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: grade.color,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {grade.grade}
+                  </span>
+                </div>
               </div>
 
               <div style={{ marginTop: 'var(--space-1)', display: 'flex', justifyContent: 'flex-start' }}>
@@ -622,16 +708,6 @@ export function SavingsPortfolioModal({
         </div>
         </div>
       </motion.div>
-
-      <AnimatePresence>
-        {showIndexModal && (
-          <IndexEvolutionModal
-            accountLabel={account.listLabel}
-            accountColor={account.color}
-            onClose={() => setShowIndexModal(false)}
-          />
-        )}
-      </AnimatePresence>
     </>
   )
 }
@@ -695,20 +771,32 @@ function IndicatorCell({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: 6,
+        gap: 'var(--space-2)',
         minWidth: 0,
-        minHeight: 22,
+        minHeight: 28,
         width: '100%',
       }}
     >
-      <span style={{ color: 'var(--neutral-500)', flexShrink: 0, display: 'flex' }}>{icon}</span>
       <span
         style={{
-          fontSize: 11,
+          color: 'var(--neutral-600)',
+          flexShrink: 0,
+          display: 'flex',
+          width: 18,
+          height: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {icon}
+      </span>
+      <span
+        style={{
+          fontSize: 12,
           fontWeight: 700,
-          letterSpacing: '0.06em',
+          letterSpacing: '0.01em',
           color: valueColor ?? 'var(--neutral-900)',
-          lineHeight: 1.15,
+          lineHeight: 1.2,
           textAlign: 'left',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -1003,14 +1091,12 @@ function resolveIndexData(label: string): IndexDataset | null {
   return null
 }
 
-function IndexEvolutionModal({
+function IndexEvolutionSection({
   accountLabel,
   accountColor,
-  onClose,
 }: {
   accountLabel: string
   accountColor: string
-  onClose: () => void
 }) {
   const dataset = resolveIndexData(accountLabel)
   const hasFiveYears = Boolean(dataset?.fiveYears)
@@ -1119,26 +1205,7 @@ function IndexEvolutionModal({
   const gradientPeaCapitalId = 'pea-capital-gradient'
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.6)', backdropFilter: 'blur(3px)' }}
-      />
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Évolution des indices ${accountLabel}`}
-        initial={{ opacity: 0, scale: 0.97, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 12 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
-        onClick={(e) => e.stopPropagation()}
-        style={{ position: 'fixed', inset: 0, zIndex: 81, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', overflowY: 'auto', pointerEvents: 'none' }}
-      >
-        <div style={{ width: 'min(540px, 100%)', maxHeight: 'calc(100dvh - 2 * var(--space-4))', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', boxShadow: '0 24px 60px rgba(13,13,31,0.28)', pointerEvents: 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-100)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
@@ -1185,9 +1252,6 @@ function IndexEvolutionModal({
                   ))}
                 </div>
               )}
-              <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'var(--neutral-400)', display: 'flex' }}>
-                <X size={16} />
-              </button>
             </div>
           </div>
 
@@ -2223,9 +2287,7 @@ function IndexEvolutionModal({
             </>
           ) : null}
           </div>
-        </div>
-      </motion.div>
-    </>
+    </div>
   )
 }
 

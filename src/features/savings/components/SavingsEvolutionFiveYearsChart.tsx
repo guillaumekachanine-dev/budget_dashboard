@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight, X } from 'lucide-react'
 import epargneInteretsIcon from '@/assets/icons/categories/epargne_interets.webp'
@@ -51,6 +51,15 @@ type YearBubbleState = {
   x: number
   y: number
 }
+
+type OverviewPointBubbleState = {
+  year: string
+  x: number
+  y: number
+}
+
+const OVERVIEW_START_YEAR = 2020
+const OVERVIEW_END_YEAR = 2026
 
 const LEGEND_ORDER: Record<string, number> = {
   'liv a': 0,
@@ -204,8 +213,11 @@ export function SavingsEvolutionFiveYearsChart() {
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
   const [selectedOperationBubble, setSelectedOperationBubble] = useState<OperationBubbleState | null>(null)
   const [selectedYearBubble, setSelectedYearBubble] = useState<YearBubbleState | null>(null)
+  const [selectedOverviewPointBubble, setSelectedOverviewPointBubble] = useState<OverviewPointBubbleState | null>(null)
   const [selectedPortfolioKey, setSelectedPortfolioKey] = useState<string | null>(null)
   const [showAllOpsModal, setShowAllOpsModal] = useState(false)
+  const [overviewDetailsYear, setOverviewDetailsYear] = useState<string | null>(null)
+  const overviewBubbleRef = useRef<HTMLDivElement | null>(null)
 
   const handleClosePortfolioModal = useCallback(() => {
     setSelectedPortfolioKey(null)
@@ -409,22 +421,37 @@ export function SavingsEvolutionFiveYearsChart() {
   }, [selectedYearBubble, selectedYear, selectedYearRow, totalSavingsByYear])
 
   // Overview mode memos
-  const overviewChartData = useMemo(() => {
-    return [...rows]
-      .sort((a, b) => Number(a.year) - Number(b.year))
-      .map((row) => {
-        const total = styledSeries.reduce((acc, s) => {
-          const v = Number(row[s.key] ?? 0)
-          return acc + (Number.isFinite(v) ? v : 0)
-        }, 0)
-        return { year: String(row.year), _total: total }
-      })
-  }, [rows, styledSeries])
+  const overviewYears = useMemo(() => {
+    const years: string[] = []
+    for (let year = OVERVIEW_START_YEAR; year <= OVERVIEW_END_YEAR; year += 1) {
+      years.push(String(year))
+    }
+    return years
+  }, [])
 
-  const overviewYears = useMemo(
-    () => [...rows].sort((a, b) => Number(a.year) - Number(b.year)).map((r) => String(r.year)),
-    [rows],
-  )
+  const overviewChartData = useMemo(() => {
+    const totalByYear = new Map<string, number>()
+    for (const row of rows) {
+      const year = String(row.year)
+      const total = styledSeries.reduce((acc, s) => {
+        const value = Number(row[s.key] ?? 0)
+        return acc + (Number.isFinite(value) ? value : 0)
+      }, 0)
+      totalByYear.set(year, total)
+    }
+
+    let lastKnownTotal = 0
+    return overviewYears.map((year) => {
+      const yearTotal = totalByYear.get(year)
+      if (typeof yearTotal === 'number') {
+        lastKnownTotal = yearTotal
+      }
+      return {
+        year,
+        _total: lastKnownTotal,
+      }
+    })
+  }, [overviewYears, rows, styledSeries])
 
   const overviewYAxisMax = useMemo(() => {
     if (overviewChartData.length === 0) return undefined
@@ -438,23 +465,32 @@ export function SavingsEvolutionFiveYearsChart() {
   }, [overviewChartData])
 
   const yearlyOperationsByYear = useMemo(() => {
-    const totals = new Map<string, { operationsCount: number; totalAmount: number }>()
+    const totals = new Map<string, { operationsCount: number; totalAmount: number; additionalCapitalAmount: number }>()
     for (const event of operationEvents) {
-      const current = totals.get(event.year) ?? { operationsCount: 0, totalAmount: 0 }
+      const current = totals.get(event.year) ?? { operationsCount: 0, totalAmount: 0, additionalCapitalAmount: 0 }
       totals.set(event.year, {
         operationsCount: current.operationsCount + 1,
         totalAmount: current.totalAmount + event.amount,
+        additionalCapitalAmount: current.additionalCapitalAmount + (event.amount > 0 ? event.amount : 0),
       })
     }
     return totals
   }, [operationEvents])
 
   const yearSummaryRows = useMemo(() => {
+    const totalByYear = new Map<string, number>()
+    for (const row of overviewChartData) {
+      totalByYear.set(row.year, row._total)
+    }
+
     return [...overviewYears].sort((a, b) => Number(b) - Number(a)).map((year) => {
-      const currentYearMetrics = yearlyOperationsByYear.get(year) ?? { operationsCount: 0, totalAmount: 0 }
+      const currentYearMetrics = yearlyOperationsByYear.get(year) ?? { operationsCount: 0, totalAmount: 0, additionalCapitalAmount: 0 }
       const prevYear = String(Number(year) - 1)
-      const previousYearMetrics = yearlyOperationsByYear.get(prevYear)
-      const variation = formatVariation(currentYearMetrics.totalAmount, previousYearMetrics?.totalAmount ?? NaN)
+      const capitalStartYear = totalByYear.get(prevYear)
+      const capitalEndYear = totalByYear.get(year) ?? 0
+      const variation = capitalStartYear != null && capitalStartYear > 0
+        ? `${capitalEndYear - capitalStartYear > 0 ? '+' : ''}${PCT_ONE_DECIMAL.format(((capitalEndYear - capitalStartYear) / capitalStartYear) * 100)}%`
+        : '—'
 
       return {
         year,
@@ -463,7 +499,73 @@ export function SavingsEvolutionFiveYearsChart() {
         variation,
       }
     })
-  }, [overviewYears, yearlyOperationsByYear])
+  }, [overviewYears, yearlyOperationsByYear, overviewChartData])
+
+  const savingsTotalByYear = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of overviewChartData) {
+      map.set(row.year, row._total)
+    }
+    return map
+  }, [overviewChartData])
+
+  const yearTopGrowthPortfolioByYear = useMemo(() => {
+    const map = new Map<string, { label: string; growthAmount: number } | null>()
+    const rowByYear = new Map(rows.map((row) => [String(row.year), row]))
+
+    for (const year of overviewYears) {
+      const previousYear = String(Number(year) - 1)
+      const currentRow = rowByYear.get(year)
+      const previousRow = rowByYear.get(previousYear)
+      if (!currentRow && !previousRow) {
+        map.set(year, null)
+        continue
+      }
+
+      let best: { label: string; growthAmount: number } | null = null
+      for (const seriesEntry of styledSeries) {
+        const currentAmount = Number(currentRow?.[seriesEntry.key] ?? 0)
+        const previousAmount = Number(previousRow?.[seriesEntry.key] ?? 0)
+        const growthAmount = currentAmount - previousAmount
+        if (!Number.isFinite(growthAmount)) continue
+        if (best == null || growthAmount > best.growthAmount) {
+          best = { label: resolveListLabel(seriesEntry.shortLabel), growthAmount }
+        }
+      }
+      map.set(year, best && best.growthAmount > 0 ? best : null)
+    }
+
+    return map
+  }, [overviewYears, rows, styledSeries])
+
+  const selectedOverviewInsight = useMemo(() => {
+    const year = selectedOverviewPointBubble?.year ?? selectedOverviewYear
+    if (!year) return null
+
+    const totalAtYearEnd = savingsTotalByYear.get(year) ?? 0
+    const previousYear = String(Number(year) - 1)
+    const openingCapital = savingsTotalByYear.get(previousYear) ?? totalAtYearEnd
+    const yearlyGrowth = totalAtYearEnd - openingCapital
+    const yearlyGrowthPct = openingCapital > 0 ? (yearlyGrowth / openingCapital) * 100 : null
+    const operationStats = yearlyOperationsByYear.get(year) ?? { operationsCount: 0, totalAmount: 0, additionalCapitalAmount: 0 }
+    const topGrowthPortfolio = yearTopGrowthPortfolioByYear.get(year) ?? null
+
+    return {
+      year,
+      openingCapital,
+      operationsCount: operationStats.operationsCount,
+      additionalCapitalAmount: operationStats.additionalCapitalAmount,
+      yearlyGrowthPct,
+      topGrowthPortfolio,
+    }
+  }, [selectedOverviewPointBubble, selectedOverviewYear, savingsTotalByYear, yearlyOperationsByYear, yearTopGrowthPortfolioByYear])
+
+  const overviewOperationsForSelectedYear = useMemo(() => {
+    if (!overviewDetailsYear) return []
+    return operationEvents
+      .filter((event) => event.year === overviewDetailsYear)
+      .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
+  }, [operationEvents, overviewDetailsYear])
 
   useEffect(() => {
     const latestVisibleYear = chartRows[chartRows.length - 1]?.year
@@ -489,6 +591,27 @@ export function SavingsEvolutionFiveYearsChart() {
       setSelectedYearBubble(null)
     }
   }, [visibleYears, selectedYearBubble])
+
+  useEffect(() => {
+    if (!selectedOverviewPointBubble) return
+    if (!overviewYears.includes(selectedOverviewPointBubble.year)) {
+      setSelectedOverviewPointBubble(null)
+    }
+  }, [overviewYears, selectedOverviewPointBubble])
+
+  useEffect(() => {
+    if (displayMode !== 'overview' || !selectedOverviewPointBubble) return
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!overviewBubbleRef.current) return
+      if (!overviewBubbleRef.current.contains(event.target as Node)) {
+        setSelectedOverviewPointBubble(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [displayMode, selectedOverviewPointBubble])
 
   const renderYearTick = (tickProps: { x?: number; y?: number; index?: number; payload?: { value?: string | number } }) => {
     const rawValue = String(tickProps.payload?.value ?? '')
@@ -558,7 +681,14 @@ export function SavingsEvolutionFiveYearsChart() {
           dy={12}
           textAnchor={isFirstTick ? 'start' : 'middle'}
           fill={active ? 'var(--neutral-800)' : 'var(--neutral-500)'}
-          style={{ fontSize: 11, fontWeight: active ? 700 : 600 }}
+          style={{ fontSize: 11, fontWeight: active ? 700 : 600, cursor: 'pointer' }}
+          onClick={(event) => {
+            event.stopPropagation()
+            setSelectedOverviewYear((prev) => (prev === year ? null : year))
+            setSelectedOverviewPointBubble((prev) => (prev?.year === year ? null : { year, x, y: y + 8 }))
+            setSelectedOperationBubble(null)
+            setSelectedYearBubble(null)
+          }}
         >
           {year}
         </text>
@@ -633,6 +763,125 @@ export function SavingsEvolutionFiveYearsChart() {
       setSelectedYear, setSelectedYearBubble, setSelectedOperationBubble],
   )
 
+  const renderOverviewAnnotations = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (chartProps: any) => {
+      const xAxis = chartProps.xAxisMap?.[0]
+      const yAxis = chartProps.yAxisMap?.[0]
+      if (!xAxis?.scale || !yAxis?.scale) return null
+
+      const xScale = xAxis.scale as (v: string) => number | undefined
+      const yScale = yAxis.scale as (v: number) => number | undefined
+      const fallbackYBottom = Number(chartProps.offset?.top ?? 0) + Number(chartProps.offset?.height ?? 0)
+      const yBottom = yScale(0)
+      const yBase = yBottom === undefined ? fallbackYBottom : yBottom
+
+      return (
+        <g>
+          {overviewChartData.map((row) => {
+            const xPos = xScale(row.year)
+            const yPos = yScale(row._total)
+            if (xPos === undefined || yPos === undefined) return null
+            const isSelected = selectedOverviewPointBubble?.year === row.year
+
+            return (
+              <g
+                key={`overview-point-${row.year}`}
+                style={{ cursor: 'pointer' }}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setSelectedOverviewYear(row.year)
+                  setSelectedOverviewPointBubble({ year: row.year, x: xPos, y: yPos })
+                  setSelectedOperationBubble(null)
+                  setSelectedYearBubble(null)
+                }}
+              >
+                <line
+                  x1={xPos}
+                  y1={yBase}
+                  x2={xPos}
+                  y2={yPos}
+                  stroke={isSelected ? 'rgba(91,87,245,0.44)' : 'rgba(91,87,245,0.22)'}
+                  strokeWidth={1}
+                />
+                <circle
+                  cx={xPos}
+                  cy={yPos}
+                  r={isSelected ? 4.6 : 3.8}
+                  fill="#5B57F5"
+                  stroke="var(--neutral-0)"
+                  strokeWidth={1}
+                />
+                <circle cx={xPos} cy={yPos} r={10} fill="transparent" />
+              </g>
+            )
+          })}
+        </g>
+      )
+    },
+    [overviewChartData, selectedOverviewPointBubble],
+  )
+
+  const renderOverviewSelectedYearArea = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (chartProps: any) => {
+      if (!selectedOverviewYear) return null
+      const xAxis = chartProps.xAxisMap?.[0]
+      const yAxis = chartProps.yAxisMap?.[0]
+      if (!xAxis?.scale || !yAxis?.scale) return null
+
+      const xScale = xAxis.scale as (v: string) => number | undefined
+      const yScale = yAxis.scale as (v: number) => number | undefined
+      const fallbackYBottom = Number(chartProps.offset?.top ?? 0) + Number(chartProps.offset?.height ?? 0)
+      const yBottom = yScale(0)
+      const yBase = yBottom === undefined ? fallbackYBottom : yBottom
+
+      const selectedIndex = overviewYears.indexOf(selectedOverviewYear)
+      if (selectedIndex < 0) return null
+
+      const previousYear = overviewYears[selectedIndex - 1]
+      const nextYear = overviewYears[selectedIndex + 1]
+      const fromYear = previousYear ?? selectedOverviewYear
+      const toYear = previousYear ? selectedOverviewYear : nextYear
+      if (!toYear) return null
+
+      const fromRow = overviewChartData.find((row) => row.year === fromYear)
+      const toRow = overviewChartData.find((row) => row.year === toYear)
+      if (!fromRow || !toRow) return null
+
+      const xFrom = xScale(fromYear)
+      const xTo = xScale(toYear)
+      const yFrom = yScale(fromRow._total)
+      const yTo = yScale(toRow._total)
+      if (xFrom === undefined || xTo === undefined || yFrom === undefined || yTo === undefined) return null
+
+      return (
+        <g>
+          <polygon
+            points={`${xFrom},${yBase} ${xFrom},${yFrom} ${xTo},${yTo} ${xTo},${yBase}`}
+            fill="rgba(126, 225, 167, 0.28)"
+            stroke="none"
+          />
+        </g>
+      )
+    },
+    [selectedOverviewYear, overviewYears, overviewChartData],
+  )
+
+  const portfolioLifetimeMetrics = useMemo(() => {
+    const byAccount = new Map<string, { operationsCount: number; investedAmount: number }>()
+
+    for (const event of operationEvents) {
+      const current = byAccount.get(event.account_key) ?? { operationsCount: 0, investedAmount: 0 }
+      byAccount.set(event.account_key, {
+        operationsCount: current.operationsCount + 1,
+        investedAmount: current.investedAmount + (event.amount > 0 && event.nature !== 'intérêts' ? event.amount : 0),
+      })
+    }
+
+    return byAccount
+  }, [operationEvents])
+
   if (isLoading) {
     return (
       <StatsSection>
@@ -685,6 +934,7 @@ export function SavingsEvolutionFiveYearsChart() {
         onClick={() => {
           setSelectedOperationBubble(null)
           setSelectedYearBubble(null)
+          setSelectedOverviewPointBubble(null)
           setIsModeMenuOpen(false)
         }}
         style={{
@@ -778,8 +1028,14 @@ export function SavingsEvolutionFiveYearsChart() {
                           e.stopPropagation()
                           setDisplayMode(option.value)
                           setIsModeMenuOpen(false)
+                          setSelectedOperationBubble(null)
+                          setSelectedYearBubble(null)
+                          setSelectedOverviewPointBubble(null)
                           if (option.value === 'overview') setIsolatedSeriesKey(null)
-                          else setSelectedOverviewYear(null)
+                          else {
+                            setSelectedOverviewYear(null)
+                            setOverviewDetailsYear(null)
+                          }
                         }}
                         style={{
                           width: '100%',
@@ -814,6 +1070,7 @@ export function SavingsEvolutionFiveYearsChart() {
             marginTop: 'var(--space-2)',
             flexWrap: 'wrap',
             minWidth: 0,
+            minHeight: displayMode === 'overview' ? 40 : undefined,
           }}
         >
           {displayMode === 'portfolio' ? (
@@ -889,49 +1146,7 @@ export function SavingsEvolutionFiveYearsChart() {
               })}
             </div>
           ) : (
-            <div
-              style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: '1 1 auto', minWidth: 0 }}
-              aria-label="Sélection de l'année"
-            >
-              {overviewYears.map((year) => {
-                const isSelected = selectedOverviewYear === year
-                const active = selectedOverviewYear === null || isSelected
-                return (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedOverviewYear((prev) => (prev === year ? null : year))
-                    }}
-                    aria-pressed={isSelected}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 'var(--radius-full)',
-                      border: isSelected ? '1.5px solid var(--primary)' : '1px solid var(--neutral-250)',
-                      background: isSelected ? 'rgba(91,87,245,0.07)' : 'var(--neutral-0)',
-                      height: 24,
-                      padding: '0 10px',
-                      cursor: 'pointer',
-                      transition: 'all 180ms ease',
-                      opacity: active ? 1 : 0.45,
-                    }}
-                  >
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                      color: isSelected ? 'var(--primary)' : 'var(--neutral-600)',
-                      transition: 'color 180ms ease',
-                    }}>
-                      {year}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+            null
           )}
         </div>
 
@@ -1104,67 +1319,135 @@ export function SavingsEvolutionFiveYearsChart() {
               ) : null}
             </>
           ) : (
-            <ResponsiveContainer width="100%" height={252}>
-              <LineChart
-                data={overviewChartData}
-                margin={{ top: 4, right: 1, left: -24, bottom: 2 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
-                <XAxis
-                  dataKey="year"
-                  type="category"
-                  ticks={overviewYears}
-                  allowDuplicatedCategory={false}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={renderOverviewXTick}
-                />
-                <YAxis
-                  axisLine={{ stroke: 'var(--neutral-200)' }}
-                  tickLine={false}
-                  width={24}
-                  orientation="left"
-                  tick={renderYAxisTick}
-                  domain={[0, overviewYAxisMax ?? 'auto']}
-                />
-                {selectedOverviewYear ? (
-                  <ReferenceLine x={selectedOverviewYear} stroke="var(--neutral-400)" strokeDasharray="2 3" />
-                ) : null}
-                <Line
-                  type="monotone"
-                  dataKey="_total"
-                  stroke="#5B57F5"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <>
+              <ResponsiveContainer width="100%" height={252}>
+                <LineChart
+                  data={overviewChartData}
+                  margin={{ top: 4, right: 1, left: -24, bottom: 2 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
+                  <XAxis
+                    dataKey="year"
+                    type="category"
+                    ticks={overviewYears}
+                    allowDuplicatedCategory={false}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={renderOverviewXTick}
+                  />
+                  <YAxis
+                    axisLine={{ stroke: 'var(--neutral-200)' }}
+                    tickLine={false}
+                    width={24}
+                    orientation="left"
+                    tick={renderYAxisTick}
+                    domain={[0, overviewYAxisMax ?? 'auto']}
+                  />
+                  {selectedOverviewYear ? (
+                    <ReferenceLine x={selectedOverviewYear} stroke="var(--neutral-400)" strokeDasharray="2 3" />
+                  ) : null}
+                  <Customized component={renderOverviewSelectedYearArea} />
+                  <Line
+                    type="monotone"
+                    dataKey="_total"
+                    stroke="#5B57F5"
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                  <Customized component={renderOverviewAnnotations} />
+                </LineChart>
+              </ResponsiveContainer>
+
+              {selectedOverviewPointBubble && selectedOverviewInsight ? (
+                <div
+                  ref={overviewBubbleRef}
+                  onClick={(event) => event.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    left: `clamp(8px, ${selectedOverviewPointBubble.x - 116}px, calc(100% - 240px))`,
+                    top: selectedOverviewPointBubble.y,
+                    transform: 'translate(0, calc(-100% - 12px))',
+                    background: 'var(--neutral-0)',
+                    border: '1px solid var(--neutral-200)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: '0 6px 24px rgba(0,0,0,0.11)',
+                    width: 'min(232px, calc(100% - 16px))',
+                    zIndex: 18,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ padding: '10px 12px 8px', display: 'grid', gap: 5 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)' }}>
+                      {selectedOverviewInsight.year}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Capital initial</span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{formatCurrency(selectedOverviewInsight.openingCapital)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Opérations</span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{selectedOverviewInsight.operationsCount}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Capital supplémentaire</span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{formatSignedCurrency(selectedOverviewInsight.additionalCapitalAmount)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Augmentation annuelle</span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                        {selectedOverviewInsight.yearlyGrowthPct == null
+                          ? '—'
+                          : `${selectedOverviewInsight.yearlyGrowthPct > 0 ? '+' : ''}${PCT_ONE_DECIMAL.format(selectedOverviewInsight.yearlyGrowthPct)}%`}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 600 }}>Portefeuille top croissance</span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                        {selectedOverviewInsight.topGrowthPortfolio?.label ?? '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ height: 1, background: 'var(--neutral-150)' }} />
+                  <div style={{ padding: '6px 12px 8px' }}>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setOverviewDetailsYear(selectedOverviewInsight.year)
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        padding: '5px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1.5px solid #5B57F5',
+                        background: 'transparent',
+                        color: '#5B57F5',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Détails
+                      <ChevronRight size={11} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
 
         {/* List — portfolio: operations / overview: year summary */}
         {displayMode === 'portfolio' ? (
-          <div style={{ display: 'grid', gap: '6px', marginTop: 'var(--space-2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 0,
-                    height: 0,
-                    borderTop: '6px solid transparent',
-                    borderBottom: '6px solid transparent',
-                    borderLeft: '10px solid var(--primary)',
-                    flexShrink: 0,
-                  }}
-                />
-                <h3 style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                  {isAllPortfoliosSelected ? 'Portefeuilles' : `Opérations · ${visibleSeries[0]?.shortLabel ?? ''}`}
-                </h3>
-              </div>
-              {!isAllPortfoliosSelected ? (
+          <div style={{ display: 'grid', gap: '6px', marginTop: 0 }}>
+            {!isAllPortfoliosSelected ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setShowAllOpsModal(true) }}
@@ -1185,43 +1468,74 @@ export function SavingsEvolutionFiveYearsChart() {
                 >
                   Liste ({operationEventsForList.length})
                 </button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             {isAllPortfoliosSelected ? (
-              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-2)' }}>
-                {orderedLegendSeries.map((entry) => (
-                  <div
-                    key={entry.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: '6px 8px',
-                      borderBottom: '1px solid var(--neutral-100)',
-                      lineHeight: 1,
-                    }}
-                  >
-                    <img
-                      src={entry.iconSrc}
-                      alt=""
-                      aria-hidden="true"
-                      style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                    />
-                    <span
+              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 0 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.95fr)',
+                    columnGap: '10px',
+                    padding: '0 6px 6px',
+                    borderBottom: '1px solid var(--neutral-100)',
+                    lineHeight: 1,
+                  }}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'left' }}>Portefeuille</span>
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center' }}>Opérations</span>
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center' }}>Capital investi</span>
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Valeur YTD</span>
+                </div>
+                {orderedLegendSeries.map((entry, index) => {
+                  const row = listRows.find((item) => item.key === entry.key)
+                  const lifetime = portfolioLifetimeMetrics.get(entry.key) ?? { operationsCount: 0, investedAmount: 0 }
+
+                  return (
+                    <div
+                      key={entry.key}
                       style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: 'var(--neutral-800)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.95fr)',
+                        columnGap: '10px',
+                        padding: '8px 6px',
+                        borderBottom: index < orderedLegendSeries.length - 1 ? '1px solid var(--neutral-50)' : 'none',
+                        alignItems: 'center',
                       }}
                     >
-                      {resolveListLabel(entry.shortLabel)}
-                    </span>
-                  </div>
-                ))}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <img
+                          src={entry.iconSrc}
+                          alt=""
+                          aria-hidden="true"
+                          style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: 'var(--neutral-800)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {resolveListLabel(entry.shortLabel)}
+                        </span>
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, textAlign: 'center' }}>
+                        {lifetime.operationsCount}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {formatCurrency(lifetime.investedAmount)}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {formatCurrency(row?.currentAmount ?? 0)}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <>
@@ -1307,6 +1621,10 @@ export function SavingsEvolutionFiveYearsChart() {
               return (
                 <div
                   key={row.year}
+                  onClick={() => {
+                    setSelectedOverviewYear((prev) => (prev === row.year ? null : row.year))
+                    setSelectedOverviewPointBubble(null)
+                  }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr repeat(3, minmax(0, 1fr))',
@@ -1319,6 +1637,7 @@ export function SavingsEvolutionFiveYearsChart() {
                     background: isHighlighted ? 'rgba(91,87,245,0.04)' : 'transparent',
                     borderRadius: isHighlighted ? 'var(--radius-sm)' : 0,
                     transition: 'opacity 150ms ease, background 150ms ease',
+                    cursor: 'pointer',
                   }}
                 >
                   <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: isHighlighted ? 700 : 600, lineHeight: 1 }}>
@@ -1365,6 +1684,89 @@ export function SavingsEvolutionFiveYearsChart() {
             />
           )
         })() : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {overviewDetailsYear ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOverviewDetailsYear(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 74, background: 'rgba(13,13,31,0.48)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Opérations ${overviewDetailsYear}`}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 10, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+              style={{ position: 'fixed', inset: 0, zIndex: 75, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-3)', pointerEvents: 'none' }}
+            >
+              <div style={{ width: 'min(620px, 100%)', maxHeight: 'min(74dvh, calc(100dvh - 2 * var(--space-3)))', overflow: 'hidden', pointerEvents: 'auto', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-150)', boxShadow: '0 20px 52px rgba(13,13,31,0.26)', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 600 }}>
+                    {`Opérations ${overviewDetailsYear} (${overviewOperationsForSelectedYear.length})`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setOverviewDetailsYear(null)}
+                    aria-label="Fermer la liste des opérations annuelles"
+                    style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-sm)', width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--neutral-600)', flexShrink: 0 }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div style={{ overflowY: 'auto', padding: 'var(--space-3) var(--space-4)' }}>
+                  {overviewOperationsForSelectedYear.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', textAlign: 'center', padding: 'var(--space-5) 0' }}>
+                      Aucune opération enregistrée sur cette année
+                    </p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '84px minmax(0,1fr) 92px 100px', columnGap: '12px', padding: '0 2px 6px', borderBottom: '1px solid var(--neutral-100)' }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Date</span>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Portefeuille</span>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center' }}>Nature</span>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Montant</span>
+                      </div>
+                      {overviewOperationsForSelectedYear.map((event, index) => (
+                        <div
+                          key={`overview-year-op-${event.id}`}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '84px minmax(0,1fr) 92px 100px',
+                            columnGap: '12px',
+                            padding: '8px 2px',
+                            borderBottom: index < overviewOperationsForSelectedYear.length - 1 ? '1px solid var(--neutral-50)' : 'none',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
+                            {formatOperationDate(event.transaction_date)}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {resolveListLabel(event.account_label)}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--neutral-600)', textAlign: 'center' }}>
+                            {event.nature}
+                          </span>
+                          <span style={{ fontSize: 11, color: event.amount >= 0 ? 'var(--neutral-900)' : 'var(--color-negative)', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {formatSignedCurrency(event.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
       </AnimatePresence>
 
       <AnimatePresence>

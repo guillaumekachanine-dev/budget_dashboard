@@ -23,6 +23,11 @@ const PCT_INTEGER = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 })
 
+const PCT_ONE_DECIMAL = new Intl.NumberFormat('fr-FR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
 type StyledSeries = SavingsEvolutionFiveYearsSeries & {
   shortLabel: string
   iconSrc: string
@@ -101,6 +106,19 @@ function formatSignedCurrency(value: number): string {
   return abs
 }
 
+function monthDiffInclusive(fromIso: string, to: Date): number {
+  const from = new Date(`${fromIso}T00:00:00`)
+  if (Number.isNaN(from.getTime())) return 1
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1
+  return Math.max(1, months)
+}
+
+function formatSignedPercentOneDecimal(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${PCT_ONE_DECIMAL.format(value)}%`
+}
+
 export function SavingsPortfoliosListSection() {
   const { data, isLoading, error } = useSavingsEvolutionFiveYears()
   const [selectedPortfolioKey, setSelectedPortfolioKey] = useState<string | null>(null)
@@ -158,14 +176,30 @@ export function SavingsPortfoliosListSection() {
     const totalSavedAmount = Number(yearlyMetrics?.total_saved_amount ?? 0)
     const performanceAmount = currentAmount - previousAmount - totalSavedAmount
 
+    const accountEvents = operationEvents.filter((event) => event.account_key === accountId)
+    const contributionEvents = accountEvents.filter((event) => event.nature === 'virement' && event.amount > 0)
+    const totalContributions = contributionEvents.reduce((sum, event) => sum + event.amount, 0)
+    const firstContributionDate = contributionEvents[0]?.transaction_date ?? accountEvents[0]?.transaction_date ?? null
+    const activeMonths = firstContributionDate ? monthDiffInclusive(firstContributionDate, new Date()) : 1
+    const activeYears = activeMonths / 12
+
+    const totalPlusValueSinceOpening = currentAmount - totalContributions
+    const annualizedReturnPct = totalContributions > 0 && activeYears > 0
+      ? (Math.pow(currentAmount / totalContributions, 1 / activeYears) - 1) * 100
+      : null
+
     return {
       ...entry,
       currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
       variationVsPreviousYear: formatVariation(currentAmount, previousAmount),
       operationsCount: Number.isFinite(operationsCount) ? operationsCount : 0,
       performanceAmount: Number.isFinite(performanceAmount) ? performanceAmount : 0,
+      annualizedReturnPct: annualizedReturnPct != null && Number.isFinite(annualizedReturnPct) ? annualizedReturnPct : null,
+      totalPlusValueSinceOpening: Number.isFinite(totalPlusValueSinceOpening) ? totalPlusValueSinceOpening : 0,
     }
-  }), [orderedLegendSeries, latestYearRow, previousYearRow, yearlyAccountMetrics])
+  }), [orderedLegendSeries, latestYearRow, previousYearRow, yearlyAccountMetrics, operationEvents])
+
+  const shortcutRows = useMemo(() => listRows.slice(0, 6), [listRows])
 
   if (isLoading) {
     return (
@@ -192,14 +226,67 @@ export function SavingsPortfoliosListSection() {
           background: 'var(--neutral-0)',
           boxShadow: 'var(--shadow-card)',
           padding: 'var(--space-4)',
+          display: 'grid',
+          gap: 'var(--space-4)',
         }}
       >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+          {shortcutRows.map((row) => (
+            <button
+              key={`shortcut-${row.key}`}
+              type="button"
+              onClick={() => setSelectedPortfolioKey(row.key)}
+              aria-label={`Ouvrir le modèle ${row.listLabel}`}
+              style={{
+                border: '1px solid var(--neutral-150)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--neutral-0)',
+                padding: 'var(--space-2)',
+                display: 'grid',
+                gridTemplateColumns: '34px minmax(0,1fr) auto',
+                alignItems: 'center',
+                columnGap: 'var(--space-2)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                minHeight: 58,
+              }}
+            >
+              <img
+                src={row.iconSrc}
+                alt=""
+                aria-hidden="true"
+                style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--neutral-900)',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {row.listLabel}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600 }}>
+                  {row.family === 'livrets' ? 'livret épargne' : 'placement financier'}
+                </span>
+              </span>
+              <span aria-hidden="true" style={{ fontSize: 12, color: 'var(--neutral-500)', alignSelf: 'start', lineHeight: 1 }}>
+                ↗
+              </span>
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'grid', gap: '6px' }}>
           <div
             aria-hidden="true"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))',
+              gridTemplateColumns: 'minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
               alignItems: 'center',
               padding: '0 2px 8px',
               columnGap: 8,
@@ -209,13 +296,13 @@ export function SavingsPortfoliosListSection() {
               portefeuille
             </span>
             <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
-              Perf.
+              valeur
             </span>
             <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
-              var. N-1
+              rendement annualisé
             </span>
             <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
-              montant
+              plus-value totale
             </span>
           </div>
 
@@ -225,7 +312,7 @@ export function SavingsPortfoliosListSection() {
               style={{
                 padding: '4px 2px',
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
                 alignItems: 'center',
                 columnGap: 8,
                 lineHeight: 1.1,
@@ -263,14 +350,21 @@ export function SavingsPortfoliosListSection() {
                 <span aria-hidden="true" style={{ fontSize: 9, color: 'var(--neutral-400)', flexShrink: 0, lineHeight: 1 }}>›</span>
               </button>
 
-              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {formatSignedCurrency(row.performanceAmount)}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {row.variationVsPreviousYear}
-              </span>
               <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {formatCurrency(row.currentAmount)}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {formatSignedPercentOneDecimal(row.annualizedReturnPct)}
+              </span>
+              <span style={{
+                fontSize: 11,
+                color: row.totalPlusValueSinceOpening >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}>
+                {formatSignedCurrency(row.totalPlusValueSinceOpening)}
               </span>
             </div>
           ))}

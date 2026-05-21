@@ -1,9 +1,5 @@
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useSavingsCurrentSummary } from '@/features/savings/hooks/useSavingsCurrentSummary'
-import epargneCapitalInvestiIcon from '@/assets/icons/app/epargne_capital_investi.png'
-import epargnePerformanceIcon from '@/assets/icons/app/epargne_performance.png'
-import epargnePlanning2026Icon from '@/assets/icons/app/epargne_planning_2026.png'
-import epargneRepartitionIcon from '@/assets/icons/app/epargne_repartition.png'
 import repartitionEpargneIcon from '@/assets/icons/app/repartition_epargne.png'
 import {
   DataQualityNotice,
@@ -24,12 +20,12 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
         <div
           style={{
             borderRadius: 'var(--radius-2xl)',
-            border: '1px solid color-mix(in oklab, var(--color-positive) 26%, var(--neutral-0) 74%)',
-            background: 'linear-gradient(136deg, color-mix(in oklab, var(--color-positive) 90%, var(--neutral-900) 10%) 0%, color-mix(in oklab, var(--color-positive) 74%, var(--neutral-900) 26%) 56%, color-mix(in oklab, var(--color-positive) 54%, var(--neutral-900) 46%) 100%)',
-            padding: 'var(--space-5)',
+            border: '1px solid color-mix(in oklab, #0B3D4A 52%, var(--neutral-0) 48%)',
+            background: 'linear-gradient(138deg, #0B3D4A 0%, #1E6578 46%, #9EC4CF 78%, #DDECF1 100%)',
+            padding: 'var(--space-4)',
             boxShadow: 'var(--shadow-card)',
             display: 'grid',
-            gap: 'var(--space-3)',
+            gap: 'var(--space-2)',
           }}
         >
           <Skeleton className="h-4 w-36 bg-white/25" />
@@ -60,10 +56,10 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
     <StatsSection>
       <div
         style={{
-          background: 'linear-gradient(136deg, color-mix(in oklab, var(--color-positive) 90%, var(--neutral-900) 10%) 0%, color-mix(in oklab, var(--color-positive) 74%, var(--neutral-900) 26%) 56%, color-mix(in oklab, var(--color-positive) 54%, var(--neutral-900) 46%) 100%)',
+          background: 'linear-gradient(138deg, #0B3D4A 0%, #1E6578 46%, #9EC4CF 78%, #DDECF1 100%)',
           borderRadius: 'var(--radius-2xl)',
-          border: '1px solid color-mix(in oklab, var(--color-positive) 28%, var(--neutral-0) 72%)',
-          padding: 'var(--space-5)',
+          border: '1px solid color-mix(in oklab, #0B3D4A 52%, var(--neutral-0) 48%)',
+          padding: 'var(--space-4)',
           boxShadow: 'var(--shadow-card)',
           position: 'relative',
           overflow: 'hidden',
@@ -126,12 +122,12 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
         <div
           style={{
             position: 'absolute',
-            top: -66,
-            right: -54,
-            width: 190,
-            height: 190,
+            top: -84,
+            right: -62,
+            width: 220,
+            height: 220,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(46,212,122,0.34) 0%, transparent 72%)',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.08) 56%, transparent 76%)',
             pointerEvents: 'none',
           }}
         />
@@ -164,44 +160,8 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
             {data ? formatEuro(data.total_savings) : '—'}
           </p>
 
-          <p
-            style={{
-              margin: 0,
-              fontSize: '11px',
-              fontWeight: 'var(--font-weight-semibold)',
-              color: 'rgba(255,255,255,0.72)',
-              letterSpacing: '0.03em',
-            }}
-          >
-            Répartition et rythme d’épargne
-          </p>
-
-          <div style={{ margin: 'var(--space-3) 0 var(--space-2)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-              gap: 'var(--space-2)',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-              <img src={epargneRepartitionIcon} alt="" aria-hidden="true" width={42} height={42} style={{ width: 42, height: 42, objectFit: 'contain' }} loading="lazy" decoding="async" />
-            </div>
-            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-              <img src={epargnePlanning2026Icon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
-            </div>
-            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-              <img src={epargneCapitalInvestiIcon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
-            </div>
-            <div style={{ minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-              <img src={epargnePerformanceIcon} alt="" aria-hidden="true" width={34} height={34} style={{ width: 34, height: 34, objectFit: 'contain' }} loading="lazy" decoding="async" />
-            </div>
-          </div>
-
           {notice ? (
-            <div style={{ marginTop: 'var(--space-3)' }}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               <DataQualityNotice
                 title={notice.title}
                 detail={notice.detail}

@@ -280,21 +280,9 @@ export function SavingsAllocationDonut() {
           boxShadow: 'var(--shadow-card)',
           padding: 'var(--space-4)',
           display: 'grid',
-          gap: 'var(--space-4)',
+          gap: 'var(--space-3)',
         }}
       >
-        <p
-          style={{
-            margin: 0,
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: 'var(--neutral-900)',
-            textAlign: 'left',
-          }}
-        >
-          Répartition de l'épargne
-        </p>
-
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center', minWidth: 0 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
