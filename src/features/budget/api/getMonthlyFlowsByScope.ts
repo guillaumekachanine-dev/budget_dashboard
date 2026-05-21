@@ -73,8 +73,8 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
   }
 
   if (kind === 'categorie') {
-    // Actuals : somme des sous-catégories via parent_category_id
-    const [actualsRes, periodsRes] = await Promise.all([
+    // childCats ne dépend que de `id` — parallélisable avec actuals + periods
+    const [actualsRes, periodsRes, childCatsRes] = await Promise.all([
       budgetDb
         .from('v_monthly_category_actuals_clean' as never)
         .select('period_month, actual_amount')
@@ -86,10 +86,15 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
         .select('id, period_month')
         .eq('period_year', year)
         .lte('period_month', cutoff),
+      budgetDb
+        .from('categories')
+        .select('id')
+        .eq('parent_id', id),
     ])
 
     if (actualsRes.error) throw new Error(`getMonthlyFlowsByScope (cat actuals): ${actualsRes.error.message}`)
     if (periodsRes.error) throw new Error(`getMonthlyFlowsByScope (periods): ${periodsRes.error.message}`)
+    if (childCatsRes.error) throw new Error(`getMonthlyFlowsByScope (child cats): ${childCatsRes.error.message}`)
 
     // Actuals agrégés par mois (somme des sous-catégories)
     const actualByMonth = new Map<number, number>()
@@ -109,31 +114,22 @@ export async function getMonthlyFlowsByScope(params: MonthlyFlowsScopeParams): P
     }
 
     const budgetByMonth = new Map<number, number>()
-    if (periodIds.length > 0) {
-      // Récupère d'abord les category_ids enfants
-      const childCatsRes = await budgetDb
-        .from('categories')
-        .select('id')
-        .eq('parent_id', id)
+    const childIds = (childCatsRes.data ?? []).map((r) => r.id)
 
-      if (childCatsRes.error) throw new Error(`getMonthlyFlowsByScope (child cats): ${childCatsRes.error.message}`)
+    if (periodIds.length > 0 && childIds.length > 0) {
+      const budgetsRes = await budgetDb
+        .from('budgets')
+        .select('period_id, category_id, amount')
+        .eq('budget_kind', 'category')
+        .in('period_id', periodIds)
+        .in('category_id', childIds)
 
-      const childIds = (childCatsRes.data ?? []).map((r) => r.id)
-      if (childIds.length > 0) {
-        const budgetsRes = await budgetDb
-          .from('budgets')
-          .select('period_id, category_id, amount')
-          .eq('budget_kind', 'category')
-          .in('period_id', periodIds)
-          .in('category_id', childIds)
+      if (budgetsRes.error) throw new Error(`getMonthlyFlowsByScope (budgets): ${budgetsRes.error.message}`)
 
-        if (budgetsRes.error) throw new Error(`getMonthlyFlowsByScope (budgets): ${budgetsRes.error.message}`)
-
-        for (const r of budgetsRes.data ?? []) {
-          const month = periodIdToMonth.get(r.period_id)
-          if (month == null) continue
-          budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(r.amount ?? 0))
-        }
+      for (const r of budgetsRes.data ?? []) {
+        const month = periodIdToMonth.get(r.period_id)
+        if (month == null) continue
+        budgetByMonth.set(month, (budgetByMonth.get(month) ?? 0) + Number(r.amount ?? 0))
       }
     }
 

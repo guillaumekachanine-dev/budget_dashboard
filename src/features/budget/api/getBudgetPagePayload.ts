@@ -2,6 +2,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import type { BudgetPagePayload } from '@/features/budget/types'
 
 interface GetBudgetPagePayloadParams {
+  userId: string
   periodYear: number
   periodMonth: number
   monthsBack?: number
@@ -45,21 +46,11 @@ function unwrapRpcPayload(data: unknown): BudgetPagePayload | null {
 }
 
 export async function getBudgetPagePayload({
+  userId,
   periodYear,
   periodMonth,
   monthsBack = 6,
 }: GetBudgetPagePayloadParams): Promise<BudgetPagePayload> {
-  const { data: userData, error: userError } = await budgetDb.auth.getUser()
-
-  if (userError) {
-    throw new Error(`getBudgetPagePayload failed (auth): ${userError.message}`)
-  }
-
-  const userId = userData.user?.id
-  if (!userId) {
-    throw new Error('getBudgetPagePayload failed: user not authenticated')
-  }
-
   const { data, error } = await budgetDb.rpc('get_budget_page_payload', {
     p_user_id: userId,
     p_period_year: periodYear,

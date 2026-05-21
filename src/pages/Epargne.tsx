@@ -33,6 +33,21 @@ const STATS_TABS: StatsTabConfig[] = [
 
 type PerformanceViewMode = 'performance' | 'capital_investi'
 
+function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
+    background: active ? 'var(--primary-50)' : 'var(--neutral-0)',
+    color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+    borderRadius: 'var(--radius-md)',
+    padding: 'var(--space-2) var(--space-4)',
+    fontSize: 'var(--font-size-sm)',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all var(--transition-base)',
+    minHeight: 36,
+  }
+}
+
 export function Epargne() {
   const {
     snapshot,
@@ -87,21 +102,6 @@ export function Epargne() {
     if (!showTabModal) return
     return lockDocumentScroll()
   }, [showTabModal])
-
-  function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
-    return {
-      border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
-      background: active ? 'var(--primary-50)' : 'var(--neutral-0)',
-      color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
-      borderRadius: 'var(--radius-md)',
-      padding: 'var(--space-2) var(--space-4)',
-      fontSize: 'var(--font-size-sm)',
-      fontWeight: 700,
-      cursor: 'pointer',
-      transition: 'all var(--transition-base)',
-      minHeight: 36,
-    }
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>

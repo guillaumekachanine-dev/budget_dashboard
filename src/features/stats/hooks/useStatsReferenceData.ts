@@ -2,19 +2,10 @@ import { useCallback, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { QK } from '@/lib/queryKeys'
-import { getBudgetBucketTotalsByPeriod } from '@/features/stats/api/getBudgetBucketTotalsByPeriod'
-import { getBudgetBucketVsActualByMonth } from '@/features/stats/api/getBudgetBucketVsActualByMonth'
-import { getBudgetGlobalVariableForPeriod } from '@/features/stats/api/getBudgetGlobalVariableForPeriod'
-import { getExpenseBudgetTotalForPeriod } from '@/features/stats/api/getExpenseBudgetTotalForPeriod'
-import { getMonthlyEvolution2026 } from '@/features/stats/api/getMonthlyEvolution2026'
 import {
-  getLatestUsableStatsPeriod,
-  getUsableStatsMonthlyPeriods,
-  type UsableStatsPeriod,
-} from '@/features/stats/api/getLatestUsableStatsPeriod'
-import { getSavingsBudgetLinesByPeriod } from '@/features/stats/api/getSavingsBudgetLinesByPeriod'
-import { getSavingsBudgetTotalsByPeriod } from '@/features/stats/api/getSavingsBudgetTotalsByPeriod'
-import { getSavingsBudgetVsActualByPeriod } from '@/features/stats/api/getSavingsBudgetVsActualByPeriod'
+  getStatsReferenceData,
+  type StatsReferencePeriodPayload,
+} from '@/features/stats/api/getStatsReferenceData'
 import { isValidUuid } from '@/features/stats/api/_shared'
 import type {
   StatsMonthlyReference,
@@ -49,37 +40,28 @@ function buildEmptyBudgetSummary(): StatsReferenceSnapshot['budgetSummary'] {
   }
 }
 
-async function fetchMonthlyReference(period: UsableStatsPeriod): Promise<StatsMonthlyReference> {
-  const [
-    budgetBucketTotals,
-    globalVariableBudget,
-    totalExpenseBudget,
-    budgetBucketVsActual,
-    savingsBudgetTotals,
-    savingsBudgetLines,
-    savingsBudgetVsActual,
-  ] = await Promise.all([
-    getBudgetBucketTotalsByPeriod(period.period_year, period.period_month),
-    getBudgetGlobalVariableForPeriod(period.id),
-    getExpenseBudgetTotalForPeriod(period.id),
-    getBudgetBucketVsActualByMonth(period.period_year, period.period_month),
-    getSavingsBudgetTotalsByPeriod(period.period_year, period.period_month),
-    getSavingsBudgetLinesByPeriod(period.period_year, period.period_month),
-    getSavingsBudgetVsActualByPeriod(period.period_year, period.period_month),
-  ])
-
-  const budgetSummary = buildBudgetSummary(budgetBucketTotals, totalExpenseBudget, globalVariableBudget)
-  const savingsSummary = buildSavingsSummary(savingsBudgetTotals, savingsBudgetVsActual, savingsBudgetLines)
+// Maps one RPC period payload → StatsMonthlyReference without any extra network calls
+function buildMonthlyReferenceFromRpc(p: StatsReferencePeriodPayload): StatsMonthlyReference {
+  const budgetSummary = buildBudgetSummary(
+    p.budget_bucket_totals,
+    p.total_expense_budget,
+    p.global_variable_budget,
+  )
+  const savingsSummary = buildSavingsSummary(
+    p.savings_budget_totals,
+    p.savings_budget_vs_actual,
+    p.savings_budget_lines,
+  )
 
   return {
-    periodYear: period.period_year,
-    periodMonth: period.period_month,
-    label: period.label ?? buildMonthLabel(period.period_year, period.period_month),
-    id: isValidUuid(period.id) ? period.id : null,
+    periodYear: p.period_year,
+    periodMonth: p.period_month,
+    label: p.label ?? buildMonthLabel(p.period_year, p.period_month),
+    id: isValidUuid(p.id) ? p.id : null,
     budgetSummary,
-    budgetBucketVsActual: buildBudgetBucketVsActual(budgetBucketVsActual),
+    budgetBucketVsActual: buildBudgetBucketVsActual(p.budget_bucket_vs_actual),
     savingsSummary,
-    savingsLines: buildSavingsLines(savingsBudgetLines, savingsBudgetVsActual),
+    savingsLines: buildSavingsLines(p.savings_budget_lines, p.savings_budget_vs_actual),
     totalMonthlyNeed: buildTotalMonthlyNeed(budgetSummary.totalExpenseBudget, savingsSummary.totalSavingsBudget),
   }
 }
@@ -91,34 +73,22 @@ type StatsReferenceData = {
   loadedAt: string
 }
 
+// Single RPC call replaces N×7 client-side queries
 async function fetchStatsReferenceData(userId: string): Promise<StatsReferenceData> {
-  const usablePeriods = await getUsableStatsMonthlyPeriods(userId, STATS_REFERENCE_YEAR)
+  const rpcResult = await getStatsReferenceData(userId, STATS_REFERENCE_YEAR)
 
-  if (usablePeriods.length === 0) {
-    await getLatestUsableStatsPeriod(userId).catch(() => null)
-    const monthlyEvolution2026Raw = await getMonthlyEvolution2026().catch(() => [])
-    return {
-      monthlyReferences: [],
-      availablePeriodOptions: [],
-      monthlyEvolution2026: buildMonthlyEvolution2026(monthlyEvolution2026Raw),
-      loadedAt: new Date().toISOString(),
-    }
-  }
-
-  const [monthlyReferences, monthlyEvolution2026Raw] = await Promise.all([
-    Promise.all(usablePeriods.map(fetchMonthlyReference)),
-    getMonthlyEvolution2026(),
-  ])
-
-  monthlyReferences.sort((a, b) => {
-    if (a.periodYear !== b.periodYear) return b.periodYear - a.periodYear
-    return b.periodMonth - a.periodMonth
-  })
+  const monthlyReferences = rpcResult.periods
+    .map(buildMonthlyReferenceFromRpc)
+    .sort((a, b) =>
+      a.periodYear !== b.periodYear
+        ? b.periodYear - a.periodYear
+        : b.periodMonth - a.periodMonth,
+    )
 
   return {
     monthlyReferences,
     availablePeriodOptions: buildStatsPeriodOptions(monthlyReferences),
-    monthlyEvolution2026: buildMonthlyEvolution2026(monthlyEvolution2026Raw),
+    monthlyEvolution2026: buildMonthlyEvolution2026(rpcResult.monthly_evolution),
     loadedAt: new Date().toISOString(),
   }
 }
