@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUpCircle, Car, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-react'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
-import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
 import { ComparedVelocityCard } from '@/features/annual-analysis/components/ComparedVelocityCard'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
@@ -514,7 +513,15 @@ function ExpandedInsightPanel({
   insightId: InsightId
   detailBody: string
 }) {
-  const { loading, error, flows2025, flows2026, fluxMetrics } = useComparedAnalysis()
+  const { loading, error, flows2025, flows2026 } = useComparedAnalysis()
+  const { annualTotals } = useAnnual2025Analysis()
+
+  const ASSURED_MONTHLY = 3334
+  const ASSURED_MONTHS = 7
+  const income2025Ytd = flows2025?.income_total ?? 0
+  const income2026Ytd = flows2026?.income_total ?? 0
+  const annualIncome2025 = annualTotals?.income_total_year ?? null
+  const projectedIncome2026 = income2026Ytd + ASSURED_MONTHLY * ASSURED_MONTHS
 
   return (
     <motion.section
@@ -547,6 +554,19 @@ function ExpandedInsightPanel({
             </li>
           ))}
         </ul>
+      ) : insightId === 'income' ? (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-1)' }}>
+          {[
+            'Aucun salaire perçu sur la période février–avril',
+            'Postes de dépenses structurels nouveaux (enfant, transport…)',
+            'Projection pessimiste : revenus 2026 divisés par 2 vs 2025',
+          ].map((line) => (
+            <li key={line} style={{ display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
+              <span style={{ color: 'var(--primary-500)', fontSize: 8, flexShrink: 0 }}>▶</span>
+              {line}
+            </li>
+          ))}
+        </ul>
       ) : (
         <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
           {detailBody}
@@ -556,40 +576,26 @@ function ExpandedInsightPanel({
       {insightId === 'savings' ? <SavingsInsightKpis /> : null}
 
       {insightId === 'income' ? (
-        <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-          {loading ? (
-            <div
-              style={{
-                height: 220,
-                borderRadius: 'var(--radius-xl)',
-                background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
-              }}
-            />
-          ) : null}
-
-          {!loading && error ? (
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)' }}>
-              Erreur de chargement du graphique.
-            </p>
-          ) : null}
-
-          {!loading && !error ? (
-            <ComparedMonthlyChart
-              flows2025={flows2025}
-              flows2026={flows2026}
-              fluxMetrics={fluxMetrics}
-              minHeight={320}
-              mode="insight"
-              title="Flux mensuels comparés"
-              allowedMetrics={['income', 'savings', 'expense']}
-              defaultEnabledMetrics={['income']}
-              maxEnabledMetrics={1}
-              forceBothYears
-            />
-          ) : null}
-        </div>
+        loading ? (
+          <div style={{
+            height: 112,
+            borderRadius: 'var(--radius-xl)',
+            background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
+          }} />
+        ) : error ? (
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)' }}>Erreur de chargement.</p>
+        ) : (
+          <IncomeProjectionCards
+            income2025Ytd={income2025Ytd}
+            annualIncome2025={annualIncome2025}
+            income2026Ytd={income2026Ytd}
+            projectedIncome2026={projectedIncome2026}
+            assuredMonthlyIncome={ASSURED_MONTHLY}
+            assuredMonths={ASSURED_MONTHS}
+          />
+        )
       ) : null}
     </motion.section>
   )
@@ -1259,6 +1265,230 @@ function KpiTile({
     </div>
   )
 }
+
+// ─── Income projection cards + modals ─────────────────────────────────────────
+
+function IncomeProjectionCards({
+  income2025Ytd,
+  annualIncome2025,
+  income2026Ytd,
+  projectedIncome2026,
+  assuredMonthlyIncome,
+  assuredMonths,
+}: {
+  income2025Ytd: number
+  annualIncome2025: number | null
+  income2026Ytd: number
+  projectedIncome2026: number
+  assuredMonthlyIncome: number
+  assuredMonths: number
+}) {
+  const [modal, setModal] = useState<'2025' | '2026' | null>(null)
+  const incomeYtdDeltaPct = income2025Ytd > 0
+    ? ((income2026Ytd - income2025Ytd) / income2025Ytd) * 100
+    : null
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+        {/* 2025 card */}
+        <button
+          type="button"
+          onClick={() => setModal('2025')}
+          style={{
+            border: '1px solid var(--neutral-300)',
+            borderTop: '2px solid var(--primary-500)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--neutral-0)',
+            padding: 'var(--space-3)',
+            textAlign: 'left',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 3,
+            transition: 'border-color 140ms ease, box-shadow 140ms ease',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(91,87,245,0.14)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none' }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--primary-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            2025 – Revenus YTD
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
+            {formatCompactCurrency(income2025Ytd)} encaissés
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+            {annualIncome2025 != null ? formatCompactCurrency(annualIncome2025) : '—'}
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 9, color: 'var(--neutral-500)' }}>revenus totaux 2025</p>
+        </button>
+
+        {/* 2026 card */}
+        <button
+          type="button"
+          onClick={() => setModal('2026')}
+          style={{
+            border: '1px solid var(--neutral-300)',
+            borderTop: '2px solid #F97316',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--neutral-0)',
+            padding: 'var(--space-3)',
+            textAlign: 'left',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 3,
+            transition: 'border-color 140ms ease, box-shadow 140ms ease',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(249,115,22,0.14)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none' }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#EA580C', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            2026 – Revenus YTD
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
+            {formatCompactCurrency(income2026Ytd)} encaissés
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+            {formatCompactCurrency(projectedIncome2026)}
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 9, color: 'var(--neutral-500)' }}>revenus totaux 2026</p>
+        </button>
+      </div>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {modal === '2025' ? (
+          <IncomeModal2025
+            incomeYtd2025={income2025Ytd}
+            incomeAnnual2025={annualIncome2025}
+            incomeYtdDeltaPct={incomeYtdDeltaPct}
+            onClose={() => setModal(null)}
+          />
+        ) : modal === '2026' ? (
+          <IncomeModal2026
+            incomeYtd2026={income2026Ytd}
+            assuredMonthlyIncome={assuredMonthlyIncome}
+            assuredMonths={assuredMonths}
+            projectedIncome2026={projectedIncome2026}
+            onClose={() => setModal(null)}
+          />
+        ) : null}
+      </AnimatePresence>
+    </>
+  )
+}
+
+function IncomeModal2025({
+  incomeYtd2025,
+  incomeAnnual2025,
+  incomeYtdDeltaPct,
+  onClose,
+}: {
+  incomeYtd2025: number
+  incomeAnnual2025: number | null
+  incomeYtdDeltaPct: number | null
+  onClose: () => void
+}) {
+  const deltaText = incomeYtdDeltaPct == null ? '—' : `${incomeYtdDeltaPct > 0 ? '+' : ''}${incomeYtdDeltaPct.toFixed(1)}%`
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(10,10,30,0.6)', backdropFilter: 'blur(4px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-5)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 8 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', maxWidth: 320, width: '100%', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}
+      >
+        <div style={{ marginBottom: 'var(--space-4)', borderBottom: '2px solid var(--primary-500)', paddingBottom: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>Revenus 2025 — détail</p>
+          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>Rappel des revenus constatés sur l'année 2025</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ModalLine label="Revenus janvier–avril 2025" value={formatCompactCurrency(incomeYtd2025)} />
+          <ModalLine label="Revenus constatés fin 2025" value={incomeAnnual2025 != null ? formatCompactCurrency(incomeAnnual2025) : '—'} />
+          <ModalLine label="Écart YTD 2025 vs 2026" value={deltaText} />
+          <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+          <ModalLine label="Total revenus 2025" value={incomeAnnual2025 != null ? formatCompactCurrency(incomeAnnual2025) : '—'} bold />
+        </div>
+        <button type="button" onClick={onClose} style={{ width: '100%', padding: '9px 0', borderRadius: 'var(--radius-full)', border: 'none', background: 'var(--primary-500)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 'var(--space-4)' }}>
+          Fermer
+        </button>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function IncomeModal2026({
+  incomeYtd2026,
+  assuredMonthlyIncome,
+  assuredMonths,
+  projectedIncome2026,
+  onClose,
+}: {
+  incomeYtd2026: number
+  assuredMonthlyIncome: number
+  assuredMonths: number
+  projectedIncome2026: number
+  onClose: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(10,10,30,0.6)', backdropFilter: 'blur(4px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-5)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 8 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', maxWidth: 320, width: '100%', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}
+      >
+        <div style={{ marginBottom: 'var(--space-4)', borderBottom: '2px solid #F97316', paddingBottom: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)' }}>Revenus 2026 — projection</p>
+          <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--neutral-400)' }}>Encaissés YTD + revenus assurés restants</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ModalLine label="Revenus encaissés YTD 2026" value={formatCompactCurrency(incomeYtd2026)} />
+          <ModalLine label={`Revenus assurés (${assuredMonths} mois × ${formatCompactCurrency(assuredMonthlyIncome)})`} value={formatCompactCurrency(assuredMonthlyIncome * assuredMonths)} />
+          <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+          <ModalLine label="Projection fin 2026" value={formatCompactCurrency(projectedIncome2026)} bold />
+        </div>
+        <button type="button" onClick={onClose} style={{ width: '100%', padding: '9px 0', borderRadius: 'var(--radius-full)', border: 'none', background: '#F97316', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 'var(--space-4)' }}>
+          Fermer
+        </button>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function ModalLine({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+      <span style={{ fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.3 }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: bold ? 800 : 600, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>{value}</span>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SavingsInsightKpis() {
   const containerRef = useRef<HTMLDivElement | null>(null)
