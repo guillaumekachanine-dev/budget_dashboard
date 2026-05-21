@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUpCircle, Car, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-react'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
-import { ComparedVelocityCard } from '@/features/annual-analysis/components/ComparedVelocityCard'
 import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
@@ -100,18 +99,6 @@ export function BudgetsAnalyticsTab() {
   const [expandedInsightId, setExpandedInsightId] = useState<InsightId | null>(null)
   const [expandedRepartitionInsightId, setExpandedRepartitionInsightId] = useState<RepartitionInsightId | null>(null)
   const yearRowRef = useRef<HTMLDivElement | null>(null)
-  const { annualTotals } = useAnnual2025Analysis()
-  const {
-    loading: comparedLoading,
-    error: comparedError,
-    flows2025,
-    flows2026,
-    projectedExpense2025,
-    projectedExpense2026,
-    medianMonthly2025,
-    medianMonthly2026,
-    remainingMonths,
-  } = useComparedAnalysis()
 
   useEffect(() => {
     if (!openYearMenu) return
@@ -245,25 +232,11 @@ export function BudgetsAnalyticsTab() {
         </div>
       </section>
 
-      {!comparedLoading && !comparedError ? (
-        <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
-            <ComparedVelocityCard
-              income2025Ytd={flows2025?.income_total ?? 0}
-              income2026Ytd={flows2026?.income_total ?? 0}
-              annualIncome2025={annualTotals?.income_total_year ?? null}
-              expense2025={flows2025?.expense_total ?? 0}
-              expense2026={flows2026?.expense_total ?? 0}
-              projected2025={projectedExpense2025}
-              projected2026={projectedExpense2026}
-              medianMonthly2025={medianMonthly2025}
-              medianMonthly2026={medianMonthly2026}
-              remainingMonths={remainingMonths}
-              containerVariant="neutral"
-            />
-          </div>
-        </section>
-      ) : null}
+      <MonthlyFlowsAnalysisCard
+        year={2026}
+        showInternalViewToggle
+        variant="standalone"
+      />
 
       <MajorSectionHeading title="Analyse de la répartition" marginTop="0" />
 
@@ -310,12 +283,6 @@ export function BudgetsAnalyticsTab() {
 
       <RepartitionComparisonSection />
 
-      <MajorSectionHeading title="Flux mensuels" marginTop="0" />
-      <MonthlyFlowsAnalysisCard
-        year={2026}
-        showInternalViewToggle
-        variant="standalone"
-      />
     </section>
   )
 }
