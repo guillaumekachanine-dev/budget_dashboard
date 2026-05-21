@@ -227,6 +227,13 @@ function MiniDonut({ data, total, selectedId, onSliceClick, centerLabel }: MiniD
 
 // ─── modal ────────────────────────────────────────────────────────────────────
 
+interface SubCategoryBudgetLine {
+  id: string
+  name: string
+  iconKey: string | null
+  budgetAmount: number
+}
+
 interface SubModalProps {
   open: boolean
   onClose: () => void
@@ -241,6 +248,7 @@ interface SubModalProps {
   loading: boolean
   onSelectTransaction: (tx: Transaction) => void
   categoryById: Map<string, Category>
+  subCategoryBudgets?: SubCategoryBudgetLine[]
 }
 
 function SubModal({
@@ -257,12 +265,14 @@ function SubModal({
   loading,
   onSelectTransaction,
   categoryById,
+  subCategoryBudgets,
 }: SubModalProps) {
   const remaining = budgetAmount - consumedAmount
   const remainingLabel = budgetAmount > 0
     ? (remaining >= 0 ? `Restant ${formatCurrencyFloored(remaining)}` : `Dépassé ${formatCurrencyFloored(Math.abs(remaining))}`)
     : null
   const isOverBudget = remaining < 0
+  const isBudgetMode = headerMetricLabel === 'Budgétisé'
 
   return (
     <AnimatePresence>
@@ -299,7 +309,7 @@ function SubModal({
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.82)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>
                         {headerMetricLabel} {formatCurrencyFloored(headerMetricAmount)}
                       </span>
-                      {remainingLabel && (
+                      {!isBudgetMode && remainingLabel && (
                         <>
                           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>·</span>
                           <span style={{ fontSize: 11, fontWeight: 700, color: isOverBudget ? 'rgba(252,90,90,0.95)' : 'rgba(46,212,122,0.95)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>
@@ -319,37 +329,62 @@ function SubModal({
                 </button>
               </div>
 
-              {/* Transaction list */}
+              {/* Body */}
               <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 68px)', overflowY: 'auto' }}>
-                {loading ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
-                ) : transactions.length === 0 ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
-                ) : (
-                  transactions.map((tx) => {
-                    const subCat = tx.category_id ? categoryById.get(tx.category_id) : undefined
-                    return (
-                      <button
-                        key={tx.id}
-                        type="button"
-                        onClick={() => onSelectTransaction(tx)}
-                        style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--neutral-100)', padding: '8px var(--space-4)', display: 'grid', gridTemplateColumns: '36px 22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                {isBudgetMode && subCategoryBudgets ? (
+                  /* Budget mode: sub-category budget allocations */
+                  subCategoryBudgets.length === 0 ? (
+                    <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune sous-catégorie budgétisée</p>
+                  ) : (
+                    subCategoryBudgets.map((line) => (
+                      <div
+                        key={line.id}
+                        style={{ width: '100%', borderBottom: '1px solid var(--neutral-100)', padding: '10px var(--space-4)', display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}
                       >
-                        <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em' }}>{formatTxDate(tx.transaction_date)}</span>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {subCat?.icon_key ? (
-                            <CategoryIcon iconKey={subCat.icon_key} label={subCat.name} size={18} />
+                          {line.iconKey ? (
+                            <CategoryIcon iconKey={line.iconKey} label={line.name} size={18} />
                           ) : (
                             <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
                           )}
                         </div>
-                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)' }}>{getTxLabel(tx)}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>-{formatCurrencyFloored(Math.abs(Number(tx.amount)))}</span>
-                      </button>
-                    )
-                  })
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)' }}>{line.name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(line.budgetAmount)}</span>
+                      </div>
+                    ))
+                  )
+                ) : (
+                  /* Real mode: transaction list */
+                  loading ? (
+                    <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
+                  ) : transactions.length === 0 ? (
+                    <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
+                  ) : (
+                    transactions.map((tx) => {
+                      const subCat = tx.category_id ? categoryById.get(tx.category_id) : undefined
+                      return (
+                        <button
+                          key={tx.id}
+                          type="button"
+                          onClick={() => onSelectTransaction(tx)}
+                          style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--neutral-100)', padding: '8px var(--space-4)', display: 'grid', gridTemplateColumns: '36px 22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        >
+                          <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em' }}>{formatTxDate(tx.transaction_date)}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {subCat?.icon_key ? (
+                              <CategoryIcon iconKey={subCat.icon_key} label={subCat.name} size={18} />
+                            ) : (
+                              <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
+                            )}
+                          </div>
+                          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)' }}>{getTxLabel(tx)}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>-{formatCurrencyFloored(Math.abs(Number(tx.amount)))}</span>
+                        </button>
+                      )
+                    })
+                  )
                 )}
               </div>
             </motion.div>
@@ -479,6 +514,7 @@ interface ModalTarget {
   color: string
   headerMetricLabel: 'Consommé' | 'Budgétisé'
   headerMetricAmount: number
+  clickedFrom: 'real' | 'budget'
 }
 
 interface SocleListRow {
@@ -521,6 +557,10 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       return acc
     }, {})
   }, [budgetPayload])
+  const payloadByCategory = useMemo(
+    () => (Array.isArray(budgetPayload?.by_category) ? budgetPayload.by_category : []),
+    [budgetPayload],
+  )
   const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
 
   const now = new Date()
@@ -636,7 +676,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
   // ── transactions for modal ────────────────────────────────────────────────
 
   const modalCategoryIds = useMemo(() => {
-    if (!modalTarget || viewMode !== 'categories') return undefined
+    if (!modalTarget || viewMode !== 'categories' || modalTarget.clickedFrom === 'budget') return undefined
     const ids = [modalTarget.id]
     categories.forEach((c) => { if (c.parent_id === modalTarget.id) ids.push(c.id) })
     return ids
@@ -644,8 +684,21 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
 
   const { data: modalTransactions = [], isLoading: loadingModalTx } = useTransactions(
     { startDate, endDate, flowType: 'expense', categoryIds: modalCategoryIds, debugSource: 'EnveloppesTab:modal' },
-    { enabled: Boolean(modalTarget) && viewMode === 'categories' },
+    { enabled: Boolean(modalTarget) && viewMode === 'categories' && modalTarget?.clickedFrom !== 'budget' },
   )
+
+  const subCategoryBudgets = useMemo<SubCategoryBudgetLine[]>(() => {
+    if (!modalTarget || modalTarget.clickedFrom !== 'budget') return []
+    return payloadByCategory
+      .filter((row) => row.parent_category_id === modalTarget.id && Number(row.budget_amount) > 0)
+      .map((row) => ({
+        id: row.category_id,
+        name: row.category_name,
+        iconKey: categoryById.get(row.category_id)?.icon_key ?? null,
+        budgetAmount: Number(row.budget_amount),
+      }))
+      .sort((a, b) => b.budgetAmount - a.budgetAmount)
+  }, [modalTarget, payloadByCategory, categoryById])
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -672,6 +725,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         color,
         headerMetricLabel: clickedFrom === 'budget' ? 'Budgétisé' : 'Consommé',
         headerMetricAmount: clickedFrom === 'budget' ? budgetAmount : realAmount,
+        clickedFrom,
       })
     }
   }
@@ -1250,6 +1304,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         loading={loadingModalTx}
         onSelectTransaction={handleSelectTransaction}
         categoryById={categoryById}
+        subCategoryBudgets={subCategoryBudgets}
       />
 
       <TransactionDetailsModal
