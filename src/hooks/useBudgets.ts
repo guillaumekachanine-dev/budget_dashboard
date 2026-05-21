@@ -13,6 +13,7 @@ async function fetchCurrentPeriod(year: number, month: number): Promise<BudgetPe
   return data?.[0] ?? null
 }
 
+
 async function fetchBudgetSummaries(year: number, month: number): Promise<CategoryBudgetSummary[]> {
   const period = await fetchCurrentPeriod(year, month)
   if (!period) return []
@@ -77,10 +78,3 @@ export function useBudgetSummaries(year: number, month: number) {
   })
 }
 
-export function useCurrentPeriod(year: number, month: number) {
-  return useQuery({
-    queryKey: ['period', year, month],
-    queryFn: () => fetchCurrentPeriod(year, month),
-    staleTime: 60_000,
-  })
-}

@@ -1,4 +1,3 @@
-import { supabase } from '@/lib/supabase'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { BudgetPagePayload } from '@/features/budget/types'
 
@@ -50,7 +49,7 @@ export async function getBudgetPagePayload({
   periodMonth,
   monthsBack = 6,
 }: GetBudgetPagePayloadParams): Promise<BudgetPagePayload> {
-  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const { data: userData, error: userError } = await budgetDb.auth.getUser()
 
   if (userError) {
     throw new Error(`getBudgetPagePayload failed (auth): ${userError.message}`)

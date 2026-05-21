@@ -1,3 +1,4 @@
+import { QK, STALE } from '@/lib/queryKeys'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useCategories } from '@/hooks/useCategories'
@@ -23,19 +24,19 @@ export function useVoyagesData(year: number) {
   )
 
   const tripsQuery = useQuery({
-    queryKey: ['voyages', 'trips', year],
+    queryKey: [QK.VOYAGES, year],
     queryFn: () => getTrips(year),
-    staleTime: 5 * 60_000,
+    staleTime: STALE.ANALYTICS,
   })
 
   const trips = tripsQuery.data ?? []
   const tripIds = useMemo(() => trips.map((t) => t.id), [trips])
 
   const txQuery = useQuery({
-    queryKey: ['voyages', 'transactions', tripIds],
+    queryKey: [QK.VOYAGES_TRANSACTIONS, tripIds],
     queryFn: () => getTripTransactions(tripIds),
     enabled: tripIds.length > 0,
-    staleTime: 5 * 60_000,
+    staleTime: STALE.ANALYTICS,
   })
 
   const txRows = txQuery.data ?? []

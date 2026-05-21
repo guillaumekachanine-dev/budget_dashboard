@@ -10,6 +10,7 @@ import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/com
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
+import { QK, STALE } from '@/lib/queryKeys'
 import type { BudgetRevenueAnalytics, BudgetRevenueTransaction } from '@/features/budget/types'
 import { useBudgetRevenueSources2026, type RevenuSource2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
 
@@ -1441,9 +1442,9 @@ export function ProjectionsTabContent() {
   const { data: revenueData } = useBudgetRevenueAnalytics()
   const { data: projection } = useAnnualProjectionOverview2026(2026)
   const { data: monthlyMetrics = [] } = useQuery({
-    queryKey: ['monthly-metrics', 2026],
+    queryKey: [QK.BUDGET_METRICS_YEAR_DATASET, 2026],
     queryFn: () => getMonthlyMetrics(2026),
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE.ANALYTICS,
   })
 
   const now = new Date()

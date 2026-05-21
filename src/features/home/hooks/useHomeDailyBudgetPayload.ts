@@ -1,5 +1,5 @@
+import { QK } from '@/lib/queryKeys'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { getCurrentPeriod } from '@/lib/utils'
 import type { HomeDailyBudgetPayload } from '../types'
@@ -10,9 +10,9 @@ export function useHomeDailyBudgetPayload(periodYear?: number, periodMonth?: num
   const targetMonth = periodMonth ?? defaultMonth
 
   return useQuery<HomeDailyBudgetPayload | null>({
-    queryKey: ['home', 'daily-budget-payload', targetYear, targetMonth],
+    queryKey: [QK.HOME_DAILY_BUDGET, targetYear, targetMonth],
     queryFn: async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      const { data: { user }, error: userError } = await budgetDb.auth.getUser()
       if (userError || !user) return null
 
       const { data, error } = await budgetDb.rpc('get_home_daily_budget_payload', {

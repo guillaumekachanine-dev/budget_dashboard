@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { createPortal } from 'react-dom'
 import { budgetDb } from '@/lib/supabaseBudget'
+import { QK, STALE } from '@/lib/queryKeys'
 import type { CategoryRolling12mStats } from '@/features/budget/api/getCategoryRolling12mStats'
 import {
   BUCKET_LABELS,
@@ -527,8 +528,8 @@ export function Annual2026BlockMetrics({
   }, [activeYearMonth])
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['budget-metrics-categories'],
-    staleTime: 5 * 60_000,
+    queryKey: [QK.BUDGET_METRICS_CATEGORIES],
+    staleTime: STALE.ANALYTICS,
     queryFn: async () => {
       const { data, error } = await budgetDb
         .from('categories')
@@ -562,8 +563,8 @@ export function Annual2026BlockMetrics({
   }, [analysisType, selectedCategoryId, rootCategories])
 
   const { data: bucketMapRows = [] } = useQuery({
-    queryKey: ['budget-metrics-bucket-map'],
-    staleTime: 5 * 60_000,
+    queryKey: [QK.BUDGET_METRICS_BUCKET_MAP],
+    staleTime: STALE.ANALYTICS,
     queryFn: async () => {
       const { data, error } = await budgetDb
         .from('category_budget_bucket_map')
@@ -574,13 +575,13 @@ export function Annual2026BlockMetrics({
   })
 
   const { data: periodDataset } = useQuery({
-    queryKey: ['budget-metrics-period-dataset', selectedMonths.join(',')],
+    queryKey: [QK.BUDGET_METRICS_PERIOD_DATASET, selectedMonths.join(',')],
     staleTime: 30_000,
     queryFn: () => fetchDatasetForMonths(selectedMonths),
   })
 
   const { data: yearDataset } = useQuery({
-    queryKey: ['budget-metrics-year-dataset', yearMonths.join(',')],
+    queryKey: [QK.BUDGET_METRICS_YEAR_DATASET, yearMonths.join(',')],
     staleTime: 30_000,
     queryFn: () => fetchDatasetForMonths(yearMonths),
   })

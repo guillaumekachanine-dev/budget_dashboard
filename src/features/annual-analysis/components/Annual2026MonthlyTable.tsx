@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { getMonthlyPersonalAccountBalances } from '@/features/annual-analysis/api/getMonthlyPersonalAccountBalances'
+import { QK, STALE } from '@/lib/queryKeys'
 
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
 
@@ -175,9 +176,9 @@ export function MonthlyFlowsAnalysisCard({
   }))
 
   const { data: dbRows } = useQuery({
-    queryKey: ['monthly-flows-analysis-card', year, tableMonthCutoff, user?.id ?? 'anon'],
+    queryKey: [QK.MONTHLY_FLOWS_ANALYSIS_CARD, year, tableMonthCutoff, user?.id ?? 'anon'],
     enabled: !authLoading && Boolean(user?.id),
-    staleTime: 5 * 60_000,
+    staleTime: STALE.ANALYTICS,
     queryFn: async (): Promise<MonthlySynthRow[]> => {
       const userId = user?.id
       if (!userId) return []

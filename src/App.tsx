@@ -4,7 +4,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
-import { useStatsReferenceBootstrap } from '@/features/stats/bootstrap/StatsReferenceBootstrap'
 
 const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })))
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
@@ -28,8 +27,6 @@ export default function App() {
   const { user, loading } = useAuth()
   const [modalOpen, setModalOpen] = useState(false)
   const location = useLocation()
-
-  useStatsReferenceBootstrap({ userId: user?.id ?? null, enabled: !!user && location.pathname === '/epargne' })
 
   useEffect(() => {
     forceUnlockDocumentScroll()

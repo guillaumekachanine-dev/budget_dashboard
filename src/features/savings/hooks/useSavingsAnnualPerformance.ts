@@ -1,12 +1,13 @@
+import { QK, STALE } from '@/lib/queryKeys'
 import { useQuery } from '@tanstack/react-query'
 import { getSavingsAnnualPerformance } from '@/features/savings/api/getSavingsAnnualPerformance'
 import type { SavingsAnnualPerformanceRow } from '@/features/savings/types'
 
 export function useSavingsAnnualPerformance() {
   const query = useQuery<SavingsAnnualPerformanceRow[], Error>({
-    queryKey: ['savings', 'annual-performance'],
+    queryKey: [QK.SAVINGS_ANNUAL_PERFORMANCE],
     queryFn: getSavingsAnnualPerformance,
-    staleTime: 60_000,
+    staleTime: STALE.ANALYTICS,
   })
 
   return {

@@ -1,12 +1,13 @@
+import { QK, STALE } from '@/lib/queryKeys'
 import { useQuery } from '@tanstack/react-query'
 import { getSavingsAccountsDisplay } from '@/features/savings/api/getSavingsAccountsDisplay'
 import type { SavingsAccountDisplay } from '@/features/savings/types'
 
 export function useSavingsAccountsDisplay() {
   const query = useQuery<SavingsAccountDisplay[], Error>({
-    queryKey: ['savings', 'accounts-display'],
+    queryKey: [QK.SAVINGS_ACCOUNTS_DISPLAY],
     queryFn: getSavingsAccountsDisplay,
-    staleTime: 60_000,
+    staleTime: STALE.ANALYTICS,
   })
 
   return {

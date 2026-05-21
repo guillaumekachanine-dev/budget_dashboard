@@ -1,12 +1,13 @@
+import { QK, STALE } from '@/lib/queryKeys'
 import { useQuery } from '@tanstack/react-query'
 import { getSavingsEvolutionFiveYears } from '@/features/savings/api/getSavingsEvolutionFiveYears'
 import type { SavingsEvolutionFiveYearsPayload } from '@/features/savings/types'
 
 export function useSavingsEvolutionFiveYears() {
   const query = useQuery<SavingsEvolutionFiveYearsPayload, Error>({
-    queryKey: ['savings', 'evolution-5y'],
+    queryKey: [QK.SAVINGS_EVOLUTION_5Y],
     queryFn: getSavingsEvolutionFiveYears,
-    staleTime: 60_000,
+    staleTime: STALE.ANALYTICS,
   })
 
   return {

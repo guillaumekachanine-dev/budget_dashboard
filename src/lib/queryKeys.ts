@@ -20,12 +20,30 @@ export const QK = {
   COMPARED_YTD_FLOWS: 'compared-ytd-flows',
   COMPARED_YTD_FLOWS_KPI_CARDS: 'compared-ytd-flows-kpi-cards',
   HOME: 'home',
+  HOME_DAILY_BUDGET: 'home-daily-budget',
   MONTHLY_FLOWS_ANALYSIS_CARD: 'monthly-flows-analysis-card',
   MONTHLY_FLOWS_BY_SCOPE: 'monthly-flows-by-scope',
   PERIOD: 'period',
   PLANNED_OPERATIONS: 'planned-operations',
   SAVINGS: 'savings',
+  SAVINGS_ACCOUNTS_DISPLAY: 'savings-accounts-display',
+  SAVINGS_ANALYTICS: 'savings-analytics',
+  SAVINGS_ANNUAL_PERFORMANCE: 'savings-annual-performance',
+  SAVINGS_CURRENT_SUMMARY: 'savings-current-summary',
+  SAVINGS_EVOLUTION_5Y: 'savings-evolution-5y',
   STATS: 'stats',
   STATS_REFERENCE: 'stats-reference',
   TRANSACTIONS: 'transactions',
+  VOYAGES: 'voyages',
+  VOYAGES_TRANSACTIONS: 'voyages-transactions',
+} as const
+
+/** Stable stale times (ms) — single source of truth */
+export const STALE = {
+  /** Live operational data: budgets, transactions, accounts */
+  LIVE: 60_000,
+  /** Analytical data refreshed at most every 5 min */
+  ANALYTICS: 5 * 60_000,
+  /** Historical/reference data — rarely changes */
+  HISTORICAL: 15 * 60_000,
 } as const
