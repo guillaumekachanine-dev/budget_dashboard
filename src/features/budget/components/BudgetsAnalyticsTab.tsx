@@ -1255,182 +1255,198 @@ function KpiTile({
 
 function SavingsInsightKpis() {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [activeBarId, setActiveBarId] = useState<string | null>(null)
+  const [hoveredBarId, setHoveredBarId] = useState<string | null>(null)
   const maxValue = Math.max(...SAVINGS_KPI_ROWS.flatMap((row) => [row.y2025, row.y2026]))
-  const chartHeight = 122
+  const CHART_H = 148
+  const GRIDLINES = [0.25, 0.5, 0.75, 1] as const
 
   useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (!containerRef.current) return
-      if (!containerRef.current.contains(event.target as Node)) {
-        setActiveBarId(null)
-      }
+    const handleOutside = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setHoveredBarId(null)
     }
-
-    document.addEventListener('mousedown', handleOutsideClick)
-    return () => document.removeEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
   }, [])
 
+  const fmtK = (v: number) =>
+    v >= 1000
+      ? `${Math.round(v / 1000)}k`
+      : `${v}`
+
   return (
-    <div ref={containerRef} style={{ overflowX: 'auto', paddingBottom: 2 }}>
-      <div style={{ minWidth: 540, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(112px, 1fr))', gap: 'var(--space-3)' }}>
+    <div ref={containerRef} style={{ width: '100%', boxSizing: 'border-box' }}>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 14, marginBottom: 12, justifyContent: 'flex-end' }}>
+        {([['2025', 'var(--primary-500)'], ['2026', 'var(--warning-500)']] as const).map(([yr, color]) => (
+          <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{yr}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 4 metric columns — no min-width, no overflow */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
         {SAVINGS_KPI_ROWS.map((row) => {
           const deltaPct = row.y2025 !== 0 ? ((row.y2026 - row.y2025) / row.y2025) * 100 : 0
           const deltaPositive = deltaPct >= 0
           const deltaLabel = `${deltaPositive ? '+' : ''}${deltaPct.toFixed(1)}%`
           const deltaColor = deltaPositive ? 'var(--positive-500)' : 'var(--negative-500)'
-          const y2025Height = maxValue > 0 ? Math.max((row.y2025 / maxValue) * chartHeight, 10) : 10
-          const y2026Height = maxValue > 0 ? Math.max((row.y2026 / maxValue) * chartHeight, 10) : 10
-          const y2025Id = `${row.label}-2025`
-          const y2026Id = `${row.label}-2026`
+          const h25 = maxValue > 0 ? Math.max((row.y2025 / maxValue) * CHART_H, 6) : 6
+          const h26 = maxValue > 0 ? Math.max((row.y2026 / maxValue) * CHART_H, 6) : 6
+          const id25 = `${row.label}-25`
+          const id26 = `${row.label}-26`
+          const BAR_W = 'clamp(14px, 5vw, 22px)'
 
           return (
             <div
               key={row.label}
-              style={{
-                display: 'grid',
-                gap: 'var(--space-2)',
-                alignItems: 'end',
-                borderBottom: '1px solid var(--neutral-300)',
-                paddingBottom: 'var(--space-2)',
-              }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
             >
+              {/* ── Chart area with gridlines ── */}
               <div
                 style={{
-                  minHeight: chartHeight + 30,
+                  width: '100%',
+                  height: CHART_H,
+                  position: 'relative',
                   display: 'flex',
-                  alignItems: 'end',
+                  alignItems: 'flex-end',
                   justifyContent: 'center',
-                  gap: 8,
+                  gap: '14%',
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => setActiveBarId((prev) => (prev === y2025Id ? null : y2025Id))}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    padding: 0,
-                    cursor: 'pointer',
-                    display: 'grid',
-                    justifyItems: 'center',
-                    gap: 4,
-                    position: 'relative',
-                  }}
-                  aria-label={`${row.label} 2025`}
-                >
-                  {activeBarId === y2025Id ? (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: y2025Height + 20,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: '#fff',
-                        fontFamily: 'var(--font-mono)',
-                        background: 'rgba(10,12,28,0.9)',
-                        border: '1px solid rgba(255,255,255,0.25)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '2px 6px',
-                        whiteSpace: 'nowrap',
-                        zIndex: 2,
-                      }}
-                    >
-                      2025 · {formatCompactCurrency(row.y2025)}
-                    </span>
-                  ) : null}
-                  <span style={{ fontSize: 9, color: 'var(--neutral-700)', fontWeight: 700 }}>2025</span>
-                  <span
+                {/* Background gridlines */}
+                {GRIDLINES.map((ratio) => (
+                  <div
+                    key={ratio}
                     style={{
-                      width: 22,
-                      height: y2025Height,
-                      borderRadius: '6px 6px 0 0',
-                      background: 'var(--primary-500)',
+                      position: 'absolute',
+                      bottom: ratio * CHART_H,
+                      left: 0,
+                      right: 0,
+                      height: 1,
+                      background: ratio === 1
+                        ? 'var(--neutral-300)'
+                        : 'var(--neutral-200)',
+                      pointerEvents: 'none',
                     }}
                   />
+                ))}
+
+                {/* 2025 bar */}
+                <button
+                  type="button"
+                  onMouseEnter={() => setHoveredBarId(id25)}
+                  onMouseLeave={() => setHoveredBarId(null)}
+                  onClick={() => setHoveredBarId((p) => (p === id25 ? null : id25))}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 3,
+                    zIndex: 1,
+                  }}
+                  aria-label={`Revenus 2025 · ${formatCompactCurrency(row.y2025)}`}
+                >
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: hoveredBarId === id25 ? 'var(--primary-600)' : 'var(--neutral-600)',
+                    transition: 'color 0.15s',
+                    lineHeight: 1,
+                  }}>
+                    {fmtK(row.y2025)}
+                  </span>
+                  <span style={{
+                    display: 'block',
+                    width: BAR_W,
+                    height: h25,
+                    borderRadius: '4px 4px 0 0',
+                    background: hoveredBarId === id25
+                      ? 'var(--primary-600)'
+                      : 'var(--primary-500)',
+                    transition: 'background 0.15s, transform 0.1s',
+                    transform: hoveredBarId === id25 ? 'scaleX(1.1)' : 'none',
+                    transformOrigin: 'center bottom',
+                  }} />
+                  <span style={{ fontSize: 8, color: 'var(--neutral-500)', fontWeight: 600, lineHeight: 1 }}>2025</span>
                 </button>
 
+                {/* 2026 bar */}
                 <button
                   type="button"
-                  onClick={() => setActiveBarId((prev) => (prev === y2026Id ? null : y2026Id))}
+                  onMouseEnter={() => setHoveredBarId(id26)}
+                  onMouseLeave={() => setHoveredBarId(null)}
+                  onClick={() => setHoveredBarId((p) => (p === id26 ? null : id26))}
                   style={{
                     border: 'none',
-                    background: 'transparent',
+                    background: 'none',
                     padding: 0,
                     cursor: 'pointer',
-                    display: 'grid',
-                    justifyItems: 'center',
-                    gap: 4,
-                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 3,
+                    zIndex: 1,
                   }}
-                  aria-label={`${row.label} 2026`}
+                  aria-label={`2026 · ${formatCompactCurrency(row.y2026)}`}
                 >
-                  {activeBarId === y2026Id ? (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: y2026Height + 20,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: '#fff',
-                        fontFamily: 'var(--font-mono)',
-                        background: 'rgba(10,12,28,0.9)',
-                        border: '1px solid rgba(255,255,255,0.25)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '2px 6px',
-                        whiteSpace: 'nowrap',
-                        zIndex: 2,
-                      }}
-                    >
-                      2026 · {formatCompactCurrency(row.y2026)}
-                    </span>
-                  ) : null}
-                  <span style={{ fontSize: 9, color: 'var(--neutral-700)', fontWeight: 700 }}>2026</span>
-                  <span
-                    style={{
-                      width: 22,
-                      height: y2026Height,
-                      borderRadius: '6px 6px 0 0',
-                      background: 'var(--warning-500)',
-                    }}
-                  />
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: hoveredBarId === id26 ? '#B45309' : 'var(--neutral-600)',
+                    transition: 'color 0.15s',
+                    lineHeight: 1,
+                  }}>
+                    {fmtK(row.y2026)}
+                  </span>
+                  <span style={{
+                    display: 'block',
+                    width: BAR_W,
+                    height: h26,
+                    borderRadius: '4px 4px 0 0',
+                    background: hoveredBarId === id26
+                      ? '#D97706'
+                      : 'var(--warning-500)',
+                    transition: 'background 0.15s, transform 0.1s',
+                    transform: hoveredBarId === id26 ? 'scaleX(1.1)' : 'none',
+                    transformOrigin: 'center bottom',
+                  }} />
+                  <span style={{ fontSize: 8, color: 'var(--neutral-500)', fontWeight: 600, lineHeight: 1 }}>2026</span>
                 </button>
               </div>
 
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 10,
-                  lineHeight: 1.2,
-                  color: 'var(--neutral-900)',
-                  fontWeight: 'var(--font-weight-semibold)',
-                  fontStyle: 'italic',
-                  transform: 'rotate(-12deg)',
-                  transformOrigin: 'left center',
-                  whiteSpace: 'nowrap',
-                  minHeight: 28,
-                }}
-              >
+              {/* Metric label — horizontal, wrapping */}
+              <p style={{
+                margin: 0,
+                fontSize: 'clamp(8px, 2.4vw, 10px)',
+                lineHeight: 1.25,
+                color: 'var(--neutral-700)',
+                fontWeight: 600,
+                textAlign: 'center',
+                wordBreak: 'break-word',
+                hyphens: 'auto',
+              }}>
                 {row.label}
               </p>
 
-              <span
-                style={{
-                  justifySelf: 'start',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '3px 7px',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: deltaColor,
-                  background: `color-mix(in oklab, ${deltaColor} 14%, #FFFFFF 86%)`,
-                  textAlign: 'center',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
+              {/* Delta badge */}
+              <span style={{
+                borderRadius: 'var(--radius-full)',
+                padding: '2px 7px',
+                fontSize: 10,
+                fontWeight: 800,
+                color: deltaColor,
+                background: `color-mix(in oklab, ${deltaColor} 14%, #FFFFFF 86%)`,
+                fontFamily: 'var(--font-mono)',
+                lineHeight: 1.4,
+              }}>
                 {deltaLabel}
               </span>
             </div>
