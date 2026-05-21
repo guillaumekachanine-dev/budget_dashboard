@@ -224,7 +224,6 @@ export function BudgetsAnalyticsTab() {
               {expandedInsightId ? (
                 <ExpandedInsightPanel
                   insightId={expandedInsightId}
-                  detailBody={FLUX_INSIGHTS[expandedInsightId].detailBody}
                 />
               ) : null}
             </AnimatePresence>
@@ -476,10 +475,8 @@ function InsightCard({
 
 function ExpandedInsightPanel({
   insightId,
-  detailBody,
 }: {
   insightId: InsightId
-  detailBody: string
 }) {
   const { loading, error, flows2025, flows2026, fluxMetrics } = useComparedAnalysis()
   const { annualTotals } = useAnnual2025Analysis()
@@ -511,22 +508,19 @@ function ExpandedInsightPanel({
       }}
     >
       {insightId === 'savings' ? (
-        <ul style={{ margin: 0, padding: '0 0 0 var(--space-4)', display: 'grid', gap: 'var(--space-1)' }}>
-          {[
-            'Compression importante des revenus (-81% hors janvier)',
-            'Maintien, et même augmentation des dépenses (+9,3%)',
-            'Conséquence : -87% d’épargne sur le début d’année',
-          ].map((line) => (
-            <li key={line} style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
-              {line}
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-1)' }}>
+          {([
+            { bullet: '▶', text: 'Compression importante des revenus (-81% hors janvier)' },
+            { bullet: '▶', text: 'Maintien, et même augmentation des dépenses (+9,3%)' },
+            { bullet: '⟶', text: 'Conséquence : -87% d’épargne sur le début d’année' },
+          ] as const).map(({ bullet, text }) => (
+            <li key={text} style={{ display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
+              <span style={{ color: 'var(--primary-500)', fontSize: bullet === '⟶' ? 12 : 8, flexShrink: 0, fontWeight: 700 }}>{bullet}</span>
+              {text}
             </li>
           ))}
         </ul>
-      ) : (
-        <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
-          {detailBody}
-        </p>
-      )}
+      ) : null}
 
       {insightId === 'savings' ? <SavingsInsightKpis /> : null}
 
@@ -1269,12 +1263,12 @@ function IncomeProjectionCards({
             borderTop: '2px solid var(--primary-500)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--neutral-0)',
-            padding: 'var(--space-3)',
+            padding: '8px var(--space-3)',
             textAlign: 'left',
             cursor: 'pointer',
             display: 'flex',
             flexDirection: 'column',
-            gap: 3,
+            gap: 2,
             transition: 'border-color 140ms ease, box-shadow 140ms ease',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(91,87,245,0.14)' }}
@@ -1282,9 +1276,6 @@ function IncomeProjectionCards({
         >
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--primary-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             2025 – Revenus
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
-            {formatCompactCurrency(income2025Ytd)} encaissés
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {annualIncome2025 != null ? formatCompactCurrency(annualIncome2025) : '—'}
@@ -1300,12 +1291,12 @@ function IncomeProjectionCards({
             borderTop: '2px solid #F97316',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--neutral-0)',
-            padding: 'var(--space-3)',
+            padding: '8px var(--space-3)',
             textAlign: 'left',
             cursor: 'pointer',
             display: 'flex',
             flexDirection: 'column',
-            gap: 3,
+            gap: 2,
             transition: 'border-color 140ms ease, box-shadow 140ms ease',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(249,115,22,0.14)' }}
@@ -1313,9 +1304,6 @@ function IncomeProjectionCards({
         >
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#EA580C', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             2026 – Projection
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
-            {formatCompactCurrency(income2026Ytd)} encaissés
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {formatCompactCurrency(projectedIncome2026)}
