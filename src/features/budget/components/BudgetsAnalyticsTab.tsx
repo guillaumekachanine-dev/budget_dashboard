@@ -1277,7 +1277,7 @@ function SavingsInsightKpis() {
     <div ref={containerRef} style={{ width: '100%', boxSizing: 'border-box' }}>
       {/* Legend */}
       <div style={{ display: 'flex', gap: 14, marginBottom: 12, justifyContent: 'flex-end' }}>
-        {([['2025', 'var(--primary-500)'], ['2026', 'var(--warning-500)']] as const).map(([yr, color]) => (
+        {([['2025', 'var(--primary-500)'], ['2026', '#F97316']] as const).map(([yr, color]) => (
           <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />
             <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{yr}</span>
@@ -1412,8 +1412,8 @@ function SavingsInsightKpis() {
                     height: h26,
                     borderRadius: '4px 4px 0 0',
                     background: hoveredBarId === id26
-                      ? '#D97706'
-                      : 'var(--warning-500)',
+                      ? '#EA580C'
+                      : '#F97316',
                     transition: 'background 0.15s, transform 0.1s',
                     transform: hoveredBarId === id26 ? 'scaleX(1.1)' : 'none',
                     transformOrigin: 'center bottom',
