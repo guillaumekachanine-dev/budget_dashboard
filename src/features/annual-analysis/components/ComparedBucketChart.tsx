@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts'
-import { BarChart3, ChevronRight, Rows3, X } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, Cell } from 'recharts'
+import { ArrowLeft, BarChart3, ChevronRight, Rows3, X } from 'lucide-react'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
@@ -52,12 +52,18 @@ const BUCKET_SHORT: Record<string, string> = {
   epargne:              'Épargne',
 }
 
+const ANALYZED_BUCKET_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+]
+
 const ALLOCATION_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
   'socle_fixe',
   'variable_essentielle',
   'discretionnaire',
   'provision',
-  'epargne',
 ]
 
 const ALLOCATION_COLORS: Record<string, string> = {
@@ -199,11 +205,11 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
   const [detailData,    setDetailData]    = useState<BucketCategoryBreakdownRow[] | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [showDetail,    setShowDetail]    = useState(false)
+  const [showBlockListModal, setShowBlockListModal] = useState(false)
 
   const variableFluxMetric = fluxMetrics.find((metric) => metric.label === 'Variable') ?? null
-  const savingsFluxMetric = fluxMetrics.find((metric) => metric.label === 'Épargne réalisée') ?? null
 
-  const data: ChartEntry[] = [...PILOTAGE_BUCKET_ORDER].map((key) => {
+  const data: ChartEntry[] = [...ANALYZED_BUCKET_ORDER].map((key) => {
     let m = metrics.find((metric) => metric.bucket === key) ?? null
     const isMissingOrZero = !m || (Math.abs(m.actual_2025) + Math.abs(m.actual_2026) < 1)
 
@@ -215,18 +221,6 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
         target_2026: 0,
         delta_eur: variableFluxMetric.delta_eur,
         delta_pct: variableFluxMetric.delta_pct,
-        consumption_ratio_2026: 0,
-      }
-    }
-
-    if (isMissingOrZero && key === 'epargne' && savingsFluxMetric) {
-      m = {
-        bucket: key,
-        actual_2025: savingsFluxMetric.value_2025,
-        actual_2026: savingsFluxMetric.value_2026,
-        target_2026: 0,
-        delta_eur: savingsFluxMetric.delta_eur,
-        delta_pct: savingsFluxMetric.delta_pct,
         consumption_ratio_2026: 0,
       }
     }
@@ -276,6 +270,10 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
     { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
     { label: '2026', color: COLOR_2026, border: COLOR_2026 },
   ]
+
+  const openBlockListModal = () => {
+    setShowBlockListModal(true)
+  }
 
   const openDetailForBucket = async (bucket: string) => {
     setClickedBucket(bucket)
@@ -328,6 +326,17 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
   const closeDetail = () => {
     setShowDetail(false)
     setDetailData(null)
+    if (!showBlockListModal) {
+      setClickedBucket(null)
+      setClickedCoord(null)
+    }
+  }
+
+  const closeBlockList = () => {
+    setShowBlockListModal(false)
+    setShowDetail(false)
+    setDetailLoading(false)
+    setDetailData(null)
     setClickedBucket(null)
     setClickedCoord(null)
   }
@@ -364,7 +373,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
             ) : (
               <button
                 type="button"
-                onClick={() => { void openDetailForBucket(clickedBucket ?? 'socle_fixe') }}
+                onClick={openBlockListModal}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -389,7 +398,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
           {barsOnly ? (
             <button
               type="button"
-              onClick={() => { void openDetailForBucket(clickedBucket ?? 'socle_fixe') }}
+              onClick={openBlockListModal}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -481,14 +490,15 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                     data={data}
                     barCategoryGap="16%"
                     barGap={2}
-                    margin={{ top: 12, right: 4, left: -22, bottom: 0 }}
+                    margin={{ top: 12, right: 4, left: -22, bottom: 22 }}
                     onClick={handleChartClick}
                     style={{ cursor: 'pointer' }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
                     <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 9, fill: 'var(--neutral-500)', fontWeight: 600 }}
+                      dataKey="bucket"
+                      tick={<BlockAxisTick />}
+                      height={48}
                       axisLine={false}
                       tickLine={false}
                       interval={0}
@@ -513,19 +523,33 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                     <Bar
                       dataKey="v2025"
                       name="v2025"
-                      fill={COLOR_2025}
                       radius={[3, 3, 0, 0]}
                       maxBarSize={16}
                       shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
-                    />
+                    >
+                      {data.map((entry) => (
+                        <Cell
+                          key={`bar-2025-${entry.bucket}`}
+                          fill={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'}
+                          fillOpacity={0.34}
+                        />
+                      ))}
+                    </Bar>
                     <Bar
                       dataKey="v2026"
                       name="v2026"
-                      fill={COLOR_2026}
                       radius={[3, 3, 0, 0]}
                       maxBarSize={16}
                       shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
-                    />
+                    >
+                      {data.map((entry) => (
+                        <Cell
+                          key={`bar-2026-${entry.bucket}`}
+                          fill={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'}
+                          fillOpacity={1}
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
 
@@ -554,13 +578,22 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
       </div>
 
       {/* Modale détail sous-catégories */}
+      {showBlockListModal ? (
+        <BlockListModal
+          rows={allocationRows}
+          onClose={closeBlockList}
+          onOpenBucket={(bucket) => { void openDetailForBucket(bucket) }}
+        />
+      ) : null}
+
       {showDetail && clickedBucket && (
         <BucketDetailModal
           bucketLabel={BUCKET_LABELS[clickedBucket] ?? clickedBucket}
-          headerColor={BUCKET_HEADER_COLORS[clickedBucket] ?? '#5B57F5'}
+          headerColor={ALLOCATION_COLORS[clickedBucket] ?? BUCKET_HEADER_COLORS[clickedBucket] ?? '#5B57F5'}
           rows={detailData}
           loading={detailLoading}
           onClose={closeDetail}
+          onBack={showBlockListModal ? closeDetail : undefined}
         />
       )}
     </>
@@ -644,7 +677,7 @@ function ClickedTooltip({
 
       {/* Ligne 2026 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: COLOR_2026 }}>2026</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: ALLOCATION_COLORS[entry.bucket] ?? COLOR_2026 }}>2026</span>
         <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
           {entry.v2026 > 0 ? formatTightEuro(entry.v2026) : '—'}
         </span>
@@ -700,6 +733,43 @@ function ClickedTooltip({
         <ChevronRight size={11} strokeWidth={2.5} />
       </button>
     </div>
+  )
+}
+
+function BlockAxisTick({
+  x = 0,
+  y = 0,
+  payload,
+}: {
+  x?: number
+  y?: number
+  payload?: { value?: string }
+}) {
+  const bucket = String(payload?.value ?? '')
+  const iconSrc = BLOCK_ICON_BY_BUCKET[bucket] ?? blockFixeIcon
+  const label = BUCKET_SHORT[bucket] ?? (BUCKET_LABELS[bucket] ?? bucket)
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <image
+        href={iconSrc}
+        x={-8}
+        y={4}
+        width={16}
+        height={16}
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <text
+        x={0}
+        y={30}
+        textAnchor="middle"
+        fill="var(--neutral-500)"
+        fontSize={9}
+        fontWeight={600}
+      >
+        {label}
+      </text>
+    </g>
   )
 }
 
@@ -1029,13 +1099,14 @@ function AllocationLineView({
 // ─── BucketDetailModal ────────────────────────────────────────────────────────
 
 function BucketDetailModal({
-  bucketLabel, headerColor, rows, loading, onClose,
+  bucketLabel, headerColor, rows, loading, onClose, onBack,
 }: {
   bucketLabel:  string
   headerColor:  string
   rows:         BucketCategoryBreakdownRow[] | null
   loading:      boolean
   onClose:      () => void
+  onBack?:      () => void
 }) {
   const { data: categories = [] } = useCategories('expense')
   const iconByCategoryId = useMemo(
@@ -1089,11 +1160,35 @@ function BucketDetailModal({
             gap: 'var(--space-3)',
             flexShrink: 0,
           }}>
-            <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+              {onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    background: 'rgba(255,255,255,0.12)',
+                    color: '#fff',
+                    width: 26,
+                    height: 26,
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                  aria-label="Revenir à la liste des blocs"
+                >
+                  <ArrowLeft size={13} />
+                </button>
+              ) : null}
+              <div>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#fff' }}>{bucketLabel}</p>
               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>
                 Dépenses YTD Jan – Avr · 2025 vs 2026
               </p>
+              </div>
             </div>
             <button
               type="button"
@@ -1198,6 +1293,147 @@ function BucketDetailModal({
                 )
               })
             )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function BlockListModal({
+  rows,
+  onClose,
+  onOpenBucket,
+}: {
+  rows: Array<{
+    bucket: string
+    label: string
+    color: string
+    v2025: number
+    v2026: number
+  }>
+  onClose: () => void
+  onOpenBucket: (bucket: string) => void
+}) {
+  const sortedRows = rows
+    .filter((row) => ANALYZED_BUCKET_ORDER.includes(row.bucket as (typeof ANALYZED_BUCKET_ORDER)[number]))
+    .sort((a, b) => ANALYZED_BUCKET_ORDER.indexOf(a.bucket as (typeof ANALYZED_BUCKET_ORDER)[number]) - ANALYZED_BUCKET_ORDER.indexOf(b.bucket as (typeof ANALYZED_BUCKET_ORDER)[number]))
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(10,10,30,0.55)',
+          backdropFilter: 'blur(3px)',
+          zIndex: 1000,
+        }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1001,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 'var(--space-5)',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          onClick={(event) => event.stopPropagation()}
+          style={{
+            width: 'min(620px, 96vw)',
+            background: 'var(--neutral-0)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.30)',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+            maxHeight: 'min(88dvh, 640px)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              background: '#002FA7',
+              padding: 'var(--space-4) var(--space-5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-3)',
+              flexShrink: 0,
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#fff' }}>Liste des blocs analysés</p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>
+                Sélectionner un bloc pour afficher son détail
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                border: 'none',
+                background: 'rgba(255,255,255,0.2)',
+                color: '#fff',
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--radius-full)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+              aria-label="Fermer la liste des blocs"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {sortedRows.map((row, index) => (
+              <button
+                key={`block-list-${row.bucket}`}
+                type="button"
+                onClick={() => onOpenBucket(row.bucket)}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  borderBottom: index === sortedRows.length - 1 ? 'none' : '1px solid var(--neutral-100)',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: '10px var(--space-5)',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0,1fr) auto',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <img
+                    src={BLOCK_ICON_BY_BUCKET[row.bucket] ?? blockFixeIcon}
+                    alt=""
+                    width={18}
+                    height={18}
+                    style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {row.label}
+                  </span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', color: row.color, fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {formatTightEuro(row.v2026)}
+                  <ChevronRight size={12} />
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       </div>

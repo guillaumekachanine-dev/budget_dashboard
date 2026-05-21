@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, LayoutGrid, PieChart as PieChartIcon, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, LayoutGrid, PieChart as PieChartIcon, X } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useCategories } from '@/hooks/useCategories'
@@ -18,6 +18,7 @@ const CATEGORY_ROW_COLUMNS = 'minmax(0,1fr) 78px 8px 86px'
 const CATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(12px)' } as const
 const SUBCATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(16px)' } as const
 const CATEGORY_SECTION_FIXED_HEIGHT = 438
+const CATEGORY_ANALYZED_PERIOD_LABEL = 'janvier-avril'
 
 const switchStyle = {
   display: 'flex',
@@ -258,7 +259,7 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
         <div style={{ display: 'grid', gap: 'var(--space-1)', minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-            Dépenses par catégorie
+            Répartition par catégories <span style={{ fontWeight: 600, color: 'var(--neutral-500)' }}>({CATEGORY_ANALYZED_PERIOD_LABEL})</span>
           </p>
         </div>
         {donutOnly ? (
@@ -402,7 +403,7 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 3200,
+            zIndex: 3300,
             background: 'rgba(20, 24, 38, 0.58)',
             display: 'flex',
             alignItems: 'center',
@@ -437,9 +438,33 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
               justifyContent: 'space-between',
               gap: 'var(--space-3)',
             }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>
-                {selectedCategoryMetric.parent_category_name}
-              </p>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                {isDonutDetailsModalOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryNameModal(null)}
+                    aria-label="Revenir à la liste des catégories"
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.35)',
+                      background: 'rgba(255,255,255,0.12)',
+                      color: '#fff',
+                      width: 26,
+                      height: 26,
+                      borderRadius: 'var(--radius-full)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ArrowLeft size={13} />
+                  </button>
+                ) : null}
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedCategoryMetric.parent_category_name}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedCategoryNameModal(null)}
@@ -631,7 +656,6 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
                     expandable={false}
                     rowClickable
                     onRowClick={() => {
-                      setIsDonutDetailsModalOpen(false)
                       setSelectedCategoryNameModal(metric.parent_category_name)
                     }}
                   />

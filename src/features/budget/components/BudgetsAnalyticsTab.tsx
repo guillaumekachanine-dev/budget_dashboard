@@ -8,20 +8,13 @@ import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnua
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
 
-type ComparisonYear = 2024 | 2025 | 2026
-type YearSide = 'left' | 'right'
 type InsightId = 'savings' | 'income'
 type RepartitionInsightId = 'achats-divers' | 'transport'
+type AnalyticsDisplayMode = 'analyse' | 'data'
 
 const REPARTITION_SLIDE_FRAME_HEIGHT = 438
 const SECTION_BORDER_WIDTH = '4px'
 const DEEP_YELLOW = '#B8860B'
-
-const YEAR_OPTIONS: Array<{ year: ComparisonYear; disabled?: boolean }> = [
-  { year: 2024, disabled: true },
-  { year: 2025 },
-  { year: 2026 },
-]
 
 const FLUX_INSIGHTS = {
   savings: {
@@ -91,53 +84,14 @@ const SAVINGS_KPI_ROWS: SavingsKpiRow[] = [
 ]
 
 export function BudgetsAnalyticsTab() {
-  const [comparisonYears, setComparisonYears] = useState<{ left: ComparisonYear; right: ComparisonYear }>({
-    left: 2025,
-    right: 2026,
-  })
-  const [openYearMenu, setOpenYearMenu] = useState<YearSide | null>(null)
+  const [displayMode, setDisplayMode] = useState<AnalyticsDisplayMode>('analyse')
   const [expandedInsightId, setExpandedInsightId] = useState<InsightId | null>(null)
   const [expandedRepartitionInsightId, setExpandedRepartitionInsightId] = useState<RepartitionInsightId | null>(null)
-  const yearRowRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!openYearMenu) return
-
-    const handleOutside = (event: MouseEvent) => {
-      if (!yearRowRef.current) return
-      if (!yearRowRef.current.contains(event.target as Node)) {
-        setOpenYearMenu(null)
-      }
-    }
-
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [openYearMenu])
-
-  const selectYear = (side: YearSide, year: ComparisonYear) => {
-    if (year === 2024) return
-
-    setComparisonYears((prev) => {
-      const otherSide = side === 'left' ? 'right' : 'left'
-      if (prev[otherSide] === year) {
-        return {
-          left: side === 'left' ? year : prev.left,
-          right: side === 'right' ? year : prev.right,
-        }
-      }
-
-      return side === 'left'
-        ? { left: year, right: prev.right }
-        : { left: prev.left, right: year }
-    })
-    setOpenYearMenu(null)
-  }
 
   return (
     <section style={{ width: '100%', boxSizing: 'border-box', display: 'grid', gap: 'var(--space-6)' }}>
-      {/* ── controls: period info (plain) + year selectors ── */}
+      {/* ── controls: period info + analyse/data selectors ── */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: '0 var(--page-gutter)', marginBottom: 'var(--space-3)' }}>
-        {/* Period — plain text, no badge */}
         <span
           style={{
             fontSize: 'var(--font-size-sm)',
@@ -150,219 +104,97 @@ export function BudgetsAnalyticsTab() {
           Janvier → Avril (4 mois)
         </span>
 
-        {/* Year selectors — keep dropdown functionality, same visual position as toggles */}
-        <div
-          ref={yearRowRef}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 'var(--space-2)',
-            position: 'relative',
-            zIndex: 8,
-          }}
-        >
-          <YearSelector
-            label="Année gauche"
-            value={comparisonYears.left}
-            open={openYearMenu === 'left'}
-            onToggle={() => setOpenYearMenu((prev) => (prev === 'left' ? null : 'left'))}
-            onSelect={(year) => selectYear('left', year)}
-            buttonWidth={92}
-            buttonHeight={36}
-          />
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 800,
-              color: 'var(--neutral-500)',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              width: 24,
-              textAlign: 'center',
-            }}
-          >
-            VS
-          </span>
-          <YearSelector
-            label="Année droite"
-            value={comparisonYears.right}
-            open={openYearMenu === 'right'}
-            onToggle={() => setOpenYearMenu((prev) => (prev === 'right' ? null : 'right'))}
-            onSelect={(year) => selectYear('right', year)}
-            buttonWidth={92}
-            buttonHeight={36}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
+          <button type="button" onClick={() => setDisplayMode('analyse')} style={{ ...analyticsDisplayBtnStyle(displayMode === 'analyse'), textAlign: 'center' }}>
+            Analyse
+          </button>
+          <button type="button" onClick={() => setDisplayMode('data')} style={{ ...analyticsDisplayBtnStyle(displayMode === 'data'), textAlign: 'center' }}>
+            Data
+          </button>
         </div>
       </div>
 
-      <MajorSectionHeading title="Analyse des flux" marginTop="0" />
-
-      <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <motion.div
-            layout
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
-          >
-            <InsightCard
-              icon="savings"
-              titleValue={FLUX_INSIGHTS.savings.titleValue}
-              titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
-              isExpanded={expandedInsightId === 'savings'}
-              onToggle={() => setExpandedInsightId((prev) => (prev === 'savings' ? null : 'savings'))}
-            />
-            <InsightCard
-              icon="income"
-              titleValue={FLUX_INSIGHTS.income.titleValue}
-              titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
-              isExpanded={expandedInsightId === 'income'}
-              onToggle={() => setExpandedInsightId((prev) => (prev === 'income' ? null : 'income'))}
-            />
-
-            <AnimatePresence initial={false}>
-              {expandedInsightId ? (
-                <ExpandedInsightPanel
-                  insightId={expandedInsightId}
-                />
-              ) : null}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      </section>
-
-      <MonthlyFlowsAnalysisCard
-        year={2026}
-        showInternalViewToggle
-        variant="standalone"
-      />
-
-      <MajorSectionHeading title="Analyse de la répartition" marginTop="0" />
-
-      <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <motion.div
-            layout
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
-          >
-            <RepartitionInsightCard
-              icon="shopping"
-              titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
-              titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
-              isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
-              onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
-              ))}
-            />
-            <RepartitionInsightCard
-              icon="transport"
-              titleValue={REPARTITION_INSIGHTS.transport.titleValue}
-              titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
-              isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
-              onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
-              ))}
-            />
-
-            <AnimatePresence initial={false}>
-              {expandedRepartitionInsightId ? (
-                <ExpandedRepartitionInsightPanel
-                  key={expandedRepartitionInsightId}
-                  insightId={expandedRepartitionInsightId}
-                  detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
-                    ? REPARTITION_INSIGHTS.achatsDivers.detailBody
-                    : REPARTITION_INSIGHTS.transport.detailBody}
-                />
-              ) : null}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      </section>
-
-      <RepartitionComparisonSection />
-
-    </section>
-  )
-}
-
-function YearSelector({
-  label,
-  value,
-  open,
-  onToggle,
-  onSelect,
-  buttonWidth = 118,
-  buttonHeight = 34,
-}: {
-  label: string
-  value: ComparisonYear
-  open: boolean
-  onToggle: () => void
-  onSelect: (year: ComparisonYear) => void
-  buttonWidth?: number
-  buttonHeight?: number
-}) {
-  return (
-    <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        aria-label={label}
-        aria-expanded={open}
-        onClick={onToggle}
-        style={{
-          minWidth: buttonWidth,
-          height: buttonHeight,
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid color-mix(in oklab, var(--primary-500) 24%, var(--neutral-200) 76%)',
-          background: 'var(--neutral-0)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          padding: '0 var(--space-3)',
-        }}
-      >
-        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-800)', lineHeight: 1 }}>
-          {value}
-        </span>
-      </button>
-
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.14 }}
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              left: 0,
-              minWidth: 118,
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid color-mix(in oklab, var(--primary-500) 20%, var(--neutral-200) 80%)',
-              background: 'var(--neutral-0)',
-              boxShadow: 'var(--shadow-card)',
-              overflow: 'hidden',
-              zIndex: 20,
-            }}
-          >
-            {YEAR_OPTIONS.map((option) => (
-              <button
-                key={option.year}
-                type="button"
-                onClick={() => onSelect(option.year)}
-                disabled={Boolean(option.disabled)}
-                style={yearOptionStyle(option.disabled)}
+      {displayMode === 'analyse' ? (
+        <>
+          <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ maxWidth: 640, margin: '0 auto' }}>
+              <motion.div
+                layout
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
               >
-                {option.year}
-              </button>
-            ))}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
+                <InsightCard
+                  icon="savings"
+                  titleValue={FLUX_INSIGHTS.savings.titleValue}
+                  titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
+                  isExpanded={expandedInsightId === 'savings'}
+                  onToggle={() => setExpandedInsightId((prev) => (prev === 'savings' ? null : 'savings'))}
+                />
+                <InsightCard
+                  icon="income"
+                  titleValue={FLUX_INSIGHTS.income.titleValue}
+                  titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
+                  isExpanded={expandedInsightId === 'income'}
+                  onToggle={() => setExpandedInsightId((prev) => (prev === 'income' ? null : 'income'))}
+                />
+                <RepartitionInsightCard
+                  icon="shopping"
+                  titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
+                  titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
+                  isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
+                  onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                    prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
+                  ))}
+                />
+                <RepartitionInsightCard
+                  icon="transport"
+                  titleValue={REPARTITION_INSIGHTS.transport.titleValue}
+                  titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
+                  isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
+                  onToggle={() => setExpandedRepartitionInsightId((prev) => (
+                    prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
+                  ))}
+                />
+
+                <AnimatePresence initial={false}>
+                  {expandedInsightId ? (
+                    <ExpandedInsightPanel
+                      insightId={expandedInsightId}
+                    />
+                  ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence initial={false}>
+                  {expandedRepartitionInsightId ? (
+                    <ExpandedRepartitionInsightPanel
+                      key={expandedRepartitionInsightId}
+                      insightId={expandedRepartitionInsightId}
+                      detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
+                        ? REPARTITION_INSIGHTS.achatsDivers.detailBody
+                        : REPARTITION_INSIGHTS.transport.detailBody}
+                    />
+                  ) : null}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <MajorSectionHeading title="Analyse de la répartition" marginTop="0" />
+
+          <RepartitionComparisonSection />
+
+          <MajorSectionHeading title="Analyse des flux mensuels" marginTop="0" />
+
+          <MonthlyFlowsAnalysisCard
+            year={2026}
+            showInternalViewToggle
+            variant="standalone"
+          />
+        </>
+      )}
+    </section>
   )
 }
 
@@ -1699,19 +1531,19 @@ function MajorSectionHeading({ title, marginTop }: { title: string; marginTop: s
   )
 }
 
-function yearOptionStyle(disabled?: boolean): CSSProperties {
+function analyticsDisplayBtnStyle(active: boolean): CSSProperties {
   return {
-    width: '100%',
-    border: 'none',
-    borderBottom: '1px solid var(--neutral-100)',
-    background: 'var(--neutral-0)',
-    color: disabled ? 'var(--neutral-400)' : 'var(--neutral-800)',
+    border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
+    background: active ? 'var(--primary-50)' : 'var(--neutral-0)',
+    color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+    borderRadius: 'var(--radius-md)',
+    padding: 'var(--space-2) var(--space-4)',
     fontSize: 'var(--font-size-sm)',
-    fontWeight: 'var(--font-weight-semibold)',
-    padding: '8px var(--space-2)',
+    fontWeight: 700,
     textAlign: 'center',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
+    cursor: 'pointer',
+    transition: 'all var(--transition-base)',
+    minHeight: 36,
   }
 }
 

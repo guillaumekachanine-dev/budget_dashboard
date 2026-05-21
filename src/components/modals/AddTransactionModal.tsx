@@ -76,14 +76,12 @@ export type CategoryPickerModalProps = {
 type SettingsListProps = {
   categoryLabel: string
   behavior: BudgetBehavior
-  isRecurring: boolean
   accountMode: AccountMode
   canUseJoint: boolean
   imputability: string
   compactMobile?: boolean
   onCategoryClick: () => void
   onBehaviorToggle: () => void
-  onRecurringToggle: () => void
   onAccountModeToggle: () => void
   onImputabilityToggle: () => void
 }
@@ -316,14 +314,12 @@ function SettingsRow({
 function SettingsList({
   categoryLabel,
   behavior,
-  isRecurring,
   accountMode,
   canUseJoint,
   imputability,
   compactMobile = false,
   onCategoryClick,
   onBehaviorToggle,
-  onRecurringToggle,
   onAccountModeToggle,
   onImputabilityToggle,
 }: SettingsListProps) {
@@ -332,7 +328,6 @@ function SettingsList({
       <div className="divide-y divide-[var(--neutral-200)] border-0">
         <SettingsRow label="Catégorie" value={categoryLabel} compactMobile={compactMobile} onClick={onCategoryClick} />
         <SettingsRow label="Fixe/variable" value={budgetBehaviorLabel(behavior)} compactMobile={compactMobile} onClick={onBehaviorToggle} />
-        <SettingsRow label="Récurrence" value={isRecurring ? 'OUI' : 'NON'} compactMobile={compactMobile} onClick={onRecurringToggle} />
         <SettingsRow
           label="Compte"
           value={accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
@@ -534,6 +529,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return window.matchMedia('(max-width: 768px)').matches
   })
   const [keyboardVisible, setKeyboardVisible] = useState(false)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
   const descriptionRef = useRef<HTMLInputElement | null>(null)
@@ -726,8 +722,12 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const canSubmit = useMemo(() => {
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
-
-  const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
+  const modalMaxHeight = useMemo(() => {
+    const baseViewportHeight = viewportHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 720)
+    const safetyMargin = isMobileViewport ? 20 : 40
+    const computedHeight = Math.max(420, Math.floor(baseViewportHeight - safetyMargin))
+    return `${computedHeight}px`
+  }, [isMobileViewport, viewportHeight])
 
   const focusDescriptionInput = useCallback(() => {
     amountRef.current?.blur()
@@ -767,14 +767,19 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   useEffect(() => {
     if (!open || !isMobileViewport || typeof window === 'undefined') {
       setKeyboardVisible(false)
+      setViewportHeight(null)
       return
     }
     const viewport = window.visualViewport
-    if (!viewport) return
+    if (!viewport) {
+      setViewportHeight(window.innerHeight)
+      return
+    }
 
     const updateKeyboardState = () => {
       const keyboardDelta = window.innerHeight - viewport.height
       setKeyboardVisible(keyboardDelta > 140)
+      setViewportHeight(viewport.height)
     }
 
     updateKeyboardState()
@@ -878,10 +883,6 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     setValue('budgetBehavior', values.budgetBehavior === 'fixed' ? 'variable' : 'fixed')
   }
 
-  const handleRecurringToggle = () => {
-    setValue('isRecurring', !values.isRecurring)
-  }
-
   const handleAccountModeToggle = () => {
     if (!canUseJoint) return
     const nextMode: AccountMode = values.accountMode === 'personal' ? 'joint' : 'personal'
@@ -973,15 +974,15 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-modal-title"
-            initial={{ y: '100%', opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 101, maxHeight: '81dvh' }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed left-1/2 top-1/2 w-[min(500px,calc(100vw-16px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
+            style={{ zIndex: 101, maxHeight: modalMaxHeight, height: 'min(82dvh, 100%)' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[81dvh] flex-col">
+            <form onSubmit={handleSubmit(onSubmit)} className="flex h-full max-h-full flex-col">
               <input type="hidden" {...register('amount')} />
               <input type="hidden" {...register('transactionType')} />
               <input type="hidden" {...register('categoryId')} />
@@ -996,7 +997,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               <header
                 className="relative overflow-hidden px-[var(--space-6)]"
                 style={{
-                  minHeight: isMobileViewport ? 162 : 176,
+                  minHeight: keyboardVisible ? (isMobileViewport ? 136 : 150) : (isMobileViewport ? 162 : 176),
                   paddingTop: 'var(--space-5)',
                   background: headerBackgroundColor,
                   borderBottom: 'none',
@@ -1152,7 +1153,6 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   <SettingsList
                     categoryLabel={categoryLabel}
                     behavior={values.budgetBehavior}
-                    isRecurring={values.isRecurring}
                     accountMode={values.accountMode}
                     canUseJoint={canUseJoint}
                     imputability={imputabilityLabel(values.personalShareRatio)}
@@ -1188,7 +1188,6 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                       setPickerClosing('none')
                     }}
                     onBehaviorToggle={handleBehaviorToggle}
-                    onRecurringToggle={handleRecurringToggle}
                     onAccountModeToggle={handleAccountModeToggle}
                     onImputabilityToggle={handleImputabilityToggle}
                   />
@@ -1200,29 +1199,27 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 </div>
               </div>
 
-              {!shouldHideFooter ? (
-                <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
-                  <div
-                    className="flex items-center justify-between gap-[var(--space-3)]"
-                    style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
+              <footer className="sticky bottom-0 z-30 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
+                <div
+                  className="flex items-center justify-between gap-[var(--space-3)]"
+                  style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
+                >
+                  <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
+                    Annuler
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
+                    style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
+                    disabled={!canSubmit}
+                    loading={isPending}
                   >
-                    <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
-                      Annuler
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
-                      style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
-                      disabled={!canSubmit}
-                      loading={isPending}
-                    >
-                      Ajouter
-                    </Button>
-                  </div>
-                </footer>
-              ) : null}
+                    Ajouter
+                  </Button>
+                </div>
+              </footer>
             </form>
           </motion.section>
 
