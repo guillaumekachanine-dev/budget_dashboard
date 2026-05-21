@@ -1600,8 +1600,8 @@ export function ProjectionsTabContent() {
             <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
           </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
-            <button type="button" onClick={() => setMode('revenus')} style={{ ...toggleBtnStyle(mode === 'revenus'), textAlign: 'center' }}>Revenus</button>
             <button type="button" onClick={() => setMode('depenses')} style={{ ...toggleBtnStyle(mode === 'depenses'), textAlign: 'center' }}>Dépenses</button>
+            <button type="button" onClick={() => setMode('revenus')} style={{ ...toggleBtnStyle(mode === 'revenus'), textAlign: 'center' }}>Revenus</button>
           </div>
         </div>
 

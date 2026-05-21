@@ -11,6 +11,10 @@ type SavingsHeroCardProps = {
   onOpenAllocationModal?: () => void
 }
 
+function formatTightEuro(value: number | null | undefined): string {
+  return formatEuro(value).replace(/\s+€/u, '€')
+}
+
 export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps) {
   const { data, isLoading, error } = useSavingsCurrentSummary()
 
@@ -59,7 +63,7 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
           background: 'linear-gradient(138deg, #0B3D4A 0%, #1E6578 46%, #9EC4CF 78%, #DDECF1 100%)',
           borderRadius: 'var(--radius-2xl)',
           border: '1px solid color-mix(in oklab, #0B3D4A 52%, var(--neutral-0) 48%)',
-          padding: 'var(--space-4)',
+          padding: 'var(--space-2)',
           boxShadow: 'var(--shadow-card)',
           position: 'relative',
           overflow: 'hidden',
@@ -132,44 +136,98 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
           }}
         />
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'grid', gap: 'var(--space-2)' }}>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-xs)',
-              fontWeight: 'var(--font-weight-bold)',
-              color: 'rgba(255,255,255,0.62)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.09em',
-            }}
-          >
-            Patrimoine épargne
-          </p>
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) max-content',
+            alignItems: 'center',
+            columnGap: 'var(--space-4)',
+            minHeight: '56px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, minHeight: '100%' }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'clamp(22px, 6vw, 30px)',
+                fontWeight: 800,
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--neutral-0)',
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {data ? formatEuro(data.total_savings) : '—'}
+            </p>
+          </div>
 
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'clamp(28px, 8vw, 40px)',
-              fontWeight: 800,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--neutral-0)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {data ? formatEuro(data.total_savings) : '—'}
-          </p>
-
-          {notice ? (
-            <div style={{ marginTop: 'var(--space-2)' }}>
-              <DataQualityNotice
-                title={notice.title}
-                detail={notice.detail}
-                tone={error ? 'warning' : 'neutral'}
+          <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'start', textAlign: 'left', alignContent: 'center', minHeight: '100%' }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-xs)',
+                color: 'rgba(255,255,255,0.9)',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 'var(--font-weight-bold)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 'var(--space-2)',
+                  height: 'var(--space-2)',
+                  borderRadius: '50%',
+                  background: 'color-mix(in oklab, var(--color-positive) 76%, var(--neutral-0) 24%)',
+                }}
               />
-            </div>
-          ) : null}
+              <span>Livret :</span>
+              <span style={{ color: 'var(--neutral-500)' }}>{formatTightEuro(data?.livrets_total)}</span>
+            </p>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-xs)',
+                color: 'rgba(255,255,255,0.9)',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 'var(--font-weight-bold)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 'var(--space-2)',
+                  height: 'var(--space-2)',
+                  borderRadius: '50%',
+                  background: 'color-mix(in oklab, var(--color-warning) 60%, var(--neutral-0) 40%)',
+                }}
+              />
+              <span>Placements :</span>
+              <span style={{ color: 'var(--neutral-500)' }}>{formatTightEuro(data?.placements_total)}</span>
+            </p>
+          </div>
         </div>
+
+        {notice ? (
+          <div style={{ marginTop: 'var(--space-2)', position: 'relative', zIndex: 2 }}>
+            <DataQualityNotice
+              title={notice.title}
+              detail={notice.detail}
+              tone={error ? 'warning' : 'neutral'}
+            />
+          </div>
+        ) : null}
       </div>
     </StatsSection>
   )

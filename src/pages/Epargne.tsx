@@ -15,6 +15,8 @@ import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAll
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
+import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
+import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
@@ -32,6 +34,86 @@ const STATS_TABS: StatsTabConfig[] = [
 ]
 
 type PerformanceViewMode = 'performance' | 'capital_investi'
+type KpiTone = 'neutral' | 'warning' | 'primary'
+
+type KpiTileItem = {
+  label: string
+  value: string
+  tone: KpiTone
+}
+
+function formatKpiCurrency(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatKpiPercent(value: number | null | undefined, options?: { signed?: boolean }): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const sign = options?.signed && value > 0 ? '+' : ''
+  return `${sign}${new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value)}%`
+}
+
+function resolveKpiTileStyle(tone: KpiTone): React.CSSProperties {
+  if (tone === 'warning') {
+    return {
+      background: 'color-mix(in oklab, var(--color-warning) 10%, var(--neutral-0) 90%)',
+      border: '1.5px solid color-mix(in oklab, var(--color-warning) 72%, var(--neutral-200) 28%)',
+    }
+  }
+
+  if (tone === 'primary') {
+    return {
+      background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
+      border: '1.5px solid color-mix(in oklab, var(--primary-500) 72%, var(--neutral-200) 28%)',
+    }
+  }
+
+  return {
+    background: 'var(--neutral-0)',
+    border: '1.5px solid var(--neutral-200)',
+  }
+}
+
+function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
+  return (
+    <div style={{ padding: '0 var(--page-gutter)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+        {items.map((item) => (
+          <div
+            key={item.label}
+            style={{
+              ...resolveKpiTileStyle(item.tone),
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-2) var(--space-3)',
+              minHeight: 58,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+              {item.label}
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
   return {
@@ -49,6 +131,7 @@ function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
 }
 
 export function Epargne() {
+  const currentYear = new Date().getFullYear()
   const {
     snapshot,
     loading,
@@ -58,6 +141,8 @@ export function Epargne() {
     resetSelectedPeriodToDefault,
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
+  const savingsAnalytics = useSavingsAnalytics(currentYear)
+  const savingsEvolution = useSavingsEvolutionFiveYears()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [showTabModal, setShowTabModal] = useState(false)
@@ -68,6 +153,78 @@ export function Epargne() {
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
     [activeTabId],
   )
+
+  const planningKpis = useMemo<KpiTileItem[]>(() => {
+    const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
+    const latestYtdRow = [...monthlyMetrics]
+      .reverse()
+      .find((row) => row.ytd_saved_amount != null)
+    const epargneYtd = latestYtdRow?.ytd_saved_amount
+      ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
+
+    const objectif2026 = annual2026.summary ? annual2026.summary.totalSavingsBudget * 12 : null
+    const progressionPct = objectif2026 && objectif2026 > 0
+      ? (epargneYtd / objectif2026) * 100
+      : null
+
+    return [
+      { label: 'Épargne YTD', value: formatKpiCurrency(epargneYtd), tone: 'neutral' },
+      { label: 'Objectif 2026', value: formatKpiCurrency(objectif2026), tone: 'warning' },
+      { label: 'Progression', value: formatKpiPercent(progressionPct), tone: 'primary' },
+    ]
+  }, [annual2026.summary, savingsAnalytics.data?.monthlyMetrics])
+
+  const performanceKpis = useMemo<KpiTileItem[]>(() => {
+    const payload = savingsEvolution.data
+    if (!payload) {
+      return [
+        { label: 'Capital investi', value: '—', tone: 'neutral' },
+        { label: 'Tx moyen', value: '—', tone: 'warning' },
+        { label: 'Plus-value', value: '—', tone: 'primary' },
+      ]
+    }
+
+    const { rows, series, yearly_account_metrics: yearlyMetrics } = payload
+    const yearKey = String(currentYear)
+    const rowForYear = rows.find((row) => row.year === yearKey)
+      ?? [...rows].sort((a, b) => Number(b.year) - Number(a.year))[0]
+      ?? null
+    const previousRow = rowForYear
+      ? rows.find((row) => row.year === String(Number(rowForYear.year) - 1)) ?? null
+      : null
+
+    if (!rowForYear) {
+      return [
+        { label: 'Capital investi', value: '—', tone: 'neutral' },
+        { label: 'Tx moyen', value: '—', tone: 'warning' },
+        { label: 'Plus-value', value: '—', tone: 'primary' },
+      ]
+    }
+
+    const metricYear = rowForYear.year
+    let capitalInvesti = 0
+    let plusValue = 0
+
+    for (const entry of series) {
+      const accountKey = entry.key
+      const currentAmount = Number(rowForYear[accountKey] ?? 0)
+      const previousAmount = Number(previousRow?.[accountKey] ?? 0)
+      const accountMetrics = yearlyMetrics[`${accountKey}::${metricYear}`]
+      const totalSavedAmount = Number(accountMetrics?.total_saved_amount ?? 0)
+      const performanceAmount = currentAmount - previousAmount - totalSavedAmount
+
+      capitalInvesti += Number.isFinite(totalSavedAmount) ? totalSavedAmount : 0
+      plusValue += Number.isFinite(performanceAmount) ? performanceAmount : 0
+    }
+
+    const txMoyen = capitalInvesti > 0 ? (plusValue / capitalInvesti) * 100 : null
+
+    return [
+      { label: 'Capital investi', value: formatKpiCurrency(capitalInvesti), tone: 'neutral' },
+      { label: 'Tx moyen', value: formatKpiPercent(txMoyen, { signed: true }), tone: 'warning' },
+      { label: 'Plus-value', value: formatKpiCurrency(plusValue), tone: 'primary' },
+    ]
+  }, [currentYear, savingsEvolution.data])
 
   const handleToggleTabModal = useCallback(() => {
     setShowTabModal((current) => !current)
@@ -203,6 +360,7 @@ export function Epargne() {
 
       {activeTab.id === 'planning_2026' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <KpiTilesRow items={planningKpis} />
           <SavingsPlanning2026Section />
         </motion.section>
       ) : null}
@@ -227,6 +385,8 @@ export function Epargne() {
               </button>
             </div>
           </div>
+
+          <KpiTilesRow items={performanceKpis} />
 
           {performanceViewMode === 'performance' ? <SavingsPortfoliosListSection /> : <SavingsEvolutionFiveYearsChart />}
         </motion.section>

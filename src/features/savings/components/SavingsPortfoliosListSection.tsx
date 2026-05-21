@@ -219,6 +219,67 @@ export function SavingsPortfoliosListSection() {
 
   return (
     <StatsSection>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+        {shortcutRows.map((row) => (
+          <button
+            key={`shortcut-${row.key}`}
+            type="button"
+            onClick={() => setSelectedPortfolioKey(row.key)}
+            aria-label={`Ouvrir le modèle ${row.listLabel}`}
+            style={{
+              border: '1px solid var(--neutral-150)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--neutral-0)',
+              boxShadow: 'var(--shadow-card)',
+              padding: 'var(--space-3)',
+              display: 'grid',
+              gridTemplateColumns: 'var(--space-8) minmax(0,1fr) auto',
+              alignItems: 'center',
+              columnGap: 'var(--space-2)',
+              cursor: 'pointer',
+              textAlign: 'left',
+              minHeight: 'var(--space-16)',
+            }}
+          >
+            <img
+              src={row.iconSrc}
+              alt=""
+              aria-hidden="true"
+              style={{ width: 'var(--space-8)', height: 'var(--space-8)', borderRadius: '50%', objectFit: 'cover' }}
+            />
+            <span
+              style={{
+                minWidth: 0,
+                fontSize: 'var(--font-size-md)',
+                color: 'var(--neutral-800)',
+                fontWeight: 'var(--font-weight-bold)',
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                lineHeight: 1.1,
+              }}
+            >
+              {row.listLabel}
+            </span>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 'var(--space-4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 'var(--font-size-2xl)',
+                color: 'var(--neutral-500)',
+                lineHeight: 1,
+              }}
+            >
+              ▸
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div
         style={{
           border: '1px solid var(--neutral-150)',
@@ -230,57 +291,6 @@ export function SavingsPortfoliosListSection() {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
-          {shortcutRows.map((row) => (
-            <button
-              key={`shortcut-${row.key}`}
-              type="button"
-              onClick={() => setSelectedPortfolioKey(row.key)}
-              aria-label={`Ouvrir le modèle ${row.listLabel}`}
-              style={{
-                border: '1px solid var(--neutral-150)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--neutral-0)',
-                padding: 'var(--space-2)',
-                display: 'grid',
-                gridTemplateColumns: '34px minmax(0,1fr) auto',
-                alignItems: 'center',
-                columnGap: 'var(--space-2)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                minHeight: 58,
-              }}
-            >
-              <img
-                src={row.iconSrc}
-                alt=""
-                aria-hidden="true"
-                style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }}
-              />
-              <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--neutral-900)',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {row.listLabel}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600 }}>
-                  {row.family === 'livrets' ? 'livret épargne' : 'placement financier'}
-                </span>
-              </span>
-              <span aria-hidden="true" style={{ fontSize: 12, color: 'var(--neutral-500)', alignSelf: 'start', lineHeight: 1 }}>
-                ↗
-              </span>
-            </button>
-          ))}
-        </div>
-
         <div style={{ display: 'grid', gap: '6px' }}>
           <div
             aria-hidden="true"

@@ -36,11 +36,6 @@ function formatTightEuro(value: number): string {
   return formatEuro(value).replace(/\s+€/u, '€')
 }
 
-function formatLegendShare(value: number, total: number): string {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0
-  return `${formatTightEuro(value)} (${pct}%)`
-}
-
 function formatRatePct(value: number): string {
   return `+${new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 1,
@@ -158,7 +153,7 @@ export function SavingsAllocationDonut() {
   const { data: annualPerf, isLoading: isLoadingPerf } = useSavingsAnnualPerformance()
   const [activeSliceId, setActiveSliceId] = useState<string | null>(null)
 
-  const { slices, totalSavings, livretsTotal, placementsTotal } = useMemo(() => {
+  const { slices, totalSavings } = useMemo(() => {
     const perfByAccount = new Map<string, ProductIndicator>()
     for (const row of annualPerf) {
       if (!row.account_id) continue
@@ -200,7 +195,7 @@ export function SavingsAllocationDonut() {
       }))
 
     if (raw.length === 0) {
-      return { slices: [] as SavingsSlice[], totalSavings: 0, livretsTotal: 0, placementsTotal: 0 }
+      return { slices: [] as SavingsSlice[], totalSavings: 0 }
     }
 
     const total = raw.reduce((sum, e) => sum + e.value, 0)
@@ -243,7 +238,7 @@ export function SavingsAllocationDonut() {
         }
       })
 
-    return { slices: computed, totalSavings: total, livretsTotal: livretsSum, placementsTotal: placementsSum }
+    return { slices: computed, totalSavings: total }
   }, [accountsDisplay, annualPerf])
 
   if (isLoadingAccounts || isLoadingPerf) {
@@ -274,61 +269,12 @@ export function SavingsAllocationDonut() {
     <StatsSection>
       <div
         style={{
-          border: '1px solid var(--neutral-150)',
-          borderRadius: 'var(--radius-xl)',
-          background: 'linear-gradient(160deg, color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%) 0%, var(--neutral-0) 100%)',
-          boxShadow: 'var(--shadow-card)',
-          padding: 'var(--space-4)',
           display: 'grid',
-          gap: 'var(--space-3)',
+          gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
-          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center', minWidth: 0 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: '50%',
-                  flexShrink: 0,
-                  background: 'color-mix(in oklab, var(--color-positive) 76%, var(--neutral-0) 24%)',
-                }}
-              />
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                livrets
-              </p>
-            </div>
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-              {formatLegendShare(livretsTotal, totalSavings)}
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center', minWidth: 0 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: '50%',
-                  flexShrink: 0,
-                  background: 'color-mix(in oklab, var(--color-warning) 60%, var(--neutral-0) 40%)',
-                }}
-              />
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                Placement
-              </p>
-            </div>
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-              {formatLegendShare(placementsTotal, totalSavings)}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(225px, 1fr))', gap: 'var(--space-4)', alignItems: 'center' }}>
-          <div style={{ height: 260, position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(225px, 1fr))', gap: 'var(--space-4)', alignItems: 'start' }}>
+          <div style={{ height: 286, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -337,8 +283,8 @@ export function SavingsAllocationDonut() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  innerRadius={66}
-                  outerRadius={98}
+                  innerRadius={72}
+                  outerRadius={108}
                   startAngle={90}
                   endAngle={-270}
                   paddingAngle={2}
@@ -412,26 +358,6 @@ export function SavingsAllocationDonut() {
           </div>
 
           <div style={{ display: 'grid', gap: '6px' }}>
-            <div
-              aria-hidden="true"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) 52px 92px',
-                alignItems: 'center',
-                padding: '0 2px',
-              }}
-            >
-              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'left' }}>
-                <span style={{ display: 'inline-block', paddingLeft: 22 }}>portefeuille</span>
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center', transform: 'translateX(6px)' }}>
-                poids
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'right' }}>
-                montant
-              </span>
-            </div>
-
             {slices.map((slice) => {
               const isActive = slice.id === activeSliceId
               return (
