@@ -259,7 +259,10 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
         <div style={{ display: 'grid', gap: 'var(--space-1)', minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-            Répartition par catégories <span style={{ fontWeight: 600, color: 'var(--neutral-500)' }}>({CATEGORY_ANALYZED_PERIOD_LABEL})</span>
+            Répartition par catégories
+          </p>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: 'var(--neutral-500)', letterSpacing: '0.02em', textTransform: 'lowercase' }}>
+            {CATEGORY_ANALYZED_PERIOD_LABEL}
           </p>
         </div>
         {donutOnly ? (
@@ -271,7 +274,7 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
               alignItems: 'center',
               gap: 4,
               width: 'fit-content',
-              padding: '6px 10px',
+              padding: '4px 10px',
               borderRadius: 'var(--radius-md)',
               border: '1.5px solid #5B57F5',
               background: 'transparent',
@@ -282,7 +285,7 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
               flexShrink: 0,
             }}
           >
-            Liste
+            Détails
             <ChevronRight size={12} strokeWidth={2.5} />
           </button>
         ) : (

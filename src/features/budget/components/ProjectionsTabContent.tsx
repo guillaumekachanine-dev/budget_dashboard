@@ -141,8 +141,8 @@ function RevenueTransactionsYtdModal({
           position: 'fixed',
           left: 'var(--page-gutter)',
           right: 'var(--page-gutter)',
-          top: '8vh',
-          bottom: '8vh',
+          top: '9vh',
+          bottom: '9vh',
           zIndex: 91,
           maxWidth: 640,
           margin: '0 auto',
@@ -372,6 +372,21 @@ function RevenueSection2026({
     color: resolveSourceColor(s.name, i),
   }))
   const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
+  const centerRevenueTotal = revenueDisplayMode === 'real_ytd'
+    ? ytdRevenue2026
+    : revenueDisplayMode === 'scenario1'
+      ? projectedScenario1
+      : projectedScenario2
+  const centerRevenueLabel = revenueDisplayMode === 'real_ytd'
+    ? 'Réel YTD'
+    : revenueDisplayMode === 'scenario1'
+      ? 'scenario #1'
+      : 'scenario #2'
+  const centerRevenueLabelColor = revenueDisplayMode === 'real_ytd'
+    ? 'var(--neutral-500)'
+    : revenueDisplayMode === 'scenario1'
+      ? SCENARIO_1_COLOR
+      : SCENARIO_2_COLOR
   const selectedSource = selectedSourceId
     ? (donutData.find(d => d.id === selectedSourceId) ?? null)
     : null
@@ -432,7 +447,7 @@ function RevenueSection2026({
 
     if (activeRevenueKpiModal === 'scenario1') {
       return {
-        title: 'SCENARIO #1 - détails du calcul',
+        title: 'Scenario #1 : chômage full year',
         accentColor: SCENARIO_1_COLOR,
         lines: [
           { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
@@ -445,7 +460,7 @@ function RevenueSection2026({
     }
 
     return {
-      title: 'SCENARIO #2 - détails du calcul',
+      title: 'Scenario #2 : reprise salariat octobre',
       accentColor: SCENARIO_2_COLOR,
       lines: [
         { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
@@ -530,10 +545,35 @@ function RevenueSection2026({
         borderRadius: 'var(--radius-md)',
         padding: 'var(--space-3)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 'var(--space-2)' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-            Sources de revenus 2026
-          </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4, gap: 'var(--space-2)' }}>
+          <div style={{ display: 'grid', gap: 3 }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+              Sources de revenus 2026
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowRevenueTransactionsModal(true)}
+              style={{
+                border: '1px solid var(--neutral-300)',
+                background: 'var(--neutral-100)',
+                borderRadius: 'var(--radius-xs)',
+                color: 'var(--neutral-700)',
+                padding: '3px var(--space-2)',
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                letterSpacing: '0.02em',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                width: 'fit-content',
+              }}
+            >
+              <span style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid var(--neutral-500)', marginTop: 1, flexShrink: 0 }} />
+              <span>liste transactions</span>
+            </button>
+          </div>
           <div style={{ position: 'relative' }}>
             <button
               type="button"
@@ -542,7 +582,7 @@ function RevenueSection2026({
               style={{
                 border: '1px solid var(--neutral-300)',
                 background: 'var(--neutral-100)',
-                borderRadius: 'var(--radius-sm)',
+                borderRadius: 'var(--radius-xs)',
                 color: revenueDisplayOptions[revenueDisplayMode].color,
                 padding: '3px var(--space-2)',
                 fontSize: 10,
@@ -648,28 +688,6 @@ function RevenueSection2026({
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8 }}>
-          <button
-            type="button"
-            onClick={() => setShowRevenueTransactionsModal(true)}
-            style={{
-              border: '1px solid var(--neutral-300)',
-              background: 'var(--neutral-100)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--neutral-700)',
-              padding: '3px var(--space-2)',
-              fontSize: 10,
-              fontWeight: 700,
-              lineHeight: 1.2,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              cursor: 'pointer',
-            }}
-          >
-            Détails
-          </button>
-        </div>
-
         <div style={{ height: 290, display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
           <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
             {selectedSource ? (
@@ -727,8 +745,49 @@ function RevenueSection2026({
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '54%',
+                transform: 'translate(-50%, -50%)',
+                display: 'grid',
+                justifyItems: 'center',
+                gap: 2,
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
+            >
+              <span
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: centerRevenueLabelColor,
+                  lineHeight: 1.2,
+                  letterSpacing: '0.02em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {centerRevenueLabel}
+              </span>
+              <span
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 900,
+                  color: 'var(--neutral-900)',
+                  lineHeight: 1,
+                  fontFamily: 'var(--font-mono)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {fmt(centerRevenueTotal)}
+              </span>
+            </div>
           </div>
-          <div aria-hidden="true" style={{ height: 'var(--space-6)', flexShrink: 0 }} />
+          <div aria-hidden="true" style={{ height: 'calc(var(--space-8) + var(--space-3))', flexShrink: 0 }} />
           <div style={{
             flex: 1,
             minHeight: 0,

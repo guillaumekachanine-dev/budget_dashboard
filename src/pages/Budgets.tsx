@@ -86,6 +86,7 @@ type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 
 type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'metriques'
+type EnveloppesViewMode = 'categories' | 'socles'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
 const BUDGETS_TABS: BudgetsTabConfig[] = [
   { id: 'enveloppes', label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
@@ -644,6 +645,13 @@ export function Budgets() {
   const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
   const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
   const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('enveloppes')
+  const [enveloppesViewMode, setEnveloppesViewMode] = useState<EnveloppesViewMode>('categories')
+  const [enveloppesRestoreRequest, setEnveloppesRestoreRequest] = useState<{
+    mode: EnveloppesViewMode
+    anchor: 'categories_list' | 'socles_list'
+    token: number
+  } | null>(null)
+  const enveloppesRestoreTokenRef = useRef(0)
   const [showBudgetsTabModal, setShowBudgetsTabModal] = useState(false)
   const [analyticsRefreshing, setAnalyticsRefreshing] = useState(false)
   const [analyticsLastUpdatedAt, setAnalyticsLastUpdatedAt] = useState<Date>(() => new Date())
@@ -864,12 +872,16 @@ export function Budgets() {
   }, [cancelSmoothScroll, cancelTopTravelSnap])
 
   const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
+    setEnveloppesViewMode('categories')
+    setEnveloppesRestoreRequest(null)
     setSelectedBlockPage(null)
     setSelectedCat(categoryId)
     scrollViewportToTop()
   }, [setSelectedBlockPage, setSelectedCat, scrollViewportToTop])
 
   const handleEnveloppesBlockClick = useCallback((blockId: string) => {
+    setEnveloppesViewMode('socles')
+    setEnveloppesRestoreRequest(null)
     setSelectedCat('all')
     if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
       setSelectedBlockPage(blockId)
@@ -878,14 +890,25 @@ export function Budgets() {
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleEnveloppesRevenueClick = useCallback(() => {
+    setEnveloppesViewMode('socles')
+    setEnveloppesRestoreRequest(null)
     setSelectedCat('all')
     setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
     scrollViewportToTop()
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleReturnToEnveloppes = useCallback(() => {
+    const shouldReturnToSocles = selectedBlockPageId != null || selectedBlockId != null
+    const nextMode: EnveloppesViewMode = shouldReturnToSocles ? 'socles' : 'categories'
+    enveloppesRestoreTokenRef.current += 1
+    setEnveloppesViewMode(nextMode)
+    setEnveloppesRestoreRequest({
+      mode: nextMode,
+      anchor: nextMode === 'socles' ? 'socles_list' : 'categories_list',
+      token: enveloppesRestoreTokenRef.current,
+    })
     shouldFocusBlocksSectionRef.current = false
-    shouldFocusCategoriesSectionRef.current = true
+    shouldFocusCategoriesSectionRef.current = false
     setActiveSlide(0)
     setSelectedBlockPage(null)
     setSelectedCat('all')
@@ -893,7 +916,12 @@ export function Budgets() {
     setShowHeaderPeriodMenu(false)
     setShowSlideThreeScopeSheet(false)
     setShowCatSheet(false)
-  }, [setSelectedBlockPage, setSelectedCat])
+  }, [selectedBlockId, selectedBlockPageId, setSelectedBlockPage, setSelectedCat])
+
+  useEffect(() => {
+    if (budgetsTabId === 'enveloppes') return
+    setEnveloppesRestoreRequest(null)
+  }, [budgetsTabId])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -4758,6 +4786,9 @@ export function Budgets() {
           onCategoryClick={handleEnveloppesCategoryClick}
           onBlockClick={handleEnveloppesBlockClick}
           onRevenueClick={handleEnveloppesRevenueClick}
+          initialViewMode={enveloppesViewMode}
+          onViewModeChange={setEnveloppesViewMode}
+          restoreRequest={enveloppesRestoreRequest}
         />
       ) : budgetsTabId === 'analytics' ? (
         <BudgetsAnalyticsTab />

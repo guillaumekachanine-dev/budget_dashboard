@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
 import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
@@ -17,7 +16,6 @@ type ExpandableCardId = InsightId | RepartitionInsightId
 const REPARTITION_SLIDE_FRAME_HEIGHT = 438
 const SECTION_BORDER_WIDTH = '4px'
 const DEEP_YELLOW = '#D4AF37'
-const INSIGHT_ARROW_BADGE_BG = '#C61CFF'
 const STRUCTURAL_SPEND_MONTHLY = 145
 
 const FLUX_INSIGHTS = {
@@ -69,7 +67,7 @@ const REPARTITION_INSIGHTS = {
     topDivergences: [
       { category: 'transport', iconKey: 'transport', deltaLabel: 'x8', y2025: 93, y2026: 701, variant: 'paired' },
       { category: 'abonnements', iconKey: 'abonnements', deltaLabel: 'x2,5', y2025: 166, y2026: 428, variant: 'paired' },
-      { category: 'famille/enfant', iconKey: 'famille_enfant', deltaLabel: `+${STRUCTURAL_SPEND_MONTHLY}€/mois`, y2025: 0, y2026: STRUCTURAL_SPEND_MONTHLY, variant: 'single' },
+      { category: 'famille/enfant', iconKey: 'famille_enfant', deltaLabel: `+${STRUCTURAL_SPEND_MONTHLY}€`, y2025: 0, y2026: STRUCTURAL_SPEND_MONTHLY, variant: 'single' },
     ] as const,
   },
 }
@@ -83,7 +81,7 @@ type SavingsKpiRow = {
 const SAVINGS_KPI_ROWS: SavingsKpiRow[] = [
   { label: 'Revenus YTD', y2025: 42141, y2026: 19158 },
   { label: 'Dépenses YTD', y2025: 10820, y2026: 11823 },
-  { label: 'Capacité épargne brute', y2025: 31321, y2026: 7335 },
+  { label: 'Capacité brute', y2025: 31321, y2026: 7335 },
   { label: 'Épargne YTD', y2025: 33500, y2026: 4243 },
 ]
 
@@ -229,7 +227,7 @@ export function BudgetsAnalyticsTab() {
         <>
           <section
             style={{
-              padding: '0 var(--space-4)',
+              padding: '0 var(--space-4) 0 var(--space-1)',
               width: '100%',
               boxSizing: 'border-box',
               display: 'flex',
@@ -244,8 +242,10 @@ export function BudgetsAnalyticsTab() {
                   width: '100%',
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: 'var(--space-3)',
+                  columnGap: 6,
+                  rowGap: 'var(--space-3)',
                   alignItems: 'stretch',
+                  transform: 'translateX(-8px)',
                 }}
               >
                 <InsightCard
@@ -319,86 +319,52 @@ export function BudgetsAnalyticsTab() {
 
           <RepartitionComparisonSection />
 
-          <section style={{ padding: '0 var(--space-6)', marginTop: '0', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
+          <section style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
               <div
                 aria-hidden="true"
                 style={{
-                  height: 2,
-                  width: '100%',
-                  background: '#121212',
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: 'max(var(--space-4), calc((100% - 800px) / 2 + var(--space-4)))',
+                  width: SECTION_BORDER_WIDTH,
+                  background: DEEP_YELLOW,
                   borderRadius: 'var(--radius-full)',
+                  pointerEvents: 'none',
+                  zIndex: 4,
                 }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 0,
-                      height: 0,
-                      borderTop: '8px solid transparent',
-                      borderBottom: '8px solid transparent',
-                      borderLeft: '14px solid #121212',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 'var(--font-size-lg)',
-                      fontWeight: 'var(--font-weight-bold)',
-                      color: 'var(--neutral-900)',
-                    }}
-                  >
-                    Analyse des flux mensuels
-                  </h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, padding: 4, borderRadius: 'var(--radius-full)', background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)', border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => setFluxDataYear(2025)}
-                    aria-label="Afficher les données flux 2025"
-                    aria-pressed={fluxDataYear === 2025}
-                    style={slideNavButtonStyle(fluxDataYear === 2025)}
-                  >
-                    2025
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFluxDataYear(2026)}
-                    aria-label="Afficher les données flux 2026"
-                    aria-pressed={fluxDataYear === 2026}
-                    style={slideNavButtonStyle(fluxDataYear === 2026)}
-                  >
-                    2026
-                  </button>
-                </div>
-              </div>
+              <MonthlyFlowsAnalysisCard
+                year={fluxDataYear}
+                showInternalViewToggle={false}
+                useBalanceOutflowView
+                headerRightSlot={(
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, padding: 2, borderRadius: 'var(--radius-sm)', background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)', border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => setFluxDataYear(2025)}
+                      aria-label="Afficher les données flux 2025"
+                      aria-pressed={fluxDataYear === 2025}
+                      style={{ ...slideNavButtonStyle(fluxDataYear === 2025), borderRadius: 'var(--radius-sm)', padding: '4px 7px', minHeight: 22, fontSize: 8 }}
+                    >
+                      2025
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFluxDataYear(2026)}
+                      aria-label="Afficher les données flux 2026"
+                      aria-pressed={fluxDataYear === 2026}
+                      style={{ ...slideNavButtonStyle(fluxDataYear === 2026), borderRadius: 'var(--radius-sm)', padding: '4px 7px', minHeight: 22, fontSize: 8 }}
+                    >
+                      2026
+                    </button>
+                  </div>
+                )}
+                forcedView={fluxDataView}
+                variant="standalone"
+              />
             </div>
-          </section>
-
-          <section style={{ position: 'relative' }}>
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 'max(var(--space-6), calc((100% - 600px) / 2))',
-                width: SECTION_BORDER_WIDTH,
-                background: DEEP_YELLOW,
-                borderRadius: 'var(--radius-full)',
-                pointerEvents: 'none',
-                zIndex: 4,
-              }}
-            />
-            <MonthlyFlowsAnalysisCard
-              year={fluxDataYear}
-              showInternalViewToggle={false}
-              forcedView={fluxDataView}
-              variant="standalone"
-            />
             <div style={{ padding: '0 var(--space-6)', marginTop: 'var(--space-3)' }}>
               <div style={{
                 maxWidth: 600,
@@ -469,34 +435,8 @@ function InsightCard({
         boxShadow: 'none',
       }}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
-          aria-expanded={isExpanded}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 'var(--radius-full)',
-            background: isExpanded ? DEEP_YELLOW : INSIGHT_ARROW_BADGE_BG,
-            border: 'none',
-            padding: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--neutral-0)',
-            flexShrink: 0,
-            cursor: 'pointer',
-          }}
-        >
-          {isExpanded ? (
-            <ChevronDown size={22} strokeWidth={2.6} color="var(--neutral-0)" />
-          ) : (
-            <ChevronRight size={22} strokeWidth={2.6} color="var(--neutral-0)" />
-          )}
-        </button>
-        <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ minWidth: 0, display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
           <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
             {titleValue}
           </p>
@@ -504,6 +444,32 @@ function InsightCard({
             {titleSuffix}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
+          aria-expanded={isExpanded}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 0,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--neutral-900)',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {isExpanded ? (
+            <ChevronDown size={20} strokeWidth={2.6} color="var(--neutral-900)" />
+          ) : (
+            <ChevronRight size={20} strokeWidth={2.6} color="var(--neutral-900)" />
+          )}
+        </button>
       </div>
 
     </motion.article>
@@ -627,34 +593,8 @@ function RepartitionInsightCard({
         boxShadow: 'none',
       }}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
-          aria-expanded={isExpanded}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 'var(--radius-full)',
-            background: isExpanded ? DEEP_YELLOW : INSIGHT_ARROW_BADGE_BG,
-            border: 'none',
-            padding: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--neutral-0)',
-            flexShrink: 0,
-            cursor: 'pointer',
-          }}
-        >
-          {isExpanded ? (
-            <ChevronDown size={22} strokeWidth={2.6} color="var(--neutral-0)" />
-          ) : (
-            <ChevronRight size={22} strokeWidth={2.6} color="var(--neutral-0)" />
-          )}
-        </button>
-        <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ minWidth: 0, display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
           <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
             {titleValue}
           </p>
@@ -662,6 +602,32 @@ function RepartitionInsightCard({
             {titleSuffix}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
+          aria-expanded={isExpanded}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 0,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--neutral-900)',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {isExpanded ? (
+            <ChevronDown size={20} strokeWidth={2.6} color="var(--neutral-900)" />
+          ) : (
+            <ChevronRight size={20} strokeWidth={2.6} color="var(--neutral-900)" />
+          )}
+        </button>
       </div>
 
     </motion.article>
@@ -709,7 +675,7 @@ function ExpandedRepartitionInsightPanel({
           items={[
             { label: 'Transport', value: 'x8', note: 'YTD', accent: 'var(--primary-500)' },
             { label: 'Abonn.', value: 'x2,5', note: 'YTD', accent: '#F97316' },
-            { label: 'Enfant', value: `+${STRUCTURAL_SPEND_MONTHLY}€/m`, note: 'mensuel', accent: '#FFAB2E' },
+            { label: 'Enfant', value: `+${STRUCTURAL_SPEND_MONTHLY}€`, note: 'mensuel', accent: '#FFAB2E' },
           ]}
         />
       )}
@@ -751,7 +717,7 @@ function InsightKpiRow({ items }: { items: InsightKpiItem[] }) {
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: item.accent, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             {item.label}
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, whiteSpace: 'nowrap' }}>
+          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, whiteSpace: 'nowrap' }}>
             {item.value}
           </p>
           {item.note ? <p style={{ margin: '1px 0 0', fontSize: 9, color: 'var(--neutral-500)', lineHeight: 1 }}>{item.note}</p> : null}
@@ -784,7 +750,7 @@ function TransportExpandedContent() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LegendDot color="#5C6276" label="2025" />
           <LegendDot color="#2ED47A" label="2026" />
-          <LegendDot color="#FFAB2E" label="Budget mensuel famille/enfant" />
+          <LegendDot color="#FFAB2E" label="budget mensuel" />
         </div>
       </div>
 
@@ -794,6 +760,7 @@ function TransportExpandedContent() {
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: 'var(--space-2)',
           alignItems: 'end',
+          paddingBottom: 'var(--space-2)',
           minWidth: 0,
         }}
       >
@@ -815,7 +782,7 @@ function TransportExpandedContent() {
                 {row.deltaLabel}
               </span>
 
-              <div style={{ height: 106, display: 'flex', alignItems: 'end', gap: 8 }}>
+              <div style={{ height: 106, display: 'flex', alignItems: 'end', gap: 8, marginTop: 14 }}>
                 {row.variant === 'paired' ? (
                   <>
                     <div style={{ position: 'relative', width: 18, height: '100%' }}>
@@ -924,8 +891,6 @@ function TransportExpandedContent() {
               >
                 {row.category}
               </p>
-
-              <CategoryIcon iconKey={row.iconKey} label={row.category} size={18} />
             </div>
           )
         })}
@@ -1115,7 +1080,7 @@ function AchatsDiversExpandedContent() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
         <KpiTile
           label="Achats div. 2025"
-          valueFontSize="var(--font-size-lg)"
+          valueFontSize="var(--font-size-base)"
           value={formatCompactCurrency(total2025)}
           note="dont 2213€ except."
         />
@@ -1297,7 +1262,7 @@ function KpiTile({
           style={{
           margin: 0,
           marginTop: 0,
-          fontSize: 20,
+          fontSize: 18,
           fontWeight: 800,
           lineHeight: 1,
           color: headlineBadgeColor ?? '#D13A2A',
@@ -1312,7 +1277,7 @@ function KpiTile({
         style={{
           margin: 0,
           marginTop: 2,
-          fontSize: valueFontSize ?? 'var(--font-size-xl)',
+          fontSize: valueFontSize ?? 'var(--font-size-lg)',
           fontWeight: 'var(--font-weight-extrabold)',
           color: '#2F3443',
           fontFamily: 'var(--font-mono)',
@@ -1392,7 +1357,7 @@ function IncomeProjectionCards({
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--primary-500)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             2025 – Revenus
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {annualIncome2025 != null ? formatCompactCurrency(annualIncome2025) : '—'}
           </p>
         </button>
@@ -1422,7 +1387,7 @@ function IncomeProjectionCards({
           <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#EA580C', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             2026 – Projection
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
             {formatCompactCurrency(projectedIncome2026)}
           </p>
         </button>
@@ -1739,6 +1704,7 @@ function SavingsInsightKpis() {
                 color: 'var(--neutral-700)',
                 fontWeight: 600,
                 textAlign: 'center',
+                whiteSpace: row.label === 'Capacité brute' ? 'nowrap' : 'normal',
                 wordBreak: 'break-word',
                 hyphens: 'auto',
               }}>
@@ -1748,8 +1714,8 @@ function SavingsInsightKpis() {
               {/* Delta badge */}
               <span style={{
                 borderRadius: 'var(--radius-full)',
-                padding: '2px 7px',
-                fontSize: 10,
+                padding: '2px 6px',
+                fontSize: 9,
                 fontWeight: 800,
                 color: deltaColor,
                 background: `color-mix(in oklab, ${deltaColor} 14%, #FFFFFF 86%)`,
@@ -1839,7 +1805,7 @@ function slideNavButtonStyle(active: boolean): CSSProperties {
     color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
     borderRadius: 'var(--radius-full)',
     padding: '6px 8px',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 800,
     letterSpacing: '0.04em',
     textTransform: 'none',

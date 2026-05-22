@@ -530,6 +530,8 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   })
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  /** Décalage vertical du visual viewport (iOS peut scroller le viewport vers le bas) */
+  const [viewportOffsetTop, setViewportOffsetTop] = useState(0)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
   const descriptionRef = useRef<HTMLInputElement | null>(null)
@@ -723,13 +725,15 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
   const modalMaxHeight = useMemo(() => {
-    const baseViewportHeight = viewportHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 720)
-    const safetyMargin = isMobileViewport ? 20 : 40
-    const availableHeight = Math.floor(baseViewportHeight - safetyMargin)
-    const preferredHeight = Math.max(180, availableHeight)
-    const clampedHeight = Math.min(preferredHeight, Math.floor(baseViewportHeight - 8))
-    return `${Math.max(120, clampedHeight)}px`
-  }, [isMobileViewport, viewportHeight])
+    const fullHeight = typeof window !== 'undefined' ? window.innerHeight : 720
+    if (isMobileViewport && keyboardVisible && viewportHeight) {
+      // Clavier ouvert : remplir le visual viewport (moins un tout petit margin)
+      return `${Math.max(120, viewportHeight - 16)}px`
+    }
+    // Sans clavier : laisser une marge confortable pour que le backdrop soit visible
+    const margin = isMobileViewport ? 48 : 80
+    return `${Math.max(200, fullHeight - margin)}px`
+  }, [isMobileViewport, keyboardVisible, viewportHeight])
 
   const focusDescriptionInput = useCallback(() => {
     amountRef.current?.blur()
@@ -782,6 +786,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
       const keyboardDelta = window.innerHeight - viewport.height
       setKeyboardVisible(keyboardDelta > 140)
       setViewportHeight(viewport.height)
+      setViewportOffsetTop(Math.round(viewport.offsetTop))
     }
 
     updateKeyboardState()
@@ -972,6 +977,31 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             onClick={closeAndReset}
           />
 
+          {/*
+           * Wrapper de centrage — flexbox sans conflit avec les transforms Framer Motion.
+           * Quand le clavier est visible, on s'ancre sur le visual viewport (height +
+           * offsetTop) pour que la modale reste entièrement visible au-dessus du clavier.
+           * pointer-events:none laisse les clics passer au backdrop derrière.
+           */}
+          <div
+            style={{
+              position: 'fixed',
+              top: (isMobileViewport && keyboardVisible) ? viewportOffsetTop : 0,
+              left: 0,
+              right: 0,
+              // Clavier ouvert → hauteur = visual viewport ; sinon → jusqu'en bas
+              ...((isMobileViewport && keyboardVisible && viewportHeight)
+                ? { height: `${viewportHeight}px` }
+                : { bottom: 0 }),
+              zIndex: 101,
+              display: 'flex',
+              // Clavier ouvert → contenu depuis le haut ; sinon → centré
+              alignItems: (isMobileViewport && keyboardVisible) ? 'flex-start' : 'center',
+              justifyContent: 'center',
+              padding: isMobileViewport ? 'var(--space-2)' : 'var(--space-6)',
+              pointerEvents: 'none',
+            }}
+          >
           <motion.section
             role="dialog"
             aria-modal="true"
@@ -980,11 +1010,19 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={isMobileViewport
-              ? 'fixed left-1/2 top-[var(--space-2)] w-[min(500px,calc(100vw-16px))] -translate-x-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]'
-              : 'fixed left-1/2 top-1/2 w-[min(500px,calc(100vw-16px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]'
-            }
-            style={{ zIndex: 101, maxHeight: modalMaxHeight, height: isMobileViewport ? 'auto' : 'min(82dvh, 100%)' }}
+            className="w-[min(500px,100%)] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
+            style={{
+              maxHeight: modalMaxHeight,
+              // Clavier ouvert → 100% du wrapper pour que flex-1 interne scrolle correctement
+              // Sans clavier mobile → auto (la modale épouse son contenu jusqu'à maxHeight)
+              // Desktop → min(82dvh, 100%) pour rester dans les bounds du wrapper
+              height: (isMobileViewport && keyboardVisible)
+                ? '100%'
+                : isMobileViewport
+                  ? 'auto'
+                  : 'min(82dvh, 100%)',
+              pointerEvents: 'auto',
+            }}
             onClick={(event) => event.stopPropagation()}
           >
             <form onSubmit={handleSubmit(onSubmit)} className="flex h-full max-h-full flex-col">
@@ -1227,6 +1265,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               </footer>
             </form>
           </motion.section>
+          </div>{/* /centering wrapper */}
 
           <CategoryPickerModal
             open={pickerMode === 'category'}

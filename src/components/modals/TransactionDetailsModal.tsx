@@ -17,6 +17,7 @@ interface TransactionDetailsModalProps {
   onBack?: () => void
   onClose: () => void
   showEditControls?: boolean
+  showReturnListButton?: boolean
 }
 
 function displayTxnLabel(tx: Transaction): string {
@@ -75,6 +76,7 @@ export function TransactionDetailsModal({
   onBack,
   onClose,
   showEditControls = false,
+  showReturnListButton = false,
 }: TransactionDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -913,6 +915,48 @@ export function TransactionDetailsModal({
                         </button>
                       </div>
                     )}
+                  </div>
+                ) : null}
+
+                {showReturnListButton && onBack ? (
+                  <div
+                    style={{
+                      padding: '0 var(--space-2) var(--space-1)',
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      aria-label="Retour liste"
+                      style={{
+                        border: '1px solid var(--primary-800)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--neutral-0)',
+                        color: 'var(--primary-800)',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: 'var(--font-weight-bold)',
+                        lineHeight: 1.2,
+                        padding: '4px 10px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 0,
+                          height: 0,
+                          borderTop: '5px solid transparent',
+                          borderBottom: '5px solid transparent',
+                          borderRight: '7px solid var(--primary-800)',
+                        }}
+                      />
+                      <span>retour liste</span>
+                    </button>
                   </div>
                 ) : null}
               </div>

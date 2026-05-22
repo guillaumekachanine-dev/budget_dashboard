@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type RefObject } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
@@ -42,7 +42,8 @@ interface PieDatum {
 
 
 function formatPercentSigned(value: number): string {
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+  const rounded = Math.round(value)
+  return `${rounded > 0 ? '+' : ''}${rounded}%`
 }
 
 function formatTxDate(dateStr: string): string {
@@ -234,6 +235,14 @@ interface SubCategoryBudgetLine {
   budgetAmount: number
 }
 
+interface SubCategoryRealLine {
+  id: string
+  name: string
+  iconKey: string | null
+  consumedAmount: number
+  transactions: Transaction[]
+}
+
 interface SubModalProps {
   open: boolean
   onClose: () => void
@@ -249,6 +258,9 @@ interface SubModalProps {
   onSelectTransaction: (tx: Transaction) => void
   categoryById: Map<string, Category>
   subCategoryBudgets?: SubCategoryBudgetLine[]
+  subCategoryReals?: SubCategoryRealLine[]
+  expandedRealSubCategoryId: string | null
+  onToggleRealSubCategory: (subCategoryId: string) => void
 }
 
 function SubModal({
@@ -266,6 +278,9 @@ function SubModal({
   onSelectTransaction,
   categoryById,
   subCategoryBudgets,
+  subCategoryReals,
+  expandedRealSubCategoryId,
+  onToggleRealSubCategory,
 }: SubModalProps) {
   const remaining = budgetAmount - consumedAmount
   const remainingLabel = budgetAmount > 0
@@ -357,6 +372,76 @@ function SubModal({
                   /* Real mode: transaction list */
                   loading ? (
                     <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
+                  ) : subCategoryReals ? (
+                    subCategoryReals.length === 0 ? (
+                      <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune sous-catégorie active sur cette période</p>
+                    ) : (
+                      subCategoryReals.map((line) => {
+                        const isExpanded = expandedRealSubCategoryId === line.id
+                        return (
+                          <div key={line.id} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                            <button
+                              type="button"
+                              onClick={() => onToggleRealSubCategory(line.id)}
+                              style={{ width: '100%', border: 'none', padding: '9px var(--space-4)', display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', background: isExpanded ? 'var(--neutral-50)' : 'transparent', textAlign: 'left', cursor: 'pointer', transition: 'background-color var(--transition-fast)' }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {line.iconKey ? (
+                                  <CategoryIcon iconKey={line.iconKey} label={line.name} size={18} />
+                                ) : (
+                                  <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
+                                )}
+                              </div>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
+                                {line.name}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                {formatCurrencyFloored(line.consumedAmount)}
+                              </span>
+                            </button>
+
+                            {isExpanded ? (
+                              <div style={{ background: 'var(--neutral-50)' }}>
+                                {line.transactions.length === 0 ? (
+                                  <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
+                                    Aucune opération ce mois
+                                  </p>
+                                ) : (
+                                  line.transactions.map((tx) => {
+                                    const txSubCat = tx.category_id ? categoryById.get(tx.category_id) : undefined
+                                    return (
+                                      <button
+                                        key={tx.id}
+                                        type="button"
+                                        onClick={() => onSelectTransaction(tx)}
+                                        style={{ width: '100%', border: 'none', borderTop: '1px solid var(--neutral-150)', padding: '8px var(--space-4)', display: 'grid', gridTemplateColumns: '36px 22px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-0)' }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                                      >
+                                        <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em' }}>{formatTxDate(tx.transaction_date)}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                          {txSubCat?.icon_key || line.iconKey ? (
+                                            <CategoryIcon iconKey={txSubCat?.icon_key ?? line.iconKey} label={txSubCat?.name ?? line.name} size={18} />
+                                          ) : (
+                                            <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
+                                          )}
+                                        </div>
+                                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)' }}>
+                                          {getTxLabel(tx)}
+                                        </span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                          -{formatCurrencyFloored(Math.abs(Number(tx.amount)))}
+                                        </span>
+                                      </button>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })
+                    )
                   ) : transactions.length === 0 ? (
                     <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
                   ) : (
@@ -401,9 +486,10 @@ interface CategoryDetailsSectionProps {
   rows: BudgetPageParentCategoryRow[]
   categoryById: Map<string, Category>
   onCategoryClick?: (categoryId: string) => void
+  sectionRef?: RefObject<HTMLElement | null>
 }
 
-function CategoryDetailsSection({ rows, categoryById, onCategoryClick }: CategoryDetailsSectionProps) {
+function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRef }: CategoryDetailsSectionProps) {
   const sorted = useMemo(() => {
     return [...rows]
       .filter((row) => Number(row.budget_amount) > 0 || Number(row.actual_amount) > 0)
@@ -418,7 +504,7 @@ function CategoryDetailsSection({ rows, categoryById, onCategoryClick }: Categor
   if (sorted.length === 0) return null
 
   return (
-    <section style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
+    <section ref={sectionRef} style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
       <h3 style={{ margin: '0 0 var(--space-5) 0', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
         Détails par catégorie
       </h3>
@@ -530,11 +616,25 @@ export interface EnveloppesTabProps {
   onCategoryClick?: (categoryId: string) => void
   onBlockClick?: (blockId: string) => void
   onRevenueClick?: () => void
+  initialViewMode?: ViewMode
+  onViewModeChange?: (mode: ViewMode) => void
+  restoreRequest?: {
+    mode: ViewMode
+    anchor: 'categories_list' | 'socles_list'
+    token: number
+  } | null
 }
 
 type ViewMode = 'categories' | 'socles'
 
-export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }: EnveloppesTabProps) {
+export function EnveloppesTab({
+  onCategoryClick,
+  onBlockClick,
+  onRevenueClick,
+  initialViewMode = 'categories',
+  onViewModeChange,
+  restoreRequest = null,
+}: EnveloppesTabProps) {
   const { data: categories = [] } = useCategories()
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
@@ -575,16 +675,71 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
     return y === currentYear && m > currentMonth
   }
 
-  const [viewMode, setViewMode] = useState<ViewMode>('categories')
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
+  const categoryListSectionRef = useRef<HTMLElement | null>(null)
+  const soclesListSectionRef = useRef<HTMLElement | null>(null)
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry | null>(null)
   const [modalTarget, setModalTarget] = useState<ModalTarget | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [subCategoryTransactionSequence, setSubCategoryTransactionSequence] = useState<Transaction[]>([])
   const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
   const [modalToReopen, setModalToReopen] = useState<ModalTarget | null>(null)
+  const [expandedRealSubCategoryId, setExpandedRealSubCategoryId] = useState<string | null>(null)
+  const [realSubCategoryToReopenId, setRealSubCategoryToReopenId] = useState<string | null>(null)
 
   // Reset selection when switching view mode
   useEffect(() => { setSelectedEntry(null) }, [viewMode])
+
+  const setViewModeAndNotify = useCallback((nextMode: ViewMode) => {
+    setViewMode(nextMode)
+    onViewModeChange?.(nextMode)
+  }, [onViewModeChange])
+
+  const scrollToListAnchorTop = useCallback((anchor: 'categories_list' | 'socles_list'): boolean => {
+    const target = anchor === 'socles_list' ? soclesListSectionRef.current : categoryListSectionRef.current
+    if (!target) return false
+    const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+    const headerPx = Number.parseFloat(rawHeader || '0')
+    const effectiveOffset = Number.isFinite(headerPx) ? headerPx + 10 : 78
+    const targetY = Math.max(0, target.getBoundingClientRect().top + window.scrollY - effectiveOffset)
+    const scroller = document.scrollingElement as HTMLElement | null
+    if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    return true
+  }, [])
+
+  useEffect(() => {
+    if (!restoreRequest) return
+
+    setViewModeAndNotify(restoreRequest.mode)
+
+    let cancelled = false
+    const tryScroll = (attemptsLeft: number) => {
+      if (cancelled) return
+      const didScroll = scrollToListAnchorTop(restoreRequest.anchor)
+      if (didScroll) {
+        window.requestAnimationFrame(() => {
+          if (cancelled) return
+          void scrollToListAnchorTop(restoreRequest.anchor)
+        })
+        return
+      }
+      if (attemptsLeft <= 0) return
+      window.setTimeout(() => {
+        tryScroll(attemptsLeft - 1)
+      }, 48)
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        tryScroll(16)
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [restoreRequest, setViewModeAndNotify, scrollToListAnchorTop])
 
   // Pending transaction → open detail modal (after sub-modal closes)
   useEffect(() => {
@@ -704,6 +859,72 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       .sort((a, b) => b.budgetAmount - a.budgetAmount)
   }, [modalTarget, payloadByCategory, categoryById])
 
+  const subCategoryReals = useMemo<SubCategoryRealLine[]>(() => {
+    if (!modalTarget || modalTarget.clickedFrom !== 'real') return []
+
+    const linesById = new Map<string, SubCategoryRealLine>()
+    const registerLine = (id: string, name: string, iconKey: string | null, consumedAmount: number) => {
+      const existing = linesById.get(id)
+      if (existing) {
+        existing.consumedAmount = Math.max(existing.consumedAmount, consumedAmount)
+        return
+      }
+      linesById.set(id, { id, name, iconKey, consumedAmount, transactions: [] })
+    }
+
+    for (const row of payloadByCategory) {
+      if (row.parent_category_id !== modalTarget.id && row.category_id !== modalTarget.id) continue
+      const id = row.category_id
+      if (!id) continue
+      registerLine(
+        id,
+        row.category_name,
+        categoryById.get(id)?.icon_key ?? null,
+        Number(row.actual_amount ?? 0),
+      )
+    }
+
+    for (const tx of modalTransactions) {
+      const categoryId = tx.category_id
+      if (!categoryId) continue
+      const txCategory = categoryById.get(categoryId)
+      const belongsToSelectedParent = categoryId === modalTarget.id || txCategory?.parent_id === modalTarget.id
+      if (!belongsToSelectedParent) continue
+
+      const fallbackName = txCategory?.name ?? modalTarget.name
+      if (!linesById.has(categoryId)) {
+        registerLine(categoryId, fallbackName, txCategory?.icon_key ?? null, 0)
+      }
+      linesById.get(categoryId)?.transactions.push(tx)
+    }
+
+    const toTimestamp = (date: string): number => {
+      const ts = new Date(`${date}T00:00:00`).getTime()
+      return Number.isFinite(ts) ? ts : 0
+    }
+
+    return [...linesById.values()]
+      .map((line) => {
+        const transactions = [...line.transactions].sort((a, b) => toTimestamp(b.transaction_date) - toTimestamp(a.transaction_date))
+        const txTotal = transactions.reduce((sum, tx) => sum + Math.abs(Number(tx.amount) || 0), 0)
+        return {
+          ...line,
+          consumedAmount: line.consumedAmount > 0 ? line.consumedAmount : txTotal,
+          transactions,
+        }
+      })
+      .filter((line) => line.consumedAmount > 0 || line.transactions.length > 0)
+      .sort((a, b) => {
+        if (b.consumedAmount !== a.consumedAmount) return b.consumedAmount - a.consumedAmount
+        return a.name.localeCompare(b.name, 'fr')
+      })
+  }, [modalTarget, payloadByCategory, categoryById, modalTransactions])
+
+  useEffect(() => {
+    setExpandedRealSubCategoryId(null)
+    setRealSubCategoryToReopenId(null)
+  }, [year, month, viewMode])
+
   // ── handlers ──────────────────────────────────────────────────────────────
 
   function selectEntry(id: string, name: string, realAmount: number, budgetAmount: number, color: string) {
@@ -719,6 +940,8 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
     clickedFrom: 'real' | 'budget',
   ) {
     selectEntry(id, name, realAmount, budgetAmount, color)
+    setExpandedRealSubCategoryId(null)
+    setRealSubCategoryToReopenId(null)
     if (viewMode === 'categories') {
       setModalTarget({
         id,
@@ -743,6 +966,11 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
     setSubCategoryTransactionSequence(modalTransactions)
     if (modalTarget) {
       setModalToReopen(modalTarget)
+      if (modalTarget.clickedFrom === 'real') {
+        setRealSubCategoryToReopenId(expandedRealSubCategoryId)
+      } else {
+        setRealSubCategoryToReopenId(null)
+      }
       setModalTarget(null)
     }
     setPendingTransaction(tx)
@@ -751,6 +979,8 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
   function handleCloseTransaction() {
     setSelectedTransaction(null)
     setModalToReopen(null)
+    setExpandedRealSubCategoryId(null)
+    setRealSubCategoryToReopenId(null)
     setSubCategoryTransactionSequence([])
     setPendingTransaction(null)
   }
@@ -759,8 +989,14 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
     setSelectedTransaction(null)
     if (modalToReopen) {
       const next = modalToReopen
+      const nextExpandedSubCategoryId = realSubCategoryToReopenId
       setModalToReopen(null)
-      window.setTimeout(() => setModalTarget(next), 120)
+      window.setTimeout(() => {
+        setModalTarget(next)
+        if (next.clickedFrom === 'real' && nextExpandedSubCategoryId) {
+          setExpandedRealSubCategoryId(nextExpandedSubCategoryId)
+        }
+      }, 120)
     }
   }
 
@@ -924,10 +1160,10 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
           <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
         </button>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
-          <button type="button" onClick={() => setViewMode('categories')} style={{ ...toggleBtnStyle(viewMode === 'categories'), textAlign: 'center' }}>
+          <button type="button" onClick={() => setViewModeAndNotify('categories')} style={{ ...toggleBtnStyle(viewMode === 'categories'), textAlign: 'center' }}>
             Catégories
           </button>
-          <button type="button" onClick={() => setViewMode('socles')} style={{ ...toggleBtnStyle(viewMode === 'socles'), textAlign: 'center' }}>
+          <button type="button" onClick={() => setViewModeAndNotify('socles')} style={{ ...toggleBtnStyle(viewMode === 'socles'), textAlign: 'center' }}>
             Socles
           </button>
         </div>
@@ -976,19 +1212,19 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
           display: 'grid',
           gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
-          padding: 'var(--space-2) var(--page-gutter) var(--space-3)',
-          minHeight: 52,
-          gap: 4,
+          padding: 'var(--space-3) var(--page-gutter) var(--space-2)',
+          minHeight: 60,
+          gap: 6,
         }}
       >
         {/* Réel info */}
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', transform: 'translateY(3px)' }}>
           {selectedEntry ? (
             <>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--neutral-800)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--neutral-800)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {selectedEntry.name}
               </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.35 }}>
                 {selectedRealAmountLabel}
               </p>
             </>
@@ -1000,18 +1236,18 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         </div>
 
         {/* Delta */}
-        <div style={{ textAlign: 'center', minWidth: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', minWidth: 54, display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'translateY(3px)' }}>
           {selectedEntry && deltaPct !== null ? (
             <span
               style={{
-                fontSize: 'var(--font-size-xs)',
+                fontSize: 'var(--font-size-sm)',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: deltaPct > 0 ? '#9F2D2D' : '#1F6E4A',
                 background: deltaPct > 0 ? 'color-mix(in oklab, #9F2D2D 16%, #FFFFFF 84%)' : 'color-mix(in oklab, #1F6E4A 16%, #FFFFFF 84%)',
                 border: '1px solid color-mix(in oklab, var(--neutral-900) 58%, transparent)',
                 borderRadius: 'var(--radius-sm)',
-                padding: '2px 6px',
+                padding: '3px 8px',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -1021,13 +1257,13 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         </div>
 
         {/* Budget info */}
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', transform: 'translateY(3px)' }}>
           {selectedEntry ? (
             <>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--neutral-800)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--neutral-800)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {selectedEntry.name}
               </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.35 }}>
                 {selectedBudgetAmountLabel}
               </p>
             </>
@@ -1123,9 +1359,10 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
           rows={parentCategoryRowsWithoutSavings}
           categoryById={categoryById}
           onCategoryClick={onCategoryClick}
+          sectionRef={categoryListSectionRef}
         />
       ) : (
-        <section style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
+        <section ref={soclesListSectionRef} style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
           <h3 style={{ margin: '0 0 var(--space-5) 0', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
             Répartition par blocs
           </h3>
@@ -1289,6 +1526,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
                 </div>
               </div>
             </button>
+            <div aria-hidden="true" style={{ height: '22dvh', minHeight: 120 }} />
           </div>
         </section>
       )}
@@ -1296,7 +1534,11 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       {/* ── modals ── */}
       <SubModal
         open={Boolean(modalTarget)}
-        onClose={() => setModalTarget(null)}
+        onClose={() => {
+          setModalTarget(null)
+          setExpandedRealSubCategoryId(null)
+          setRealSubCategoryToReopenId(null)
+        }}
         name={modalTarget?.name ?? ''}
         iconKey={modalTarget?.iconKey ?? null}
         color={modalTarget?.color ?? 'var(--primary-500)'}
@@ -1309,6 +1551,11 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         onSelectTransaction={handleSelectTransaction}
         categoryById={categoryById}
         subCategoryBudgets={subCategoryBudgets}
+        subCategoryReals={modalTarget?.clickedFrom === 'real' ? subCategoryReals : undefined}
+        expandedRealSubCategoryId={expandedRealSubCategoryId}
+        onToggleRealSubCategory={(subCategoryId) => {
+          setExpandedRealSubCategoryId((current) => (current === subCategoryId ? null : subCategoryId))
+        }}
       />
 
       <TransactionDetailsModal
@@ -1318,6 +1565,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
         onNavigate={setSelectedTransaction}
         onBack={handleBackToList}
         onClose={handleCloseTransaction}
+        showReturnListButton={modalToReopen?.clickedFrom === 'real'}
       />
     </div>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -18,6 +18,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -42,6 +43,8 @@ type MonthlyFlowsAnalysisCardProps = {
   initialView?: 'table' | 'chart'
   forcedView?: 'table' | 'chart'
   showInternalViewToggle?: boolean
+  headerRightSlot?: ReactNode
+  useBalanceOutflowView?: boolean
   className?: string
   variant?: 'standalone' | 'embedded'
   monthlyProfile?: MonthlyBudget2026Point[]
@@ -107,13 +110,19 @@ function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
-const CHART_SERIES = [
+const CHART_SERIES_STANDARD = [
   { key: 'budget',  name: 'Budget',   color: '#5B57F5', gradId: 'gBudget', dashed: true },
   { key: 'expense', name: 'Dépenses', color: '#FC5A5A', gradId: 'gExp', dashed: false },
   { key: 'income',  name: 'Revenus',  color: '#2ED47A', gradId: 'gInc', dashed: false },
   { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
 ]
-const SOLDE_SERIES = { key: 'balance', name: 'Cashflow', color: '#4A4A62' } as const
+const CHART_SERIES_BALANCE = [
+  { key: 'expense', name: 'Dépenses', color: '#FC5A5A', gradId: 'gExp', dashed: false },
+  { key: 'income',  name: 'Revenus',  color: '#2ED47A', gradId: 'gInc', dashed: false },
+  { key: 'savings', name: 'Épargne',  color: '#FFAB2E', gradId: 'gSav', dashed: false },
+]
+const SOLDE_SERIES_STANDARD = { key: 'balance', name: 'Cashflow', color: '#4A4A62' } as const
+const SOLDE_SERIES_BALANCE = { key: 'balance', name: 'Balance', color: '#4A4A62' } as const
 const MONTH_LABELS_FULL_FR = [
   'Janvier',
   'Février',
@@ -142,6 +151,8 @@ export function MonthlyFlowsAnalysisCard({
   initialView = 'table',
   forcedView,
   showInternalViewToggle = true,
+  headerRightSlot,
+  useBalanceOutflowView = false,
   className,
   variant = 'standalone',
   monthlyProfile = [],
@@ -155,6 +166,8 @@ export function MonthlyFlowsAnalysisCard({
   const isScopedMode =
     Boolean(scopeSelection) &&
     !(scopeSelection?.kind === 'categorie' && scopeSelection?.id === ALL_CATEGORIES_SCOPE_ID)
+  const chartSeries = useBalanceOutflowView ? CHART_SERIES_BALANCE : CHART_SERIES_STANDARD
+  const soldeSeries = useBalanceOutflowView ? SOLDE_SERIES_BALANCE : SOLDE_SERIES_STANDARD
 
   const { data: scopedData } = useMonthlyFlowsByScope(scopeSelection, year, isScopedMode && !authLoading)
 
@@ -302,8 +315,9 @@ export function MonthlyFlowsAnalysisCard({
     label: row.monthLabel,
     month: row.month,
     monthFull: MONTH_LABELS_FULL_FR[Math.max(0, Math.min(11, row.month - 1))] ?? row.monthLabel,
-    // Reprend exactement la valeur affichée dans la colonne "Solde" du tableau.
-    balance: row.openingBalance,
+    balance: useBalanceOutflowView
+      ? (row.income - row.expense - row.savings)
+      : row.openingBalance,
     budget: row.budget,
     expense: row.expense,
     income: row.income,
@@ -322,11 +336,24 @@ export function MonthlyFlowsAnalysisCard({
     1000,
     Math.ceil(
       chartData.reduce((max, row) => {
-        const values = [row.budget, row.expense, row.income, row.savings, Number(row.balance ?? 0)]
+        const values = useBalanceOutflowView
+          ? [row.expense, row.income, row.savings, Number(row.balance ?? 0)]
+          : [row.budget, row.expense, row.income, row.savings, Number(row.balance ?? 0)]
         return Math.max(max, ...values.filter((value) => Number.isFinite(value) && value >= 0))
       }, 0) / 1000,
     ) * 1000,
   )
+  const chartMinY = useBalanceOutflowView
+    ? Math.min(
+      0,
+      Math.floor(
+        chartData.reduce((min, row) => {
+          const values = [row.expense, row.income, row.savings, Number(row.balance ?? 0)]
+          return Math.min(min, ...values.filter((value) => Number.isFinite(value)))
+        }, 0) / 1000,
+      ) * 1000,
+    )
+    : 0
   const showHeaderRow = variant !== 'embedded' || (showInternalViewToggle && !forcedView)
 
   return (
@@ -381,7 +408,7 @@ export function MonthlyFlowsAnalysisCard({
                     <LineChartIcon size={14} color={activeView === 'chart' ? 'var(--primary-600)' : 'var(--neutral-500)'} />
                   </button>
                 </div>
-              ) : null}
+              ) : (headerRightSlot ?? null)}
             </div>
           ) : null}
 
@@ -488,10 +515,21 @@ export function MonthlyFlowsAnalysisCard({
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '14%' }} />
-                        <col style={{ width: '24%' }} />
-                        <col style={{ width: '22%' }} />
-                        <col style={{ width: '22%' }} />
-                        <col style={{ width: '18%' }} />
+                        {useBalanceOutflowView ? (
+                          <>
+                            <col style={{ width: '21%' }} />
+                            <col style={{ width: '21%' }} />
+                            <col style={{ width: '21%' }} />
+                            <col style={{ width: '23%' }} />
+                          </>
+                        ) : (
+                          <>
+                            <col style={{ width: '24%' }} />
+                            <col style={{ width: '22%' }} />
+                            <col style={{ width: '22%' }} />
+                            <col style={{ width: '18%' }} />
+                          </>
+                        )}
                       </colgroup>
                       <thead>
                         <tr>
@@ -501,41 +539,81 @@ export function MonthlyFlowsAnalysisCard({
                               <span style={{ fontSize: 9, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mois</span>
                             </div>
                           </th>
-                          <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={Wallet} color="var(--neutral-500)" label="Cash" />
-                          </th>
-                          <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
-                          </th>
-                          <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
-                          </th>
-                          <th style={{ ...thStyle, textAlign: 'center' }}>
-                            <IconHeader icon={Zap} color="var(--neutral-400)" label="Solde" />
-                          </th>
+                          {useBalanceOutflowView ? (
+                            <>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={PieChart} color="#FFAB2E" label="Épargne" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={Zap} color="var(--neutral-400)" label="Balance" />
+                              </th>
+                            </>
+                          ) : (
+                            <>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={Wallet} color="var(--neutral-500)" label="Cash" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={ArrowUpCircle} color="#E57373" label="Dépenses" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={ArrowDownCircle} color="#81C784" label="Revenus" />
+                              </th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>
+                                <IconHeader icon={Zap} color="var(--neutral-400)" label="Solde" />
+                              </th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row) => {
                           const monthlyCashDelta = row.income - row.expense
+                          const monthlyBalance = row.income - row.expense - row.savings
                           const deltaColor = monthlyCashDelta < 0 ? '#E57373' : monthlyCashDelta > 0 ? '#81C784' : 'var(--neutral-500)'
+                          const balanceColor = monthlyBalance < 0 ? '#E57373' : monthlyBalance > 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr key={row.month} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
                                 <span style={{ fontWeight: 600, color: 'var(--neutral-700)', fontSize: 11 }}>{row.monthLabel}</span>
                               </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)' }}>
-                                {row.openingBalance == null ? '—' : fmt(row.openingBalance)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
-                                {fmt(row.expense)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
-                                {fmt(row.income)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, fontWeight: 700 }}>
-                                {fmt(monthlyCashDelta)}
-                              </td>
+                              {useBalanceOutflowView ? (
+                                <>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
+                                    {fmt(row.income)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
+                                    {fmt(row.expense)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-500)' }}>
+                                    {fmt(row.savings)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: balanceColor, fontWeight: 700 }}>
+                                    {fmt(monthlyBalance)}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)' }}>
+                                    {row.openingBalance == null ? '—' : fmt(row.openingBalance)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#E57373' }}>
+                                    {fmt(row.expense)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#81C784', fontWeight: 600 }}>
+                                    {fmt(row.income)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', color: deltaColor, fontWeight: 700 }}>
+                                    {fmt(monthlyCashDelta)}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           )
                         })}
@@ -547,27 +625,49 @@ export function MonthlyFlowsAnalysisCard({
                           const synthSolde = nonNullBalances.length > 0
                             ? nonNullBalances.reduce((s, v) => s + v, 0) / nonNullBalances.length
                             : null
-                          const synthExpense = rows.reduce((s, r) => s + r.expense, 0)
                           const synthIncome = rows.reduce((s, r) => s + r.income, 0)
+                          const synthExpense = rows.reduce((s, r) => s + r.expense, 0)
+                          const synthSavings = rows.reduce((s, r) => s + r.savings, 0)
                           const synthDelta = synthIncome - synthExpense
+                          const synthBalance = synthIncome - synthExpense - synthSavings
                           const deltaColor = synthDelta < 0 ? '#E57373' : synthDelta > 0 ? '#81C784' : 'var(--neutral-500)'
+                          const balanceColor = synthBalance < 0 ? '#E57373' : synthBalance > 0 ? '#81C784' : 'var(--neutral-500)'
                           return (
                             <tr style={synthRowStyle}>
                               <td style={{ ...tdStyle, paddingLeft: 'var(--space-3)', textAlign: 'left' }}>
                                 <span style={{ fontWeight: 800, color: 'var(--neutral-600)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Synth.</span>
                               </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-700)' }}>
-                                {synthSolde == null ? '—' : fmt(synthSolde)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#E57373' }}>
-                                {fmt(synthExpense)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#81C784' }}>
-                                {fmt(synthIncome)}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: deltaColor }}>
-                                {fmt(synthDelta)}
-                              </td>
+                              {useBalanceOutflowView ? (
+                                <>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#81C784' }}>
+                                    {fmt(synthIncome)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#E57373' }}>
+                                    {fmt(synthExpense)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-400)' }}>
+                                    {fmt(synthSavings)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: balanceColor }}>
+                                    {fmt(synthBalance)}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-700)' }}>
+                                    {synthSolde == null ? '—' : fmt(synthSolde)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#E57373' }}>
+                                    {fmt(synthExpense)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#81C784' }}>
+                                    {fmt(synthIncome)}
+                                  </td>
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: deltaColor }}>
+                                    {fmt(synthDelta)}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           )
                         })()}
@@ -587,7 +687,7 @@ export function MonthlyFlowsAnalysisCard({
                     <ResponsiveContainer width="100%" height={variant === 'embedded' ? 232 : 260}>
                       <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
                         <defs>
-                          {CHART_SERIES.map((s) => (
+                          {chartSeries.map((s) => (
                             <linearGradient key={s.gradId} id={s.gradId} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%"   stopColor={s.color} stopOpacity={s.dashed ? 0.06 : 0.18} />
                               <stop offset="100%" stopColor={s.color} stopOpacity={0} />
@@ -610,10 +710,15 @@ export function MonthlyFlowsAnalysisCard({
                           axisLine={false}
                           tickLine={false}
                           width={30}
-                          domain={[0, chartMaxY]}
-                          allowDataOverflow
+                          domain={[chartMinY, chartMaxY]}
                           tickCount={5}
                           tickFormatter={(v: number) => fmtTickK(Number(v))}
+                        />
+                        <ReferenceLine
+                          y={0}
+                          stroke="var(--neutral-700)"
+                          strokeWidth={1.35}
+                          ifOverflow="extendDomain"
                         />
                         <Tooltip
                           content={<MonthlyFlowsChartTooltip />}
@@ -627,7 +732,7 @@ export function MonthlyFlowsAnalysisCard({
                           }}
                           cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }}
                         />
-                        {CHART_SERIES.map((s) => (
+                        {chartSeries.map((s) => (
                           <Area
                             key={s.key}
                             type="monotone"
@@ -643,9 +748,9 @@ export function MonthlyFlowsAnalysisCard({
                         ))}
                         <Area
                           type="monotone"
-                          dataKey={SOLDE_SERIES.key}
-                          name={SOLDE_SERIES.name}
-                          stroke={SOLDE_SERIES.color}
+                          dataKey={soldeSeries.key}
+                          name={soldeSeries.name}
+                          stroke={soldeSeries.color}
                           strokeWidth={2.4}
                           strokeDasharray="5 3"
                           dot={false}
@@ -677,7 +782,7 @@ export function MonthlyFlowsAnalysisCard({
                           maxWidth: '100%',
                         }}
                       >
-                        {[...CHART_SERIES, SOLDE_SERIES].map((serie) => (
+                        {[...chartSeries, soldeSeries].map((serie) => (
                           <span key={serie.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                             <span style={{ width: 7, height: 7, borderRadius: '50%', background: serie.color, flexShrink: 0 }} />
                             <span>{serie.name}</span>

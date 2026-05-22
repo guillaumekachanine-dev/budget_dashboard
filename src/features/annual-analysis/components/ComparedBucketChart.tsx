@@ -27,11 +27,10 @@ type ChartEntry = {
 type ViewMode = 'bars' | 'allocation'
 
 // ─── Couleurs unifiées ────────────────────────────────────────────────────────
-const COLOR_2025 = 'rgba(255,171,46,0.38)'
-const COLOR_2026 = '#B8860B'
+const COLOR_2025 = 'rgba(44, 58, 96, 0.92)'
+const COLOR_2026 = 'rgba(44, 58, 96, 0.92)'
 const BLOCK_SECTION_FIXED_HEIGHT = 438
-const CONTENT_HEIGHT = 320
-const VERTICAL_AXIS_MAX = 10000
+const CONTENT_HEIGHT = 332
 
 // ─── Couleurs d'accent par bloc ───────────────────────────────────────────────
 const BUCKET_HEADER_COLORS: Record<string, string> = {
@@ -97,10 +96,21 @@ function formatTightEuro(value: number): string {
   return fmt(value).replace(/[\u00A0\u202F ]+€$/u, '€')
 }
 
+function computeYAxisMax(maxValue: number): number {
+  if (!(maxValue > 0)) return 1000
+  const withHeadroom = maxValue * 1.06
+  const exponent = Math.max(0, Math.floor(Math.log10(withHeadroom)) - 1)
+  const step = 10 ** exponent
+  return Math.ceil(withHeadroom / step) * step
+}
+
 type CappedBarShapeProps = {
   fill?: string
   height?: number
+  maxDomain?: number
   payload?: ChartEntry
+  stroke?: string
+  strokeWidth?: number
   value?: number
   width?: number
   x?: number
@@ -113,7 +123,10 @@ function CappedBarShape({
   width = 0,
   height = 0,
   fill = '#999',
+  maxDomain = Number.POSITIVE_INFINITY,
   payload,
+  stroke = 'transparent',
+  strokeWidth = 0,
   value,
 }: CappedBarShapeProps) {
   if (width <= 0 || height <= 0) return null
@@ -125,7 +138,7 @@ function CappedBarShape({
   const shouldShowBreak =
     payload?.bucket === 'epargne' &&
     typeof value === 'number' &&
-    value > VERTICAL_AXIS_MAX &&
+    value > maxDomain &&
     clippedHeight >= 8
 
   const slashY = top + 4
@@ -142,6 +155,8 @@ function CappedBarShape({
         rx={3}
         ry={3}
         fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
       />
       {shouldShowBreak ? (
         <>
@@ -235,6 +250,10 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
 
   const clickedEntry  = data.find((d) => d.bucket === clickedBucket) ?? null
   const clickedMetric = metrics.find((m) => m.bucket === clickedBucket) ?? null
+  const yAxisMax = useMemo(
+    () => computeYAxisMax(Math.max(...data.flatMap((entry) => [entry.v2025, entry.v2026]), 0)),
+    [data],
+  )
 
   const allocationRows = useMemo(() => ALLOCATION_ORDER.map((bucket) => {
     const row = data.find((entry) => entry.bucket === bucket)
@@ -267,8 +286,8 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
   }
 
   const headerLegend = [
-    { label: '2025', color: COLOR_2025, border: 'rgba(255,171,46,0.7)' },
-    { label: '2026', color: COLOR_2026, border: COLOR_2026 },
+    { label: '2025', type: 'solid' as const },
+    { label: '2026', type: 'hatched' as const },
   ]
 
   const openBlockListModal = () => {
@@ -362,11 +381,24 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
               Dépenses YTD par bloc
             </p>
             {effectiveViewMode === 'bars' ? (
-              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                {headerLegend.map(({ label, color, border }) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: color, border: `1px solid ${border}` }} />
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', whiteSpace: 'nowrap' }}>
+                {headerLegend.map(({ label, type }) => (
+                  <div key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 11,
+                        height: 9,
+                        borderRadius: 2,
+                        border: '1px solid rgba(44,58,96,0.3)',
+                        background: type === 'solid'
+                          ? COLOR_2025
+                          : 'repeating-linear-gradient(135deg, rgba(44,58,96,0.92) 0px, rgba(44,58,96,0.92) 2px, rgba(255,255,255,0.0) 2px, rgba(255,255,255,0.0) 5px)',
+                      }}
+                    />
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {label}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -404,7 +436,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                 alignItems: 'center',
                 gap: 4,
                 width: 'fit-content',
-                padding: '6px 10px',
+                padding: '4px 10px',
                 borderRadius: 'var(--radius-md)',
                 border: '1.5px solid #5B57F5',
                 background: 'transparent',
@@ -475,11 +507,11 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
         <div style={{
           position: 'relative',
           height: '100%',
-          marginTop: 'var(--space-2)',
+          marginTop: 'var(--space-4)',
           minHeight: 0,
           display: 'flex',
           alignItems: 'flex-end',
-          paddingBottom: 'var(--space-2)',
+          paddingBottom: 0,
         }}>
           {effectiveViewMode === 'bars' ? (
             <>
@@ -490,15 +522,30 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                     data={data}
                     barCategoryGap="16%"
                     barGap={2}
-                    margin={{ top: 12, right: 4, left: -22, bottom: 22 }}
+                    margin={{ top: 12, right: 4, left: -22, bottom: 10 }}
                     onClick={handleChartClick}
                     style={{ cursor: 'pointer' }}
                   >
+                    <defs>
+                      {data.map((entry) => (
+                        <pattern
+                          key={`hatch-${entry.bucket}`}
+                          id={`hatch-2026-${entry.bucket}`}
+                          patternUnits="userSpaceOnUse"
+                          width="6"
+                          height="6"
+                          patternTransform="rotate(135)"
+                        >
+                          <rect width="6" height="6" fill="rgba(255,255,255,0)" />
+                          <line x1="0" y1="0" x2="0" y2="6" stroke={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'} strokeWidth="2" />
+                        </pattern>
+                      ))}
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
                     <XAxis
                       dataKey="bucket"
                       tick={<BlockAxisTick />}
-                      height={48}
+                      height={54}
                       axisLine={false}
                       tickLine={false}
                       interval={0}
@@ -508,8 +555,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                       axisLine={false}
                       tickLine={false}
                       width={38}
-                      domain={[0, VERTICAL_AXIS_MAX]}
-                      allowDataOverflow
+                      domain={[0, yAxisMax]}
                       tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                     />
                     {/* Tooltip hover masqué quand un bloc est sélectionné */}
@@ -525,13 +571,13 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                       name="v2025"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={16}
-                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
+                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} maxDomain={yAxisMax} />}
                     >
                       {data.map((entry) => (
                         <Cell
                           key={`bar-2025-${entry.bucket}`}
                           fill={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'}
-                          fillOpacity={0.34}
+                          fillOpacity={1}
                         />
                       ))}
                     </Bar>
@@ -540,12 +586,19 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                       name="v2026"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={16}
-                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} />}
+                      shape={(props: CappedBarShapeProps) => (
+                        <CappedBarShape
+                          {...props}
+                          maxDomain={yAxisMax}
+                          stroke={ALLOCATION_COLORS[(props.payload as ChartEntry | undefined)?.bucket ?? ''] ?? '#5B6070'}
+                          strokeWidth={1.15}
+                        />
+                      )}
                     >
                       {data.map((entry) => (
                         <Cell
                           key={`bar-2026-${entry.bucket}`}
-                          fill={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'}
+                          fill={`url(#hatch-2026-${entry.bucket})`}
                           fillOpacity={1}
                         />
                       ))}
@@ -751,17 +804,9 @@ function BlockAxisTick({
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <image
-        href={iconSrc}
-        x={-8}
-        y={4}
-        width={16}
-        height={16}
-        preserveAspectRatio="xMidYMid meet"
-      />
       <text
         x={0}
-        y={30}
+        y={10}
         textAnchor="middle"
         fill="var(--neutral-500)"
         fontSize={9}
@@ -769,6 +814,14 @@ function BlockAxisTick({
       >
         {label}
       </text>
+      <image
+        href={iconSrc}
+        x={-8}
+        y={16}
+        width={16}
+        height={16}
+        preserveAspectRatio="xMidYMid meet"
+      />
     </g>
   )
 }

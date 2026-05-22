@@ -219,62 +219,61 @@ export function SavingsPortfoliosListSection() {
 
   return (
     <StatsSection>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '2px var(--space-16)', width: 'fit-content', margin: '0 auto' }}>
         {shortcutRows.map((row) => (
           <button
             key={`shortcut-${row.key}`}
             type="button"
             onClick={() => setSelectedPortfolioKey(row.key)}
             aria-label={`Ouvrir le modèle ${row.listLabel}`}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-50)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             style={{
-              border: '1px solid var(--neutral-150)',
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--neutral-0)',
-              boxShadow: 'var(--shadow-card)',
-              padding: 'var(--space-3)',
-              display: 'grid',
-              gridTemplateColumns: 'var(--space-8) minmax(0,1fr) auto',
+              /* Cadre supprimé : pas de border, shadow ni background */
+              border: 'none',
+              background: 'transparent',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-2) var(--space-2)',
+              display: 'flex',
               alignItems: 'center',
-              columnGap: 'var(--space-2)',
+              gap: 'var(--space-2)',
               cursor: 'pointer',
               textAlign: 'left',
-              minHeight: 'var(--space-16)',
             }}
           >
             <img
               src={row.iconSrc}
               alt=""
               aria-hidden="true"
-              style={{ width: 'var(--space-8)', height: 'var(--space-8)', borderRadius: '50%', objectFit: 'cover' }}
+              style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
             />
             <span
               style={{
-                minWidth: 0,
-                fontSize: 'var(--font-size-md)',
+                fontSize: 'var(--font-size-base)',
                 color: 'var(--neutral-800)',
                 fontWeight: 'var(--font-weight-bold)',
                 letterSpacing: '0.01em',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                lineHeight: 1.1,
+                lineHeight: 1.2,
               }}
             >
               {row.listLabel}
             </span>
+            {/* Flèche immédiatement après le nom, pas repoussée à droite */}
             <span
               aria-hidden="true"
               style={{
-                width: 'var(--space-4)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 'var(--font-size-2xl)',
-                color: 'var(--neutral-500)',
+                fontSize: 13,
+                color: 'var(--neutral-400)',
                 lineHeight: 1,
+                flexShrink: 0,
               }}
             >
-              ▸
+              ›
             </span>
           </button>
         ))}
