@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { TriangleAlert } from 'lucide-react'
@@ -34,20 +33,6 @@ function normalizeStr(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-}
-
-type TrendSignal = { label: string; color: string }
-
-function resolveTrend(label: string): TrendSignal {
-  const n = normalizeStr(label)
-  if (n.includes('livret a')) return { label: 'Maintenir', color: '#2ED47A' }
-  if (n.includes('ldds')) return { label: 'Maintenir', color: '#2ED47A' }
-  if (n.includes('lep')) return { label: 'Maintenir', color: '#2ED47A' }
-  if (n.includes('pea')) return { label: 'Continuer', color: '#2ED47A' }
-  if (n.includes('per') || n.includes('plan epargne retraite')) return { label: 'Continuer', color: '#2ED47A' }
-  if (n.includes('peg') || n.includes('capgemini')) return { label: 'Surveiller', color: '#FFAB2E' }
-  if (n.includes('bitcoin') || n.includes('btc') || n.includes('crypto')) return { label: 'Réduire', color: '#FC5A5A' }
-  return { label: 'Continuer', color: '#2ED47A' }
 }
 
 function resolveAdvice(label: string, family: string, recommendedAction: string | null): string {
@@ -117,10 +102,6 @@ function fmtSignedPercentCompact(value: number, digits = 1): string {
   return `${abs}%`
 }
 
-function fmtMonthYear(value: Date): string {
-  return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: '2-digit' }).format(value)
-}
-
 function fmtMonthYearFull(value: Date): string {
   return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: 'numeric' }).format(value)
 }
@@ -149,11 +130,6 @@ export function SavingsPortfolioModal({
         .filter((e) => e.account_key === account.key)
         .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()),
     [operationEvents, account.key],
-  )
-
-  const totalInterests = useMemo(
-    () => accountEvents.filter((e) => e.nature === 'intérêts').reduce((sum, e) => sum + e.amount, 0),
-    [accountEvents],
   )
 
   const accountIsLivret = account.family === 'livrets'
@@ -188,19 +164,6 @@ export function SavingsPortfolioModal({
     [normalizedAccountLabel],
   )
 
-  const totalGain: number | null = accountIsLivret
-    ? totalInterests
-    : (investAccount?.estimated_gain_vs_total_cash_in ?? null)
-
-  const avgRate = useMemo(() => {
-    if (!accountIsLivret) return null
-    const rates = accountAnnualPerf
-      .filter((r) => r.regulated_rate_pct != null)
-      .map((r) => r.regulated_rate_pct as number)
-    if (rates.length === 0) return null
-    return rates.reduce((sum, r) => sum + r, 0) / rates.length
-  }, [accountIsLivret, accountAnnualPerf])
-
   const accountEventsAsc = useMemo(
     () => [...accountEvents].sort((a, b) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime()),
     [accountEvents],
@@ -230,12 +193,6 @@ export function SavingsPortfolioModal({
     return (now.getFullYear() - openedAt.getFullYear()) * 12 + (now.getMonth() - openedAt.getMonth())
   }, [openedAt])
 
-  const trend = resolveTrend(account.label)
-  const latestInterestEvent = useMemo(
-    () => accountEvents.find((event) => event.nature === 'intérêts') ?? null,
-    [accountEvents],
-  )
-
   const handleReturnToList = () => {
     if (onReturnToList) {
       onReturnToList()
@@ -254,40 +211,6 @@ export function SavingsPortfolioModal({
     () => (totalCashIn > 0 ? currentAmount - totalCashIn : null),
     [currentAmount, totalCashIn],
   )
-
-  const placementYieldPct = useMemo(() => {
-    if (accountIsLivret) return null
-    return investAccount?.estimated_gain_vs_total_cash_in_pct ?? null
-  }, [accountIsLivret, investAccount?.estimated_gain_vs_total_cash_in_pct])
-
-  const placementStatus = useMemo(() => {
-    if (accountIsLivret) {
-      return { label: 'plafond atteint', color: '#2ED47A' }
-    }
-
-    const rate = placementYieldPct
-    if (rate == null || !Number.isFinite(rate)) {
-      return { label: 'stagnant', color: '#FFAB2E' }
-    }
-    if (rate > 3) return { label: 'rentable +', color: '#2ED47A' }
-    if (rate >= 1) return { label: 'rentable', color: '#5B57F5' }
-    if (rate >= -1 && rate <= 1) return { label: 'stagnant', color: '#FFAB2E' }
-    return { label: 'déficitaire', color: '#FC5A5A' }
-  }, [accountIsLivret, placementYieldPct])
-
-  const lastYieldAmount = useMemo(() => {
-    if (accountIsLivret) return latestInterestEvent?.amount ?? null
-    return kpiYtdGainAmount
-  }, [accountIsLivret, latestInterestEvent?.amount, kpiYtdGainAmount])
-
-  const strategyWord = useMemo(() => {
-    if (accountIsLivret) return { label: 'maintenir', color: '#2ED47A' }
-    if (placementStatus.label === 'rentable +') return { label: 'maintenir', color: '#2ED47A' }
-    if (placementStatus.label === 'rentable') return { label: 'surveiller', color: '#5B57F5' }
-    if (placementStatus.label === 'stagnant') return { label: 'surveiller', color: '#FFAB2E' }
-    if (placementStatus.label === 'déficitaire') return { label: 'réallouer', color: '#FC5A5A' }
-    return { label: trend.label.toLowerCase(), color: trend.color }
-  }, [accountIsLivret, placementStatus.label, trend.color, trend.label])
 
   const currentYear = new Date().getFullYear()
   const previousYear = currentYear - 1
@@ -743,60 +666,6 @@ function SectionHeading({ label, count, color }: { label: string; count?: number
           {count}
         </span>
       ) : null}
-    </div>
-  )
-}
-
-function IndicatorCell({
-  icon,
-  value,
-  valueColor,
-}: {
-  icon: ReactNode
-  value: string
-  valueColor?: string
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: 'var(--space-2)',
-        minWidth: 0,
-        minHeight: 28,
-        width: '100%',
-      }}
-    >
-      <span
-        style={{
-          color: 'var(--neutral-600)',
-          flexShrink: 0,
-          display: 'flex',
-          width: 18,
-          height: 18,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {icon}
-      </span>
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: '0.01em',
-          color: valueColor ?? 'var(--neutral-900)',
-          lineHeight: 1.2,
-          textAlign: 'left',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          width: 'auto',
-        }}
-      >
-        {value}
-      </span>
     </div>
   )
 }

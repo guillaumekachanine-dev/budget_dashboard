@@ -352,17 +352,6 @@ function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockI
   }
 }
 
-function formatBudgetBucketLabel(bucket: string | null | undefined): string {
-  if (!bucket) return 'Non classé'
-  if (bucket === 'socle_fixe') return 'Fixe'
-  if (bucket === 'variable_essentielle') return 'Variable essentielle'
-  if (bucket === 'discretionnaire') return 'Discrétionnaire'
-  if (bucket === 'cagnotte_projet') return 'Cagnotte projet'
-  if (bucket === 'provision') return 'Provision'
-  if (bucket === 'hors_pilotage') return 'Hors pilotage'
-  return bucket
-}
-
 function truncateCalloutLabel(value: string, maxLength = 14): string {
   if (value.length <= maxLength) return value
   return `${value.slice(0, Math.max(1, maxLength - 1)).trim()}…`
@@ -1586,10 +1575,6 @@ export function Budgets() {
       || line.parent_category_id === selectedCat
     ))
   }, [configuredBudgetCategoryLines, selectedCat])
-  const dominantCategoryBudgetLine = useMemo(() => {
-    if (!categoryBudgetLines.length) return null
-    return [...categoryBudgetLines].sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))[0]
-  }, [categoryBudgetLines])
   const categoryMonthlyBudget = useMemo(() => {
     if (selectedCat === 'all') return totalMonthlyBudget
     if (!categoryBudgetLines.length) return 0
@@ -1629,10 +1614,6 @@ export function Budgets() {
     if (idx < 0) return null
     return { index: idx + 1, total: ranked.length }
   }, [selectedCat, selectedCatInfo, summaries])
-  const categoryBlockLabel = useMemo(() => {
-    const bucketLabel = formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)
-    return bucketLabel.toLowerCase()
-  }, [dominantCategoryBudgetLine?.budget_bucket])
   const budgetByCategoryId = useMemo(
     () =>
       (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
