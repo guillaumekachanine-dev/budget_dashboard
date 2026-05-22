@@ -286,7 +286,6 @@ const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> 
   { id: 'socle_fixe', label: 'Fixe', color: 'var(--primary-500)' },
   { id: 'variable_essentielle', label: 'Variable essentielle', color: 'var(--color-success)' },
   { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
-  { id: 'epargne', label: 'Épargne', color: 'var(--color-warning)' },
   { id: 'provision', label: 'Provision', color: 'var(--viz-d)' },
 ]
 
@@ -295,7 +294,6 @@ const BLOCK_LIST_ORDER: BudgetBlockId[] = [
   'socle_fixe',
   'variable_essentielle',
   'provision',
-  'epargne',
 ]
 
 const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
@@ -458,7 +456,10 @@ function buildSegmentCallouts(
   adjustStack(raw.filter((item) => item.side === 'left'))
   adjustStack(raw.filter((item) => item.side === 'right'))
 
-  return raw.map(({ side: _side, ...item }) => item)
+  return raw.map(({ side, ...item }) => {
+    if (side !== 'left' && side !== 'right') return item
+    return item
+  })
 }
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
@@ -873,7 +874,7 @@ export function Budgets() {
 
   const handleEnveloppesBlockClick = useCallback((blockId: string) => {
     setSelectedCat('all')
-    if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision' || blockId === 'epargne') {
+    if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
       setSelectedBlockPage(blockId)
     }
     scrollViewportToTop()
@@ -886,11 +887,16 @@ export function Budgets() {
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleReturnToEnveloppes = useCallback(() => {
-    setSelectedCat('all')
+    shouldFocusBlocksSectionRef.current = false
+    shouldFocusCategoriesSectionRef.current = true
+    setActiveSlide(0)
     setSelectedBlockPage(null)
+    setSelectedCat('all')
     setBudgetsTabId('enveloppes')
-    scrollViewportToTop()
-  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
+    setShowHeaderPeriodMenu(false)
+    setShowSlideThreeScopeSheet(false)
+    setShowCatSheet(false)
+  }, [setSelectedBlockPage, setSelectedCat])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -1168,7 +1174,9 @@ export function Budgets() {
     const periodYear = Number(budgetPayload.selected_period?.period_year ?? selectedPeriodYear)
     const periodMonth = Number(budgetPayload.selected_period?.period_month ?? selectedPeriodMonth)
 
-    return payloadByParentCategory.map((row) => ({
+    return payloadByParentCategory
+      .filter((row) => normalizeCategoryToken(row.parent_category_name) !== 'epargne')
+      .map((row) => ({
       id: `${row.parent_category_id}:${periodYear}-${periodMonth}`,
       period_id: '',
       category_id: row.parent_category_id,
@@ -1187,7 +1195,7 @@ export function Budgets() {
       final_budget_monthly_eur: null,
       manual_budget_monthly_eur: null,
       recommendation_comment: null,
-    }))
+      }))
   }, [payloadByParentCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
 
   const configuredBudgetActuals = useMemo(() => {
@@ -1235,7 +1243,12 @@ export function Budgets() {
   const expenseCategories = useMemo(() => categories.filter((c) => c.flow_type === 'expense'), [categories])
   const rootExpenseCategories = useMemo(() => expenseCategories.filter((c) => c.parent_id === null), [expenseCategories])
   const rootNavigableCategories = useMemo(
-    () => categories.filter((c) => c.parent_id === null && (c.flow_type === 'expense' || c.flow_type === 'savings')),
+    () =>
+      categories.filter((c) => (
+        c.parent_id === null
+        && (c.flow_type === 'expense' || c.flow_type === 'savings')
+        && normalizeCategoryToken(c.name) !== 'epargne'
+      )),
     [categories],
   )
   const childCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
@@ -1309,6 +1322,12 @@ export function Budgets() {
       setSelectedCat('all')
     }
   }, [selectedCat, categoryById, categoriesFetched, setSelectedCat])
+
+  useEffect(() => {
+    if (!epargneRootCategory) return
+    if (selectedCat !== epargneRootCategory.id) return
+    setSelectedCat('all')
+  }, [selectedCat, epargneRootCategory, setSelectedCat])
 
   const range = useMemo(
     () => getPeriodRange(periodKey, selectedPeriodYear, selectedPeriodMonth),
@@ -3800,7 +3819,7 @@ export function Budgets() {
                             onClick={(slice: unknown) => {
                               const payload = extractPiePayload(slice)
                               const blockId = String(payload?.id ?? '')
-                              if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'epargne' || blockId === 'provision') {
+                              if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
                                 setSelectedBlockId(blockId)
                               }
                             }}
@@ -4787,38 +4806,12 @@ export function Budgets() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
+                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
                 boxShadow: 'var(--shadow-lg)',
-                maxHeight: '78dvh',
-                overflowY: 'auto',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-4)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                  Sélectionner un onglet
-                </p>
-                <button
-                  type="button"
-                  aria-label="Fermer"
-                  onClick={() => setShowBudgetsTabModal(false)}
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    minWidth: 'var(--touch-target-min)',
-                    minHeight: 'var(--touch-target-min)',
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ width: 28, height: 3, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '0 auto var(--space-2)' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${BUDGETS_TABS.length}, minmax(0, 1fr))`, gap: 'var(--space-2)' }}>
                 {BUDGETS_TABS.map((tab) => {
                   const isActive = tab.id === budgetsTabId
                   return (
@@ -4827,25 +4820,19 @@ export function Budgets() {
                       type="button"
                       onClick={() => handleBudgetsTabSelect(tab.id)}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: 0,
+                        border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
+                        background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '6px var(--space-2)',
                         cursor: 'pointer',
-                        display: 'grid',
-                        justifyItems: 'center',
-                        gap: 'var(--space-2)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 'var(--touch-target-min)',
+                        transition: 'background 150ms ease, border-color 150ms ease',
                       }}
                     >
-                      <img
-                        src={tab.iconSrc}
-                        alt={tab.label}
-                        width={34}
-                        height={34}
-                        style={{ width: 34, height: 34, objectFit: 'contain' }}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span style={{ fontSize: 10, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', textTransform: 'capitalize', whiteSpace: 'pre-line' }}>
+                      <span style={{ fontSize: 11, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {tab.label}
                       </span>
                     </button>

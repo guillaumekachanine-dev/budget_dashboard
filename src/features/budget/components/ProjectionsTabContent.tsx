@@ -33,9 +33,8 @@ interface ExpenseHistoryPoint {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 
-// ─── Revenue 2026 histogram ───────────────────────────────────────────────────
+// ─── Revenue 2026 sources ─────────────────────────────────────────────────────
 
-const REV_GREEN = '#2ED47A'
 const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD69D', '#94E3B7', '#B9EED1']
 const SCENARIO_1_COLOR = '#D58A83'
 const SCENARIO_2_COLOR = '#15A9A1'
@@ -74,14 +73,6 @@ function addProjectedAmountToSources(
   })
 }
 
-interface Rev2026Point {
-  monthOrder: number
-  month: string
-  value: number
-  isProjected: boolean
-  color: string
-}
-
 interface RevenueMonthGroup {
   monthKey: string
   monthLabel: string
@@ -91,7 +82,6 @@ interface RevenueMonthGroup {
 
 type RevenueKpiModalKey = 'ytd' | 'scenario1' | 'scenario2' | null
 type RevenueDisplayMode = 'real_ytd' | 'scenario1' | 'scenario2'
-type RevenueProjectionMode = 'scenario1' | 'scenario2'
 
 interface RevenueKpiModalConfig {
   title: string
@@ -118,37 +108,6 @@ function formatMonthYearFromKey(monthKey: string): string {
   const date = new Date(`${monthKey}-01T00:00:00`)
   if (Number.isNaN(date.getTime())) return monthKey
   return capitalizeFirst(new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(date))
-}
-
-function RevBarShape(props: {
-  x?: number
-  y?: number
-  width?: number
-  height?: number
-  payload?: Rev2026Point
-  [key: string]: unknown
-}) {
-  const { x = 0, y = 0, width = 0, height = 0, payload } = props
-  const fillColor = payload?.color ?? REV_GREEN
-  const h = Math.max(0, height)
-  if (h === 0) return null
-  if (!payload?.isProjected) {
-    return <rect x={x} y={y} width={width} height={h} fill={fillColor} rx={3} ry={3} />
-  }
-  return (
-    <rect
-      x={x + 1}
-      y={y}
-      width={Math.max(0, width - 2)}
-      height={h}
-      fill="color-mix(in oklab, var(--neutral-0) 82%, transparent)"
-      stroke={fillColor}
-      strokeWidth={1.5}
-      strokeDasharray="5 3"
-      rx={3}
-      ry={3}
-    />
-  )
 }
 
 function RevenueTransactionsYtdModal({
@@ -349,17 +308,13 @@ function RevenueSection2026({
   revenueData: BudgetRevenueAnalytics | null
   ytdMonths: number
 }) {
-  const [revSlide, setRevSlide] = useState(0)
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
-  const [selectedRevenueBar, setSelectedRevenueBar] = useState<Rev2026Point | null>(null)
   const [showRevenueTransactionsModal, setShowRevenueTransactionsModal] = useState(false)
   const [activeRevenueKpiModal, setActiveRevenueKpiModal] = useState<RevenueKpiModalKey>(null)
-  const [histogramProjectionMode, setHistogramProjectionMode] = useState<RevenueProjectionMode>('scenario1')
   const [revenueDisplayMode, setRevenueDisplayMode] = useState<RevenueDisplayMode>('real_ytd')
   const [showRevenueDisplayPicker, setShowRevenueDisplayPicker] = useState(false)
   const { data: rawSources } = useBudgetRevenueSources2026()
 
-  // ── Histogram data ────────────────────────────────────────────────────────
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
   const guaranteedMonthlyIncome = 3338
   const salaryAndPrimeMonthlyIncome = 6500
@@ -371,31 +326,6 @@ function RevenueSection2026({
   const projectedScenario2 = ytdRevenue2026 + guaranteedMonthlyIncome * scenario2UnemploymentMonths + salaryAndPrimeMonthlyIncome * scenario2SalaryMonths
   const assuredStartMonthLabel = MONTH_LABELS_SHORT[Math.max(0, Math.min(11, ytdMonths))] ?? 'juin'
   const assuredPeriodLabel = `${assuredStartMonthLabel.toLowerCase()}-déc. (${remainingMonths} mois)`
-  const activeScenarioColor = histogramProjectionMode === 'scenario1' ? SCENARIO_1_COLOR : SCENARIO_2_COLOR
-
-  const projectedRevenueForMonth = (month: number) => {
-    if (histogramProjectionMode === 'scenario1') return guaranteedMonthlyIncome
-    if (month >= 6 && month <= 9) return guaranteedMonthlyIncome
-    if (month >= 10 && month <= 12) return salaryAndPrimeMonthlyIncome
-    return 0
-  }
-
-  const chartData: Rev2026Point[] = MONTH_LABELS_SHORT.map((label, idx) => {
-    const m = idx + 1
-    const isProjected = m > ytdMonths
-    const actual = series2026.find(p => parseInt(p.month_start.slice(5, 7), 10) === m)
-    return {
-      monthOrder: m,
-      month: label,
-      value: isProjected ? projectedRevenueForMonth(m) : (actual?.revenue_amount ?? 0),
-      isProjected,
-      color: activeScenarioColor,
-    }
-  })
-
-  const maxVal = Math.max(...chartData.map(d => d.value), 1000)
-  const yMax = Math.ceil(maxVal / 500) * 500 + 500
-
   // ── Donut data (2026 only) ────────────────────────────────────────────────
   const scenarioSourceValues = useMemo(() => {
     const baseSources = rawSources.map((source) => ({ ...source }))
@@ -477,7 +407,6 @@ function RevenueSection2026({
     return groups
   }, [allTransactions2026])
 
-  const SLIDE_TITLES = ['Revenus 2026', 'Sources de revenus 2026'] as const
   const revenueDisplayOptions = {
     real_ytd: { label: 'Réel YTD', color: 'var(--neutral-700)' },
     scenario1: { label: '#1', color: SCENARIO_1_COLOR },
@@ -539,37 +468,18 @@ function RevenueSection2026({
     ytdRevenue2026,
   ])
 
-  function handleSlide(idx: number) {
-    setRevSlide(idx)
-    setSelectedSourceId(null)
-    setSelectedRevenueBar(null)
-    setShowRevenueDisplayPicker(false)
-  }
-
   function handleDisplayModeSelect(mode: RevenueDisplayMode) {
     setRevenueDisplayMode(mode)
     setSelectedSourceId(null)
     setShowRevenueDisplayPicker(false)
   }
 
-  function handleHistogramProjectionToggle() {
-    setSelectedRevenueBar(null)
-    setHistogramProjectionMode((prev) => (prev === 'scenario1' ? 'scenario2' : 'scenario1'))
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
 
-      {/* ── 3 KPI tiles — always above carousel ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+      {/* ── 2 KPI tiles — always above carousel ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
         {([
-          {
-            key: 'ytd' as const,
-            label: 'Revenus YTD',
-            value: ytdRevenue2026,
-            borderColor: 'var(--neutral-200)',
-            background: 'var(--neutral-0)',
-          },
           {
             key: 'scenario1' as const,
             label: 'Scenario #1',
@@ -614,442 +524,263 @@ function RevenueSection2026({
         ))}
       </div>
 
-      {/* ── Carousel card ── */}
       <div style={{
         background: 'var(--neutral-0)',
         border: '1px solid var(--neutral-200)',
         borderRadius: 'var(--radius-md)',
         padding: 'var(--space-3)',
       }}>
-        {/* Card header — title + conditional legend */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 'var(--space-2)' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-              {SLIDE_TITLES[revSlide]}
-            </p>
-            {revSlide === 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowRevenueTransactionsModal(true)}
-                style={{
-                  border: '1px solid var(--neutral-300)',
-                  background: 'var(--neutral-100)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--neutral-700)',
-                  padding: '3px var(--space-2)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  lineHeight: 1.2,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                  cursor: 'pointer',
-                }}
-              >
-                Détails
-              </button>
-            ) : null}
-          </div>
-          {revSlide === 0 ? (
-            <div style={{ display: 'grid', justifyItems: 'end', gap: 6 }}>
-              <button
-                type="button"
-                onClick={handleHistogramProjectionToggle}
-                style={{
-                  border: '1px solid var(--neutral-300)',
-                  background: 'var(--neutral-100)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: histogramProjectionMode === 'scenario1' ? SCENARIO_1_COLOR : SCENARIO_2_COLOR,
-                  padding: '3px var(--space-2)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  lineHeight: 1.2,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                {histogramProjectionMode === 'scenario1' ? 'Scenario #1' : 'Scenario #2'}
-              </button>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-                  <span style={{ display: 'inline-block', width: 10, height: 8, background: activeScenarioColor, borderRadius: 2 }} />
-                  Réel
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--neutral-500)' }}>
-                  <span style={{ display: 'inline-block', width: 10, height: 8, background: 'color-mix(in oklab, var(--neutral-0) 82%, transparent)', border: `1.5px dashed ${activeScenarioColor}`, borderRadius: 2, boxSizing: 'border-box' as const }} />
-                  Projeté
-                </span>
-              </div>
-            </div>
-          ) : revSlide === 1 ? (
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setShowRevenueDisplayPicker((prev) => !prev)}
-                aria-label="Choisir un affichage des sources de revenus"
-                style={{
-                  border: '1px solid var(--neutral-300)',
-                  background: 'var(--neutral-100)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: revenueDisplayOptions[revenueDisplayMode].color,
-                  padding: '3px var(--space-2)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  lineHeight: 1.2,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <span>
-                  {revenueDisplayMode === 'real_ytd'
-                    ? 'Réel YTD'
-                    : revenueDisplayMode === 'scenario1'
-                      ? 'Scenario #1'
-                      : 'Scenario #2'}
-                </span>
-                <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
-              </button>
-              <AnimatePresence>
-                {showRevenueDisplayPicker ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                    transition={{ duration: 0.16 }}
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 6px)',
-                      right: 0,
-                      minWidth: 164,
-                      background: 'var(--neutral-0)',
-                      border: '1px solid var(--neutral-200)',
-                      borderRadius: 'var(--radius-md)',
-                      boxShadow: '0 8px 30px rgba(13,13,31,0.16)',
-                      padding: '4px',
-                      display: 'grid',
-                      gap: 2,
-                      zIndex: 3,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleDisplayModeSelect('real_ytd')}
-                      style={{
-                        width: '100%',
-                        padding: '7px var(--space-2)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        background: revenueDisplayMode === 'real_ytd' ? 'var(--neutral-150)' : 'transparent',
-                        color: 'var(--neutral-800)',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      Réel YTD
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDisplayModeSelect('scenario1')}
-                      style={{
-                        width: '100%',
-                        padding: '7px var(--space-2)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        background: revenueDisplayMode === 'scenario1' ? `color-mix(in oklab, ${SCENARIO_1_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
-                        color: SCENARIO_1_COLOR,
-                        fontSize: 11,
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      Scenario #1
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDisplayModeSelect('scenario2')}
-                      style={{
-                        width: '100%',
-                        padding: '7px var(--space-2)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        background: revenueDisplayMode === 'scenario2' ? `color-mix(in oklab, ${SCENARIO_2_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
-                        color: SCENARIO_2_COLOR,
-                        fontSize: 11,
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      Scenario #2
-                    </button>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Slides container */}
-        <div style={{ overflow: 'hidden', height: 290 }}>
-          <div style={{
-            display: 'flex',
-            width: '200%',
-            height: '100%',
-            transform: `translateX(-${50 * revSlide}%)`,
-            transition: 'transform 300ms ease',
-          }}>
-
-            {/* ── Slide 0: Monthly histogram ── */}
-            <div style={{ width: '50%', flexShrink: 0, height: '100%', position: 'relative' }}>
-              {selectedRevenueBar ? (
-                <div
-                  onClick={(event) => event.stopPropagation()}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+            Sources de revenus 2026
+          </p>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowRevenueDisplayPicker((prev) => !prev)}
+              aria-label="Choisir un affichage des sources de revenus"
+              style={{
+                border: '1px solid var(--neutral-300)',
+                background: 'var(--neutral-100)',
+                borderRadius: 'var(--radius-sm)',
+                color: revenueDisplayOptions[revenueDisplayMode].color,
+                padding: '3px var(--space-2)',
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <span>
+                {revenueDisplayMode === 'real_ytd'
+                  ? 'Réel YTD'
+                  : revenueDisplayMode === 'scenario1'
+                    ? 'Scenario #1'
+                    : 'Scenario #2'}
+              </span>
+              <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
+            </button>
+            <AnimatePresence>
+              {showRevenueDisplayPicker ? (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.16 }}
                   style={{
                     position: 'absolute',
-                    top: 6,
-                    left: 6,
-                    zIndex: 3,
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: 164,
                     background: 'var(--neutral-0)',
                     border: '1px solid var(--neutral-200)',
-                    borderRadius: 'var(--radius-lg)',
-                    boxShadow: 'var(--shadow-card)',
-                    padding: '10px 12px',
-                    minWidth: 156,
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: '0 8px 30px rgba(13,13,31,0.16)',
+                    padding: '4px',
+                    display: 'grid',
+                    gap: 2,
+                    zIndex: 3,
                   }}
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedRevenueBar(null)}
-                    aria-label="Fermer"
+                    onClick={() => handleDisplayModeSelect('real_ytd')}
                     style={{
-                      position: 'absolute',
-                      top: 6,
-                      right: 6,
+                      width: '100%',
+                      padding: '7px var(--space-2)',
                       border: 'none',
-                      background: 'transparent',
-                      color: 'var(--neutral-400)',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      padding: 0,
-                    }}
-                  >
-                    <X size={11} />
-                  </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', columnGap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35, paddingRight: 14 }}>
-                      {selectedRevenueBar.month}
-                    </span>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                      {selectedRevenueBar.monthOrder}/12
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>
-                      {selectedRevenueBar.isProjected
-                        ? histogramProjectionMode === 'scenario1'
-                          ? 'Scenario #1'
-                          : 'Scenario #2'
-                        : 'Réel 2026'}
-                    </span>
-                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
-                      {fmt(selectedRevenueBar.value)}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 56, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 9, fill: '#9090a8' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis hide domain={[0, yMax]} />
-                  <Bar
-                    dataKey="value"
-                    shape={<RevBarShape />}
-                    maxBarSize={24}
-                    isAnimationActive={false}
-                    onClick={(data, index) => {
-                      const payload = (data as { payload?: Rev2026Point } | null)?.payload ?? null
-                      const fallback = typeof index === 'number' ? chartData[index] ?? null : null
-                      const next = payload ?? fallback
-                      if (!next) return
-                      setSelectedRevenueBar((prev) =>
-                        prev && prev.monthOrder === next.monthOrder ? null : next,
-                      )
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* ── Slide 1: Sources donut (2026 only) ── */}
-            <div style={{ width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
-              {/* Pie area */}
-              <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
-                {selectedSource ? (
-                  <div style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    maxWidth: '86%',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    boxShadow: 'var(--shadow-card)',
-                    padding: '4px 8px',
-                    display: 'grid',
-                    justifyItems: 'center',
-                    gap: 1,
-                    zIndex: 1,
-                  }}>
-                    <span style={{ fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-                      {selectedSource.name}
-                    </span>
-                    <span style={{ fontSize: 11, lineHeight: 1.2, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                      {fmt(selectedSource.value)}
-                    </span>
-                  </div>
-                ) : null}
-                <ResponsiveContainer width="100%" height={188}>
-                  <PieChart>
-                    <Pie
-                      data={donutData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="54%"
-                      innerRadius={54}
-                      outerRadius={86}
-                      paddingAngle={2}
-                      onClick={(slice: unknown) => {
-                        const s = slice as { id?: string; payload?: { id?: string } } | null
-                        const inner = (s?.payload ?? s) as { id?: string } | null
-                        const id = inner?.id ?? null
-                        setSelectedSourceId(prev => prev === id ? null : id)
-                      }}
-                    >
-                      {donutData.map((entry) => (
-                        <Cell
-                          key={entry.id}
-                          fill={entry.color}
-                          fillOpacity={selectedSourceId && selectedSourceId !== entry.id ? 0.55 : 0.96}
-                          stroke={selectedSourceId === entry.id ? 'var(--neutral-900)' : 'var(--neutral-0)'}
-                          strokeWidth={selectedSourceId === entry.id ? 2 : 1}
-                        />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div aria-hidden="true" style={{ height: 'var(--space-6)', flexShrink: 0 }} />
-              {/* Legend grid */}
-              <div style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: 6,
-                alignContent: 'start',
-              }}>
-                {donutData.map((entry) => (
-                  <button
-                    key={`${entry.id}-legend`}
-                    type="button"
-                    onClick={() => setSelectedSourceId(prev => prev === entry.id ? null : entry.id)}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      padding: 0,
-                      display: 'grid',
-                      gridTemplateColumns: '10px minmax(0, 1fr)',
-                      gap: 6,
-                      alignItems: 'center',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      opacity: selectedSourceId && selectedSourceId !== entry.id ? 0.6 : 1,
-                    }}
-                  >
-                    <span style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 'var(--radius-full)',
-                      background: entry.color,
-                      border: '1px solid color-mix(in oklab, var(--neutral-900) 18%, transparent)',
-                      flexShrink: 0,
-                      display: 'block',
-                    }} />
-                    <span style={{
-                      minWidth: 0,
-                      fontSize: 10,
-                      lineHeight: 1.2,
-                      color: 'var(--neutral-700)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      borderRadius: 'var(--radius-sm)',
+                      background: revenueDisplayMode === 'real_ytd' ? 'var(--neutral-150)' : 'transparent',
+                      color: 'var(--neutral-800)',
+                      fontSize: 11,
                       fontWeight: 700,
-                    }}>
-                      {`${entry.name} (${donutTotal > 0 ? Math.round((entry.value / donutTotal) * 100) : 0}%)`}
-                    </span>
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    Réel YTD
                   </button>
-                ))}
-              </div>
-            </div>
-
+                  <button
+                    type="button"
+                    onClick={() => handleDisplayModeSelect('scenario1')}
+                    style={{
+                      width: '100%',
+                      padding: '7px var(--space-2)',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      background: revenueDisplayMode === 'scenario1' ? `color-mix(in oklab, ${SCENARIO_1_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
+                      color: SCENARIO_1_COLOR,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    Scenario #1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDisplayModeSelect('scenario2')}
+                    style={{
+                      width: '100%',
+                      padding: '7px var(--space-2)',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      background: revenueDisplayMode === 'scenario2' ? `color-mix(in oklab, ${SCENARIO_2_COLOR} 16%, var(--neutral-0) 84%)` : 'transparent',
+                      color: SCENARIO_2_COLOR,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    Scenario #2
+                  </button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* ── Dot slide selector (matches bloc revenus pattern) ── */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)', marginTop: 8 }}>
-          {([0, 1] as const).map((idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleSlide(idx)}
-              aria-label={`Slide ${idx + 1} sur 2`}
-              style={{
-                minWidth: 'var(--touch-target-min)',
-                minHeight: 'var(--touch-target-min)',
-                borderRadius: 'var(--radius-full)',
-                border: 'none',
-                padding: 0,
-                background: 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all var(--transition-base)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  display: 'block',
-                  width: idx === revSlide ? 14 : 8,
-                  height: idx === revSlide ? 14 : 8,
-                  borderRadius: 'var(--radius-full)',
-                  background: idx === revSlide ? 'var(--primary-500)' : 'var(--neutral-300)',
-                  transition: 'all var(--transition-base)',
-                }}
-              />
-            </button>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowRevenueTransactionsModal(true)}
+            style={{
+              border: '1px solid var(--neutral-300)',
+              background: 'var(--neutral-100)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--neutral-700)',
+              padding: '3px var(--space-2)',
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 1.2,
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              cursor: 'pointer',
+            }}
+          >
+            Détails
+          </button>
         </div>
 
+        <div style={{ height: 290, display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
+          <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
+            {selectedSource ? (
+              <div style={{
+                position: 'absolute',
+                top: 2,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                maxWidth: '86%',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--neutral-200)',
+                background: 'var(--neutral-0)',
+                boxShadow: 'var(--shadow-card)',
+                padding: '4px 8px',
+                display: 'grid',
+                justifyItems: 'center',
+                gap: 1,
+                zIndex: 1,
+              }}>
+                <span style={{ fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                  {selectedSource.name}
+                </span>
+                <span style={{ fontSize: 11, lineHeight: 1.2, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                  {fmt(selectedSource.value)}
+                </span>
+              </div>
+            ) : null}
+            <ResponsiveContainer width="100%" height={188}>
+              <PieChart>
+                <Pie
+                  data={donutData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="54%"
+                  innerRadius={54}
+                  outerRadius={86}
+                  paddingAngle={2}
+                  onClick={(slice: unknown) => {
+                    const s = slice as { id?: string; payload?: { id?: string } } | null
+                    const inner = (s?.payload ?? s) as { id?: string } | null
+                    const id = inner?.id ?? null
+                    setSelectedSourceId(prev => prev === id ? null : id)
+                  }}
+                >
+                  {donutData.map((entry) => (
+                    <Cell
+                      key={entry.id}
+                      fill={entry.color}
+                      fillOpacity={selectedSourceId && selectedSourceId !== entry.id ? 0.55 : 0.96}
+                      stroke={selectedSourceId === entry.id ? 'var(--neutral-900)' : 'var(--neutral-0)'}
+                      strokeWidth={selectedSourceId === entry.id ? 2 : 1}
+                    />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div aria-hidden="true" style={{ height: 'var(--space-6)', flexShrink: 0 }} />
+          <div style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: 6,
+            alignContent: 'start',
+          }}>
+            {donutData.map((entry) => (
+              <button
+                key={`${entry.id}-legend`}
+                type="button"
+                onClick={() => setSelectedSourceId(prev => prev === entry.id ? null : entry.id)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  display: 'grid',
+                  gridTemplateColumns: '10px minmax(0, 1fr)',
+                  gap: 6,
+                  alignItems: 'center',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  opacity: selectedSourceId && selectedSourceId !== entry.id ? 0.6 : 1,
+                }}
+              >
+                <span style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 'var(--radius-full)',
+                  background: entry.color,
+                  border: '1px solid color-mix(in oklab, var(--neutral-900) 18%, transparent)',
+                  flexShrink: 0,
+                  display: 'block',
+                }} />
+                <span style={{
+                  minWidth: 0,
+                  fontSize: 10,
+                  lineHeight: 1.2,
+                  color: 'var(--neutral-700)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  fontWeight: 700,
+                }}>
+                  {`${entry.name} (${donutTotal > 0 ? Math.round((entry.value / donutTotal) * 100) : 0}%)`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -1152,10 +883,26 @@ function ExpenseSection2026({
     { key: 'avg_12m', label: 'Moyenne (12M)', color: '#7C4DFF' },
     { key: 'median_12m', label: 'Médiane (12M)', color: '#FFB300' },
   ] as const
+  const expenseSlideToggleButtonStyle = (active: boolean): React.CSSProperties => ({
+    border: active ? '1px solid color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)' : '1px solid transparent',
+    background: active ? 'var(--neutral-0)' : 'transparent',
+    color: active ? 'var(--primary-700)' : 'var(--neutral-600)',
+    borderRadius: 'var(--radius-full)',
+    padding: '5px 10px',
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
+    transition: 'all 160ms ease',
+    minHeight: 32,
+    width: '100%',
+    textAlign: 'center',
+    textTransform: 'none',
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
         <button
           type="button"
           onClick={() => setActiveExpenseKpiModal('ytd')}
@@ -1170,76 +917,96 @@ function ExpenseSection2026({
         </button>
         <button
           type="button"
-          onClick={() => setActiveExpenseKpiModal('gap')}
-          style={{ background: 'color-mix(in oklab, var(--color-warning) 10%, var(--neutral-0) 90%)', border: '1.5px solid color-mix(in oklab, var(--color-warning) 72%, var(--neutral-200) 28%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 58, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'pointer' }}
-        >
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
-            écart YTD
-          </p>
-          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: gapColor, lineHeight: 1 }}>
-            {formatSignedPercent(gapYtdPct)}
-          </p>
-        </button>
-        <button
-          type="button"
           onClick={() => setActiveExpenseKpiModal('projection')}
-          style={{ background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)', border: '1.5px solid color-mix(in oklab, var(--primary-500) 72%, var(--neutral-200) 28%)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 58, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'pointer' }}
+          style={{
+            background: 'linear-gradient(135deg, #0F4C5C 0%, #245E6D 62%, #DDEFF4 98%)',
+            border: '1.5px solid rgba(255,255,255,0.96)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-2) var(--space-3)',
+            minHeight: 58,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            cursor: 'pointer',
+          }}
         >
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
             projection 2026
           </p>
-          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#F2B622', lineHeight: 1, textShadow: '0 1px 1px rgba(0,0,0,0.22)' }}>
             {projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}
           </p>
         </button>
       </div>
 
       <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-        <AnimatePresence mode="wait" initial={false}>
-          {expenseSlide === 0 ? (
-            <motion.div
-              key="expense-slide-category"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AnnualProjectionSectionConnected
-                viewMode="category"
-                hideModeToggle
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="expense-slide-year"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AnnualProjectionSectionConnected
-                viewMode="year"
-                hideModeToggle
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div style={{ height: 354, overflow: 'hidden' }}>
+          <AnimatePresence mode="wait" initial={false}>
+            {expenseSlide === 0 ? (
+              <motion.div
+                key="expense-slide-category"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AnnualProjectionSectionConnected
+                  viewMode="category"
+                  hideModeToggle
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="expense-slide-year"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AnnualProjectionSectionConnected
+                  viewMode="year"
+                  hideModeToggle
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)', marginTop: 8 }}>
-          {([0, 1] as const).map((idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setExpenseSlide(idx)}
-              aria-label={`Slide dépenses ${idx + 1} sur 2`}
-              style={{ minWidth: 'var(--touch-target-min)', minHeight: 'var(--touch-target-min)', borderRadius: 'var(--radius-full)', border: 'none', padding: 0, background: 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all var(--transition-base)' }}
-            >
-              <span
-                aria-hidden="true"
-                style={{ display: 'block', width: idx === expenseSlide ? 14 : 8, height: idx === expenseSlide ? 14 : 8, borderRadius: 'var(--radius-full)', background: idx === expenseSlide ? 'var(--primary-500)' : 'var(--neutral-300)', transition: 'all var(--transition-base)' }}
-              />
-            </button>
-          ))}
+        <div
+          role="tablist"
+          aria-label="Sélection du graphique de projection dépenses"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 4,
+            padding: 3,
+            borderRadius: 'var(--radius-full)',
+            background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
+            border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)',
+            marginTop: 8,
+          }}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={expenseSlide === 0}
+            onClick={() => setExpenseSlide(0)}
+            style={expenseSlideToggleButtonStyle(expenseSlide === 0)}
+          >
+            Catégories
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={expenseSlide === 1}
+            onClick={() => setExpenseSlide(1)}
+            style={expenseSlideToggleButtonStyle(expenseSlide === 1)}
+          >
+            Socles
+          </button>
         </div>
       </div>
 

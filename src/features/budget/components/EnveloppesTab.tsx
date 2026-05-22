@@ -85,7 +85,7 @@ const BLOCK_COLORS: Record<string, string> = {
   discretionnaire: '#FC5A5A',
 }
 
-const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'provision', 'epargne']
+const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'provision']
 const SOCLE_LIST_LABELS: Record<string, string> = {
   socle_fixe: 'Fixe',
   variable_essentielle: 'Variable essentielle',
@@ -561,6 +561,10 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
     () => (Array.isArray(budgetPayload?.by_category) ? budgetPayload.by_category : []),
     [budgetPayload],
   )
+  const parentCategoryRowsWithoutSavings = useMemo(
+    () => payloadByParentCategory.filter((row) => normalizeCategoryLabel(row.parent_category_name) !== 'epargne'),
+    [payloadByParentCategory],
+  )
   const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
 
   const now = new Date()
@@ -596,20 +600,20 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
 
   const catRealPieData = useMemo<PieDatum[]>(
     () =>
-      payloadByParentCategory
+      parentCategoryRowsWithoutSavings
         .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.actual_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
         .sort(sortPieByCategoryOrder),
-    [payloadByParentCategory],
+    [parentCategoryRowsWithoutSavings],
   )
 
   const catBudgetPieData = useMemo<PieDatum[]>(
     () =>
-      payloadByParentCategory
+      parentCategoryRowsWithoutSavings
         .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.budget_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
         .filter((d) => d.value > 0)
         .sort(sortPieByCategoryOrder),
-    [payloadByParentCategory],
+    [parentCategoryRowsWithoutSavings],
   )
 
   const bucketRealPieData = useMemo<PieDatum[]>(
@@ -1116,7 +1120,7 @@ export function EnveloppesTab({ onCategoryClick, onBlockClick, onRevenueClick }:
       {/* ── details section ── */}
       {viewMode === 'categories' ? (
         <CategoryDetailsSection
-          rows={payloadByParentCategory}
+          rows={parentCategoryRowsWithoutSavings}
           categoryById={categoryById}
           onCategoryClick={onCategoryClick}
         />

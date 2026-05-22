@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpCircle, Car, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
 import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
@@ -11,10 +12,13 @@ import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/
 type InsightId = 'savings' | 'income'
 type RepartitionInsightId = 'achats-divers' | 'transport'
 type AnalyticsDisplayMode = 'analyse' | 'data'
+type ExpandableCardId = InsightId | RepartitionInsightId
 
 const REPARTITION_SLIDE_FRAME_HEIGHT = 438
 const SECTION_BORDER_WIDTH = '4px'
-const DEEP_YELLOW = '#B8860B'
+const DEEP_YELLOW = '#D4AF37'
+const INSIGHT_ARROW_BADGE_BG = '#C61CFF'
+const STRUCTURAL_SPEND_MONTHLY = 145
 
 const FLUX_INSIGHTS = {
   savings: {
@@ -56,16 +60,16 @@ const REPARTITION_INSIGHTS = {
   },
   transport: {
     id: 'transport' as const,
-    titleValue: '×8',
-    titleSuffix: 'transport',
+    titleValue: '+3',
+    titleSuffix: 'postes dépenses\nstructurels',
     subtitle: 'de nouvelles catégories structurelles et ponctuelles impactent le budget 2026',
     detailBody:
       "Le transport devient un poste structurel en 2026, avec une hausse régulière sur les premiers mois et un poids plus significatif dans le budget opérationnel.",
     accentColor: '#FC5A5A',
     topDivergences: [
-      { category: 'transport', deltaPct: 701, y2025: 93, y2026: 701 },
-      { category: 'abonnements', deltaPct: 158, y2025: 166, y2026: 428 },
-      { category: "retrait d'espèces", deltaPct: 69, y2025: 1410, y2026: 2380 },
+      { category: 'transport', iconKey: 'transport', deltaLabel: 'x8', y2025: 93, y2026: 701, variant: 'paired' },
+      { category: 'abonnements', iconKey: 'abonnements', deltaLabel: 'x2,5', y2025: 166, y2026: 428, variant: 'paired' },
+      { category: 'famille/enfant', iconKey: 'famille_enfant', deltaLabel: `+${STRUCTURAL_SPEND_MONTHLY}€/mois`, y2025: 0, y2026: STRUCTURAL_SPEND_MONTHLY, variant: 'single' },
     ] as const,
   },
 }
@@ -85,13 +89,120 @@ const SAVINGS_KPI_ROWS: SavingsKpiRow[] = [
 
 export function BudgetsAnalyticsTab() {
   const [displayMode, setDisplayMode] = useState<AnalyticsDisplayMode>('analyse')
-  const [expandedInsightId, setExpandedInsightId] = useState<InsightId | null>(null)
-  const [expandedRepartitionInsightId, setExpandedRepartitionInsightId] = useState<RepartitionInsightId | null>(null)
+  const [expandedCardId, setExpandedCardId] = useState<ExpandableCardId | null>(null)
+  const [expandedBottomSpacing, setExpandedBottomSpacing] = useState(false)
+  const [fluxDataView, setFluxDataView] = useState<'table' | 'chart'>('table')
+  const [fluxDataYear, setFluxDataYear] = useState<2025 | 2026>(2026)
+  const firstRowExpanded = expandedCardId === 'savings' || expandedCardId === 'income'
+  const secondRowExpanded = expandedCardId === REPARTITION_INSIGHTS.achatsDivers.id || expandedCardId === REPARTITION_INSIGHTS.transport.id
+  const cardsGridRef = useRef<HTMLDivElement | null>(null)
+  const cardRefs = useRef<Record<ExpandableCardId, HTMLElement | null>>({
+    savings: null,
+    income: null,
+    'achats-divers': null,
+    transport: null,
+  })
+  const pendingScrollIntentRef = useRef<{ cardId: ExpandableCardId; expanding: boolean } | null>(null)
+  const scrollAnimationFrameRef = useRef<number | null>(null)
+
+  const runTravelScroll = (targetTop: number, onComplete?: () => void) => {
+    if (typeof window === 'undefined') return
+    if (scrollAnimationFrameRef.current != null) {
+      window.cancelAnimationFrame(scrollAnimationFrameRef.current)
+      scrollAnimationFrameRef.current = null
+    }
+
+    const startTop = window.scrollY
+    const destination = Math.max(0, targetTop)
+    const distance = destination - startTop
+    if (Math.abs(distance) < 2) {
+      onComplete?.()
+      return
+    }
+
+    const duration = 280
+    const start = performance.now()
+    const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4)
+
+    const tick = (now: number) => {
+      const elapsed = now - start
+      const progress = Math.min(1, elapsed / duration)
+      const eased = easeOutQuart(progress)
+      window.scrollTo(0, startTop + distance * eased)
+      if (progress < 1) {
+        scrollAnimationFrameRef.current = window.requestAnimationFrame(tick)
+      } else {
+        scrollAnimationFrameRef.current = null
+        onComplete?.()
+      }
+    }
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(tick)
+  }
+
+  useEffect(() => {
+    if (displayMode !== 'analyse') {
+      pendingScrollIntentRef.current = null
+      return
+    }
+
+    const intent = pendingScrollIntentRef.current
+    if (!intent) return
+    pendingScrollIntentRef.current = null
+
+    let frameA = 0
+    let frameB = 0
+    const topOffset = 12
+
+    frameA = window.requestAnimationFrame(() => {
+      frameB = window.requestAnimationFrame(() => {
+        if (intent.expanding) {
+          const cardEl = cardRefs.current[intent.cardId]
+          if (!cardEl) return
+          const targetTop = window.scrollY + cardEl.getBoundingClientRect().top - topOffset
+          runTravelScroll(targetTop, () => {
+            setExpandedBottomSpacing(true)
+          })
+          return
+        }
+
+        const gridEl = cardsGridRef.current
+        if (!gridEl) return
+        const targetTop = window.scrollY + gridEl.getBoundingClientRect().top - topOffset
+        runTravelScroll(targetTop)
+        setExpandedBottomSpacing(false)
+      })
+    })
+
+    return () => {
+      if (frameA) window.cancelAnimationFrame(frameA)
+      if (frameB) window.cancelAnimationFrame(frameB)
+    }
+  }, [displayMode, expandedCardId])
+
+  useEffect(() => () => {
+    if (scrollAnimationFrameRef.current != null) {
+      window.cancelAnimationFrame(scrollAnimationFrameRef.current)
+    }
+  }, [])
+
+  const handleCardToggle = (id: ExpandableCardId) => {
+    setExpandedCardId((previous) => {
+      const next = previous === id ? null : id
+      pendingScrollIntentRef.current = { cardId: id, expanding: next === id }
+      if (next === id) {
+        setExpandedBottomSpacing(false)
+      } else {
+        setExpandedBottomSpacing(false)
+      }
+      return next
+    })
+  }
 
   return (
-    <section style={{ width: '100%', boxSizing: 'border-box', display: 'grid', gap: 'var(--space-6)' }}>
+    <section style={{ width: '100%', boxSizing: 'border-box', display: 'grid', gap: displayMode === 'analyse' ? 'var(--space-3)' : 'var(--space-6)' }}>
       {/* ── controls: period info + analyse/data selectors ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: '0 var(--page-gutter)', marginBottom: 'var(--space-3)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: '0 var(--page-gutter)', marginBottom: 0 }}>
         <span
           style={{
             fontSize: 'var(--font-size-sm)',
@@ -116,60 +227,72 @@ export function BudgetsAnalyticsTab() {
 
       {displayMode === 'analyse' ? (
         <>
-          <section style={{ padding: '0 var(--space-4)', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <section
+            style={{
+              padding: '0 var(--space-4)',
+              width: '100%',
+              boxSizing: 'border-box',
+              display: 'flex',
+            }}
+          >
+            <div style={{ maxWidth: 640, margin: '0 auto', width: '100%', display: 'flex' }}>
               <motion.div
+                ref={cardsGridRef}
                 layout
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)', alignItems: 'stretch' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 260, mass: 0.7 }}
+                style={{
+                  width: '100%',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 'var(--space-3)',
+                  alignItems: 'stretch',
+                }}
               >
                 <InsightCard
-                  icon="savings"
+                  cardRef={(node) => { cardRefs.current.savings = node }}
                   titleValue={FLUX_INSIGHTS.savings.titleValue}
                   titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
-                  isExpanded={expandedInsightId === 'savings'}
-                  onToggle={() => setExpandedInsightId((prev) => (prev === 'savings' ? null : 'savings'))}
+                  isExpanded={expandedCardId === 'savings'}
+                  onToggle={() => handleCardToggle('savings')}
                 />
                 <InsightCard
-                  icon="income"
+                  cardRef={(node) => { cardRefs.current.income = node }}
                   titleValue={FLUX_INSIGHTS.income.titleValue}
                   titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
-                  isExpanded={expandedInsightId === 'income'}
-                  onToggle={() => setExpandedInsightId((prev) => (prev === 'income' ? null : 'income'))}
-                />
-                <RepartitionInsightCard
-                  icon="shopping"
-                  titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
-                  titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
-                  isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id}
-                  onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                    prev === REPARTITION_INSIGHTS.achatsDivers.id ? null : REPARTITION_INSIGHTS.achatsDivers.id
-                  ))}
-                />
-                <RepartitionInsightCard
-                  icon="transport"
-                  titleValue={REPARTITION_INSIGHTS.transport.titleValue}
-                  titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
-                  isExpanded={expandedRepartitionInsightId === REPARTITION_INSIGHTS.transport.id}
-                  onToggle={() => setExpandedRepartitionInsightId((prev) => (
-                    prev === REPARTITION_INSIGHTS.transport.id ? null : REPARTITION_INSIGHTS.transport.id
-                  ))}
+                  isExpanded={expandedCardId === 'income'}
+                  onToggle={() => handleCardToggle('income')}
                 />
 
-                <AnimatePresence initial={false}>
-                  {expandedInsightId ? (
+                <AnimatePresence mode="wait" initial={false}>
+                  {firstRowExpanded ? (
                     <ExpandedInsightPanel
-                      insightId={expandedInsightId}
+                      key={expandedCardId}
+                      insightId={expandedCardId as InsightId}
                     />
                   ) : null}
                 </AnimatePresence>
 
-                <AnimatePresence initial={false}>
-                  {expandedRepartitionInsightId ? (
+                <RepartitionInsightCard
+                  cardRef={(node) => { cardRefs.current['achats-divers'] = node }}
+                  titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
+                  titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
+                  isExpanded={expandedCardId === REPARTITION_INSIGHTS.achatsDivers.id}
+                  onToggle={() => handleCardToggle(REPARTITION_INSIGHTS.achatsDivers.id)}
+                />
+                <RepartitionInsightCard
+                  cardRef={(node) => { cardRefs.current.transport = node }}
+                  titleValue={REPARTITION_INSIGHTS.transport.titleValue}
+                  titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
+                  isExpanded={expandedCardId === REPARTITION_INSIGHTS.transport.id}
+                  onToggle={() => handleCardToggle(REPARTITION_INSIGHTS.transport.id)}
+                />
+
+                <AnimatePresence mode="wait" initial={false}>
+                  {secondRowExpanded ? (
                     <ExpandedRepartitionInsightPanel
-                      key={expandedRepartitionInsightId}
-                      insightId={expandedRepartitionInsightId}
-                      detailBody={expandedRepartitionInsightId === REPARTITION_INSIGHTS.achatsDivers.id
+                      key={expandedCardId}
+                      insightId={expandedCardId as RepartitionInsightId}
+                      detailBody={expandedCardId === REPARTITION_INSIGHTS.achatsDivers.id
                         ? REPARTITION_INSIGHTS.achatsDivers.detailBody
                         : REPARTITION_INSIGHTS.transport.detailBody}
                     />
@@ -178,6 +301,17 @@ export function BudgetsAnalyticsTab() {
               </motion.div>
             </div>
           </section>
+          <motion.div
+            aria-hidden="true"
+            initial={false}
+            animate={{
+              height: expandedCardId && expandedBottomSpacing
+                ? 'calc(var(--space-12) + var(--safe-bottom-offset))'
+                : '0px',
+            }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
+            style={{ pointerEvents: 'none' }}
+          />
         </>
       ) : (
         <>
@@ -185,13 +319,119 @@ export function BudgetsAnalyticsTab() {
 
           <RepartitionComparisonSection />
 
-          <MajorSectionHeading title="Analyse des flux mensuels" marginTop="0" />
+          <section style={{ padding: '0 var(--space-6)', marginTop: '0', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
+              <div
+                aria-hidden="true"
+                style={{
+                  height: 2,
+                  width: '100%',
+                  background: '#121212',
+                  borderRadius: 'var(--radius-full)',
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderTop: '8px solid transparent',
+                      borderBottom: '8px solid transparent',
+                      borderLeft: '14px solid #121212',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-lg)',
+                      fontWeight: 'var(--font-weight-bold)',
+                      color: 'var(--neutral-900)',
+                    }}
+                  >
+                    Analyse des flux mensuels
+                  </h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, padding: 4, borderRadius: 'var(--radius-full)', background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)', border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => setFluxDataYear(2025)}
+                    aria-label="Afficher les données flux 2025"
+                    aria-pressed={fluxDataYear === 2025}
+                    style={slideNavButtonStyle(fluxDataYear === 2025)}
+                  >
+                    2025
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFluxDataYear(2026)}
+                    aria-label="Afficher les données flux 2026"
+                    aria-pressed={fluxDataYear === 2026}
+                    style={slideNavButtonStyle(fluxDataYear === 2026)}
+                  >
+                    2026
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <MonthlyFlowsAnalysisCard
-            year={2026}
-            showInternalViewToggle
-            variant="standalone"
-          />
+          <section style={{ position: 'relative' }}>
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 'max(var(--space-6), calc((100% - 600px) / 2))',
+                width: SECTION_BORDER_WIDTH,
+                background: DEEP_YELLOW,
+                borderRadius: 'var(--radius-full)',
+                pointerEvents: 'none',
+                zIndex: 4,
+              }}
+            />
+            <MonthlyFlowsAnalysisCard
+              year={fluxDataYear}
+              showInternalViewToggle={false}
+              forcedView={fluxDataView}
+              variant="standalone"
+            />
+            <div style={{ padding: '0 var(--space-6)', marginTop: 'var(--space-3)' }}>
+              <div style={{
+                maxWidth: 600,
+                margin: '0 auto',
+                padding: 4,
+                borderRadius: 'var(--radius-full)',
+                background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
+                border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 4,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setFluxDataView('table')}
+                  aria-label="Afficher la vue Tableau des flux mensuels"
+                  aria-pressed={fluxDataView === 'table'}
+                  style={slideNavButtonStyle(fluxDataView === 'table')}
+                >
+                  Tableau
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFluxDataView('chart')}
+                  aria-label="Afficher la vue Graphique des flux mensuels"
+                  aria-pressed={fluxDataView === 'chart'}
+                  style={slideNavButtonStyle(fluxDataView === 'chart')}
+                >
+                  Graphique
+                </button>
+              </div>
+            </div>
+          </section>
         </>
       )}
     </section>
@@ -199,32 +439,21 @@ export function BudgetsAnalyticsTab() {
 }
 
 function InsightCard({
-  icon,
+  cardRef,
   titleValue,
   titleSuffix,
   isExpanded,
   onToggle,
 }: {
-  icon: 'savings' | 'income'
+  cardRef?: (node: HTMLElement | null) => void
   titleValue: string
   titleSuffix: string
   isExpanded: boolean
   onToggle: () => void
 }) {
-  const Icon = icon === 'savings' ? PiggyBank : ArrowUpCircle
-  const iconStyle =
-    icon === 'savings'
-      ? {
-          background: 'color-mix(in oklab, #FFAB2E 20%, white 80%)',
-          color: '#FFAB2E',
-        }
-      : {
-          background: 'color-mix(in oklab, #7C3AED 20%, white 80%)',
-          color: '#7C3AED',
-        }
-
   return (
     <motion.article
+      ref={cardRef}
       layout
       transition={{ duration: 0.22, ease: 'easeOut' }}
       style={{
@@ -241,66 +470,42 @@ function InsightCard({
       }}
     >
       <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <span
-          aria-hidden="true"
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
+          aria-expanded={isExpanded}
           style={{
             width: 44,
             height: 44,
             borderRadius: 'var(--radius-full)',
-            background: iconStyle.background,
+            background: isExpanded ? DEEP_YELLOW : INSIGHT_ARROW_BADGE_BG,
+            border: 'none',
+            padding: 0,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: iconStyle.color,
+            color: 'var(--neutral-0)',
             flexShrink: 0,
+            cursor: 'pointer',
           }}
         >
-          <Icon size={22} strokeWidth={2.2} color={iconStyle.color} />
-        </span>
+          {isExpanded ? (
+            <ChevronDown size={22} strokeWidth={2.6} color="var(--neutral-0)" />
+          ) : (
+            <ChevronRight size={22} strokeWidth={2.6} color="var(--neutral-0)" />
+          )}
+        </button>
         <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
-          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: '#FC5A5A', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
             {titleValue}
           </p>
-          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1, whiteSpace: 'pre-line' }}>
             {titleSuffix}
           </p>
         </div>
       </div>
 
-      <div
-        aria-hidden="true"
-        style={{
-          height: 1,
-          width: 'calc(100% - 44px - var(--space-2))',
-          marginLeft: 'calc(44px + var(--space-2))',
-          background: 'var(--neutral-700)',
-        }}
-      />
-
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
-        aria-expanded={isExpanded}
-        style={{
-          border: 'none',
-          background: 'transparent',
-          padding: '2px 0 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
-      >
-        <ChevronDown
-          size={24}
-          color="var(--neutral-600)"
-          style={{
-            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 180ms ease',
-          }}
-        />
-      </button>
     </motion.article>
   )
 }
@@ -340,18 +545,13 @@ function ExpandedInsightPanel({
       }}
     >
       {insightId === 'savings' ? (
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-1)' }}>
-          {([
-            { bullet: '▶', text: 'Compression importante des revenus (-81% hors janvier)' },
-            { bullet: '▶', text: 'Maintien, et même augmentation des dépenses (+9,3%)' },
-            { bullet: '⟶', text: 'Conséquence : -87% d’épargne sur le début d’année' },
-          ] as const).map(({ bullet, text }) => (
-            <li key={text} style={{ display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--neutral-900)' }}>
-              <span style={{ color: 'var(--primary-500)', fontSize: bullet === '⟶' ? 12 : 8, flexShrink: 0, fontWeight: 700 }}>{bullet}</span>
-              {text}
-            </li>
-          ))}
-        </ul>
+        <InsightKpiRow
+          items={[
+            { label: 'Revenus', value: '-81%', note: 'hors janvier', accent: 'var(--primary-500)' },
+            { label: 'Dépenses', value: '+9,3%', note: 'YTD', accent: '#F97316' },
+            { label: 'Épargne', value: '-87%', note: 'YTD', accent: '#C74335' },
+          ]}
+        />
       ) : null}
 
       {insightId === 'savings' ? <SavingsInsightKpis /> : null}
@@ -397,32 +597,21 @@ function ExpandedInsightPanel({
 }
 
 function RepartitionInsightCard({
-  icon,
+  cardRef,
   titleValue,
   titleSuffix,
   isExpanded,
   onToggle,
 }: {
-  icon: 'shopping' | 'transport'
+  cardRef?: (node: HTMLElement | null) => void
   titleValue: string
   titleSuffix: string
   isExpanded: boolean
   onToggle: () => void
 }) {
-  const Icon = icon === 'shopping' ? ShoppingBag : Car
-  const iconStyle =
-    icon === 'shopping'
-      ? {
-          background: 'color-mix(in oklab, #FFAB2E 20%, white 80%)',
-          color: '#FFAB2E',
-        }
-      : {
-          background: 'color-mix(in oklab, #7C3AED 20%, white 80%)',
-          color: '#7C3AED',
-        }
-
   return (
     <motion.article
+      ref={cardRef}
       layout
       transition={{ duration: 0.22, ease: 'easeOut' }}
       style={{
@@ -439,66 +628,42 @@ function RepartitionInsightCard({
       }}
     >
       <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr)', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <span
-          aria-hidden="true"
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
+          aria-expanded={isExpanded}
           style={{
             width: 44,
             height: 44,
             borderRadius: 'var(--radius-full)',
-            background: iconStyle.background,
+            background: isExpanded ? DEEP_YELLOW : INSIGHT_ARROW_BADGE_BG,
+            border: 'none',
+            padding: 0,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: iconStyle.color,
+            color: 'var(--neutral-0)',
             flexShrink: 0,
+            cursor: 'pointer',
           }}
         >
-          <Icon size={22} strokeWidth={2.2} color={iconStyle.color} />
-        </span>
+          {isExpanded ? (
+            <ChevronDown size={22} strokeWidth={2.6} color="var(--neutral-0)" />
+          ) : (
+            <ChevronRight size={22} strokeWidth={2.6} color="var(--neutral-0)" />
+          )}
+        </button>
         <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
-          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: '#FC5A5A', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
             {titleValue}
           </p>
-          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1, whiteSpace: 'pre-line' }}>
             {titleSuffix}
           </p>
         </div>
       </div>
 
-      <div
-        aria-hidden="true"
-        style={{
-          height: 1,
-          width: 'calc(100% - 44px - var(--space-2))',
-          marginLeft: 'calc(44px + var(--space-2))',
-          background: 'var(--neutral-700)',
-        }}
-      />
-
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
-        aria-expanded={isExpanded}
-        style={{
-          border: 'none',
-          background: 'transparent',
-          padding: '2px 0 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
-      >
-        <ChevronDown
-          size={24}
-          color="var(--neutral-600)"
-          style={{
-            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 180ms ease',
-          }}
-        />
-      </button>
     </motion.article>
   )
 }
@@ -528,16 +693,26 @@ function ExpandedRepartitionInsightPanel({
         gap: 'var(--space-3)',
       }}
     >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: 'var(--neutral-900)',
-        }}
-      >
-        {detailBody}
-      </p>
+      {insightId !== REPARTITION_INSIGHTS.transport.id ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: 'var(--neutral-900)',
+          }}
+        >
+          {detailBody}
+        </p>
+      ) : (
+        <InsightKpiRow
+          items={[
+            { label: 'Transport', value: 'x8', note: 'YTD', accent: 'var(--primary-500)' },
+            { label: 'Abonn.', value: 'x2,5', note: 'YTD', accent: '#F97316' },
+            { label: 'Enfant', value: `+${STRUCTURAL_SPEND_MONTHLY}€/m`, note: 'mensuel', accent: '#FFAB2E' },
+          ]}
+        />
+      )}
 
       {insightId === REPARTITION_INSIGHTS.achatsDivers.id ? <AchatsDiversExpandedContent /> : null}
       {insightId === REPARTITION_INSIGHTS.transport.id ? <TransportExpandedContent /> : null}
@@ -545,9 +720,50 @@ function ExpandedRepartitionInsightPanel({
   )
 }
 
+type InsightKpiItem = {
+  label: string
+  value: string
+  note?: string
+  accent: string
+}
+
+function InsightKpiRow({ items }: { items: InsightKpiItem[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+      {items.map((item) => (
+        <div
+          key={`${item.label}-${item.value}`}
+          style={{
+            border: '1px solid var(--neutral-300)',
+            borderTop: `2px solid ${item.accent}`,
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--neutral-0)',
+            padding: '8px var(--space-3)',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            minHeight: 58,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: item.accent, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            {item.label}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, whiteSpace: 'nowrap' }}>
+            {item.value}
+          </p>
+          {item.note ? <p style={{ margin: '1px 0 0', fontSize: 9, color: 'var(--neutral-500)', lineHeight: 1 }}>{item.note}</p> : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function TransportExpandedContent() {
   const rows = REPARTITION_INSIGHTS.transport.topDivergences
-  const maxValue = Math.max(...rows.flatMap((row) => [row.y2025, row.y2026]), 1)
+  const maxValue = Math.max(...rows.flatMap((row) => [row.y2025, row.y2026]), STRUCTURAL_SPEND_MONTHLY, 1)
 
   return (
     <div
@@ -568,6 +784,7 @@ function TransportExpandedContent() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LegendDot color="#5C6276" label="2025" />
           <LegendDot color="#2ED47A" label="2026" />
+          <LegendDot color="#FFAB2E" label="Budget mensuel famille/enfant" />
         </div>
       </div>
 
@@ -581,11 +798,11 @@ function TransportExpandedContent() {
         }}
       >
         {rows.map((row) => {
-          const h2025 = Math.max((row.y2025 / maxValue) * 124, 8)
-          const h2026 = Math.max((row.y2026 / maxValue) * 124, 8)
+          const h2025 = Math.max((row.y2025 / maxValue) * 104, 8)
+          const h2026 = Math.max((row.y2026 / maxValue) * 104, 8)
 
           return (
-            <div key={row.category} style={{ minWidth: 0, display: 'grid', gap: 6, justifyItems: 'center' }}>
+            <div key={row.category} style={{ minWidth: 0, display: 'grid', gap: 4, justifyItems: 'center' }}>
               <span
                 style={{
                   fontSize: 11,
@@ -595,35 +812,111 @@ function TransportExpandedContent() {
                   lineHeight: 1,
                 }}
               >
-                +{row.deltaPct}%
+                {row.deltaLabel}
               </span>
 
-              <div style={{ height: 130, display: 'flex', alignItems: 'end', gap: 8 }}>
-                <span
-                  style={{
-                    width: 18,
-                    height: h2025,
-                    borderRadius: '6px 6px 0 0',
-                    background: '#5C6276',
-                  }}
-                />
-                <span
-                  style={{
-                    width: 18,
-                    height: h2026,
-                    borderRadius: '6px 6px 0 0',
-                    background: '#2ED47A',
-                  }}
-                />
+              <div style={{ height: 106, display: 'flex', alignItems: 'end', gap: 8 }}>
+                {row.variant === 'paired' ? (
+                  <>
+                    <div style={{ position: 'relative', width: 18, height: '100%' }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          bottom: h2025 + 4,
+                          transform: 'translateX(-50%)',
+                          fontSize: 8,
+                          lineHeight: 1,
+                          color: '#5B6070',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatCompactCurrency(row.y2025).replace(/\s*€/u, '€')}
+                      </span>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          bottom: 0,
+                          width: 18,
+                          height: h2025,
+                          borderRadius: '6px 6px 0 0',
+                          background: '#5C6276',
+                        }}
+                      />
+                    </div>
+                    <div style={{ position: 'relative', width: 18, height: '100%' }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          bottom: h2026 + 4,
+                          transform: 'translateX(-50%)',
+                          fontSize: 8,
+                          lineHeight: 1,
+                          color: '#5B6070',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatCompactCurrency(row.y2026).replace(/\s*€/u, '€')}
+                      </span>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          bottom: 0,
+                          width: 18,
+                          height: h2026,
+                          borderRadius: '6px 6px 0 0',
+                          background: '#2ED47A',
+                        }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ position: 'relative', width: 24, height: '100%' }}>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: '50%',
+                        bottom: h2026 + 4,
+                        transform: 'translateX(-50%)',
+                        fontSize: 8,
+                        lineHeight: 1,
+                        color: '#5B6070',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatCompactCurrency(row.y2026).replace(/\s*€/u, '€')}
+                    </span>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: 0,
+                        width: 24,
+                        height: h2026,
+                        borderRadius: '6px 6px 0 0',
+                        background: '#FFAB2E',
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               <p
                 style={{
                   margin: 0,
-                  minHeight: 30,
+                  minHeight: 22,
                   textAlign: 'center',
                   fontSize: 10,
-                  lineHeight: 1.25,
+                  lineHeight: 1.15,
                   fontWeight: 700,
                   color: '#5B6070',
                   textTransform: 'none',
@@ -632,19 +925,7 @@ function TransportExpandedContent() {
                 {row.category}
               </p>
 
-              <p
-                style={{
-                  margin: 0,
-                  textAlign: 'center',
-                  fontSize: 11,
-                  lineHeight: 1.2,
-                  color: '#3F4454',
-                  fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {formatCompactCurrency(row.y2025)} / {formatCompactCurrency(row.y2026)}
-              </p>
+              <CategoryIcon iconKey={row.iconKey} label={row.category} size={18} />
             </div>
           )
         })}
@@ -1096,10 +1377,12 @@ function IncomeProjectionCards({
             borderRadius: 'var(--radius-lg)',
             background: 'var(--neutral-0)',
             padding: '8px var(--space-3)',
-            textAlign: 'left',
+            textAlign: 'center',
             cursor: 'pointer',
             display: 'flex',
             flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
             gap: 2,
             transition: 'border-color 140ms ease, box-shadow 140ms ease',
           }}
@@ -1124,10 +1407,12 @@ function IncomeProjectionCards({
             borderRadius: 'var(--radius-lg)',
             background: 'var(--neutral-0)',
             padding: '8px var(--space-3)',
-            textAlign: 'left',
+            textAlign: 'center',
             cursor: 'pointer',
             display: 'flex',
             flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
             gap: 2,
             transition: 'border-color 140ms ease, box-shadow 140ms ease',
           }}

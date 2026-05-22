@@ -147,11 +147,11 @@ export function SavingsHeroCard({ onOpenAllocationModal }: SavingsHeroCardProps)
             minHeight: '56px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, minHeight: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', minWidth: 0, minHeight: '100%' }}>
             <p
               style={{
                 margin: 0,
-                fontSize: 'clamp(22px, 6vw, 30px)',
+                fontSize: 'clamp(24px, 6.4vw, 33px)',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--neutral-0)',

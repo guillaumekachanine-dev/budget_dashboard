@@ -232,9 +232,7 @@ function AnnualCostProjectionCard({
   const [openedDeltaBreakdownBlockKey, setOpenedDeltaBreakdownBlockKey] = useState<string | null>(null)
   const [showListModal, setShowListModal] = useState(false)
   const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
-  const selectedDetailsAnchorRef = useRef<HTMLDivElement | null>(null)
   const deltaTooltipRef = useRef<HTMLDivElement | null>(null)
-  const wasDetailsVisibleRef = useRef(false)
   const { data: categories = [] } = useCategories()
   const viewMode = controlledViewMode ?? internalViewMode
 
@@ -487,46 +485,10 @@ function AnnualCostProjectionCard({
     }
   }, [selectedDeltaTooltip])
 
-  const selectedRow = useMemo(
-    () => parentGroups.find((group) => group.parentKey === selectedParentKey) ?? null,
-    [parentGroups, selectedParentKey],
-  )
-
   const openedParentGroup = useMemo(
     () => parentGroups.find((group) => group.parentKey === openedParentKey) ?? null,
     [parentGroups, openedParentKey],
   )
-
-  useEffect(() => {
-    if (selectedRow == null) {
-      wasDetailsVisibleRef.current = false
-      return
-    }
-    if (viewMode !== 'category') return
-    if (wasDetailsVisibleRef.current) return
-
-    wasDetailsVisibleRef.current = true
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
-
-    let timeoutId: number | undefined
-    const rafId = window.requestAnimationFrame(() => {
-      selectedDetailsAnchorRef.current?.scrollIntoView({
-        behavior,
-        block: 'end',
-      })
-
-      timeoutId = window.setTimeout(() => {
-        const targetTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
-        window.scrollTo({ top: targetTop, behavior })
-      }, 180)
-    })
-
-    return () => {
-      window.cancelAnimationFrame(rafId)
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
-  }, [selectedRow, viewMode])
 
   const modeToggle = hideModeToggle ? null : (
     <div style={switchStyle} role="tablist" aria-label="Mode de projection">
@@ -773,30 +735,25 @@ function AnnualCostProjectionCard({
     </div>
   )
 
-  const selectedCard = selectedRow && viewMode === 'category'
-    ? <ProjectionDetailsCard row={selectedRow} />
-    : null
-  const categoryPlaceholderCard = viewMode === 'category' && !selectedCard
-    ? (
-      <ProjectionDetailsPlaceholderCard
-        rows={top5}
-        parentIconByName={parentIconByName}
-      />
-    )
-    : null
-  const yearSummaryCard = viewMode === 'year' ? (
+  const projectedNetSummary = (
     <DeltaBlockSummaryCard
       rows={deltaBlockSummaryRows}
-      onOpenBlockDetails={(blockKey) => setOpenedDeltaBreakdownBlockKey(blockKey)}
+      compactOnly
     />
-  ) : null
+  )
 
   const categoryHeaderControls = viewMode === 'category' ? (
-    <div style={categoryInlineControlsStyle}>
+    <div
+      style={{
+        ...categoryInlineControlsStyle,
+        width: hideModeToggle ? '100%' : 'auto',
+        justifyContent: hideModeToggle ? 'space-between' : 'flex-start',
+      }}
+    >
       <span style={top5LabelStyle}>Top 5 catégories</span>
       <button type="button" onClick={() => setShowListModal(true)} style={listButtonStyle}>
         <ChevronRight size={12} />
-        liste
+        liste complète
       </button>
     </div>
   ) : (
@@ -845,7 +802,7 @@ function AnnualCostProjectionCard({
       <>
         {chartTopControls}
         {chart}
-        <div ref={selectedDetailsAnchorRef}>{selectedCard ?? categoryPlaceholderCard ?? yearSummaryCard}</div>
+        {projectedNetSummary}
         {modal}
         {detailsModal}
         {deltaBreakdownModal}
@@ -868,7 +825,7 @@ function AnnualCostProjectionCard({
           </div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chartTopControls}</div>
           <div style={{ marginTop: 'var(--space-2)' }}>{chart}</div>
-          <div ref={selectedDetailsAnchorRef}>{selectedCard ?? categoryPlaceholderCard ?? yearSummaryCard}</div>
+          {projectedNetSummary}
         </div>
       </div>
       {modal}
@@ -880,16 +837,16 @@ function AnnualCostProjectionCard({
 
 function DeltaBlockSummaryCard({
   rows,
-  onOpenBlockDetails,
+  compactOnly = false,
 }: {
   rows: DeltaBlockSummaryRow[]
-  onOpenBlockDetails: (blockKey: string) => void
+  compactOnly?: boolean
 }) {
   const totalDeltaAmount = rows.reduce((sum, row) => sum + row.deltaAmount, 0)
   const totalDeltaPositive = totalDeltaAmount > 0
 
   return (
-    <div style={selectedCardStyle}>
+    <div style={compactOnly ? projectedNetInlineStyle : selectedCardStyle}>
       <div
         style={{
           display: 'grid',
@@ -899,18 +856,18 @@ function DeltaBlockSummaryCard({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '16px minmax(0,1fr) 90px 24px',
+            gridTemplateColumns: compactOnly ? 'minmax(0,1fr) auto' : '16px minmax(0,1fr) 90px 24px',
             alignItems: 'center',
             columnGap: 7,
             padding: '1px 0 4px',
           }}
         >
-          <span style={{ gridColumn: '1 / 3', fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>
+          <span style={{ gridColumn: compactOnly ? '1 / 2' : '1 / 3', fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}>
             Ecart net projeté 2026
           </span>
           <span
             style={{
-              gridColumn: '3 / 5',
+              gridColumn: compactOnly ? '2 / 3' : '3 / 5',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -931,121 +888,57 @@ function DeltaBlockSummaryCard({
           </span>
         </div>
 
-        {rows.map((row) => {
-          const isOverBudget = row.deltaAmount > 0
-          const pillColor = isOverBudget ? 'var(--negative)' : 'var(--positive)'
+        {!compactOnly
+          ? rows.map((row) => {
+              const isOverBudget = row.deltaAmount > 0
+              const pillColor = isOverBudget ? 'var(--negative)' : 'var(--positive)'
 
-          return (
-            <div
-              key={row.blockKey}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '16px minmax(0,1fr) 90px 24px',
-                alignItems: 'center',
-                columnGap: 7,
-                padding: '3px 0',
-              }}
-            >
-              <img
-                src={row.iconSrc ?? blockFixeIcon}
-                alt={`Bloc ${row.name}`}
-                width={15}
-                height={15}
-                style={{ width: 15, height: 15, objectFit: 'contain' }}
-              />
+              return (
+                <div
+                  key={row.blockKey}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '16px minmax(0,1fr) 90px 24px',
+                    alignItems: 'center',
+                    columnGap: 7,
+                    padding: '3px 0',
+                  }}
+                >
+                  <img
+                    src={row.iconSrc ?? blockFixeIcon}
+                    alt={`Bloc ${row.name}`}
+                    width={15}
+                    height={15}
+                    style={{ width: 15, height: 15, objectFit: 'contain' }}
+                  />
 
-              <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {row.name}
-                </span>
-              </div>
+                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {row.name}
+                    </span>
+                  </div>
 
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  color: pillColor,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'nowrap',
-                  width: 90,
-                }}
-              >
-                {fmtSignedCurrency(row.deltaAmount)}
-              </span>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      color: pillColor,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-mono)',
+                      whiteSpace: 'nowrap',
+                      width: 90,
+                    }}
+                  >
+                    {fmtSignedCurrency(row.deltaAmount)}
+                  </span>
 
-              <button
-                type="button"
-                onClick={() => onOpenBlockDetails(row.blockKey)}
-                aria-label={`Ouvrir le détail du bloc ${row.name}`}
-                style={deltaExpandButtonStyle}
-              >
-                +
-              </button>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function ProjectionDetailsPlaceholderCard({
-  rows,
-  parentIconByName,
-}: {
-  rows: ParentProjectionGroup[]
-  parentIconByName: Map<string, string | null>
-}) {
-  return (
-    <div style={{ ...selectedCardStyle, minHeight: 152 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--neutral-800)' }}>
-          Top 5 catégories dépenses
-        </span>
-      </div>
-      <div style={{ display: 'grid', gap: 6 }}>
-        {rows.map((row) => (
-          <div
-            key={row.parentKey}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '16px minmax(0,1fr) auto',
-              alignItems: 'center',
-              columnGap: 7,
-            }}
-          >
-            <CategoryIcon
-              iconKey={parentIconByName.get(row.parentKey) ?? null}
-              label={row.parentName}
-              size={15}
-            />
-            <span
-              style={{
-                fontSize: 12,
-                color: 'var(--neutral-800)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {row.parentName}
-            </span>
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--neutral-700)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {fmtCurrency(row.projectedAnnualAmount)}
-            </span>
-          </div>
-        ))}
+                  <span aria-hidden="true" style={{ width: 24, height: 24 }} />
+                </div>
+              )
+            })
+          : null}
       </div>
     </div>
   )
@@ -1201,67 +1094,6 @@ function DeltaBreakdownModal({
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ProjectionDetailsCard({ row }: { row: ParentProjectionGroup }) {
-  const theoreticalProjection = row.budgetAnnualAmount
-
-  const riskOverBudget = row.projectedVsBudgetPct > 0
-
-  return (
-    <div style={{ ...selectedCardStyle, borderColor: riskOverBudget ? 'rgba(252,90,90,0.25)' : 'rgba(46,212,122,0.28)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--neutral-800)' }}>
-          {row.parentName}
-        </span>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            fontFamily: 'var(--font-mono)',
-            color: riskOverBudget ? 'var(--negative)' : 'var(--positive)',
-            background: riskOverBudget ? 'rgba(252,90,90,0.1)' : 'rgba(46,212,122,0.12)',
-            borderRadius: 'var(--radius-full)',
-            padding: '3px 8px',
-          }}
-        >
-          {riskOverBudget ? 'risque dépassement' : 'sous contrôle'}
-        </span>
-      </div>
-
-      <div style={{ display: 'grid', gap: 5 }}>
-        <DetailRow label="consommé YTD" value={fmtCurrency(row.actualYtdAmount)} />
-        <DetailRow label="Moy. mensuelle YTD" value={fmtCurrency(row.avgMonthlyYtdAmount)} />
-        <DetailRow label="Mois restants" value={`${row.remainingMonths}`} />
-        <DetailRow label="budget annuel théorique" value={fmtCurrency(theoreticalProjection)} />
-        <DetailRow label="projection closing 2026 (mai)" value={fmtCurrency(row.projectedAnnualAmount)} />
-        <DetailRow
-          label="Ecart budget/projection"
-          value={`${fmtCurrency(row.projectedVsBudgetAmount)} (${fmtPctSigned(row.projectedVsBudgetPct)})`}
-          valueColor={riskOverBudget ? 'var(--negative)' : 'var(--positive)'}
-        />
-      </div>
-    </div>
-  )
-}
-
-function DetailRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string
-  value: string
-  valueColor?: string
-}) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-      <span style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{label}</span>
-      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: valueColor ?? 'var(--neutral-900)' }}>
-        {value}
-      </span>
     </div>
   )
 }
@@ -1698,38 +1530,25 @@ const selectedCardStyle: CSSProperties = {
   border: '1px solid var(--neutral-150)',
 }
 
+const projectedNetInlineStyle: CSSProperties = {
+  marginTop: 'var(--space-2)',
+  padding: '2px 0',
+}
+
 const listButtonStyle: CSSProperties = {
   background: 'none',
   border: '1px solid var(--neutral-300)',
   borderRadius: 'var(--radius-full)',
   padding: '4px 9px 4px 7px',
   fontSize: 10,
-  color: 'var(--neutral-600)',
+  color: 'var(--neutral-700)',
   cursor: 'pointer',
-  fontWeight: 400,
+  fontWeight: 500,
   fontFamily: 'var(--font-sans)',
   letterSpacing: '0.04em',
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-}
-
-const deltaExpandButtonStyle: CSSProperties = {
-  width: 24,
-  height: 24,
-  minWidth: 24,
-  minHeight: 24,
-  borderRadius: 'var(--radius-full)',
-  border: '1px solid var(--neutral-300)',
-  background: 'var(--neutral-0)',
-  color: 'var(--neutral-700)',
-  fontSize: 16,
-  lineHeight: 1,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-  padding: 0,
 }
 
 const deltaTooltipLayerStyle: CSSProperties = {

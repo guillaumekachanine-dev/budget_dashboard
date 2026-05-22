@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.png'
@@ -28,7 +27,7 @@ type StatsTabConfig = {
 }
 const STATS_TABS: StatsTabConfig[] = [
   { id: 'epargne', label: 'Épargne', iconSrc: epargneIcon },
-  { id: 'planning_2026', label: 'Planning 2026', iconSrc: planning2026Icon },
+  { id: 'planning_2026', label: 'Planning', iconSrc: planning2026Icon },
   { id: 'performance', label: 'Performance', iconSrc: performanceIcon },
   { id: 'optimisation', label: 'Optimisation', iconSrc: optimisationIcon },
 ]
@@ -422,39 +421,13 @@ export function Epargne() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
+                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
                 boxShadow: 'var(--shadow-lg)',
-                maxHeight: '78dvh',
-                overflowY: 'auto',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '2px auto var(--space-4)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                  Sélectionner un onglet
-                </p>
-                <button
-                  type="button"
-                  aria-label="Fermer"
-                  onClick={() => setShowTabModal(false)}
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    minWidth: 'var(--touch-target-min)',
-                    minHeight: 'var(--touch-target-min)',
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <div style={{ width: 28, height: 3, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '0 auto var(--space-2)' }} />
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STATS_TABS.length}, minmax(0, 1fr))`, gap: 'var(--space-2)' }}>
                 {STATS_TABS.map((tab) => {
                   const isActive = tab.id === activeTab.id
 
@@ -464,25 +437,19 @@ export function Epargne() {
                       type="button"
                       onClick={() => handleSelectTab(tab.id)}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: 0,
+                        border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
+                        background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '6px var(--space-2)',
                         cursor: 'pointer',
-                        display: 'grid',
-                        justifyItems: 'center',
-                        gap: 'var(--space-2)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 'var(--touch-target-min)',
+                        transition: 'background 150ms ease, border-color 150ms ease',
                       }}
                     >
-                      <img
-                        src={tab.iconSrc}
-                        alt={tab.label}
-                        width={34}
-                        height={34}
-                        style={{ width: 34, height: 34, objectFit: 'contain' }}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span style={{ fontSize: 10, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', textTransform: 'capitalize', whiteSpace: 'pre-line' }}>
+                      <span style={{ fontSize: 11, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {tab.label}
                       </span>
                     </button>

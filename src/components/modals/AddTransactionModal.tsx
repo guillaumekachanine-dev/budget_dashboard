@@ -725,8 +725,10 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const modalMaxHeight = useMemo(() => {
     const baseViewportHeight = viewportHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 720)
     const safetyMargin = isMobileViewport ? 20 : 40
-    const computedHeight = Math.max(420, Math.floor(baseViewportHeight - safetyMargin))
-    return `${computedHeight}px`
+    const availableHeight = Math.floor(baseViewportHeight - safetyMargin)
+    const preferredHeight = Math.max(180, availableHeight)
+    const clampedHeight = Math.min(preferredHeight, Math.floor(baseViewportHeight - 8))
+    return `${Math.max(120, clampedHeight)}px`
   }, [isMobileViewport, viewportHeight])
 
   const focusDescriptionInput = useCallback(() => {
@@ -978,8 +980,11 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="fixed left-1/2 top-1/2 w-[min(500px,calc(100vw-16px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 101, maxHeight: modalMaxHeight, height: 'min(82dvh, 100%)' }}
+            className={isMobileViewport
+              ? 'fixed left-1/2 top-[var(--space-2)] w-[min(500px,calc(100vw-16px))] -translate-x-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]'
+              : 'fixed left-1/2 top-1/2 w-[min(500px,calc(100vw-16px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]'
+            }
+            style={{ zIndex: 101, maxHeight: modalMaxHeight, height: isMobileViewport ? 'auto' : 'min(82dvh, 100%)' }}
             onClick={(event) => event.stopPropagation()}
           >
             <form onSubmit={handleSubmit(onSubmit)} className="flex h-full max-h-full flex-col">
