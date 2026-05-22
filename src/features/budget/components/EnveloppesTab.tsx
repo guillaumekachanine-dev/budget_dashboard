@@ -9,7 +9,7 @@ import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsM
 import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } from '@/lib/utils'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import type { Category, Transaction } from '@/lib/types'
-import type { BudgetPageParentCategoryRow, BudgetPageBucketRow } from '../types'
+import type { BudgetPageParentCategoryRow, BudgetPageBucketRow, BudgetPageCategoryRow } from '../types'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
@@ -480,6 +480,256 @@ function SubModal({
   )
 }
 
+// ─── all-envelopes modal ──────────────────────────────────────────────────────
+
+interface AllEnvelopesModalProps {
+  open: boolean
+  onClose: () => void
+  parentCategoryRows: BudgetPageParentCategoryRow[]
+  subCategoryRows: BudgetPageCategoryRow[]
+  categoryById: Map<string, Category>
+}
+
+function AllEnvelopesModal({ open, onClose, parentCategoryRows, subCategoryRows, categoryById }: AllEnvelopesModalProps) {
+  const [expandedParentId, setExpandedParentId] = useState<string | null>(null)
+
+  const sortedParents = useMemo(() => {
+    return [...parentCategoryRows]
+      .filter((row) => Number(row.budget_amount) > 0 && normalizeCategoryLabel(row.parent_category_name) !== 'epargne')
+      .sort((a, b) => {
+        const ra = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(a.parent_category_name)) ?? 999
+        const rb = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(b.parent_category_name)) ?? 999
+        if (ra !== rb) return ra - rb
+        return a.parent_category_name.localeCompare(b.parent_category_name, 'fr')
+      })
+  }, [parentCategoryRows])
+
+  const subsByParentId = useMemo(() => {
+    const map = new Map<string, BudgetPageCategoryRow[]>()
+    for (const row of subCategoryRows) {
+      if (!row.parent_category_id || Number(row.budget_amount) <= 0) continue
+      const existing = map.get(row.parent_category_id) ?? []
+      existing.push(row)
+      map.set(row.parent_category_id, existing)
+    }
+    for (const [key, rows] of map) {
+      map.set(key, [...rows].sort((a, b) => Number(b.budget_amount) - Number(a.budget_amount)))
+    }
+    return map
+  }, [subCategoryRows])
+
+  function handleToggle(parentId: string) {
+    setExpandedParentId((current) => (current === parentId ? null : parentId))
+  }
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 260, background: 'rgba(13,13,31,0.56)' }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 261,
+              display: 'grid',
+              placeItems: 'center',
+              padding: 'clamp(var(--space-6), 6dvh, var(--space-10)) var(--space-4)',
+              pointerEvents: 'none',
+            }}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 20, opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              style={{
+                width: 'min(520px, 100%)',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-2xl)',
+                maxHeight: '100%',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-lg)',
+                pointerEvents: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: 'var(--space-4) var(--space-5)',
+                  background: 'linear-gradient(135deg, #4845d4 0%, var(--primary-500) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 'var(--space-3)',
+                  flexShrink: 0,
+                  borderBottom: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--font-size-base)',
+                    fontWeight: 800,
+                    color: 'var(--neutral-0)',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  Toutes les enveloppes
+                </h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    border: 'none',
+                    background: 'rgba(255,255,255,0.22)',
+                    borderRadius: 'var(--radius-full)',
+                    width: 32,
+                    height: 32,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--neutral-0)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {sortedParents.map((parent) => {
+                  const isExpanded = expandedParentId === parent.parent_category_id
+                  const cat = categoryById.get(parent.parent_category_id)
+                  const normalizedName = normalizeCategoryLabel(parent.parent_category_name)
+                  const iconKey = normalizedName === 'epargne' ? 'epargne' : (cat?.icon_key ?? null)
+                  const subs = subsByParentId.get(parent.parent_category_id) ?? []
+
+                  return (
+                    <div key={parent.parent_category_id} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                      {/* Parent row */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggle(parent.parent_category_id)}
+                        style={{
+                          width: '100%',
+                          border: 'none',
+                          padding: '13px var(--space-5)',
+                          display: 'grid',
+                          gridTemplateColumns: '28px minmax(0,1fr) auto',
+                          alignItems: 'center',
+                          gap: 'var(--space-3)',
+                          background: isExpanded ? 'color-mix(in oklab, var(--primary-500) 6%, var(--neutral-0) 94%)' : 'transparent',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          transition: 'background-color var(--transition-fast)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <CategoryIcon iconKey={iconKey} label={parent.parent_category_name} size={24} />
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: 'var(--neutral-900)',
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {parent.parent_category_name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: 'var(--primary-600)',
+                            fontFamily: 'var(--font-mono)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatCurrencyFloored(Number(parent.budget_amount))}
+                        </span>
+                      </button>
+
+                      {/* Sub-categories */}
+                      {isExpanded && subs.length > 0 && (
+                        <div style={{ background: 'var(--neutral-50)' }}>
+                          {subs.map((sub) => {
+                            const subCat = categoryById.get(sub.category_id)
+                            const subIconKey = subCat?.icon_key ?? null
+                            return (
+                              <div
+                                key={sub.category_id}
+                                style={{
+                                  padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
+                                  display: 'grid',
+                                  gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                  alignItems: 'center',
+                                  gap: 'var(--space-2)',
+                                  borderTop: '1px solid var(--neutral-150)',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {subIconKey ? (
+                                    <CategoryIcon iconKey={subIconKey} label={sub.category_name} size={18} />
+                                  ) : (
+                                    <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
+                                  )}
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    color: 'var(--neutral-600)',
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {sub.category_name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: 'var(--primary-400)',
+                                    fontFamily: 'var(--font-mono)',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {formatCurrencyFloored(Number(sub.budget_amount))}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          </div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 // ─── details section ──────────────────────────────────────────────────────────
 
 interface CategoryDetailsSectionProps {
@@ -487,9 +737,10 @@ interface CategoryDetailsSectionProps {
   categoryById: Map<string, Category>
   onCategoryClick?: (categoryId: string) => void
   sectionRef?: RefObject<HTMLElement | null>
+  onShowAllEnvelopes?: () => void
 }
 
-function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRef }: CategoryDetailsSectionProps) {
+function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRef, onShowAllEnvelopes }: CategoryDetailsSectionProps) {
   const sorted = useMemo(() => {
     return [...rows]
       .filter((row) => Number(row.budget_amount) > 0 || Number(row.actual_amount) > 0)
@@ -505,9 +756,46 @@ function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRe
 
   return (
     <section ref={sectionRef} style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
-      <h3 style={{ margin: '0 0 var(--space-5) 0', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
-        Détails par catégorie
-      </h3>
+      <div style={{ margin: '0 0 var(--space-5) 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+        <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
+          Détails par catégorie
+        </h3>
+        {onShowAllEnvelopes && (
+          <button
+            type="button"
+            onClick={onShowAllEnvelopes}
+            style={{
+              border: '1.5px solid var(--primary-500)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'transparent',
+              color: 'var(--primary-600)',
+              padding: '5px 10px',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              flexShrink: 0,
+              transition: 'background var(--transition-fast)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in oklab, var(--primary-500) 8%, transparent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            Toutes les enveloppes
+            <span
+              style={{
+                width: 0,
+                height: 0,
+                borderLeft: '4px solid transparent',
+                borderRight: '4px solid transparent',
+                borderTop: '5px solid var(--primary-500)',
+                flexShrink: 0,
+              }}
+            />
+          </button>
+        )}
+      </div>
       <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
         {sorted.map((row) => {
           const budgetAmount = Number(row.budget_amount)
@@ -678,6 +966,7 @@ export function EnveloppesTab({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
   const categoryListSectionRef = useRef<HTMLElement | null>(null)
   const soclesListSectionRef = useRef<HTMLElement | null>(null)
+  const [showAllEnvelopes, setShowAllEnvelopes] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry | null>(null)
   const [modalTarget, setModalTarget] = useState<ModalTarget | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -1360,6 +1649,7 @@ export function EnveloppesTab({
           categoryById={categoryById}
           onCategoryClick={onCategoryClick}
           sectionRef={categoryListSectionRef}
+          onShowAllEnvelopes={() => setShowAllEnvelopes(true)}
         />
       ) : (
         <section ref={soclesListSectionRef} style={{ padding: 'var(--space-8) var(--page-gutter) var(--space-8)' }}>
@@ -1532,6 +1822,14 @@ export function EnveloppesTab({
       )}
 
       {/* ── modals ── */}
+      <AllEnvelopesModal
+        open={showAllEnvelopes}
+        onClose={() => setShowAllEnvelopes(false)}
+        parentCategoryRows={parentCategoryRowsWithoutSavings}
+        subCategoryRows={payloadByCategory}
+        categoryById={categoryById}
+      />
+
       <SubModal
         open={Boolean(modalTarget)}
         onClose={() => {

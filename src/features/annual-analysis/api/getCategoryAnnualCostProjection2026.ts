@@ -50,6 +50,10 @@ function normalizeRow(row: RawProjectionRow): CategoryAnnualCostProjection2026 |
   const categoryId = row.category_id?.trim() ?? ''
   if (!categoryId) return null
 
+  // parent_category_name is NULL when the row itself is a parent category (parent_id IS NULL).
+  // These rows have no real transactions and should not appear in expense projections.
+  if (row.parent_category_name == null) return null
+
   const categoryName = row.category_name?.trim() ?? ''
   const parentCategoryName = row.parent_category_name?.trim() ?? categoryName
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CalendarDays, Compass, Coins, BadgeCheck, TriangleAlert } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, ReferenceLine, Legend } from 'recharts'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
@@ -119,6 +119,10 @@ function fmtSignedPercentCompact(value: number, digits = 1): string {
 
 function fmtMonthYear(value: Date): string {
   return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: '2-digit' }).format(value)
+}
+
+function fmtMonthYearFull(value: Date): string {
+  return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: 'numeric' }).format(value)
 }
 
 export function SavingsPortfolioModal({
@@ -301,6 +305,19 @@ export function SavingsPortfolioModal({
     return perfRow?.performance_amount ?? null
   }, [accountIsLivret, accountEvents, previousYear, accountAnnualPerf])
 
+  const annualizedReturnPctModal = useMemo(() => {
+    if (!activeMonths || activeMonths <= 0 || totalCashIn <= 0 || currentAmount <= 0) return null
+    const activeYears = activeMonths / 12
+    return (Math.pow(currentAmount / totalCashIn, 1 / activeYears) - 1) * 100
+  }, [activeMonths, totalCashIn, currentAmount])
+
+  const kpiPreviousYearPct = useMemo(() => {
+    if (accountIsLivret) {
+      return accountAnnualPerf.find((r) => r.period_year === previousYear)?.regulated_rate_pct ?? null
+    }
+    return accountAnnualPerf.find((r) => r.period_year === previousYear)?.performance_pct ?? null
+  }, [accountIsLivret, accountAnnualPerf, previousYear])
+
   return (
     <>
       <motion.div
@@ -328,12 +345,15 @@ export function SavingsPortfolioModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'fixed',
-          inset: 0,
+          top: 'calc(var(--safe-top) + 64px + var(--space-4))',
+          left: 0,
+          right: 0,
+          bottom: 'var(--space-8)',
           zIndex: 71,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
-          padding: 'var(--space-3)',
+          padding: '0 var(--space-3)',
           overflowY: 'auto',
           pointerEvents: 'none',
         }}
@@ -341,7 +361,7 @@ export function SavingsPortfolioModal({
         <div
           style={{
             width: 'min(640px, 100%)',
-            maxHeight: 'calc(100dvh - 2 * var(--space-3))',
+            maxHeight: '100%',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-2xl)',
             boxShadow: '0 24px 60px rgba(13,13,31,0.24)',
@@ -430,35 +450,6 @@ export function SavingsPortfolioModal({
 
         </div>
 
-        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-100)' }}>
-          <section>
-            <SectionHeading label="Activité" color={account.color} />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px var(--space-4)', marginTop: 'var(--space-3)' }}>
-              <IndicatorCell
-                icon={<CalendarDays size={16} strokeWidth={2} />}
-                value={openedAt
-                  ? `${fmtMonthYear(openedAt)}${activeMonths != null ? ` (${activeMonths} mois)` : ''}`
-                  : '—'}
-              />
-              <IndicatorCell
-                icon={<BadgeCheck size={16} strokeWidth={2} />}
-                value={placementStatus.label}
-                valueColor={placementStatus.color}
-              />
-              <IndicatorCell
-                icon={<Coins size={16} strokeWidth={2} />}
-                value={lastYieldAmount != null ? fmtSignedCompact(lastYieldAmount) : '—'}
-                valueColor={lastYieldAmount != null && lastYieldAmount < 0 ? '#FC5A5A' : '#2ED47A'}
-              />
-              <IndicatorCell
-                icon={<Compass size={16} strokeWidth={2} />}
-                value={strategyWord.label}
-                valueColor={strategyWord.color}
-              />
-            </div>
-          </section>
-        </div>
-
         {/* Bottom section: analysis and advice */}
         <div
           style={{
@@ -474,41 +465,41 @@ export function SavingsPortfolioModal({
 
             <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-3)' }}>
               {/* KPI list */}
-              <div
-                style={{
-                  display: 'grid',
-                  gap: '6px',
-                  paddingLeft: '18px',
-                }}
-              >
+              <div style={{ display: 'grid', gap: '6px', paddingLeft: '18px' }}>
                 <KpiBulletRow
-                  label="Variation depuis ouverture"
+                  label="Période d'activité"
                   value={
-                    accountIsLivret
-                      ? (avgRate != null ? `~${avgRate.toFixed(2)}%` : '—')
-                      : (investAccount?.estimated_gain_vs_total_cash_in_pct != null
-                          ? fmtSignedPercentCompact(investAccount.estimated_gain_vs_total_cash_in_pct, 1)
-                          : '—')
+                    activeMonths != null
+                      ? `${activeMonths} mois${openedAt ? ` (ouvert en ${fmtMonthYearFull(openedAt)})` : ''}`
+                      : '—'
                   }
                 />
                 <KpiBulletRow
-                  label="Variation N-1 glissante"
-                  value={kpiPreviousYearAmount != null ? fmtSignedCompact(kpiPreviousYearAmount) : '—'}
+                  label={accountIsLivret ? 'Capital épargné' : 'Capital investi'}
+                  value={totalCashIn > 0 ? fmtEur(totalCashIn) : '—'}
                 />
                 <KpiBulletRow
-                  label="Plus-values YTD"
+                  label="Valeur actuelle"
+                  value={fmtEur(currentAmount)}
+                />
+                <KpiBulletRow
+                  label="Gain net"
                   value={kpiYtdGainAmount != null ? fmtSignedCompact(kpiYtdGainAmount) : '—'}
                   positive={kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined}
                 />
                 <KpiBulletRow
-                  label="Rendement depuis ouverture"
-                  value={totalGain != null && totalGain !== 0
-                    ? `${fmtSignedCompact(totalGain)}${
-                        !accountIsLivret && investAccount?.estimated_gain_vs_total_cash_in_pct != null
-                          ? ` (${fmtSignedPercentCompact(investAccount.estimated_gain_vs_total_cash_in_pct, 1)})`
-                          : ''
-                      }`
-                    : '—'}
+                  label="Rendement annualisé"
+                  value={annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—'}
+                  positive={annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined}
+                />
+                <KpiBulletRow
+                  label="Rendement N-1"
+                  value={
+                    kpiPreviousYearAmount != null
+                      ? `${fmtSignedCompact(kpiPreviousYearAmount)}${kpiPreviousYearPct != null ? ` (${fmtSignedPercentCompact(kpiPreviousYearPct, 1)})` : ''}`
+                      : '—'
+                  }
+                  positive={kpiPreviousYearAmount != null ? kpiPreviousYearAmount >= 0 : undefined}
                 />
               </div>
 
@@ -2305,13 +2296,12 @@ function KpiBulletRow({
       <span
         aria-hidden="true"
         style={{
-          width: 7,
-          height: 7,
-          borderRadius: 'var(--radius-full)',
-          background: 'var(--primary-600)',
+          fontSize: 11,
+          color: 'var(--primary-600)',
           flexShrink: 0,
+          lineHeight: 1,
         }}
-      />
+      >↗</span>
       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>{label}</span>
       <span style={{ flex: 1 }} />
       <span

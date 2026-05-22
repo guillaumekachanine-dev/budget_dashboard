@@ -724,6 +724,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const canSubmit = useMemo(() => {
     return Boolean(parseMoney(values.amount) && (values.categoryId || values.subCategoryId) && values.accountId && isValidDate(values.date))
   }, [values.amount, values.categoryId, values.subCategoryId, values.accountId, values.date])
+  const mobileWithoutKeyboard = isMobileViewport && !keyboardVisible
   const modalMaxHeight = useMemo(() => {
     const fullHeight = typeof window !== 'undefined' ? window.innerHeight : 720
     if (isMobileViewport && keyboardVisible && viewportHeight) {
@@ -998,7 +999,9 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               // Clavier ouvert → contenu depuis le haut ; sinon → centré
               alignItems: (isMobileViewport && keyboardVisible) ? 'flex-start' : 'center',
               justifyContent: 'center',
-              padding: isMobileViewport ? 'var(--space-2)' : 'var(--space-6)',
+              padding: isMobileViewport
+                ? (keyboardVisible ? 'var(--space-2)' : 'var(--space-6) var(--space-2) var(--space-2)')
+                : 'var(--space-6)',
               pointerEvents: 'none',
             }}
           >
@@ -1025,7 +1028,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <form onSubmit={handleSubmit(onSubmit)} className="flex h-full max-h-full flex-col">
+            <form onSubmit={handleSubmit(onSubmit)} className={`flex max-h-full flex-col ${mobileWithoutKeyboard ? '' : 'h-full'}`}>
               <input type="hidden" {...register('amount')} />
               <input type="hidden" {...register('transactionType')} />
               <input type="hidden" {...register('categoryId')} />
@@ -1168,7 +1171,10 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 />
               </div>
 
-              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0" style={{ position: 'relative', zIndex: 20 }}>
+              <div
+                className={`modal-main-scroll overflow-y-auto pt-0 ${mobileWithoutKeyboard ? 'pb-0' : 'flex-1 pb-[var(--space-4)]'}`}
+                style={{ position: 'relative', zIndex: 20 }}
+              >
 
                 <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
                   <Input

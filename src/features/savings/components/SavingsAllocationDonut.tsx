@@ -204,8 +204,15 @@ export function SavingsAllocationDonut() {
     const livretsSum = livrets.reduce((sum, e) => sum + e.value, 0)
     const placementsSum = placements.reduce((sum, e) => sum + e.value, 0)
 
-    const computed = [...raw]
-      .sort((a, b) => b.value - a.value)
+    const sortedRaw = [...raw].sort((a, b) => b.value - a.value)
+    // Swap PEA and LDDS: LDDS up one position, PEA down one position
+    const peaSortIdx = sortedRaw.findIndex((e) => e.savings_kind === 'pea')
+    const lddsSortIdx = sortedRaw.findIndex((e) => e.name.toLowerCase().includes('ldds'))
+    if (peaSortIdx !== -1 && lddsSortIdx !== -1 && peaSortIdx < lddsSortIdx) {
+      ;[sortedRaw[peaSortIdx], sortedRaw[lddsSortIdx]] = [sortedRaw[lddsSortIdx], sortedRaw[peaSortIdx]]
+    }
+
+    const computed = sortedRaw
       .map((entry) => {
         const sharePct = total > 0 ? (entry.value / total) * 100 : 0
         const familyTotal = entry.family === 'livrets' ? livretsSum : placementsSum
@@ -379,6 +386,17 @@ export function SavingsAllocationDonut() {
                   }}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 3,
+                        height: 16,
+                        borderRadius: 2,
+                        background: slice.family === 'livrets' ? '#2ED47A' : '#FFAB2E',
+                        flexShrink: 0,
+                        display: 'inline-block',
+                      }}
+                    />
                     <img
                       src={slice.iconSrc}
                       alt=""

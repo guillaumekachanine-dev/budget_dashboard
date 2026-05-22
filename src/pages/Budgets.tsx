@@ -480,6 +480,76 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
   )
 }
 
+interface BarClickBubbleProps {
+  data: MonthlyBucket
+  sixMonthAverage: number
+  sixMonthGapPct: number | null
+  chartX: number
+  onClose: () => void
+}
+
+function BarClickBubble({ data, sixMonthAverage, sixMonthGapPct, chartX, onClose }: BarClickBubbleProps) {
+  const gapPct = data.budget > 0 ? ((data.amount - data.budget) / data.budget) * 100 : null
+  const parts = data.monthStart.split('-')
+  const monthLabel = MONTHS_FR_FULL[Number(parts[1]) - 1] ?? ''
+  const year = parts[0] ?? ''
+  return (
+    <div style={{
+      position: 'absolute',
+      left: Math.max(4, Math.min(chartX - 88, 280)),
+      top: 6,
+      zIndex: 20,
+      pointerEvents: 'none',
+    }}>
+      <div style={{
+        pointerEvents: 'auto',
+        background: '#1e1b4b',
+        borderRadius: 'var(--radius-lg)',
+        padding: '10px 13px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.28)',
+        display: 'grid',
+        gap: 5,
+        minWidth: 176,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-0)', textTransform: 'capitalize' }}>
+            {monthLabel} {year}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.14)', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'var(--neutral-0)', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, padding: 0, flexShrink: 0 }}
+          >
+            ✕
+          </button>
+        </div>
+        <div style={{ display: 'grid', gap: 4, borderTop: '1px solid rgba(255,255,255,0.13)', paddingTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Consommé</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(data.amount)}</span>
+          </div>
+          {gapPct != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>% écart</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: gapPct > 0 ? '#ff8fa3' : '#6fcf97', whiteSpace: 'nowrap' }}>{formatPercentSigned(gapPct)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(sixMonthAverage)}</span>
+          </div>
+          {sixMonthGapPct != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Écart moyen (6M)</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: sixMonthGapPct > 0 ? '#ff8fa3' : '#6fcf97', whiteSpace: 'nowrap' }}>{formatPercentSigned(sixMonthGapPct)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface SubCategoryTransactionsModalProps {
   open: boolean
   onClose: () => void
@@ -577,7 +647,9 @@ function SubCategoryTransactionsModal({
                     }}
                   >
                     <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatTxDateDayMonth(tx.transaction_date)}</span>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{getTxLabel(tx)}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
+                      {getTxLabel(tx)}{tx.personal_share_ratio != null && tx.personal_share_ratio !== 1 ? <span style={{ color: 'var(--neutral-400)', fontSize: 11, marginLeft: 4 }}>(dépense jointe)</span> : null}
+                    </span>
                     <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
                   </button>
                 ))
@@ -606,6 +678,8 @@ export function Budgets() {
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
   const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
   const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(defaultPeriodMonth)
+  const [clickedCatBar, setClickedCatBar] = useState<{ payload: MonthlyBucket; chartX: number } | null>(null)
+  const [clickedBlockBar, setClickedBlockBar] = useState<{ payload: MonthlyBucket; chartX: number } | null>(null)
   const { data: availableBudgetPeriods = [] } = useQuery({
     queryKey: ['budget-periods'],
     queryFn: getBudgetPeriods,
@@ -1671,7 +1745,7 @@ export function Budgets() {
 
     const totalsBySubCategory = txs.reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
-      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount) * (tx.personal_share_ratio ?? 1))
       return acc
     }, new Map<string, number>())
 
@@ -1741,7 +1815,7 @@ export function Budgets() {
   const periodSpentByCategory = useMemo(() => {
     return (periodTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
-      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount) * (tx.personal_share_ratio ?? 1))
       return acc
     }, new Map<string, number>())
   }, [periodTxns])
@@ -2236,6 +2310,10 @@ export function Budgets() {
     () => categoryBarRows.reduce((max, row) => Math.max(max, row.displayAmount), 0),
     [categoryBarRows],
   )
+  const categoryCurrentPeriodAmount = useMemo(
+    () => monthlyHistory.find((r) => r.isCurrent)?.amount ?? 0,
+    [monthlyHistory],
+  )
   const sixMonthAverageAmount = useMemo(() => {
     if (!monthlyHistory.length) return 0
     return monthlyHistory.reduce((sum, row) => sum + row.amount, 0) / monthlyHistory.length
@@ -2356,7 +2434,7 @@ export function Budgets() {
         onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
         rightSlot={budgetsTabId !== 'metriques' && budgetsTabId !== 'analytics' ? (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            {isDetailMode && (
+            {isDetailMode && !isCategoryMode && !isExpenseBlockPage && (
               <button
                 type="button"
                 onClick={() => {
@@ -2896,19 +2974,19 @@ export function Budgets() {
               </div>
 
               <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}
+                <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+                    {formatCurrencyFloored(selectedBlockPage.actualAmount).replace(/\s+€/, '€')}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(blockPageSixMonthAverage).replace(/\s+€/, '€')}</span>
+                <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}</span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: blockPageSixMonthGapPct == null ? 'var(--neutral-500)' : blockPageSixMonthGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{blockPageSixMonthGapPct == null ? '—' : formatPercentSigned(blockPageSixMonthGapPct)}</span>
+                <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount - selectedBlockPage.actualAmount).replace(/\s+€/, '€')}</span>
                 </div>
               </div>
             </div>
@@ -2918,9 +2996,21 @@ export function Budgets() {
 
       {isExpenseBlockPage && selectedBlockPage ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
+          <div style={{ height: 220, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={blockPageHistory} barCategoryGap="18%" margin={{ top: 8, right: 44, left: -8, bottom: 4 }}>
+              <BarChart
+                data={blockPageHistory}
+                barCategoryGap="18%"
+                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                onClick={(data) => {
+                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                  if (!payload) { setClickedBlockBar(null); return }
+                  setClickedBlockBar((prev) =>
+                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                  )
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
@@ -2936,6 +3026,15 @@ export function Budgets() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            {clickedBlockBar && (
+              <BarClickBubble
+                data={clickedBlockBar.payload}
+                sixMonthAverage={blockPageSixMonthAverage}
+                sixMonthGapPct={blockPageSixMonthGapPct}
+                chartX={clickedBlockBar.chartX}
+                onClose={() => setClickedBlockBar(null)}
+              />
+            )}
           </div>
 
           <div
@@ -2950,8 +3049,9 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: blockListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)' }}>
-              Répartition par sous-catégories
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: blockListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+              <span>Répartition par sous-catégories</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
             </p>
             <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {selectedBlockPage.lines.length === 0 ? (
@@ -3528,9 +3628,6 @@ export function Budgets() {
                       <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
                         {selectedCatInfo?.name ?? '—'}
                       </p>
-                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                        - {categoryBlockLabel}
-                      </span>
                     </div>
                   </div>
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -3539,19 +3636,19 @@ export function Budgets() {
                 </div>
 
                 <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                      {formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                  <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+                      {formatCurrencyFloored(categoryCurrentPeriodAmount).replace(/\s+€/, '€')}
                     </span>
                   </div>
-                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatCurrencyFloored(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
+                  <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}</span>
                   </div>
-                  <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
+                  <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget - categoryCurrentPeriodAmount).replace(/\s+€/, '€')}</span>
                   </div>
                 </div>
               </div>
@@ -3562,9 +3659,21 @@ export function Budgets() {
 
       {isCategoryMode && !isVoyagesCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
+          <div style={{ height: 220, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 44, left: -8, bottom: 4 }}>
+              <BarChart
+                data={monthlyHistory}
+                barCategoryGap="18%"
+                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                onClick={(data) => {
+                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                  if (!payload) { setClickedCatBar(null); return }
+                  setClickedCatBar((prev) =>
+                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                  )
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
@@ -3580,6 +3689,15 @@ export function Budgets() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            {clickedCatBar && (
+              <BarClickBubble
+                data={clickedCatBar.payload}
+                sixMonthAverage={sixMonthAverageAmount}
+                sixMonthGapPct={sixMonthAverageGapPct}
+                chartX={clickedCatBar.chartX}
+                onClose={() => setClickedCatBar(null)}
+              />
+            )}
           </div>
 
           <div
@@ -3594,8 +3712,9 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: categoryListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)' }}>
-              Répartition par sous-catégories
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: categoryListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+              <span>Répartition par sous-catégories</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
             </p>
             <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {categoryBarRows.length === 0 ? (

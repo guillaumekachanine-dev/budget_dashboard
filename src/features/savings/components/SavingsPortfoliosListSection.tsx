@@ -38,9 +38,9 @@ const LEGEND_ORDER: Record<string, number> = {
   'liv a': 0,
   'livr a': 0,
   'livret a': 0,
-  pea: 1,
-  per: 2,
-  ldds: 3,
+  ldds: 1,
+  pea: 2,
+  per: 3,
   peg: 4,
   bitcoin: 5,
 }
@@ -241,6 +241,17 @@ export function SavingsPortfoliosListSection() {
               textAlign: 'left',
             }}
           >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 3,
+                height: 36,
+                borderRadius: 2,
+                background: row.family === 'livrets' ? '#2ED47A' : '#FFAB2E',
+                flexShrink: 0,
+                display: 'inline-block',
+              }}
+            />
             <img
               src={row.iconSrc}
               alt=""
@@ -301,7 +312,7 @@ export function SavingsPortfoliosListSection() {
               columnGap: 8,
             }}
           >
-            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'left', paddingLeft: 22 }}>
+            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'left', paddingLeft: 31 }}>
               portefeuille
             </span>
             <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
@@ -347,6 +358,17 @@ export function SavingsPortfoliosListSection() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-100)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 3,
+                    height: 16,
+                    borderRadius: 2,
+                    background: row.family === 'livrets' ? '#2ED47A' : '#FFAB2E',
+                    flexShrink: 0,
+                    display: 'inline-block',
+                  }}
+                />
                 <img
                   src={row.iconSrc}
                   alt=""
