@@ -241,17 +241,6 @@ export function SavingsPortfoliosListSection() {
               textAlign: 'left',
             }}
           >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 3,
-                height: 36,
-                borderRadius: 2,
-                background: row.family === 'livrets' ? '#2ED47A' : '#FFAB2E',
-                flexShrink: 0,
-                display: 'inline-block',
-              }}
-            />
             <img
               src={row.iconSrc}
               alt=""
@@ -278,7 +267,8 @@ export function SavingsPortfoliosListSection() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                fontSize: 13,
+                fontSize: 23,
+                fontWeight: 600,
                 color: 'var(--neutral-400)',
                 lineHeight: 1,
                 flexShrink: 0,

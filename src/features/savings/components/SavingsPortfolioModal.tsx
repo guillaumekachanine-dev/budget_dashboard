@@ -102,10 +102,6 @@ function fmtSignedPercentCompact(value: number, digits = 1): string {
   return `${abs}%`
 }
 
-function fmtMonthYearFull(value: Date): string {
-  return new Intl.DateTimeFormat('fr-FR', { month: '2-digit', year: 'numeric' }).format(value)
-}
-
 export function SavingsPortfolioModal({
   account,
   operationEvents,
@@ -240,6 +236,8 @@ export function SavingsPortfolioModal({
     }
     return accountAnnualPerf.find((r) => r.period_year === previousYear)?.performance_pct ?? null
   }, [accountIsLivret, accountAnnualPerf, previousYear])
+  const modalTopInset = 'calc(var(--safe-top) + 64px + var(--space-7))'
+  const modalBottomInset = 'var(--space-10)'
 
   return (
     <>
@@ -268,23 +266,23 @@ export function SavingsPortfolioModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'fixed',
-          top: 'calc(var(--safe-top) + 64px + var(--space-4))',
+          top: modalTopInset,
           left: 0,
           right: 0,
-          bottom: 'var(--space-8)',
+          bottom: modalBottomInset,
           zIndex: 71,
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'center',
-          padding: '0 var(--space-3)',
-          overflowY: 'auto',
+          padding: '0 var(--space-5)',
+          overflowY: 'hidden',
           pointerEvents: 'none',
         }}
       >
         <div
           style={{
-            width: 'min(640px, 100%)',
-            maxHeight: '100%',
+            width: 'min(620px, 100%)',
+            maxHeight: 'calc(100dvh - var(--safe-top) - 64px - var(--space-7) - var(--space-10))',
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-2xl)',
             boxShadow: '0 24px 60px rgba(13,13,31,0.24)',
@@ -292,6 +290,7 @@ export function SavingsPortfolioModal({
             flexDirection: 'column',
             overflowY: 'auto',
             overflowX: 'hidden',
+            overscrollBehavior: 'contain',
             pointerEvents: 'auto',
           }}
         >
@@ -388,12 +387,19 @@ export function SavingsPortfolioModal({
 
             <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-3)' }}>
               {/* KPI list */}
-              <div style={{ display: 'grid', gap: '6px', paddingLeft: '18px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  columnGap: 'var(--space-3)',
+                  rowGap: '6px',
+                }}
+              >
                 <KpiBulletRow
                   label="Période d'activité"
                   value={
                     activeMonths != null
-                      ? `${activeMonths} mois${openedAt ? ` (ouvert en ${fmtMonthYearFull(openedAt)})` : ''}`
+                      ? `${activeMonths} mois`
                       : '—'
                   }
                 />
@@ -1063,57 +1069,59 @@ function IndexEvolutionSection({
   const gradientPerValeurId = 'per-valeur-gradient'
   const gradientPeaValeurId = 'pea-valeur-gradient'
   const gradientPeaCapitalId = 'pea-capital-gradient'
+  const peaSourceNoteSingleLine = (dataset?.sourceNote ?? '').replace(/\s*\([^)]*\d[^)]*\)\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 
   return (
     <div style={{ width: '100%', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-100)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                Évolution des indices · {accountLabel}
-              </h3>
+          {!isPeaChart ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
+                <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                  Évolution des indices · {accountLabel}
+                </h3>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Period toggle — only shown when 5Y data exists */}
+                {hasFiveYears && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      background: 'var(--neutral-100)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: 2,
+                      gap: 2,
+                    }}
+                  >
+                    {(['ytd', '5y'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPeriod(p)}
+                        style={{
+                          border: 'none',
+                          borderRadius: 'calc(var(--radius-sm) - 2px)',
+                          padding: '3px 10px',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-mono)',
+                          cursor: 'pointer',
+                          letterSpacing: '0.04em',
+                          transition: 'background 0.15s, color 0.15s',
+                          background: period === p ? 'var(--neutral-0)' : 'transparent',
+                          color: period === p ? accountColor : 'var(--neutral-400)',
+                          boxShadow: period === p ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                        }}
+                      >
+                        {p === 'ytd' ? 'YTD' : '5 ans'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* Period toggle — only shown when 5Y data exists */}
-              {hasFiveYears && (
-                <div
-                  style={{
-                    display: 'flex',
-                    background: 'var(--neutral-100)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: 2,
-                    gap: 2,
-                  }}
-                >
-                  {(['ytd', '5y'] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPeriod(p)}
-                      style={{
-                        border: 'none',
-                        borderRadius: 'calc(var(--radius-sm) - 2px)',
-                        padding: '3px 10px',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        fontFamily: 'var(--font-mono)',
-                        cursor: 'pointer',
-                        letterSpacing: '0.04em',
-                        transition: 'background 0.15s, color 0.15s',
-                        background: period === p ? 'var(--neutral-0)' : 'transparent',
-                        color: period === p ? accountColor : 'var(--neutral-400)',
-                        boxShadow: period === p ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
-                      }}
-                    >
-                      {p === 'ytd' ? 'YTD' : '5 ans'}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          ) : null}
 
           <div style={{ overflowY: 'auto' }}>
 
@@ -1879,63 +1887,8 @@ function IndexEvolutionSection({
             </>
           ) : isPeaChart && peaData ? (
             <>
-              {/* ── KPI strip PEA — 4 métriques ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid var(--neutral-100)', background: 'var(--neutral-50)' }}>
-                {[
-                  {
-                    label: 'Capital investi',
-                    value: peaSyntheseData ? fmtEur(peaSyntheseData.totalContributed) : '—',
-                    color: 'var(--neutral-700)',
-                    sub: 'depuis janv. 2025',
-                  },
-                  {
-                    label: 'Valeur actuelle',
-                    value: peaSyntheseData ? fmtEur(peaSyntheseData.portfolioValue) : '—',
-                    color: accountColor,
-                    sub: `au ${peaSyntheseData?.valuationDate ? new Date(peaSyntheseData.valuationDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—'}`,
-                  },
-                  {
-                    label: 'Gain net',
-                    value: peaSyntheseData
-                      ? `${peaSyntheseData.gainLoss >= 0 ? '+' : ''}${fmtEur(peaSyntheseData.gainLoss)}`
-                      : '—',
-                    color: peaSyntheseData && peaSyntheseData.gainLoss >= 0 ? '#2ED47A' : '#FC5A5A',
-                    sub: peaSyntheseData
-                      ? `${peaSyntheseData.simpleReturnPct >= 0 ? '+' : ''}${peaSyntheseData.simpleReturnPct.toFixed(1)} % brut`
-                      : '—',
-                  },
-                  {
-                    label: 'Rend. annualisé',
-                    value: peaSyntheseData ? `${peaSyntheseData.xirrAnnualizedPct >= 0 ? '+' : ''}${peaSyntheseData.xirrAnnualizedPct.toFixed(1)} %` : '—',
-                    color: peaSyntheseData && peaSyntheseData.xirrAnnualizedPct >= 0 ? '#2ED47A' : '#FC5A5A',
-                    sub: 'XIRR pondéré tps',
-                  },
-                ].map((kpi) => (
-                  <div
-                    key={kpi.label}
-                    style={{
-                      padding: '10px 14px',
-                      borderRight: '1px solid var(--neutral-100)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1 }}>
-                      {kpi.label}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: kpi.color, lineHeight: 1.2 }}>
-                      {kpi.value}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', lineHeight: 1 }}>
-                      {kpi.sub}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
               {/* ── ComposedChart : valeur + capital investi + gain/perte ── */}
-              <div style={{ padding: '16px 8px 4px 4px' }}>
+              <div style={{ padding: '6px 8px 4px 4px' }}>
                 <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={peaData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                     <defs>
@@ -2044,8 +1997,19 @@ function IndexEvolutionSection({
                     <ReferenceLine y={peaSyntheseData?.totalContributed ?? 15000} stroke="var(--neutral-200)" strokeDasharray="2 4" strokeWidth={1} />
                   </ComposedChart>
                 </ResponsiveContainer>
-                <p style={{ margin: '2px 20px 8px', fontSize: 9, color: 'var(--neutral-400)', textAlign: 'right', fontStyle: 'italic' }}>
-                  {dataset?.sourceNote ?? ''}
+                <p
+                  style={{
+                    margin: '2px 20px 8px',
+                    fontSize: 9,
+                    color: 'var(--neutral-400)',
+                    textAlign: 'center',
+                    fontStyle: 'italic',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {peaSourceNoteSingleLine}
                 </p>
               </div>
             </>
@@ -2161,35 +2125,46 @@ function KpiBulletRow({
   positive?: boolean
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'nowrap' }}>
+    <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 0,
+            height: 0,
+            borderTop: '4px solid transparent',
+            borderBottom: '4px solid transparent',
+            borderLeft: '6px solid var(--neutral-900)',
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--neutral-600)',
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {label}
+        </span>
+      </div>
       <span
-        aria-hidden="true"
         style={{
-          fontSize: 11,
-          color: 'var(--primary-600)',
-          flexShrink: 0,
-          lineHeight: 1,
-        }}
-      >↗</span>
-      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>{label}</span>
-      <span style={{ flex: 1 }} />
-      <span
-        style={{
-          fontSize: 'var(--font-size-sm)',
-          fontWeight: 'var(--font-weight-medium)',
+          fontSize: 'var(--font-size-xs)',
+          fontWeight: 'var(--font-weight-semibold)',
           fontFamily: 'var(--font-mono)',
           letterSpacing: '-0.01em',
           lineHeight: 1.2,
-          minWidth: 122,
-          textAlign: 'right',
-          marginRight: 22,
+          paddingLeft: 12,
           color:
             positive === undefined
               ? 'var(--neutral-900)'
               : positive
                 ? 'var(--color-positive)'
                 : 'var(--color-negative)',
-          flexShrink: 0,
         }}
       >
         {value}

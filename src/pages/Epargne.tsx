@@ -5,7 +5,7 @@ import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.png'
 import planning2026Icon from '@/assets/icons/app/epargne_planning_2026.png'
 import performanceIcon from '@/assets/icons/app/epargne_performance.png'
-import epargneIcon from '@/assets/icons/categories/epargne.webp'
+import epargneIcon from '@/assets/icons/app/epargne_accueil.png'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
@@ -385,9 +385,11 @@ export function Epargne() {
             </div>
           </div>
 
-          <KpiTilesRow items={performanceKpis} />
+          {performanceViewMode !== 'performance' ? <KpiTilesRow items={performanceKpis} /> : null}
 
-          {performanceViewMode === 'performance' ? <SavingsPortfoliosListSection /> : <SavingsEvolutionFiveYearsChart />}
+          <div style={performanceViewMode === 'performance' ? { marginTop: 'var(--space-4)' } : undefined}>
+            {performanceViewMode === 'performance' ? <SavingsPortfoliosListSection /> : <SavingsEvolutionFiveYearsChart />}
+          </div>
         </motion.section>
       ) : null}
 
