@@ -1,3 +1,5 @@
+import { BUDGET_BUCKET_COLORS } from '@/lib/budgetBuckets'
+
 // ─── Flow types d'opérations planifiées ─────────────────────────────────────
 
 export const PLANNED_FLOW_LABELS: Record<string, string> = {
@@ -10,12 +12,14 @@ export const PLANNED_FLOW_LABELS: Record<string, string> = {
 // ─── Buckets ──────────────────────────────────────────────────────────────────
 
 export const BUCKET_COLORS: Record<string, string> = {
-  socle_fixe:           '#5B57F5', // --primary-500
-  variable_essentielle: '#4CC9F0', // --viz-a
-  provision:            '#FFAB2E', // --color-warning
-  discretionnaire:      '#FF9F43', // --viz-c
-  cagnotte_projet:      '#2ED47A', // --color-success
-  hors_pilotage:        '#FC5A5A', // --color-error
+  socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
+  provision: BUDGET_BUCKET_COLORS.provision,
+  discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  revenu: BUDGET_BUCKET_COLORS.revenu,
+  epargne: BUDGET_BUCKET_COLORS.epargne,
+  cagnotte_projet: BUDGET_BUCKET_COLORS.cagnotte_projet,
+  hors_pilotage: BUDGET_BUCKET_COLORS.hors_pilotage,
 }
 
 export const BUCKET_LABELS: Record<string, string> = {

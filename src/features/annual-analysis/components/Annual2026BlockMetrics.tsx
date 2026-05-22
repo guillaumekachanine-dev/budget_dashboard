@@ -8,6 +8,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import { QK, STALE } from '@/lib/queryKeys'
 import type { CategoryRolling12mStats } from '@/features/budget/api/getCategoryRolling12mStats'
 import {
+  BUCKET_COLORS,
   BUCKET_LABELS,
   BUCKET_ORDER,
   EXPENSE_BUCKETS,
@@ -195,13 +196,13 @@ const ALLOWED_BUCKETS: BudgetBucketId[] = [
 const STRICT_EXPENSE_BUCKETS: BudgetBucketId[] = [...EXPENSE_BUCKETS]
 
 const HISTOGRAM_BUCKET_COLOR: Record<BudgetBucketId, string> = {
-  revenu: '#2ED47A',
-  socle_fixe: '#5B57F5',
-  variable_essentielle: '#4CC9F0',
-  discretionnaire: '#FC5A5A',
-  provision: '#6C63FF',
-  epargne: '#FFAB2E',
-  hors_pilotage: '#B0BEC5',
+  revenu: BUCKET_COLORS.revenu,
+  socle_fixe: BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUCKET_COLORS.variable_essentielle,
+  discretionnaire: BUCKET_COLORS.discretionnaire,
+  provision: BUCKET_COLORS.provision,
+  epargne: BUCKET_COLORS.epargne,
+  hors_pilotage: BUCKET_COLORS.hors_pilotage,
 }
 const HISTOGRAM_BUDGET_LINE_COLOR = '#EF4444'
 const HISTOGRAM_AVG12_LINE_COLOR = '#7C4DFF'

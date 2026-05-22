@@ -1,19 +1,22 @@
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { YtdFlowRow } from '@/features/annual-analysis/types.compared'
 import { COMPARED_MONTHS, COMPARED_YEARS } from '@/features/annual-analysis/types.compared'
-
-type RawFlowRow = {
-  period_year: number | string | null
-  period_month: number | string | null
-  expense_total: number | string | null
-  income_total: number | string | null
-  fixed_expense_total: number | string | null
-  variable_expense_total: number | string | null
-}
+import {
+  assertNoNonExpenseBucketsInExpenseTotal,
+  isExpenseBucket,
+} from '@/features/annual-analysis/components/_constants'
 
 type RawSavingsRow = {
   transaction_date: string | null
   amount: number | string | null
+}
+
+type RawBucketMonthlyRow = {
+  month_start: string | null
+  budget_bucket: string | null
+  expense_amount: number | string | null
+  revenue_amount: number | string | null
+  net_amount: number | string | null
 }
 
 function buildPeriodKey(year: number, month: number): string {
@@ -42,14 +45,14 @@ export async function getComparedYtdFlows(): Promise<YtdFlowRow[]> {
   const allowedYears = new Set<number>(COMPARED_YEARS as readonly number[])
   const allowedMonths = new Set<number>(COMPARED_MONTHS as readonly number[])
 
-  const [metricsRes, savingsRes] = await Promise.all([
+  const [bucketMonthlyRes, savingsRes] = await Promise.all([
     budgetDb
-      .from('v_monthly_metrics_clean' as never)
-      .select('period_year, period_month, expense_total, income_total, fixed_expense_total, variable_expense_total')
-      .in('period_year', [...COMPARED_YEARS])
-      .in('period_month', [...COMPARED_MONTHS])
-      .order('period_year', { ascending: true })
-      .order('period_month', { ascending: true }),
+      .from('v_monthly_bucket_actuals_clean')
+      .select('month_start, budget_bucket, expense_amount, revenue_amount, net_amount')
+      .gte('month_start', `${minYear}-01-01`)
+      .lt('month_start', `${maxYear + 1}-01-01`)
+      .order('month_start', { ascending: true })
+      .order('budget_bucket', { ascending: true }),
     budgetDb
       .from('transactions')
       .select('transaction_date, amount')
@@ -60,8 +63,47 @@ export async function getComparedYtdFlows(): Promise<YtdFlowRow[]> {
       .order('transaction_date', { ascending: true }),
   ])
 
-  if (metricsRes.error) throw new Error(`getComparedYtdFlows (metrics): ${metricsRes.error.message}`)
+  if (bucketMonthlyRes.error) throw new Error(`getComparedYtdFlows (bucket actuals): ${bucketMonthlyRes.error.message}`)
   if (savingsRes.error) throw new Error(`getComparedYtdFlows (savings): ${savingsRes.error.message}`)
+
+  const expenseByPeriod = new Map<string, number>()
+  const fixedByPeriod = new Map<string, number>()
+  const variableByPeriod = new Map<string, number>()
+  const incomeByPeriod = new Map<string, number>()
+  const includedBucketsInExpenseTotal: string[] = []
+
+  for (const row of (bucketMonthlyRes.data ?? []) as RawBucketMonthlyRow[]) {
+    const parsed = extractYearMonth(row.month_start)
+    if (!parsed) continue
+    if (!allowedYears.has(parsed.year) || !allowedMonths.has(parsed.month)) continue
+
+    const bucket = String(row.budget_bucket ?? '').trim()
+    const key = buildPeriodKey(parsed.year, parsed.month)
+
+    if (bucket === 'revenu') {
+      const incomeAmount = Number(row.revenue_amount ?? row.net_amount ?? 0)
+      if (!Number.isFinite(incomeAmount)) continue
+      incomeByPeriod.set(key, (incomeByPeriod.get(key) ?? 0) + incomeAmount)
+      continue
+    }
+
+    includedBucketsInExpenseTotal.push(bucket)
+    if (!isExpenseBucket(bucket)) continue
+
+    const expenseAmount = Number(row.expense_amount ?? row.net_amount ?? 0)
+    if (!Number.isFinite(expenseAmount)) continue
+    const safeExpense = Math.abs(expenseAmount)
+
+    expenseByPeriod.set(key, (expenseByPeriod.get(key) ?? 0) + safeExpense)
+    if (bucket === 'socle_fixe') {
+      fixedByPeriod.set(key, (fixedByPeriod.get(key) ?? 0) + safeExpense)
+    } else {
+      // "Variable" = toutes les dépenses hors socle fixe.
+      variableByPeriod.set(key, (variableByPeriod.get(key) ?? 0) + safeExpense)
+    }
+  }
+
+  assertNoNonExpenseBucketsInExpenseTotal(includedBucketsInExpenseTotal, 'getComparedYtdFlows:expenseByPeriod')
 
   const savingsByPeriod = new Map<string, number>()
   for (const row of (savingsRes.data ?? []) as RawSavingsRow[]) {
@@ -77,14 +119,21 @@ export async function getComparedYtdFlows(): Promise<YtdFlowRow[]> {
     savingsByPeriod.set(key, (savingsByPeriod.get(key) ?? 0) + amount)
   }
 
-  const rows = (metricsRes.data ?? []) as RawFlowRow[]
-  return rows.map((row) => ({
-    period_year:            Number(row.period_year ?? 0),
-    period_month:           Number(row.period_month ?? 0),
-    expense_total:          Number(row.expense_total ?? 0),
-    income_total:           Number(row.income_total ?? 0),
-    fixed_expense_total:    Number(row.fixed_expense_total ?? 0),
-    variable_expense_total: Number(row.variable_expense_total ?? 0),
-    savings_realized_total: savingsByPeriod.get(buildPeriodKey(Number(row.period_year ?? 0), Number(row.period_month ?? 0))) ?? 0,
-  }))
+  const rows: YtdFlowRow[] = []
+  for (const year of COMPARED_YEARS) {
+    for (const month of COMPARED_MONTHS) {
+      const key = buildPeriodKey(year, month)
+      rows.push({
+        period_year: year,
+        period_month: month,
+        expense_total: expenseByPeriod.get(key) ?? 0,
+        income_total: incomeByPeriod.get(key) ?? 0,
+        fixed_expense_total: fixedByPeriod.get(key) ?? 0,
+        variable_expense_total: variableByPeriod.get(key) ?? 0,
+        savings_realized_total: savingsByPeriod.get(key) ?? 0,
+      })
+    }
+  }
+
+  return rows
 }

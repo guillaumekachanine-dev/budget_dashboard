@@ -1284,6 +1284,24 @@ export function ProjectionsTabContent() {
     [completedMonths, monthlyMetrics],
   )
   const ytdBudgetClosedMonths = (summary?.totalMonthlyBudget ?? 0) * completedMonths
+  const projectedExpenseFromStrictSeries = useMemo(() => {
+    if (completedMonths <= 0) return null
+
+    const closedMonthExpenses = Array.from({ length: completedMonths }, (_, index) => {
+      const month = index + 1
+      const row = monthlyMetrics.find((metric) => Number(metric.period_month) === month)
+      return Number(row?.expense_total ?? 0)
+    })
+
+    if (closedMonthExpenses.length === 0) return null
+
+    const observedYtd = closedMonthExpenses.reduce((sum, value) => sum + value, 0)
+    const medianMonthlyExpense = median(closedMonthExpenses)
+    const remainingMonths = Math.max(0, 12 - completedMonths)
+
+    return observedYtd + medianMonthlyExpense * remainingMonths
+  }, [completedMonths, monthlyMetrics])
+  const projectedExpense2026 = projectedExpenseFromStrictSeries ?? projection?.projectedTotalExpensesAmount ?? null
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1439,7 +1457,7 @@ export function ProjectionsTabContent() {
           <ExpenseSection2026
             ytdExpenseClosedMonths={ytdExpenseClosedMonths}
             ytdBudgetClosedMonths={ytdBudgetClosedMonths}
-            projectedExpense2026={projection?.projectedTotalExpensesAmount ?? null}
+            projectedExpense2026={projectedExpense2026}
             monthlyMetrics={monthlyMetrics}
             completedMonths={completedMonths}
           />

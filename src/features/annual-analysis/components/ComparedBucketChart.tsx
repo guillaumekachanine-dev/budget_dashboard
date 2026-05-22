@@ -7,7 +7,7 @@ import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
-import { BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
+import { BUCKET_COLORS, BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
 import type { ComparedBucketMetric, ComparedFluxMetric } from '@/features/annual-analysis/types.compared'
 import {
   getComparedBucketCategoryBreakdown,
@@ -33,14 +33,7 @@ const BLOCK_SECTION_FIXED_HEIGHT = 438
 const CONTENT_HEIGHT = 332
 
 // ─── Couleurs d'accent par bloc ───────────────────────────────────────────────
-const BUCKET_HEADER_COLORS: Record<string, string> = {
-  socle_fixe:           '#5B57F5',
-  variable_essentielle: '#4CC9F0',
-  provision:            '#6C63FF',
-  discretionnaire:      '#FF9F43',
-  epargne:              '#2ED47A',
-  hors_pilotage:        '#FC5A5A',
-}
+const BUCKET_HEADER_COLORS: Record<string, string> = BUCKET_COLORS
 
 // ─── Labels courts pour l'axe X ──────────────────────────────────────────────
 const BUCKET_SHORT: Record<string, string> = {
@@ -65,13 +58,7 @@ const ALLOCATION_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
   'provision',
 ]
 
-const ALLOCATION_COLORS: Record<string, string> = {
-  socle_fixe: '#5B57F5',
-  variable_essentielle: '#2ED47A',
-  discretionnaire: '#FC5A5A',
-  provision: '#00B8D9',
-  epargne: '#FFAB2E',
-}
+const ALLOCATION_COLORS: Record<string, string> = BUCKET_COLORS
 
 const BLOCK_ICON_BY_BUCKET: Record<string, string | null> = {
   socle_fixe: blockFixeIcon,
@@ -642,7 +629,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
       {showDetail && clickedBucket && (
         <BucketDetailModal
           bucketLabel={BUCKET_LABELS[clickedBucket] ?? clickedBucket}
-          headerColor={ALLOCATION_COLORS[clickedBucket] ?? BUCKET_HEADER_COLORS[clickedBucket] ?? '#5B57F5'}
+          headerColor={ALLOCATION_COLORS[clickedBucket] ?? BUCKET_HEADER_COLORS[clickedBucket] ?? BUCKET_COLORS.socle_fixe}
           rows={detailData}
           loading={detailLoading}
           onClose={closeDetail}

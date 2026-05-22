@@ -7,7 +7,7 @@ import {
   type CategoryAnnualCostProjection2026,
 } from '@/features/annual-analysis/api/getCategoryAnnualCostProjection2026'
 import { useCategoryAnnualCostProjection2026 } from '@/features/annual-analysis/hooks/useCategoryAnnualCostProjection2026'
-import { VIZ_PALETTE, BUCKET_LABELS, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
+import { VIZ_PALETTE, BUCKET_COLORS, BUCKET_LABELS, PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 import {
   assertNoNonExpenseBucketsInExpenseTotal,
   isExpenseBucket,
@@ -92,11 +92,11 @@ const fmtPctSignedRounded = (value: number) => `${value > 0 ? '+' : ''}${Math.ro
 
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
 const BLOCK_DELTA_COLORS: Record<string, string> = {
-  socle_fixe: 'var(--primary-500)',
-  variable_essentielle: 'var(--viz-a)',
-  discretionnaire: 'var(--viz-c)',
-  provision: 'var(--color-warning)',
-  epargne: 'var(--color-success)',
+  socle_fixe: BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUCKET_COLORS.variable_essentielle,
+  discretionnaire: BUCKET_COLORS.discretionnaire,
+  provision: BUCKET_COLORS.provision,
+  epargne: BUCKET_COLORS.epargne,
 }
 const BLOCK_ICON_BY_BUCKET: Record<string, string> = {
   socle_fixe: blockFixeIcon,

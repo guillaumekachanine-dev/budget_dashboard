@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel, categoryColorFromName } from '@/lib/utils'
+import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { budgetDb } from '@/lib/supabaseBudget'
 import type { FlowType, Transaction } from '@/lib/types'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
@@ -284,10 +285,10 @@ function formatMonthYearShort(month: number, year: number): string {
 
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
-  { id: 'socle_fixe', label: 'Fixe', color: 'var(--primary-500)' },
-  { id: 'variable_essentielle', label: 'Variable essentielle', color: 'var(--color-success)' },
-  { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
-  { id: 'provision', label: 'Provision', color: 'var(--viz-d)' },
+  { id: 'socle_fixe', label: 'Fixe', color: BUDGET_BUCKET_COLORS.socle_fixe },
+  { id: 'variable_essentielle', label: 'Variable essentielle', color: BUDGET_BUCKET_COLORS.variable_essentielle },
+  { id: 'discretionnaire', label: 'Discrétionnaire', color: BUDGET_BUCKET_COLORS.discretionnaire },
+  { id: 'provision', label: 'Provision', color: BUDGET_BUCKET_COLORS.provision },
 ]
 
 const BLOCK_LIST_ORDER: BudgetBlockId[] = [
@@ -298,12 +299,12 @@ const BLOCK_LIST_ORDER: BudgetBlockId[] = [
 ]
 
 const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
-  socle_fixe: '#5B57F5',
-  variable_essentielle: '#2ED47A',
-  epargne: '#FFAB2E',
-  provision: '#6C63FF',
-  discretionnaire: '#FC5A5A',
-  cagnotte: '#4A4A62',
+  socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
+  epargne: BUDGET_BUCKET_COLORS.epargne,
+  provision: BUDGET_BUCKET_COLORS.provision,
+  discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  cagnotte: BUDGET_BUCKET_COLORS.cagnotte,
 }
 
 const BLOCK_ICON_SRC: Record<BudgetBlockId, string> = {
@@ -324,17 +325,6 @@ const BUCKET_SCOPE_ICON_SRC: Record<string, string> = {
   revenu: blockRevenusIcon,
   cagnotte_projet: blockEpargneIcon,
 }
-
-const SLIDE_THREE_SCOPE_COLORS: Record<string, string> = {
-  revenu: 'var(--color-success)',
-  socle_fixe: 'var(--primary-500)',
-  variable_essentielle: '#4CC9F0',
-  discretionnaire: 'var(--color-error)',
-  provision: 'var(--viz-d)',
-  epargne: 'var(--color-warning)',
-  hors_pilotage: 'var(--neutral-400)',
-}
-
 
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
   switch (bucket) {
@@ -1376,7 +1366,7 @@ export function Budgets() {
         iconType: 'block' as const,
         iconSrc: BUCKET_SCOPE_ICON_SRC[slideThreeScopeSelection.id] ?? blockProvisionsIcon,
         iconKey: null as string | null,
-        color: SLIDE_THREE_SCOPE_COLORS[slideThreeScopeSelection.id] ?? 'var(--primary-500)',
+        color: getBudgetBucketColor(slideThreeScopeSelection.id, 'var(--primary-500)'),
       }
     }
     if (slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID) {
@@ -1391,7 +1381,7 @@ export function Budgets() {
     const category = categoryById.get(slideThreeScopeSelection.id) ?? null
     const categoryPayload = payloadByCategory.find((row) => row.category_id === slideThreeScopeSelection.id)
     const scopeColor = categoryPayload?.budget_bucket
-      ? (SLIDE_THREE_SCOPE_COLORS[categoryPayload.budget_bucket] ?? categoryColorFromName(category?.name))
+      ? getBudgetBucketColor(categoryPayload.budget_bucket, categoryColorFromName(category?.name))
       : categoryColorFromName(category?.name)
     return {
       label: category?.name ?? 'Catégorie',

@@ -44,6 +44,17 @@
   --viz-d: #8BC34A;  /* Lime / Category D */
   --viz-e: #B0BEC5;  /* Grey / Category E */
 
+  /* BUDGET BUCKET COLORS — source de vérité (socles/blocs) */
+  --bucket-socle-fixe: #5B57F5;
+  --bucket-variable-essentielle: #4CC9F0;
+  --bucket-discretionnaire: #FC5A5A;
+  --bucket-provision: #8BC34A;
+  --bucket-revenu: #2ED47A;
+  --bucket-epargne: #FFAB2E;
+  --bucket-hors-pilotage: #B0BEC5;
+  --bucket-cagnotte-projet: #2ED47A;
+  --bucket-cagnotte: #4A4A62;
+
   /* CATEGORY COLORS — palette fixe par catégorie */
   --cat-logement:      #1D3F8F;  /* Logement */
   --cat-alimentation:  #35C17B;  /* Alimentation */

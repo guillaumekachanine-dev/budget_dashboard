@@ -7,6 +7,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } from '@/lib/utils'
+import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import type { Category, Transaction } from '@/lib/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow, BudgetPageCategoryRow } from '../types'
@@ -78,14 +79,6 @@ const BUCKET_LABELS: Record<string, string> = {
   epargne: 'Épargne',
 }
 
-const BLOCK_COLORS: Record<string, string> = {
-  socle_fixe: '#5B57F5',
-  variable_essentielle: '#2ED47A',
-  epargne: '#FFAB2E',
-  provision: '#6C63FF',
-  discretionnaire: '#FC5A5A',
-}
-
 const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'provision']
 const SOCLE_LIST_LABELS: Record<string, string> = {
   socle_fixe: 'Fixe',
@@ -101,12 +94,18 @@ const SOCLE_LIST_ICON_SRC: Record<string, string> = {
   provision: blockProvisionsIcon,
   epargne: blockEpargneIcon,
 }
+const BUCKET_MODAL_ICON_SRC: Record<string, string> = {
+  socle_fixe: blockFixeIcon,
+  variable_essentielle: blockVariableIcon,
+  discretionnaire: blockDiscretionnaireIcon,
+  provision: blockProvisionsIcon,
+}
 const SOCLE_LIST_PROGRESS_COLORS: Record<string, string> = {
-  socle_fixe: 'var(--primary-500)',
-  variable_essentielle: '#4CC9F0',
-  discretionnaire: 'var(--color-error)',
-  provision: 'var(--viz-d)',
-  epargne: 'var(--color-warning)',
+  socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
+  discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  provision: BUDGET_BUCKET_COLORS.provision,
+  epargne: BUDGET_BUCKET_COLORS.epargne,
 }
 const CATEGORY_ORDER_MAP = new Map<string, number>(CATEGORY_DISPLAY_ORDER.map((key, i) => [key, i]))
 const PILOTAGE_BUCKET_ORDER_MAP = new Map<string, number>(PILOTAGE_BUCKETS.map((key, i) => [key, i]))
@@ -248,6 +247,7 @@ interface SubModalProps {
   onClose: () => void
   name: string
   iconKey: string | null
+  iconSrc?: string | null
   color: string
   consumedAmount: number
   budgetAmount: number
@@ -268,6 +268,7 @@ function SubModal({
   onClose,
   name,
   iconKey,
+  iconSrc,
   color,
   consumedAmount,
   budgetAmount,
@@ -311,9 +312,13 @@ function SubModal({
               {/* Header */}
               <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: color }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                  {iconKey && (
+                  {(iconKey || iconSrc) && (
                     <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CategoryIcon iconKey={iconKey} label={name} size={22} />
+                      {iconKey ? (
+                        <CategoryIcon iconKey={iconKey} label={name} size={22} />
+                      ) : iconSrc ? (
+                        <img src={iconSrc} alt="" width={22} height={22} aria-hidden="true" style={{ display: 'block', objectFit: 'contain' }} />
+                      ) : null}
                     </div>
                   )}
                   <div style={{ minWidth: 0 }}>
@@ -882,7 +887,9 @@ interface SelectedEntry {
 interface ModalTarget {
   id: string
   name: string
+  scopeKind: 'category' | 'bucket'
   iconKey: string | null
+  iconSrc: string | null
   amount: number
   budgetAmount: number
   color: string
@@ -1066,7 +1073,7 @@ export function EnveloppesTab({
         .flatMap((bucket) => {
           const row = payloadByBucket[bucket]
           if (!row || Number(row.actual_amount) <= 0) return []
-          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.actual_amount), color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)' }]
+          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.actual_amount), color: getBudgetBucketColor(bucket) }]
         })
         .sort(sortPieByBucketOrder),
     [payloadByBucket],
@@ -1078,7 +1085,7 @@ export function EnveloppesTab({
         .flatMap((bucket) => {
           const row = payloadByBucket[bucket]
           if (!row || Number(row.budget_amount) <= 0) return []
-          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.budget_amount), color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)' }]
+          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.budget_amount), color: getBudgetBucketColor(bucket) }]
         })
         .sort(sortPieByBucketOrder),
     [payloadByBucket],
@@ -1104,7 +1111,7 @@ export function EnveloppesTab({
           label: SOCLE_LIST_LABELS[bucket] ?? (BUCKET_LABELS[bucket] ?? bucket),
           budgetAmount,
           actualAmount,
-          color: BLOCK_COLORS[bucket] ?? 'var(--neutral-400)',
+          color: getBudgetBucketColor(bucket),
           iconSrc: SOCLE_LIST_ICON_SRC[bucket] ?? blockFixeIcon,
         }]
       }),
@@ -1124,21 +1131,33 @@ export function EnveloppesTab({
   // ── transactions for modal ────────────────────────────────────────────────
 
   const modalCategoryIds = useMemo(() => {
-    if (!modalTarget || viewMode !== 'categories' || modalTarget.clickedFrom === 'budget') return undefined
-    const ids = [modalTarget.id]
-    categories.forEach((c) => { if (c.parent_id === modalTarget.id) ids.push(c.id) })
-    return ids
-  }, [modalTarget, categories, viewMode])
+    if (!modalTarget || modalTarget.clickedFrom === 'budget') return undefined
+    if (modalTarget.scopeKind === 'category') {
+      const ids = [modalTarget.id]
+      categories.forEach((c) => { if (c.parent_id === modalTarget.id) ids.push(c.id) })
+      return ids
+    }
+    const bucketCategoryIds = payloadByCategory
+      .filter((row) => row.budget_bucket === modalTarget.id)
+      .map((row) => row.category_id)
+      .filter((id): id is string => Boolean(id))
+    return [...new Set(bucketCategoryIds)]
+  }, [modalTarget, categories, payloadByCategory])
+
+  const hasModalCategoryIds = modalCategoryIds == null || modalCategoryIds.length > 0
 
   const { data: modalTransactions = [], isLoading: loadingModalTx } = useTransactions(
     { startDate, endDate, flowType: 'expense', categoryIds: modalCategoryIds, debugSource: 'EnveloppesTab:modal' },
-    { enabled: Boolean(modalTarget) && viewMode === 'categories' && modalTarget?.clickedFrom !== 'budget' },
+    { enabled: Boolean(modalTarget) && modalTarget?.clickedFrom !== 'budget' && hasModalCategoryIds },
   )
 
   const subCategoryBudgets = useMemo<SubCategoryBudgetLine[]>(() => {
     if (!modalTarget || modalTarget.clickedFrom !== 'budget') return []
-    return payloadByCategory
-      .filter((row) => row.parent_category_id === modalTarget.id && Number(row.budget_amount) > 0)
+    const scopedRows = modalTarget.scopeKind === 'category'
+      ? payloadByCategory.filter((row) => row.parent_category_id === modalTarget.id)
+      : payloadByCategory.filter((row) => row.budget_bucket === modalTarget.id)
+    return scopedRows
+      .filter((row) => Number(row.budget_amount) > 0)
       .map((row) => ({
         id: row.category_id,
         name: row.category_name,
@@ -1162,7 +1181,10 @@ export function EnveloppesTab({
     }
 
     for (const row of payloadByCategory) {
-      if (row.parent_category_id !== modalTarget.id && row.category_id !== modalTarget.id) continue
+      const belongsToScope = modalTarget.scopeKind === 'category'
+        ? (row.parent_category_id === modalTarget.id || row.category_id === modalTarget.id)
+        : row.budget_bucket === modalTarget.id
+      if (!belongsToScope) continue
       const id = row.category_id
       if (!id) continue
       registerLine(
@@ -1173,12 +1195,25 @@ export function EnveloppesTab({
       )
     }
 
+    const scopedCategoryIds = new Set(
+      payloadByCategory
+        .filter((row) => {
+          if (modalTarget.scopeKind === 'category') {
+            return row.parent_category_id === modalTarget.id || row.category_id === modalTarget.id
+          }
+          return row.budget_bucket === modalTarget.id
+        })
+        .map((row) => row.category_id),
+    )
+
     for (const tx of modalTransactions) {
       const categoryId = tx.category_id
       if (!categoryId) continue
       const txCategory = categoryById.get(categoryId)
-      const belongsToSelectedParent = categoryId === modalTarget.id || txCategory?.parent_id === modalTarget.id
-      if (!belongsToSelectedParent) continue
+      const belongsToScope = modalTarget.scopeKind === 'category'
+        ? (categoryId === modalTarget.id || txCategory?.parent_id === modalTarget.id)
+        : scopedCategoryIds.has(categoryId)
+      if (!belongsToScope) continue
 
       const fallbackName = txCategory?.name ?? modalTarget.name
       if (!linesById.has(categoryId)) {
@@ -1231,19 +1266,21 @@ export function EnveloppesTab({
     selectEntry(id, name, realAmount, budgetAmount, color)
     setExpandedRealSubCategoryId(null)
     setRealSubCategoryToReopenId(null)
-    if (viewMode === 'categories') {
-      setModalTarget({
-        id,
-        name,
-        iconKey: categoryById.get(id)?.icon_key ?? null,
-        amount: realAmount,
-        budgetAmount,
-        color,
-        headerMetricLabel: clickedFrom === 'budget' ? 'Budgétisé' : 'Consommé',
-        headerMetricAmount: clickedFrom === 'budget' ? budgetAmount : realAmount,
-        clickedFrom,
-      })
-    }
+    const isCategoryMode = viewMode === 'categories'
+    const modalName = isCategoryMode ? name : `Socle ${String(SOCLE_LIST_LABELS[id] ?? name).toLowerCase()}`
+    setModalTarget({
+      id,
+      name: modalName,
+      scopeKind: isCategoryMode ? 'category' : 'bucket',
+      iconKey: isCategoryMode ? (categoryById.get(id)?.icon_key ?? null) : null,
+      iconSrc: isCategoryMode ? null : (BUCKET_MODAL_ICON_SRC[id] ?? null),
+      amount: realAmount,
+      budgetAmount,
+      color,
+      headerMetricLabel: clickedFrom === 'budget' ? 'Budgétisé' : 'Consommé',
+      headerMetricAmount: clickedFrom === 'budget' ? budgetAmount : realAmount,
+      clickedFrom,
+    })
   }
 
   function handleListRowClick(entry: PieDatum) {
@@ -1839,6 +1876,7 @@ export function EnveloppesTab({
         }}
         name={modalTarget?.name ?? ''}
         iconKey={modalTarget?.iconKey ?? null}
+        iconSrc={modalTarget?.iconSrc ?? null}
         color={modalTarget?.color ?? 'var(--primary-500)'}
         consumedAmount={modalTarget?.amount ?? 0}
         budgetAmount={modalTarget?.budgetAmount ?? 0}
