@@ -67,12 +67,13 @@ export function assertNoNonExpenseBucketsInExpenseTotal(
   }
 }
 
+// REGLE: 'epargne' n'est PAS un bucket de pilotage budgétaire — l'épargne est
+// trackée séparément dans les vues d'épargne. Ne jamais l'ajouter ici.
 export const PILOTAGE_BUCKET_ORDER = [
   'socle_fixe',
   'variable_essentielle',
   'discretionnaire',
   'provision',
-  'epargne',
 ] as const
 
 export const TECHNICAL_BUCKETS = [

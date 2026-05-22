@@ -345,8 +345,7 @@ function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockI
       return 'discretionnaire'
     case 'provision':
       return 'provision'
-    case 'epargne':
-      return 'epargne'
+    // 'epargne' intentionnellement absent — l'épargne n'est jamais un block budgétaire
     default:
       return null
   }
@@ -359,7 +358,6 @@ function formatBudgetBucketLabel(bucket: string | null | undefined): string {
   if (bucket === 'discretionnaire') return 'Discrétionnaire'
   if (bucket === 'cagnotte_projet') return 'Cagnotte projet'
   if (bucket === 'provision') return 'Provision'
-  if (bucket === 'epargne') return 'Épargne'
   if (bucket === 'hors_pilotage') return 'Hors pilotage'
   return bucket
 }
@@ -674,7 +672,6 @@ export function Budgets() {
   useEffect(() => {
     if (!import.meta.env.DEV || !budgetPayload) return
     console.log('[Budget Mapping Check] by_bucket keys', Object.keys(payloadByBucket))
-    console.log('[Budget Mapping Check] epargne', payloadByBucket.epargne)
     console.log('[Budget Mapping Check] provision', payloadByBucket.provision)
   }, [budgetPayload, payloadByBucket])
 
@@ -1246,8 +1243,7 @@ export function Budgets() {
     () =>
       categories.filter((c) => (
         c.parent_id === null
-        && (c.flow_type === 'expense' || c.flow_type === 'savings')
-        && normalizeCategoryToken(c.name) !== 'epargne'
+        && c.flow_type === 'expense'  // REGLE: jamais flow_type = 'savings' dans le budget
       )),
     [categories],
   )
