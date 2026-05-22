@@ -50,7 +50,7 @@ function resolveAccountIconSrc(savingsKind: string): string {
     case 'crypto': return bitcoinIcon
     case 'peg':
     case 'percol': return pegCapgeminiIcon
-    case 'per':
+    case 'per': return comptePrincipalIcon
     case 'assurance_vie':
     case 'cto': return amundiEpargneIcon
     default: return comptePrincipalIcon
@@ -274,7 +274,7 @@ export function SavingsAllocationDonut() {
         }}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(225px, 1fr))', gap: 'var(--space-4)', alignItems: 'start' }}>
-          <div style={{ height: 286, position: 'relative' }}>
+          <div style={{ height: 302, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -283,8 +283,8 @@ export function SavingsAllocationDonut() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  innerRadius={72}
-                  outerRadius={108}
+                  innerRadius={76}
+                  outerRadius={114}
                   startAngle={90}
                   endAngle={-270}
                   paddingAngle={2}
@@ -357,9 +357,8 @@ export function SavingsAllocationDonut() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: '6px' }}>
+          <div style={{ display: 'grid', gap: '6px', width: '86%', margin: '0 auto' }}>
             {slices.map((slice) => {
-              const isActive = slice.id === activeSliceId
               return (
                 <button
                   key={slice.id}
@@ -368,15 +367,14 @@ export function SavingsAllocationDonut() {
                   style={{
                     border: 'none',
                     borderRadius: 0,
-                    background: isActive ? 'var(--neutral-50)' : 'var(--neutral-0)',
+                    background: 'transparent',
                     padding: '4px 2px',
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 1fr) 52px 92px',
+                    gridTemplateColumns: 'minmax(0, 1fr) 44px 82px',
                     alignItems: 'center',
-                    columnGap: 6,
+                    columnGap: 4,
                     cursor: 'pointer',
                     textAlign: 'left',
-                    transition: 'all var(--transition-base)',
                     lineHeight: 1.1,
                   }}
                 >
