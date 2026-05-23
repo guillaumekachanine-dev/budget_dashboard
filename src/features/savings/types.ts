@@ -118,6 +118,8 @@ export type SavingsAccountDisplay = {
   sub_accounts_count: number | null
   latest_balance_month: string | null
   latest_observed_date: string | null
+  /** Capital total effectivement versé (valeur explicite, écrase le calcul auto). Null = calcul auto depuis les opérations. */
+  total_capital_deposited: number | null
 }
 
 export type SavingsAnnualPerformanceRow = {

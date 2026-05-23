@@ -43,5 +43,6 @@ export async function getSavingsAccountsDisplay(): Promise<SavingsAccountDisplay
     sub_accounts_count: asNullableNumber(row.sub_accounts_count),
     latest_balance_month: row.latest_balance_month != null ? String(row.latest_balance_month) : null,
     latest_observed_date: row.latest_observed_date != null ? String(row.latest_observed_date) : null,
+    total_capital_deposited: asNullableNumber(row.total_capital_deposited),
   }))
 }

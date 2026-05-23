@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Minus, TriangleAlert, X } from 'lucide-react'
+import { Bell, Check, Minus, TriangleAlert, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
@@ -860,6 +860,105 @@ function OptimizationsTile({
   )
 }
 
+// ─── InfosTile ────────────────────────────────────────────────────────────────
+// Module libre : notes ponctuelles + rappels automatiques.
+// showSnapshotReminder = true les 2 derniers jours du mois courant ;
+// disparaît automatiquement au 1er du mois suivant.
+function InfosTile({ showSnapshotReminder }: { showSnapshotReminder: boolean }) {
+  const hasContent = showSnapshotReminder
+
+  return (
+    <div
+      role="region"
+      aria-label="Informations et rappels"
+      style={{
+        background: 'var(--neutral-0)',
+        border: '1px solid var(--neutral-150)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-card)',
+        padding: 'var(--space-3) var(--space-4)',
+        minHeight: 72,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-2)',
+      }}
+    >
+      {/* En-tête */}
+      <p
+        style={{
+          margin: 0,
+          fontSize: 10,
+          fontWeight: 800,
+          color: 'var(--neutral-500)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.09em',
+        }}
+      >
+        Infos
+      </p>
+
+      {/* Placeholder si aucun contenu */}
+      {!hasContent ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            color: 'var(--neutral-300)',
+            fontStyle: 'italic',
+            lineHeight: 1.4,
+          }}
+        >
+          Aucune info pour le moment.
+        </p>
+      ) : null}
+
+      {/* Rappel automatique snapshot — visible J-1 et J (dernier jour du mois) */}
+      <AnimatePresence>
+        {showSnapshotReminder ? (
+          <motion.div
+            key="snapshot-reminder"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            <div
+              style={{
+                background: 'color-mix(in oklab, var(--primary-500) 9%, var(--neutral-0) 91%)',
+                border: '1px solid color-mix(in oklab, var(--primary-500) 22%, var(--neutral-0) 78%)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-2) var(--space-3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <Bell
+                size={14}
+                color="var(--primary-600)"
+                strokeWidth={2.2}
+                style={{ flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  color: 'var(--primary-700)',
+                  fontWeight: 600,
+                  lineHeight: 1.4,
+                }}
+              >
+                Fin de mois — Pense à mettre à jour les snapshots épargne
+              </p>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 export function Home() {
   const { year, month } = getCurrentPeriod()
   const now = new Date()
@@ -876,6 +975,8 @@ export function Home() {
   const daysInMonth = new Date(year, month, 0).getDate()
   const daysElapsed = now.getDate()
   const daysRemaining = getDaysRemainingInMonth()
+  // Rappel snapshot : visible les 2 derniers jours du mois, disparaît le 1er du mois suivant
+  const showSnapshotReminder = daysElapsed >= daysInMonth - 1
 
   const { data: monthExpenseTxns } = useTransactions({
     startDate: monthStart,
@@ -1890,6 +1991,21 @@ export function Home() {
             >
               <OptimizationsTile rows={OPTIMIZATION_PRIORITIES_MOCK} onClick={() => setShowOptimizationsModal(true)} />
               <div />
+            </div>
+          </motion.section>
+
+          {/* ── Module libre Infos ── */}
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.24 }}
+            style={{
+              padding: '0 var(--space-6)',
+              paddingBottom: 'calc(var(--space-6) + env(safe-area-inset-bottom, 0px))',
+            }}
+          >
+            <div style={{ maxWidth: 600, margin: '0 auto' }}>
+              <InfosTile showSnapshotReminder={showSnapshotReminder} />
             </div>
           </motion.section>
         </>

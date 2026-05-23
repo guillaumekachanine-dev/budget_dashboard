@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { useInvestmentPerformance } from '@/features/stats/hooks/useInvestmentPerformance'
 import { useSavingsAnnualPerformance } from '@/features/savings/hooks/useSavingsAnnualPerformance'
+import { useSavingsAccountsDisplay } from '@/features/savings/hooks/useSavingsAccountsDisplay'
 import type {
   SavingsEvolutionFiveYearsRow,
   SavingsEvolutionFiveYearsSeries,
@@ -112,6 +113,7 @@ export function SavingsPortfolioModal({
 }: Props) {
   const { data: perfData } = useInvestmentPerformance(2026)
   const { data: annualPerf } = useSavingsAnnualPerformance()
+  const { data: accountsDisplay } = useSavingsAccountsDisplay()
 
   useEffect(() => lockDocumentScroll(), [])
 
@@ -197,12 +199,22 @@ export function SavingsPortfolioModal({
     onClose()
   }
 
-  const totalCashIn = useMemo(
-    () => accountEvents
-      .filter((e) => e.nature !== 'intérêts')
-      .reduce((sum, e) => sum + e.amount, 0),
-    [accountEvents],
+  // Résolution du capital investi :
+  // 1. Priorité à total_capital_deposited si défini explicitement en config (ex. Livret A = 22 950 €)
+  //    → couvre les comptes réglementés où les retraits ne sont pas tracés dans la vue opérations
+  // 2. Sinon : somme des virements nets depuis les événements (hors intérêts)
+  const accountConfig = useMemo(
+    () => accountsDisplay.find((a) => a.account_id === account.key) ?? null,
+    [accountsDisplay, account.key],
   )
+  const totalCashIn = useMemo(() => {
+    if (accountConfig?.total_capital_deposited != null) {
+      return accountConfig.total_capital_deposited
+    }
+    return accountEvents
+      .filter((e) => e.nature !== 'intérêts')
+      .reduce((sum, e) => sum + e.amount, 0)
+  }, [accountConfig, accountEvents])
   const kpiYtdGainAmount = useMemo(
     () => (totalCashIn > 0 ? currentAmount - totalCashIn : null),
     [currentAmount, totalCashIn],
@@ -784,7 +796,7 @@ const PER_MONTHLY_DATA: Array<{
   { period: 'jan 26',  valeur: 6141.10, uc: 146.94, frais: 3.14 },
   { period: 'fév 26',  valeur: 6231.84, uc: 149.18, frais: 2.88 },
   { period: 'mar 26',  valeur: 5825.75, uc: 139.53, frais: 2.98 },
-  { period: 'mai 26',  valeur: 6117.29, uc: 146.59, frais: 3.23 },
+  { period: 'mai 26',  valeur: 6180.23, uc: 148.10, frais: 3.23 },
 ]
 
 // PER synthèse par exercice — rendement, frais totaux, performance
@@ -797,7 +809,7 @@ const PER_SYNTHESE_DATA: Array<{
   fraisTotaux: number
 }> = [
   { period: '2025',      opening: 5872.56, closing: 6137.55, rendement:  264.99, rendementPct:  4.51, fraisTotaux: 36.08 },
-  { period: '2026 YTD',  opening: 6137.55, closing: 6117.29, rendement:  -20.26, rendementPct: -0.33, fraisTotaux: 12.23 },
+  { period: '2026 YTD',  opening: 6137.55, closing: 6180.23, rendement:   42.68, rendementPct:  0.70, fraisTotaux: 12.23 },
 ]
 
 // Livret A — rendement réel semestriel 2020–2026 vs inflation (source INSEE / BdF)

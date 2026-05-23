@@ -272,9 +272,11 @@ export async function getSavingsEvolutionFiveYears(): Promise<SavingsEvolutionFi
           if (row) row[account.account_id] = Math.max(0, Math.round(snap.balance_eur))
         }
       }
-      // Accounts with no current-year snapshot: carry forward current_balance from the view
+      // Always use current_balance for the current year — it is the most recent
+      // observed value from v_savings_accounts_display and overrides any stale snapshot
+      // (e.g. a March snapshot for a PEA that has since risen in May).
       const currentYearRow = yearlyPoints.get(String(endYear))
-      if (currentYearRow && currentYearRow[account.account_id] === undefined && (account.current_balance ?? 0) > 0) {
+      if (currentYearRow && (account.current_balance ?? 0) > 0) {
         currentYearRow[account.account_id] = Math.round(account.current_balance!)
       }
     }
