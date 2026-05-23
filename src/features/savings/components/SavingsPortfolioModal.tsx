@@ -236,8 +236,9 @@ export function SavingsPortfolioModal({
     }
     return accountAnnualPerf.find((r) => r.period_year === previousYear)?.performance_pct ?? null
   }, [accountIsLivret, accountAnnualPerf, previousYear])
-  const modalTopInset = 'calc(var(--safe-top) + 64px + var(--space-7))'
-  const modalBottomInset = 'var(--space-10)'
+  const modalTopInset = 'calc(var(--safe-top) + 64px + var(--space-8))'
+  const modalBottomInset = 'calc(var(--nav-height) + var(--space-4))'
+  const modalMaxHeight = 'calc(100dvh - var(--safe-top) - 64px - var(--space-8) - var(--nav-height) - var(--space-4))'
 
   return (
     <>
@@ -274,7 +275,7 @@ export function SavingsPortfolioModal({
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'center',
-          padding: '0 var(--space-5)',
+          padding: '0 var(--page-gutter)',
           overflowY: 'hidden',
           pointerEvents: 'none',
         }}
@@ -282,13 +283,13 @@ export function SavingsPortfolioModal({
         <div
           style={{
             width: 'min(620px, 100%)',
-            maxHeight: 'calc(100dvh - var(--safe-top) - 64px - var(--space-7) - var(--space-10))',
+            maxHeight: modalMaxHeight,
             background: 'var(--neutral-0)',
             borderRadius: 'var(--radius-2xl)',
             boxShadow: '0 24px 60px rgba(13,13,31,0.24)',
             display: 'flex',
             flexDirection: 'column',
-            overflowY: 'auto',
+            overflow: 'hidden',
             overflowX: 'hidden',
             overscrollBehavior: 'contain',
             pointerEvents: 'auto',
@@ -298,8 +299,12 @@ export function SavingsPortfolioModal({
         {/* Header */}
         <div
           style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 12,
             padding: 'var(--space-4)',
             borderBottom: '1px solid var(--neutral-100)',
+            background: 'var(--neutral-0)',
             flexShrink: 0,
           }}
         >
@@ -375,9 +380,14 @@ export function SavingsPortfolioModal({
         {/* Bottom section: analysis and advice */}
         <div
           style={{
-            flexShrink: 0,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            scrollbarGutter: 'stable both-edges',
             background: 'var(--neutral-50)',
             padding: 'var(--space-4)',
+            paddingBottom: 'max(var(--space-4), var(--safe-bottom))',
           }}
         >
           <section>
@@ -475,8 +485,7 @@ export function SavingsPortfolioModal({
                       lineHeight: 1.55,
                     }}
                   >
-                    <li>Maintenir l&apos;équivalent de 3 à 6 mois de dépenses essentielles</li>
-                    <li>Rediriger l&apos;excédent (au-delà du plafond de 22 950€) vers un PEA ou une assurance-vie pour optimiser le rendement sur le long terme.</li>
+                    <li>Rediriger l&apos;excédent vers un placement plus rentable pour optimiser le rendement à long terme</li>
                   </ul>
                 ) : isLddsModal ? (
                   <ul
@@ -492,8 +501,7 @@ export function SavingsPortfolioModal({
                       lineHeight: 1.55,
                     }}
                   >
-                    <li>Excellent complément d&apos;un Livret A déjà plafonné</li>
-                    <li>Liquidité totale pour l&apos;épargne de précaution.</li>
+                    <li>Maintenir le plafond : Liquidité totale pour l&apos;épargne de précaution</li>
                   </ul>
                 ) : isPeaModal ? (
                   <ul
@@ -964,6 +972,8 @@ function IndexEvolutionSection({
   accountLabel: string
   accountColor: string
 }) {
+  const normalizedAccountLabel = useMemo(() => normalizeStr(accountLabel), [accountLabel])
+  const isLddsChart = normalizedAccountLabel.includes('ldds')
   const dataset = resolveIndexData(accountLabel)
   const hasFiveYears = Boolean(dataset?.fiveYears)
   const isRateChart = Boolean(dataset?.rateHistory)
@@ -1007,16 +1017,8 @@ function IndexEvolutionSection({
     ? rateData.reduce((s, r) => s + r.reel, 0) / rateData.length
     : 0
 
-  // Livret A KPIs
-  const livretData = dataset?.livretHistory ?? null
-  const latestLivret = livretData?.[livretData.length - 1]
-  const maxLivretTaux = livretData ? Math.max(...livretData.map((r) => r.taux)) : 0
-  // Livret A réel KPIs (série 2020–2026)
+  // Livret A réel (série 2020–2026)
   const livretReelData = dataset?.livretReel ?? null
-  const latestLivretReel = livretReelData?.[livretReelData.length - 1]
-  const livretInflationCumulee = latestLivretReel?.inflationCumulee ?? 0
-  const livretReelCumule = latestLivretReel?.reelCumule ?? 0
-  const livretTauxActuel = latestLivretReel?.taux ?? latestLivret?.taux ?? 0
 
   // PER KPIs
   const perData = dataset?.perHistory ?? null
@@ -1074,7 +1076,7 @@ function IndexEvolutionSection({
   return (
     <div style={{ width: '100%', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--neutral-100)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-          {!isPeaChart ? (
+          {!isPeaChart && !isLddsChart && !isLivretChart ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
@@ -1663,50 +1665,6 @@ function IndexEvolutionSection({
           {/* ── Livret A — taux · inflation · rendement réel 2020–2026 ── */}
           {isLivretChart && livretReelData ? (
             <>
-              {/* KPI strip — 3 métriques demandées */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'var(--neutral-50)', borderBottom: '1px solid var(--neutral-100)' }}>
-                {[
-                  {
-                    label: 'Taux actuel',
-                    value: `${livretTauxActuel.toFixed(2)} %`,
-                    color: accountColor,
-                    sub: `max historique · ${maxLivretTaux.toFixed(2)} %`,
-                  },
-                  {
-                    label: 'Inflation cumulée (2020–2026)',
-                    value: `+${livretInflationCumulee.toFixed(2)} %`,
-                    color: '#FC5A5A',
-                    sub: 'pouvoir d\'achat perdu',
-                  },
-                  {
-                    label: 'Rendement réel (2020–2026)',
-                    value: `${livretReelCumule >= 0 ? '+' : ''}${livretReelCumule.toFixed(2)} %`,
-                    color: livretReelCumule >= 0 ? '#2ED47A' : '#FC5A5A',
-                    sub: 'net d\'inflation',
-                  },
-                ].map((kpi, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '11px 16px',
-                      borderRight: i < 2 ? '1px solid var(--neutral-100)' : 'none',
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                      {kpi.label}
-                    </p>
-                    <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: kpi.color, lineHeight: 1.1 }}>
-                      {kpi.value}
-                    </p>
-                    {kpi.sub && (
-                      <p style={{ margin: '2px 0 0', fontSize: 8, color: 'var(--neutral-400)' }}>
-                        {kpi.sub}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
               {/* ComposedChart : barres taux + ligne inflation + ligne rendement réel */}
               <div style={{ padding: '16px 8px 4px 4px' }}>
                 <ResponsiveContainer width="100%" height={220}>
@@ -1783,29 +1741,30 @@ function IndexEvolutionSection({
           {/* ── Rate history chart (LDDS / livrets) ── */}
           {isRateChart && rateData ? (
             <>
-              {/* KPI strip */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 20px', background: 'var(--neutral-50)', borderBottom: '1px solid var(--neutral-100)' }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Taux actuel</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: accountColor }}>
-                    {latestRate ? `${latestRate.ldds.toFixed(2)} %` : '—'}
-                  </p>
+              {!isLddsChart ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 20px', background: 'var(--neutral-50)', borderBottom: '1px solid var(--neutral-100)' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Taux actuel</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: accountColor }}>
+                      {latestRate ? `${latestRate.ldds.toFixed(2)} %` : '—'}
+                    </p>
+                  </div>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Rendement réel moy.</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: avgReel >= 0 ? '#2ED47A' : '#FC5A5A' }}>
+                      {avgReel >= 0 ? '+' : ''}{avgReel.toFixed(2)} %
+                    </p>
+                  </div>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Taux max. historique</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>
+                      {`${maxLddsRate.toFixed(2)} %`}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Rendement réel moy.</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: avgReel >= 0 ? '#2ED47A' : '#FC5A5A' }}>
-                    {avgReel >= 0 ? '+' : ''}{avgReel.toFixed(2)} %
-                  </p>
-                </div>
-                <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Taux max. historique</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>
-                    {`${maxLddsRate.toFixed(2)} %`}
-                  </p>
-                </div>
-              </div>
+              ) : null}
 
               {/* Chart */}
               <div style={{ padding: '16px 8px 4px 4px' }}>

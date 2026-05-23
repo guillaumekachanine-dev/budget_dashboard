@@ -39,6 +39,8 @@ type KpiTileItem = {
   label: string
   value: string
   tone: KpiTone
+  detail?: string
+  detailTone?: 'neutral' | 'positive' | 'negative'
 }
 
 function formatKpiCurrency(value: number | null | undefined): string {
@@ -84,7 +86,7 @@ function resolveKpiTileStyle(tone: KpiTone): React.CSSProperties {
 function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
   return (
     <div style={{ padding: '0 var(--page-gutter)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, items.length)}, minmax(0, 1fr))`, gap: 'var(--space-2)' }}>
         {items.map((item) => (
           <div
             key={item.label}
@@ -107,6 +109,23 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
               {item.value}
             </p>
+            {item.detail ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  color: item.detailTone === 'positive'
+                    ? 'var(--color-positive)'
+                    : item.detailTone === 'negative'
+                      ? 'var(--color-negative)'
+                      : 'var(--neutral-500)',
+                }}
+              >
+                {item.detail}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>
@@ -175,55 +194,52 @@ export function Epargne() {
 
   const performanceKpis = useMemo<KpiTileItem[]>(() => {
     const payload = savingsEvolution.data
+    const totalCurrentSavings = Number(savingsAnalytics.data?.currentSummary?.total_savings ?? 0)
     if (!payload) {
       return [
         { label: 'Capital investi', value: '—', tone: 'neutral' },
-        { label: 'Tx moyen', value: '—', tone: 'warning' },
-        { label: 'Plus-value', value: '—', tone: 'primary' },
+        { label: 'Valeur totale actuelle', value: '—', tone: 'primary', detail: 'Évolution —' },
       ]
     }
 
     const { rows, series, yearly_account_metrics: yearlyMetrics } = payload
-    const yearKey = String(currentYear)
-    const rowForYear = rows.find((row) => row.year === yearKey)
-      ?? [...rows].sort((a, b) => Number(b.year) - Number(a.year))[0]
-      ?? null
-    const previousRow = rowForYear
-      ? rows.find((row) => row.year === String(Number(rowForYear.year) - 1)) ?? null
-      : null
+    const rowForYear = [...rows].sort((a, b) => Number(b.year) - Number(a.year))[0] ?? null
 
     if (!rowForYear) {
       return [
         { label: 'Capital investi', value: '—', tone: 'neutral' },
-        { label: 'Tx moyen', value: '—', tone: 'warning' },
-        { label: 'Plus-value', value: '—', tone: 'primary' },
+        { label: 'Valeur totale actuelle', value: '—', tone: 'primary', detail: 'Évolution —' },
       ]
     }
 
-    const metricYear = rowForYear.year
-    let capitalInvesti = 0
-    let plusValue = 0
+    const capitalInvestiFromOperations = payload.operation_events.reduce((sum, event) => {
+      if (event.nature !== 'virement' || event.amount <= 0) return sum
+      return sum + event.amount
+    }, 0)
+    const capitalInvestiFromMetrics = Object.values(yearlyMetrics).reduce((sum, metric) => {
+      const saved = Number(metric.total_saved_amount ?? 0)
+      return sum + (Number.isFinite(saved) && saved > 0 ? saved : 0)
+    }, 0)
+    const capitalInvesti = capitalInvestiFromOperations > 0 ? capitalInvestiFromOperations : capitalInvestiFromMetrics
 
-    for (const entry of series) {
-      const accountKey = entry.key
-      const currentAmount = Number(rowForYear[accountKey] ?? 0)
-      const previousAmount = Number(previousRow?.[accountKey] ?? 0)
-      const accountMetrics = yearlyMetrics[`${accountKey}::${metricYear}`]
-      const totalSavedAmount = Number(accountMetrics?.total_saved_amount ?? 0)
-      const performanceAmount = currentAmount - previousAmount - totalSavedAmount
-
-      capitalInvesti += Number.isFinite(totalSavedAmount) ? totalSavedAmount : 0
-      plusValue += Number.isFinite(performanceAmount) ? performanceAmount : 0
-    }
-
-    const txMoyen = capitalInvesti > 0 ? (plusValue / capitalInvesti) * 100 : null
+    const totalCurrentSavingsFromRows = series.reduce((sum, entry) => {
+      const amount = Number(rowForYear[entry.key] ?? 0)
+      return sum + (Number.isFinite(amount) ? amount : 0)
+    }, 0)
+    const totalSavingsCurrent = totalCurrentSavings > 0 ? totalCurrentSavings : totalCurrentSavingsFromRows
+    const evolutionPct = capitalInvesti > 0 ? ((totalSavingsCurrent - capitalInvesti) / capitalInvesti) * 100 : null
 
     return [
-      { label: 'Capital investi', value: formatKpiCurrency(capitalInvesti), tone: 'neutral' },
-      { label: 'Tx moyen', value: formatKpiPercent(txMoyen, { signed: true }), tone: 'warning' },
-      { label: 'Plus-value', value: formatKpiCurrency(plusValue), tone: 'primary' },
+      { label: 'Capital investi / épargné', value: formatKpiCurrency(capitalInvesti), tone: 'neutral' },
+      {
+        label: 'Valeur totale actuelle',
+        value: formatKpiCurrency(totalSavingsCurrent),
+        tone: 'primary',
+        detail: `Évolution ${formatKpiPercent(evolutionPct, { signed: true })}`,
+        detailTone: evolutionPct == null ? 'neutral' : evolutionPct >= 0 ? 'positive' : 'negative',
+      },
     ]
-  }, [currentYear, savingsEvolution.data])
+  }, [savingsAnalytics.data?.currentSummary?.total_savings, savingsEvolution.data])
 
   const handleToggleTabModal = useCallback(() => {
     setShowTabModal((current) => !current)
