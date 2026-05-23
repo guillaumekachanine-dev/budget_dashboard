@@ -586,6 +586,10 @@ export function Flux() {
       text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)}`,
     }
   }, [isPlannedMode, plannedModeEndDate, plannedModeStartDate, range.endDate, range.startDate, filteredTransactions])
+  const listResultsLabel = useMemo(
+    () => `Du ${selectedPeriodHeader.startLabel} au ${selectedPeriodHeader.endLabel} - ${operationsSummaryLabel}`,
+    [operationsSummaryLabel, selectedPeriodHeader.endLabel, selectedPeriodHeader.startLabel],
+  )
 
   const applyParameters = () => {
     setFlow(draftFlow)
@@ -654,12 +658,11 @@ export function Flux() {
               boxShadow: 'var(--shadow-card)',
               position: 'relative',
               overflow: 'hidden',
+              minHeight: 'clamp(80px, 18vw, 102px)',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-              {selectedPeriodHeader.text}
-            </p>
-
             <button
               type="button"
               aria-label="Ouvrir les paramètres"
@@ -668,7 +671,7 @@ export function Flux() {
               style={{
                 position: 'absolute',
                 top: '50%',
-                right: 'var(--space-2)',
+                right: 'var(--space-4)',
                 transform: 'translateY(-50%)',
                 border: '1px solid rgba(255,255,255,0.38)',
                 background: 'rgba(255,255,255,0.12)',
@@ -685,7 +688,7 @@ export function Flux() {
               <Settings2 size={16} color="var(--neutral-0)" strokeWidth={2.2} />
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
               <p style={{ margin: 0, fontSize: 'clamp(30px, 8.6vw, 44px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
                 {formatMoneyInteger(heroMainAmount)}
               </p>
@@ -711,7 +714,7 @@ export function Flux() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {operationsSummaryLabel}
+                {listResultsLabel}
               </span>
               <button
                 type="button"
@@ -1368,15 +1371,25 @@ export function Flux() {
 
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderTop: '1px solid var(--neutral-200)',
+                  paddingTop: 'var(--space-3)',
+                  marginTop: 'var(--space-1)',
+                }}
+              >
                 <button
                   type="button"
                   onClick={closeParametersModal}
                   style={{
-                    border: '1px solid var(--neutral-200)',
+                    border: '1px solid color-mix(in oklab, var(--color-warning) 36%, var(--neutral-200) 64%)',
                     borderRadius: 'var(--radius-md)',
-                    background: 'var(--neutral-0)',
-                    color: 'var(--neutral-700)',
+                    background: 'color-mix(in oklab, var(--color-warning) 12%, var(--neutral-0) 88%)',
+                    color: 'color-mix(in oklab, var(--color-warning) 52%, #5a2700 48%)',
                     fontSize: 11,
                     fontWeight: 700,
                     width: '100%',
@@ -1395,10 +1408,10 @@ export function Flux() {
                   type="button"
                   onClick={resetDraftParametersToDefaults}
                   style={{
-                    border: '1px solid color-mix(in oklab, #B45309 34%, var(--neutral-200) 66%)',
+                    border: '1px solid var(--neutral-300)',
                     borderRadius: 'var(--radius-md)',
-                    background: 'color-mix(in oklab, #B45309 10%, var(--neutral-0) 90%)',
-                    color: '#8A3A06',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-800)',
                     fontSize: 11,
                     fontWeight: 700,
                     width: '100%',
