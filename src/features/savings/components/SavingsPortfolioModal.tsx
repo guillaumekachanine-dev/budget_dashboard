@@ -302,7 +302,7 @@ export function SavingsPortfolioModal({
             position: 'sticky',
             top: 0,
             zIndex: 12,
-            padding: 'var(--space-4)',
+            padding: 'var(--space-3)',
             borderBottom: '1px solid var(--neutral-100)',
             background: 'var(--neutral-0)',
             flexShrink: 0,
@@ -313,18 +313,49 @@ export function SavingsPortfolioModal({
               background: 'color-mix(in oklab, var(--primary-600) 5%, var(--neutral-0) 95%)',
               border: '1px solid color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-3)',
+              padding: 'var(--space-2) var(--space-3)',
             }}
           >
-            {/* Top row: logo + info left + amount right */}
+            {/* Top row: back affordance + logo/info + amount */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                <button
+                  type="button"
+                  onClick={handleReturnToList}
+                  aria-label="Fermer et revenir"
+                  title="Retour"
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    margin: 0,
+                    minWidth: 22,
+                    minHeight: 22,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderTop: '6px solid transparent',
+                      borderBottom: '6px solid transparent',
+                      borderRight: '9px solid var(--neutral-400)',
+                      display: 'inline-block',
+                    }}
+                  />
+                </button>
                 <div
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 34,
+                    height: 34,
                     borderRadius: '50%',
-                    border: `2.5px solid ${account.color}`,
+                    border: `2px solid ${account.color}`,
                     flexShrink: 0,
                     overflow: 'hidden',
                     background: 'var(--neutral-100)',
@@ -337,7 +368,7 @@ export function SavingsPortfolioModal({
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </div>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
                   <p
                     style={{
                       margin: 0,
@@ -351,9 +382,6 @@ export function SavingsPortfolioModal({
                     }}
                   >
                     {account.listLabel}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', fontWeight: 500 }}>
-                    {account.family === 'livrets' ? 'Livret réglementé' : 'Placement financier'}
                   </p>
                 </div>
               </div>
@@ -395,7 +423,7 @@ export function SavingsPortfolioModal({
               <SectionHeading label="Performance" color={account.color} />
             </div>
 
-            <div style={{ marginTop: 'var(--space-2)', display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
               {/* KPI list */}
               <div
                 style={{
@@ -406,7 +434,7 @@ export function SavingsPortfolioModal({
                 }}
               >
                 <KpiBulletRow
-                  label="Période d'activité"
+                  label="Activité"
                   value={
                     activeMonths != null
                       ? `${activeMonths} mois`
@@ -414,11 +442,11 @@ export function SavingsPortfolioModal({
                   }
                 />
                 <KpiBulletRow
-                  label={accountIsLivret ? 'Capital épargné' : 'Capital investi'}
+                  label="Capital init."
                   value={totalCashIn > 0 ? fmtEur(totalCashIn) : '—'}
                 />
                 <KpiBulletRow
-                  label="Valeur actuelle"
+                  label="Valeur"
                   value={fmtEur(currentAmount)}
                 />
                 <KpiBulletRow
@@ -427,12 +455,12 @@ export function SavingsPortfolioModal({
                   positive={kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined}
                 />
                 <KpiBulletRow
-                  label="Rendement annualisé"
+                  label="Rend.annual."
                   value={annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—'}
                   positive={annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined}
                 />
                 <KpiBulletRow
-                  label="Rendement N-1"
+                  label="Rend.N-1"
                   value={
                     kpiPreviousYearAmount != null
                       ? `${fmtSignedCompact(kpiPreviousYearAmount)}${kpiPreviousYearPct != null ? ` (${fmtSignedPercentCompact(kpiPreviousYearPct, 1)})` : ''}`
@@ -442,10 +470,12 @@ export function SavingsPortfolioModal({
                 />
               </div>
 
-              <IndexEvolutionSection
-                accountLabel={account.listLabel}
-                accountColor={account.color}
-              />
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                <IndexEvolutionSection
+                  accountLabel={account.listLabel}
+                  accountColor={account.color}
+                />
+              </div>
 
               <div
                 aria-hidden="true"
@@ -609,28 +639,6 @@ export function SavingsPortfolioModal({
                 </div>
               </div>
 
-              <div style={{ marginTop: 'var(--space-1)', display: 'flex', justifyContent: 'flex-start' }}>
-                <button
-                  type="button"
-                  onClick={handleReturnToList}
-                  style={{
-                    height: 34,
-                    minHeight: 34,
-                    minWidth: 104,
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--neutral-700)',
-                    background: 'var(--neutral-0)',
-                    color: 'var(--neutral-800)',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: 'var(--font-weight-bold)',
-                    textTransform: 'lowercase',
-                    padding: '0 var(--space-4)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  retour
-                </button>
-              </div>
             </div>
           </section>
         </div>
@@ -2084,7 +2092,7 @@ function KpiBulletRow({
   positive?: boolean
 }) {
   return (
-    <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+    <div style={{ minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         <span
           aria-hidden="true"
@@ -2109,25 +2117,26 @@ function KpiBulletRow({
         >
           {label}
         </span>
+        <span
+          style={{
+            fontSize: 'var(--font-size-xs)',
+            fontWeight: 'var(--font-weight-semibold)',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '-0.01em',
+            lineHeight: 1.2,
+            marginLeft: 'auto',
+            color:
+              positive === undefined
+                ? 'var(--neutral-900)'
+                : positive
+                  ? 'var(--color-positive)'
+                  : 'var(--color-negative)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {value}
+        </span>
       </div>
-      <span
-        style={{
-          fontSize: 'var(--font-size-xs)',
-          fontWeight: 'var(--font-weight-semibold)',
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: '-0.01em',
-          lineHeight: 1.2,
-          paddingLeft: 12,
-          color:
-            positive === undefined
-              ? 'var(--neutral-900)'
-              : positive
-                ? 'var(--color-positive)'
-                : 'var(--color-negative)',
-        }}
-      >
-        {value}
-      </span>
     </div>
   )
 }
