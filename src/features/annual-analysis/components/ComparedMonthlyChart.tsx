@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { ArrowDownCircle, ArrowUpCircle, RotateCw, SlidersHorizontal } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -108,7 +108,11 @@ export function ComparedMonthlyChart({
   const [visibleYear, setVisibleYear] = useState<'2025' | '2026'>('2026')
   const [showMetricMenu, setShowMetricMenu] = useState(false)
   const [tooltipResetKey, setTooltipResetKey] = useState(0)
+  const [isPointTooltipOpen, setIsPointTooltipOpen] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
+  const metricMenuRef = useRef<HTMLDivElement | null>(null)
+  const metricMenuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const pointTooltipRef = useRef<HTMLDivElement | null>(null)
 
   const activeMetricKey = enabledMetrics.includes(focusedMetric)
     ? focusedMetric
@@ -205,15 +209,29 @@ export function ComparedMonthlyChart({
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (!chartContainerRef.current) return
-      if (chartContainerRef.current.contains(event.target as Node)) return
-      setShowMetricMenu(false)
-      setTooltipResetKey((prev) => prev + 1)
+      const target = event.target
+      if (!(target instanceof Node)) return
+
+      if (showMetricMenu) {
+        const isInsideMenu = metricMenuRef.current?.contains(target) ?? false
+        const isOnMenuButton = metricMenuButtonRef.current?.contains(target) ?? false
+        if (!isInsideMenu && !isOnMenuButton) {
+          setShowMetricMenu(false)
+        }
+      }
+
+      if (isPointTooltipOpen) {
+        const isInsideTooltip = pointTooltipRef.current?.contains(target) ?? false
+        if (!isInsideTooltip) {
+          setTooltipResetKey((prev) => prev + 1)
+          setIsPointTooltipOpen(false)
+        }
+      }
     }
 
     document.addEventListener('mousedown', handleOutsideClick)
     return () => document.removeEventListener('mousedown', handleOutsideClick)
-  }, [])
+  }, [isPointTooltipOpen, showMetricMenu])
 
   return (
     <div
@@ -249,6 +267,7 @@ export function ComparedMonthlyChart({
           {isInsightMode ? (
             <div style={{ position: 'relative' }}>
               <button
+                ref={metricMenuButtonRef}
                 type="button"
                 onClick={() => setShowMetricMenu((prev) => !prev)}
                 aria-label="Paramètres du graphique"
@@ -272,6 +291,7 @@ export function ComparedMonthlyChart({
               <AnimatePresence>
                 {showMetricMenu ? (
                   <motion.div
+                    ref={metricMenuRef}
                     initial={{ opacity: 0, y: -4, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
@@ -523,6 +543,8 @@ export function ComparedMonthlyChart({
             trigger="click"
             content={
               <MonthlyFluxTooltip
+                tooltipRef={pointTooltipRef}
+                onActiveChange={setIsPointTooltipOpen}
                 metricLabel={focused.label}
                 accentColor={focused.color}
                 valueKey2025={focused.key2025}
@@ -693,6 +715,8 @@ type MonthlyFluxTooltipProps = {
   accentColor: string
   valueKey2025: string
   valueKey2026: string
+  tooltipRef: RefObject<HTMLDivElement | null>
+  onActiveChange: (active: boolean) => void
 }
 
 function MonthlyFluxTooltip({
@@ -703,7 +727,13 @@ function MonthlyFluxTooltip({
   accentColor,
   valueKey2025,
   valueKey2026,
+  tooltipRef,
+  onActiveChange,
 }: MonthlyFluxTooltipProps) {
+  useEffect(() => {
+    onActiveChange(Boolean(active && payload && payload.length > 0))
+  }, [active, onActiveChange, payload])
+
   if (!active || !payload || payload.length === 0) return null
 
   const row = payload[0]?.payload
@@ -721,15 +751,18 @@ function MonthlyFluxTooltip({
   const fullMonth = (label && MONTH_LABELS_FULL[label]) ? MONTH_LABELS_FULL[label] : (label ?? '')
 
   return (
-    <div style={{
+    <div
+      ref={tooltipRef}
+      style={{
       background: 'var(--neutral-0)',
       border: '1px solid var(--neutral-200)',
       borderRadius: 'var(--radius-lg)',
       boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
       padding: '10px 12px',
       minWidth: 164,
-      pointerEvents: 'none',
-    }}>
+      pointerEvents: 'auto',
+    }}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <p style={{
           margin: '0 0 8px',

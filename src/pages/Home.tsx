@@ -125,6 +125,16 @@ type OptimizationPriorityMock = {
   expectedAnnualAmount: number
   previousYearAmount: number
   determinationMethod: string
+  categoryNameMatchers: string[]
+}
+
+type OptimizationGaugeTone = 'success' | 'warning' | 'danger'
+
+type OptimizationTileRow = OptimizationPriorityMock & {
+  gaugeTone: OptimizationGaugeTone
+  spentAmount: number
+  budgetAmount: number
+  monthlyTargetAmount: number
 }
 
 const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
@@ -135,6 +145,7 @@ const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
     expectedAnnualAmount: 420,
     previousYearAmount: 85,
     determinationMethod: 'Écart entre moyenne mobile 6 mois et cible hebdomadaire plafonnée.',
+    categoryNameMatchers: ["retrait d'especes", 'retrait especes', 'retrait'],
   },
   {
     label: 'Petits achats alimentaires',
@@ -143,6 +154,7 @@ const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
     expectedAnnualAmount: 360,
     previousYearAmount: 210,
     determinationMethod: 'Réduction visée par regroupement des achats et suppression des doublons de panier.',
+    categoryNameMatchers: ['petits achats alimentaires', 'alimentation'],
   },
   {
     label: 'Café / bars',
@@ -151,6 +163,7 @@ const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
     expectedAnnualAmount: 300,
     previousYearAmount: 70,
     determinationMethod: 'Comparaison N vs N-1 ajustée du nombre de sorties mensuelles observées.',
+    categoryNameMatchers: ['cafe', 'bars', 'bar'],
   },
 ]
 
@@ -263,7 +276,7 @@ function DriftCategoryTransactionsModal({
   )
 }
 
-type DriftRowShape = { id: string; name: string; spent: number; driftPct: number; iconKey: string | null; colorToken: string | null; exceedDate: string | null }
+type DriftRowShape = { id: string; name: string; spent: number; driftPct: number; overrunAmount: number; iconKey: string | null; colorToken: string | null; exceedDate: string | null }
 type Top5RowShape = { id: string; name: string; spent: number; driftPct: number }
 
 function DriftsModal({
@@ -446,12 +459,20 @@ function DriftsModal({
   )
 }
 
-function DriftsTile({ count, onClick }: { count: number; onClick: () => void }) {
+function DriftsTile({
+  count,
+  totalOverrunAmount,
+  onClick,
+}: {
+  count: number
+  totalOverrunAmount: number
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire — voir le détail`}
+      aria-label={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire, total ${formatCurrencyFloored(totalOverrunAmount)} — voir le détail`}
       style={{
         position: 'relative',
         width: '100%',
@@ -537,6 +558,24 @@ function DriftsTile({ count, onClick }: { count: number; onClick: () => void }) 
           {count}
         </span>
       </div>
+
+      <p
+        style={{
+          margin: 0,
+          padding: '0 12px 11px',
+          fontSize: 13,
+          fontWeight: 800,
+          fontFamily: 'var(--font-mono)',
+          lineHeight: 1,
+          textAlign: 'center',
+          color: count > 0 ? '#FFF0E3' : 'rgba(255,240,227,0.74)',
+          position: 'relative',
+          zIndex: 1,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {formatCurrencyFloored(totalOverrunAmount)}
+      </p>
     </button>
   )
 }
@@ -552,7 +591,7 @@ const EXPENSE_BUCKET_LABELS: Record<ExpenseBucketId, string> = {
   discretionnaire: 'Discrétionnaire',
 }
 
-type YtdBlockProgressItem = { id: string; label: string; actual: number; budget: number; pct: number }
+type MonthlyBlockProgressItem = { id: string; label: string; actual: number; budget: number; pct: number }
 
 // ─── ProgressRing ─────────────────────────────────────────────────────────────
 function ProgressRing({ pct, size = 80 }: { pct: number; size?: number }) {
@@ -604,36 +643,28 @@ function ProgressCircleTile({ pct, onClick }: { pct: number; onClick: () => void
       onClick={onClick}
       aria-label={`${Math.round(pct)}% du budget mensuel consommé — voir la progression par bloc`}
       style={{
-        position: 'relative',
         width: '100%',
         aspectRatio: '1',
-        border: '1px solid var(--neutral-200)',
-        background: 'var(--neutral-0)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
+        border: 'none',
+        background: 'transparent',
+        borderRadius: 'var(--radius-full)',
         cursor: 'pointer',
-        overflow: 'hidden',
+        overflow: 'visible',
         padding: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
+        display: 'grid',
+        placeItems: 'center',
+        transition: 'transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
         e.currentTarget.style.transform = 'translateY(-1px)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
-      <p style={{ margin: 0, padding: '10px 12px 0', fontSize: 10, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.09em', textAlign: 'left', position: 'relative', zIndex: 1 }}>
-        Consommé
-      </p>
-      <div style={{ flex: 1, display: 'grid', placeItems: 'center', position: 'relative', padding: '0 0 8px' }}>
-        <ProgressRing pct={pct} size={72} />
-        <span style={{ position: 'absolute', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, pointerEvents: 'none' }}>
+      <div style={{ display: 'grid', placeItems: 'center', position: 'relative' }}>
+        <ProgressRing pct={pct} size={86} />
+        <span style={{ position: 'absolute', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, pointerEvents: 'none' }}>
           {`${Math.round(pct)}%`}
         </span>
       </div>
@@ -645,11 +676,11 @@ function ProgressCircleTile({ pct, onClick }: { pct: number; onClick: () => void
 function BudgetProgressModal({
   open,
   onClose,
-  ytdBlockProgress,
+  monthlyBlockProgress,
 }: {
   open: boolean
   onClose: () => void
-  ytdBlockProgress: YtdBlockProgressItem[]
+  monthlyBlockProgress: MonthlyBlockProgressItem[]
 }) {
   return (
     <AnimatePresence>
@@ -672,14 +703,14 @@ function BudgetProgressModal({
             >
               <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--neutral-150)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                  Progression dépenses YTD
+                  Progression dépenses du mois
                 </p>
                 <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                   <X size={16} />
                 </button>
               </div>
               <div style={{ padding: 'var(--space-4)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                {ytdBlockProgress.map((block) => {
+                {monthlyBlockProgress.map((block) => {
                   const pctCapped = Math.min(100, block.pct)
                   const isOver = block.pct > 100
                   const barColor = isOver ? 'var(--color-error)' : block.pct >= 85 ? 'var(--color-warning)' : 'var(--primary-500)'
@@ -790,11 +821,29 @@ function SavingsTile({
   )
 }
 
+function OptimizationGauge({ tone }: { tone: OptimizationGaugeTone }) {
+  const angle = tone === 'success' ? -42 : tone === 'warning' ? 0 : 42
+  const needleColor = tone === 'success' ? '#4ADE80' : tone === 'warning' ? '#FACC15' : '#F87171'
+
+  return (
+    <svg width="66" height="40" viewBox="0 0 66 40" aria-hidden="true" style={{ display: 'block' }}>
+      <path d="M7 32 A26 26 0 0 1 23 9" fill="none" stroke="#5CCF42" strokeWidth="8" strokeLinecap="round" />
+      <path d="M25 8 A26 26 0 0 1 41 8" fill="none" stroke="#F0D84A" strokeWidth="8" strokeLinecap="round" />
+      <path d="M43 9 A26 26 0 0 1 59 32" fill="none" stroke="#FF3636" strokeWidth="8" strokeLinecap="round" />
+      <g transform={`rotate(${angle} 33 32)`}>
+        <line x1="33" y1="32" x2="33" y2="16" stroke={needleColor} strokeWidth="2.2" strokeLinecap="round" />
+      </g>
+      <circle cx="33" cy="32" r="3.4" fill="#0f172a" />
+      <circle cx="33" cy="32" r="1.5" fill="#fff" opacity="0.78" />
+    </svg>
+  )
+}
+
 function OptimizationsTile({
   rows,
   onClick,
 }: {
-  rows: OptimizationPriorityMock[]
+  rows: OptimizationTileRow[]
   onClick: () => void
 }) {
   return (
@@ -804,7 +853,7 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 132,
+        minHeight: 148,
         border: '1px solid rgba(135, 236, 224, 0.42)',
         background: 'radial-gradient(120% 90% at 18% -10%, rgba(151,255,236,0.58) 0%, rgba(151,255,236,0) 58%), radial-gradient(105% 85% at 100% 100%, rgba(90,242,226,0.46) 0%, rgba(90,242,226,0) 62%), linear-gradient(142deg, #0A5B63 0%, #0F7B83 46%, #13A0A8 100%)',
         borderRadius: 'var(--radius-xl)',
@@ -839,20 +888,17 @@ function OptimizationsTile({
         Optimisations
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-1)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
         {rows.map((row) => (
-          <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 2 }}>
+          <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 4 }}>
             <CategoryIcon iconKey={row.iconKey} label={row.label} size={20} />
             <p style={{ margin: 0, fontSize: 9, color: 'rgba(235,255,251,0.9)', lineHeight: 1.1 }}>
               {row.label}
             </p>
-            {row.optimizationYtdAmount != null ? (
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--color-success)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
-                {`+${formatCurrencyFloored(row.optimizationYtdAmount)}`}
-              </p>
-            ) : (
-              <X size={15} color="var(--color-error)" strokeWidth={2.6} />
-            )}
+            <OptimizationGauge tone={row.gaugeTone} />
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(235,255,251,0.88)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+              {`${formatCurrencyFloored(row.spentAmount)} / ${formatCurrencyFloored(row.budgetAmount)}`}
+            </p>
           </div>
         ))}
       </div>
@@ -969,7 +1015,6 @@ export function Home() {
   const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
 
   const todayDate = now.toISOString().slice(0, 10)
-  const yearStart = `${year}-01-01`
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -987,11 +1032,6 @@ export function Home() {
     startDate: monthStart,
     endDate: monthEnd,
     flowType: 'savings',
-  })
-  const { data: ytdExpenseTxns } = useTransactions({
-    startDate: yearStart,
-    endDate: todayDate,
-    flowType: 'expense',
   })
   const { data: homeBudgetLines } = useQuery<{
     categoryLines: BudgetLineWithCategory[]
@@ -1091,6 +1131,7 @@ export function Home() {
         const budget = Number(r.budget_amount)
         const spent = Number(r.spent_amount)
         const driftPct = (spent / budget) * 100 - 100
+        const overrunAmount = Math.max(0, spent - budget)
         let exceedDateStr = null
         if (driftPct >= 0) {
           const categoryTxns = txns
@@ -1113,6 +1154,7 @@ export function Home() {
           colorToken: r.category.color_token,
           spent: r.spent_amount,
           driftPct,
+          overrunAmount,
           exceedDate: exceedDateStr,
         }
       })
@@ -1258,9 +1300,9 @@ export function Home() {
   const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
   const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
-  const expenseYtdAmountDisplay = useMemo(
-    () => (ytdExpenseTxns ?? []).reduce((sum, txn) => sum + Number(txn.amount), 0),
-    [ytdExpenseTxns],
+  const expenseMonthAmountDisplay = useMemo(
+    () => (monthExpenseTxns ?? []).reduce((sum, txn) => sum + Number(txn.amount), 0),
+    [monthExpenseTxns],
   )
   const overallConsumedPct = useMemo(() => {
     if (!dailyPayload) return 0
@@ -1270,16 +1312,17 @@ export function Home() {
     return totalBudget > 0 ? Math.min(100, (totalActual / totalBudget) * 100) : 0
   }, [dailyPayload])
 
-  const ytdBlockProgress = useMemo<YtdBlockProgressItem[]>(() => {
+  const monthlyBlockProgress = useMemo<MonthlyBlockProgressItem[]>(() => {
     // Map category_id → budget_bucket using dailyPayload.by_category
     const catToBucket = new Map<string, string>()
     for (const c of dailyPayload?.by_category ?? []) {
       if (c.category_id && c.budget_bucket) catToBucket.set(c.category_id, c.budget_bucket)
     }
-    // Sum YTD expense amounts by bucket
+    // Sum monthly expense amounts by bucket
     const bucketActuals: Record<string, number> = {}
-    for (const txn of ytdExpenseTxns ?? []) {
+    for (const txn of monthExpenseTxns ?? []) {
       if (!txn.category_id) continue
+      if (txn.transaction_date > todayDate) continue
       const bucket = catToBucket.get(txn.category_id)
       if (!bucket) continue
       bucketActuals[bucket] = (bucketActuals[bucket] ?? 0) + Number(txn.amount)
@@ -1288,12 +1331,11 @@ export function Home() {
       const monthlyBudget = Number(
         dailyPayload?.by_bucket.find((b) => b.budget_bucket === id)?.budget_amount ?? 0,
       )
-      const ytdBudget = monthlyBudget * month
       const actual = bucketActuals[id] ?? 0
-      const pct = ytdBudget > 0 ? (actual / ytdBudget) * 100 : 0
-      return { id, label: EXPENSE_BUCKET_LABELS[id], actual, budget: ytdBudget, pct }
+      const pct = monthlyBudget > 0 ? (actual / monthlyBudget) * 100 : 0
+      return { id, label: EXPENSE_BUCKET_LABELS[id], actual, budget: monthlyBudget, pct }
     })
-  }, [ytdExpenseTxns, dailyPayload, month])
+  }, [monthExpenseTxns, dailyPayload, todayDate])
   const savingsProgressPct = useMemo(() => {
     if (MOCK_SAVINGS_MONTHLY_GOAL <= 0) return 0
     return Math.max(0, Math.min(100, (MOCK_SAVINGS_MONTHLY_SAVED / MOCK_SAVINGS_MONTHLY_GOAL) * 100))
@@ -1463,9 +1505,39 @@ export function Home() {
         iconKey: c.iconKey,
         colorToken: c.colorToken,
         exceedDate: c.exceedDate,
+        overrunAmount: c.overrunAmount,
       })),
     [driftCategories],
   )
+  const driftOverrunTotal = useMemo(
+    () => driftRows.reduce((sum, row) => sum + Math.max(0, Number(row.overrunAmount ?? 0)), 0),
+    [driftRows],
+  )
+  const optimizationTileRows = useMemo<OptimizationTileRow[]>(() => {
+    const summaryRows = summaries ?? []
+    return OPTIMIZATION_PRIORITIES_MOCK.map((row) => {
+      const matchingRows = summaryRows.filter((summaryRow) => {
+        const categoryName = normalizeLabel(summaryRow.category.name ?? '')
+        return row.categoryNameMatchers.some((matcher) => categoryName.includes(normalizeLabel(matcher)))
+      })
+      const spentAmount = matchingRows.reduce((sum, summaryRow) => sum + Number(summaryRow.spent_amount ?? 0), 0)
+      const budgetAmount = matchingRows.reduce((sum, summaryRow) => sum + Number(summaryRow.budget_amount ?? 0), 0)
+      const monthlyTargetAmount = Math.max(0, row.expectedAnnualAmount / 12)
+      const gaugeTone: OptimizationGaugeTone = spentAmount < monthlyTargetAmount
+        ? 'success'
+        : spentAmount <= budgetAmount
+          ? 'warning'
+          : 'danger'
+
+      return {
+        ...row,
+        spentAmount,
+        budgetAmount,
+        monthlyTargetAmount,
+        gaugeTone,
+      }
+    })
+  }, [summaries])
 
   const top5ExpenseRows = useMemo(() => {
     const rows = monthExpenseTxns ?? []
@@ -1712,7 +1784,7 @@ export function Home() {
                   <button
                     type="button"
                     onClick={() => setShowHeroBalanceModal(true)}
-                    aria-label="Voir le détail revenus du mois et dépenses YTD"
+                    aria-label="Voir le détail revenus du mois et dépenses du mois"
                     style={{
                       border: 'none',
                       background: 'linear-gradient(140deg, #1A1730 0%, #2D2B6B 45%, #3D3AB8 100%)',
@@ -1750,7 +1822,10 @@ export function Home() {
                       {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                     </p>
                   </button>
-                  <div />
+                  <ProgressCircleTile
+                    pct={overallConsumedPct}
+                    onClick={() => setShowProgressModal(true)}
+                  />
                 </div>
               ) : (
                 <>
@@ -1860,7 +1935,7 @@ export function Home() {
                 maxWidth: 600,
                 margin: '0 auto',
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                gridTemplateColumns: isMainCheckingAccount ? '1fr' : '1fr 1fr',
                 gap: 'var(--space-3)',
               }}
             >
@@ -1942,11 +2017,12 @@ export function Home() {
                   </div>
                 </div>
               </button>
-              {/* Tuile Progression — coin supérieur droit */}
-              <ProgressCircleTile
-                pct={overallConsumedPct}
-                onClick={() => setShowProgressModal(true)}
-              />
+              {!isMainCheckingAccount ? (
+                <ProgressCircleTile
+                  pct={overallConsumedPct}
+                  onClick={() => setShowProgressModal(true)}
+                />
+              ) : null}
             </div>
           </motion.section>
 
@@ -1969,6 +2045,7 @@ export function Home() {
               {/* Tuile Dérives — droite */}
               <DriftsTile
                 count={driftRows.length}
+                totalOverrunAmount={driftOverrunTotal}
                 onClick={() => setShowDriftsModal(true)}
               />
             </div>
@@ -1985,12 +2062,10 @@ export function Home() {
                 maxWidth: 600,
                 margin: '0 auto',
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 'var(--space-3)',
+                gridTemplateColumns: '1fr',
               }}
             >
-              <OptimizationsTile rows={OPTIMIZATION_PRIORITIES_MOCK} onClick={() => setShowOptimizationsModal(true)} />
-              <div />
+              <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
             </div>
           </motion.section>
 
@@ -2187,7 +2262,7 @@ export function Home() {
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="Détail revenus du mois et dépenses YTD"
+              aria-label="Détail revenus du mois et dépenses du mois"
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -2221,10 +2296,10 @@ export function Home() {
                 </div>
                 <div style={{ display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                    Dépenses YTD
+                    Dépenses du mois
                   </p>
                   <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                    {formatCurrencyFloored(expenseYtdAmountDisplay)}
+                    {formatCurrencyFloored(expenseMonthAmountDisplay)}
                   </p>
                 </div>
               </div>
@@ -2422,7 +2497,7 @@ export function Home() {
       <BudgetProgressModal
         open={showProgressModal}
         onClose={() => setShowProgressModal(false)}
-        ytdBlockProgress={ytdBlockProgress}
+        monthlyBlockProgress={monthlyBlockProgress}
       />
 
       <DriftsModal

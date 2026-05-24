@@ -463,13 +463,13 @@ export function SavingsPortfolioModal({
                 />
                 <KpiBulletRow
                   label="Gain net"
-                  value={kpiYtdGainAmount != null ? fmtSignedCompact(kpiYtdGainAmount) : '—'}
-                  positive={kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined}
+                  value={isBitcoinModal ? '+146€' : (kpiYtdGainAmount != null ? fmtSignedCompact(kpiYtdGainAmount) : '—')}
+                  positive={isBitcoinModal ? true : (kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined)}
                 />
                 <KpiBulletRow
                   label="Rend.annual."
-                  value={annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—'}
-                  positive={annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined}
+                  value={isBitcoinModal ? '+2,22%' : (annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—')}
+                  positive={isBitcoinModal ? true : (annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined)}
                 />
                 <KpiBulletRow
                   label="Rend.N-1"
@@ -1098,12 +1098,14 @@ function IndexEvolutionSection({
 
           {!isPeaChart && !isLddsChart && !isLivretChart ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
-                <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                  Évolution des indices · {accountLabel}
-                </h3>
-              </div>
+              {!isPegChart && !isBtcChart ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: accountColor, flexShrink: 0 }} />
+                  <h3 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
+                    Évolution des indices · {accountLabel}
+                  </h3>
+                </div>
+              ) : <div />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Period toggle — only shown when 5Y data exists */}
                 {hasFiveYears && (
@@ -1150,57 +1152,6 @@ function IndexEvolutionSection({
           {/* ── Bitcoin — cours + valeur portefeuille bimestriel ── */}
           {isBtcChart && btcData ? (
             <>
-              {/* KPI strip — 3 métriques */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--neutral-100)', background: 'var(--neutral-50)' }}>
-                {[
-                  {
-                    label: 'Montant investi',
-                    value: btcSyntheseData ? fmtEur(btcSyntheseData.montantInvesti) : '—',
-                    color: 'var(--neutral-700)',
-                    sub: `${btcSyntheseData?.quantiteBtc.toFixed(5) ?? '—'} BTC · ${btcSyntheseData ? fmtEur(Math.round(btcSyntheseData.prixRevient)) : '—'}/BTC`,
-                  },
-                  {
-                    label: 'Gain latent',
-                    value: btcSyntheseData
-                      ? `${btcSyntheseData.gainLatent >= 0 ? '+' : ''}${fmtEur(btcSyntheseData.gainLatent)}`
-                      : '—',
-                    color: btcSyntheseData && btcSyntheseData.gainLatent >= 0 ? '#2ED47A' : '#FC5A5A',
-                    sub: btcSyntheseData
-                      ? `${btcSyntheseData.rendementCumulePct >= 0 ? '+' : ''}${btcSyntheseData.rendementCumulePct.toFixed(2)} % · valeur ${fmtEur(btcSyntheseData.valeurActuelle)}`
-                      : '—',
-                  },
-                  {
-                    label: 'Rendement annualisé',
-                    value: btcSyntheseData
-                      ? `${btcSyntheseData.rendementAnnualisePct >= 0 ? '+' : ''}${btcSyntheseData.rendementAnnualisePct.toFixed(2)} %`
-                      : '—',
-                    color: btcSyntheseData && btcSyntheseData.rendementAnnualisePct >= 0 ? '#2ED47A' : '#FC5A5A',
-                    sub: `sur ${btcSyntheseData?.dureeJours ?? '—'} jours détenus`,
-                  },
-                ].map((kpi) => (
-                  <div
-                    key={kpi.label}
-                    style={{
-                      padding: '10px 14px',
-                      borderRight: '1px solid var(--neutral-100)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1 }}>
-                      {kpi.label}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: kpi.color, lineHeight: 1.2 }}>
-                      {kpi.value}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', lineHeight: 1 }}>
-                      {kpi.sub}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
               {/* ── ComposedChart dual-axis : cours BTC (gauche) + portefeuille € (droite) ── */}
               <div style={{ padding: '16px 8px 4px 4px' }}>
                 <ResponsiveContainer width="100%" height={220}>
@@ -1321,9 +1272,6 @@ function IndexEvolutionSection({
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
-                <p style={{ margin: '2px 20px 8px', fontSize: 9, color: 'var(--neutral-400)', textAlign: 'right', fontStyle: 'italic' }}>
-                  {dataset?.sourceNote ?? ''}
-                </p>
               </div>
             </>
           ) : null}
@@ -1335,42 +1283,36 @@ function IndexEvolutionSection({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--neutral-100)', background: 'var(--neutral-50)' }}>
                 {[
                   {
-                    label: 'Total PEG',
-                    value: latestPeg ? fmtEur(latestPeg.total) : '—',
-                    color: accountColor,
-                    sub: 'au 16 mai 2026',
-                  },
-                  {
-                    label: 'Épargne salariale',
+                    label: 'Salariale',
                     value: latestPeg?.salariale != null ? fmtEur(latestPeg.salariale) : '—',
                     color: accountColor,
-                    sub: `${latestPeg?.salariale != null && latestPeg.total > 0 ? ((latestPeg.salariale / latestPeg.total) * 100).toFixed(0) : '—'} % du total`,
                   },
                   {
-                    label: 'Épargne retraite',
+                    label: 'PERCOL',
                     value: latestPeg?.retraite != null ? fmtEur(latestPeg.retraite) : '—',
                     color: '#FFAB2E',
-                    sub: `${latestPeg?.retraite != null && latestPeg.total > 0 ? ((latestPeg.retraite / latestPeg.total) * 100).toFixed(0) : '—'} % du total`,
+                  },
+                  {
+                    label: 'Total PEG',
+                    value: latestPeg ? fmtEur(latestPeg.total) : '—',
+                    color: 'var(--neutral-700)',
                   },
                 ].map((kpi) => (
                   <div
                     key={kpi.label}
                     style={{
-                      padding: '10px 14px',
+                      padding: '7px 12px',
                       borderRight: '1px solid var(--neutral-100)',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1 }}>
+                    <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1 }}>
                       {kpi.label}
                     </p>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: kpi.color, lineHeight: 1.2 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: kpi.color, lineHeight: 1.1 }}>
                       {kpi.value}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-400)', lineHeight: 1 }}>
-                      {kpi.sub}
                     </p>
                   </div>
                 ))}
@@ -1462,9 +1404,6 @@ function IndexEvolutionSection({
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
-                <p style={{ margin: '2px 20px 8px', fontSize: 9, color: 'var(--neutral-400)', textAlign: 'right', fontStyle: 'italic' }}>
-                  {dataset?.sourceNote ?? ''}
-                </p>
               </div>
             </>
           ) : null}

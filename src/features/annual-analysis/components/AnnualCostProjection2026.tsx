@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, LayoutGrid, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, LayoutGrid, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -76,6 +76,28 @@ type DeltaBlockSummaryRow = {
   categories: DeltaBlockCategoryRow[]
 }
 
+type ProjectionListViewMode = 'real' | 'budget'
+
+type BlockProjectionCategoryRow = {
+  categoryId: string
+  categoryName: string
+  iconKey: string | null
+  projectedAnnualAmount: number
+  budgetAnnualAmount: number
+  projectedVsBudgetPct: number
+}
+
+type BlockProjectionListRow = {
+  blockKey: string
+  name: string
+  color: string
+  iconSrc: string | null
+  projectedAnnualAmount: number
+  budgetAnnualAmount: number
+  projectedVsBudgetPct: number
+  categories: BlockProjectionCategoryRow[]
+}
+
 type AnnualProjectionSectionConnectedProps = {
   scopeSelection?: MetricsScopeSelection
   initialViewMode?: ProjectionViewMode
@@ -88,9 +110,9 @@ const fmtCurrency = (n: number) => formatCurrencyFloored(n)
 const fmtSignedCurrency = (n: number) => `${n > 0 ? '+' : ''}${fmtCurrency(n)}`
 
 const fmtPctSigned = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
-const fmtPctSignedRounded = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value)}%`
 
 const ALL_CATEGORIES_SCOPE_ID = 'all_categories'
+const HIDDEN_PARENT_KEYS = new Set(['revenus', 'epargne', 'épargne', 'transferts'])
 const BLOCK_DELTA_COLORS: Record<string, string> = {
   socle_fixe: BUCKET_COLORS.socle_fixe,
   variable_essentielle: BUCKET_COLORS.variable_essentielle,
@@ -231,7 +253,9 @@ function AnnualCostProjectionCard({
   const [selectedDeltaBlockKey, setSelectedDeltaBlockKey] = useState<string | null>(null)
   const [openedDeltaBreakdownBlockKey, setOpenedDeltaBreakdownBlockKey] = useState<string | null>(null)
   const [showListModal, setShowListModal] = useState(false)
-  const [openedParentKey, setOpenedParentKey] = useState<string | null>(null)
+  const [projectionListViewMode, setProjectionListViewMode] = useState<ProjectionListViewMode>('real')
+  const [showBlockListModal, setShowBlockListModal] = useState(false)
+  const [blockListViewMode, setBlockListViewMode] = useState<ProjectionListViewMode>('real')
   const deltaTooltipRef = useRef<HTMLDivElement | null>(null)
   const { data: categories = [] } = useCategories()
   const viewMode = controlledViewMode ?? internalViewMode
@@ -403,6 +427,84 @@ function AnnualCostProjectionCard({
       }
     })
   }, [categoryIconById, rows])
+  const blockProjectionRows = useMemo<BlockProjectionListRow[]>(() => {
+    const byBlock = new Map<string, {
+      blockKey: string
+      name: string
+      color: string
+      iconSrc: string | null
+      projectedAnnualAmount: number
+      budgetAnnualAmount: number
+      categories: Map<string, BlockProjectionCategoryRow>
+    }>()
+
+    for (const row of rows) {
+      const bucket = (row.budgetBucket ?? '').trim()
+      if (!(PILOTAGE_BUCKET_ORDER as readonly string[]).includes(bucket)) continue
+      const existing = byBlock.get(bucket) ?? {
+        blockKey: bucket,
+        name: BUCKET_LABELS[bucket] ?? bucket,
+        color: BLOCK_DELTA_COLORS[bucket] ?? 'var(--neutral-500)',
+        iconSrc: BLOCK_ICON_BY_BUCKET[bucket] ?? null,
+        projectedAnnualAmount: 0,
+        budgetAnnualAmount: 0,
+        categories: new Map<string, BlockProjectionCategoryRow>(),
+      }
+      existing.projectedAnnualAmount += Number(row.projectedAnnualAmount ?? 0)
+      existing.budgetAnnualAmount += Number(row.budgetAnnualAmount ?? 0)
+
+      const currentCategory = existing.categories.get(row.categoryId)
+      if (currentCategory) {
+        currentCategory.projectedAnnualAmount += Number(row.projectedAnnualAmount ?? 0)
+        currentCategory.budgetAnnualAmount += Number(row.budgetAnnualAmount ?? 0)
+      } else {
+        existing.categories.set(row.categoryId, {
+          categoryId: row.categoryId,
+          categoryName: row.categoryName,
+          iconKey: categoryIconById.get(row.categoryId) ?? null,
+          projectedAnnualAmount: Number(row.projectedAnnualAmount ?? 0),
+          budgetAnnualAmount: Number(row.budgetAnnualAmount ?? 0),
+          projectedVsBudgetPct: 0,
+        })
+      }
+      byBlock.set(bucket, existing)
+    }
+
+    return PILOTAGE_BUCKET_ORDER.map((bucket) => {
+      const entry = byBlock.get(bucket)
+      if (!entry) {
+        return {
+          blockKey: bucket,
+          name: BUCKET_LABELS[bucket] ?? bucket,
+          color: BLOCK_DELTA_COLORS[bucket] ?? 'var(--neutral-500)',
+          iconSrc: BLOCK_ICON_BY_BUCKET[bucket] ?? null,
+          projectedAnnualAmount: 0,
+          budgetAnnualAmount: 0,
+          projectedVsBudgetPct: 0,
+          categories: [],
+        }
+      }
+      const categories = [...entry.categories.values()]
+        .map((category) => {
+          const delta = category.projectedAnnualAmount - category.budgetAnnualAmount
+          const pct = category.budgetAnnualAmount > 0 ? (delta / category.budgetAnnualAmount) * 100 : 0
+          return { ...category, projectedVsBudgetPct: pct }
+        })
+        .sort((a, b) => b.projectedAnnualAmount - a.projectedAnnualAmount)
+      const blockDelta = entry.projectedAnnualAmount - entry.budgetAnnualAmount
+      const blockPct = entry.budgetAnnualAmount > 0 ? (blockDelta / entry.budgetAnnualAmount) * 100 : 0
+      return {
+        blockKey: entry.blockKey,
+        name: entry.name,
+        color: entry.color,
+        iconSrc: entry.iconSrc,
+        projectedAnnualAmount: entry.projectedAnnualAmount,
+        budgetAnnualAmount: entry.budgetAnnualAmount,
+        projectedVsBudgetPct: blockPct,
+        categories,
+      }
+    })
+  }, [categoryIconById, rows])
   const totalDeltaBreakdownRow = useMemo<DeltaBlockSummaryRow>(() => {
     const categoriesById = new Map<string, DeltaBlockCategoryRow>()
     let totalBudgetYtdAmount = 0
@@ -484,11 +586,6 @@ function AnnualCostProjectionCard({
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [selectedDeltaTooltip])
-
-  const openedParentGroup = useMemo(
-    () => parentGroups.find((group) => group.parentKey === openedParentKey) ?? null,
-    [parentGroups, openedParentKey],
-  )
 
   const modeToggle = hideModeToggle ? null : (
     <div style={switchStyle} role="tablist" aria-label="Mode de projection">
@@ -751,13 +848,39 @@ function AnnualCostProjectionCard({
       }}
     >
       <span style={top5LabelStyle}>Top 5 catégories</span>
-      <button type="button" onClick={() => setShowListModal(true)} style={listButtonStyle}>
+      <button
+        type="button"
+        onClick={() => {
+          setProjectionListViewMode('real')
+          setShowListModal(true)
+        }}
+        style={listButtonStyle}
+      >
         <ChevronRight size={12} />
         liste complète
       </button>
     </div>
   ) : (
-    <span style={top5LabelStyle}>Projection écart fin 2026</span>
+    <div
+      style={{
+        ...categoryInlineControlsStyle,
+        width: hideModeToggle ? '100%' : 'auto',
+        justifyContent: hideModeToggle ? 'space-between' : 'flex-start',
+      }}
+    >
+      <span style={top5LabelStyle}>Projection écart fin 2026</span>
+      <button
+        type="button"
+        onClick={() => {
+          setBlockListViewMode('real')
+          setShowBlockListModal(true)
+        }}
+        style={listButtonStyle}
+      >
+        <ChevronRight size={12} />
+        détails complets
+      </button>
+    </div>
   )
 
   const chartTopControls = (
@@ -771,17 +894,12 @@ function AnnualCostProjectionCard({
     <ProjectionListModal
       rows={parentGroups}
       parentIconByName={parentIconByName}
-      onOpenParentDetails={(parentKey) => setOpenedParentKey(parentKey)}
-      onClose={() => setShowListModal(false)}
-    />
-  ) : null
-
-  const detailsModal = openedParentGroup ? (
-    <ParentCategoryDetailsModal
-      group={openedParentGroup}
-      headerColor={parentHeaderColorByName.get(openedParentGroup.parentKey) ?? 'var(--primary-600)'}
       categoryIconById={categoryIconById}
-      onClose={() => setOpenedParentKey(null)}
+      viewMode={projectionListViewMode}
+      onSwitchViewMode={() => {
+        setProjectionListViewMode((current) => (current === 'real' ? 'budget' : 'real'))
+      }}
+      onClose={() => setShowListModal(false)}
     />
   ) : null
   const deltaBreakdownModal = openedDeltaBreakdownBlockKey
@@ -796,6 +914,16 @@ function AnnualCostProjectionCard({
       />
     )
     : null
+  const blockListModal = showBlockListModal ? (
+    <BlockProjectionListModal
+      rows={blockProjectionRows}
+      viewMode={blockListViewMode}
+      onSwitchViewMode={() => {
+        setBlockListViewMode((current) => (current === 'real' ? 'budget' : 'real'))
+      }}
+      onClose={() => setShowBlockListModal(false)}
+    />
+  ) : null
 
   if (bare) {
     return (
@@ -804,7 +932,7 @@ function AnnualCostProjectionCard({
         {chart}
         {projectedNetSummary}
         {modal}
-        {detailsModal}
+        {blockListModal}
         {deltaBreakdownModal}
       </>
     )
@@ -829,7 +957,7 @@ function AnnualCostProjectionCard({
         </div>
       </div>
       {modal}
-      {detailsModal}
+      {blockListModal}
       {deltaBreakdownModal}
     </section>
   )
@@ -1101,27 +1229,70 @@ function DeltaBreakdownModal({
 function ProjectionListModal({
   rows,
   parentIconByName,
-  onOpenParentDetails,
+  categoryIconById,
+  viewMode,
+  onSwitchViewMode,
   onClose,
 }: {
   rows: ParentProjectionGroup[]
   parentIconByName: Map<string, string | null>
-  onOpenParentDetails: (parentKey: string) => void
+  categoryIconById: Map<string, string | null>
+  viewMode: ProjectionListViewMode
+  onSwitchViewMode: () => void
   onClose: () => void
 }) {
-  const hiddenParentKeys = new Set(['revenus', 'epargne', 'épargne', 'transferts'])
-  const visibleRows = rows.filter((row) => !hiddenParentKeys.has(parentKeyFromName(row.parentName)))
-  const totalProjected = visibleRows.reduce((sum, row) => sum + row.projectedAnnualAmount, 0)
+  const [expandedParentKey, setExpandedParentKey] = useState<string | null>(null)
+  const isBudgetMode = viewMode === 'budget'
+  const visibleRows = useMemo(
+    () => rows.filter((row) => !HIDDEN_PARENT_KEYS.has(parentKeyFromName(row.parentName))),
+    [rows],
+  )
+  const sortedRows = useMemo(() => {
+    const sorted = [...visibleRows]
+    if (isBudgetMode) {
+      sorted.sort((a, b) => b.budgetAnnualAmount - a.budgetAnnualAmount)
+      return sorted
+    }
+    sorted.sort((a, b) => b.projectedAnnualAmount - a.projectedAnnualAmount)
+    return sorted
+  }, [visibleRows, isBudgetMode])
+  const totalDisplayedAmount = sortedRows.reduce(
+    (sum, row) => sum + (isBudgetMode ? row.budgetAnnualAmount : row.projectedAnnualAmount),
+    0,
+  )
   const statusIconSize = 13
 
   return (
     <div style={listModalOverlayCenteredStyle} onClick={onClose}>
       <div style={listModalCenteredStyle} onClick={(e) => e.stopPropagation()}>
         <div style={listModalHeaderStyle}>
-          <div>
+          <button
+            type="button"
+            onClick={onSwitchViewMode}
+            aria-label={isBudgetMode ? 'Afficher les projections basées sur le réel' : 'Afficher les projections basées sur le budget théorique'}
+            style={{
+              border: '1px solid var(--color-warning)',
+              background: 'rgba(255,255,255,0.22)',
+              borderRadius: 'var(--radius-full)',
+              width: 32,
+              height: 32,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--color-warning)',
+              flexShrink: 0,
+            }}
+          >
+            {isBudgetMode ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
+          <div style={{ minWidth: 0, flex: 1, paddingLeft: 'var(--space-2)' }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--neutral-0)' }}>
               Détails par catégorie
             </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+              {isBudgetMode ? 'Budget théorique 2026' : 'Projection basée sur le réel'}
+            </p>
           </div>
           <button
             type="button"
@@ -1152,75 +1323,129 @@ function ProjectionListModal({
           marginBottom: 1,
         }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Catégorie / budget annuel
+            Catégorie
           </span>
           <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            Projection 2026
+            {isBudgetMode ? 'Budget 2026' : 'Projection 2026'}
           </span>
         </div>
 
         <div style={{ display: 'grid', gap: 0 }}>
-          {visibleRows.map((row) => {
+          {sortedRows.map((row) => {
             const overBudget = row.projectedVsBudgetPct > 0
+            const isExpanded = expandedParentKey === row.parentKey
+            const rowDisplayedAmount = isBudgetMode ? row.budgetAnnualAmount : row.projectedAnnualAmount
+            const visibleChildren = row.children
+              .filter((child) => parentKeyFromName(child.categoryName) !== parentKeyFromName(row.parentName))
+              .sort((a, b) => {
+                if (isBudgetMode) return b.budgetAnnualAmount - a.budgetAnnualAmount
+                return b.projectedAnnualAmount - a.projectedAnnualAmount
+              })
             return (
-              <button
-                key={row.parentKey}
-                type="button"
-                onClick={() => onOpenParentDetails(row.parentKey)}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  width: '100%',
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1fr) auto',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '7px 0',
-                  borderBottom: '1px solid var(--neutral-100)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,1fr)', alignItems: 'center', gap: 8 }}>
-                    <CategoryIcon
-                      iconKey={parentIconByName.get(row.parentKey) ?? null}
-                      label={row.parentName}
-                      size={28}
-                      style={{ width: 28, height: 28, display: 'block', objectFit: 'contain' }}
-                    />
-                    <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div key={row.parentKey} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedParentKey((current) => (current === row.parentKey ? null : row.parentKey))
+                  }}
+                  style={{
+                    border: 'none',
+                    background: isExpanded ? 'var(--neutral-50)' : 'transparent',
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0,1fr) auto',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 0',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background-color var(--transition-fast)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px minmax(0,1fr)', alignItems: 'center', gap: 8 }}>
+                      <CategoryIcon
+                        iconKey={parentIconByName.get(row.parentKey) ?? null}
+                        label={row.parentName}
+                        size={30}
+                        style={{ width: 30, height: 30, display: 'block', objectFit: 'contain' }}
+                      />
+                      <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.1, fontWeight: 600, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {row.parentName}
                         </span>
-                        {overBudget ? (
+                        {overBudget && !isBudgetMode ? (
                           <AlertTriangle size={statusIconSize} color="var(--color-warning)" aria-label="Attention risque de dépassement" />
                         ) : (
                           <CheckCircle2 size={statusIconSize} color="var(--color-success)" aria-label="Sous contrôle" />
                         )}
                       </div>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                        Budget annuel : {fmtCurrency(row.budgetAnnualAmount)}
-                      </span>
                     </div>
                   </div>
-                </div>
-                <div style={{ display: 'grid', justifyItems: 'end', gap: 2 }}>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                    {fmtCurrency(row.projectedAnnualAmount)}
+                  <span style={{ fontSize: 13, lineHeight: 1.1, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                    {fmtCurrency(rowDisplayedAmount)}
                   </span>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
-                    {fmtPctSignedRounded(row.projectedVsBudgetPct)}
-                  </span>
-                </div>
-              </button>
+                </button>
+                {isExpanded ? (
+                  <div style={{ background: 'var(--neutral-50)' }}>
+                    {visibleChildren.length === 0 ? (
+                      <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
+                        Aucune sous-catégorie disponible
+                      </p>
+                    ) : (
+                      visibleChildren.map((child) => {
+                        const childDisplayedAmount = isBudgetMode ? child.budgetAnnualAmount : child.projectedAnnualAmount
+                        const childOverBudget = child.projectedVsBudgetPct > 0
+                        return (
+                          <div
+                            key={child.categoryId}
+                            style={{
+                              width: '100%',
+                              borderTop: '1px solid var(--neutral-150)',
+                              padding: '8px var(--space-4)',
+                              display: 'grid',
+                              gridTemplateColumns: '22px minmax(0,1fr) auto',
+                              alignItems: 'center',
+                              gap: 'var(--space-2)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <CategoryIcon
+                                iconKey={categoryIconById.get(child.categoryId) ?? null}
+                                label={child.categoryName}
+                                size={18}
+                              />
+                            </div>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
+                              {child.categoryName}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                lineHeight: 1.1,
+                                fontWeight: 700,
+                                color: isBudgetMode ? 'var(--primary-700)' : (childOverBudget ? 'var(--color-error)' : 'var(--primary-700)'),
+                                fontFamily: 'var(--font-mono)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {fmtCurrency(childDisplayedAmount)}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                ) : null}
+              </div>
             )
           })}
           <div style={{ ...listModalTotalRowStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0 2px' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#C88400', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total projeté</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#C88400', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {isBudgetMode ? 'Total budget' : 'Total projeté'}
+            </span>
             <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#C88400' }}>
-              {fmtCurrency(totalProjected)}
+              {fmtCurrency(totalDisplayedAmount)}
             </span>
           </div>
         </div>
@@ -1229,31 +1454,63 @@ function ProjectionListModal({
   )
 }
 
-function ParentCategoryDetailsModal({
-  group,
-  headerColor,
-  categoryIconById,
+function BlockProjectionListModal({
+  rows,
+  viewMode,
+  onSwitchViewMode,
   onClose,
 }: {
-  group: ParentProjectionGroup
-  headerColor: string
-  categoryIconById: Map<string, string | null>
+  rows: BlockProjectionListRow[]
+  viewMode: ProjectionListViewMode
+  onSwitchViewMode: () => void
   onClose: () => void
 }) {
-  const visibleChildren = group.children.filter((child) => (
-    parentKeyFromName(child.categoryName) !== parentKeyFromName(group.parentName)
-  ))
+  const [expandedBlockKey, setExpandedBlockKey] = useState<string | null>(null)
+  const isBudgetMode = viewMode === 'budget'
+  const sortedRows = useMemo(() => {
+    const sorted = [...rows]
+    if (isBudgetMode) {
+      sorted.sort((a, b) => b.budgetAnnualAmount - a.budgetAnnualAmount)
+      return sorted
+    }
+    sorted.sort((a, b) => b.projectedAnnualAmount - a.projectedAnnualAmount)
+    return sorted
+  }, [rows, isBudgetMode])
+  const totalDisplayedAmount = sortedRows.reduce(
+    (sum, row) => sum + (isBudgetMode ? row.budgetAnnualAmount : row.projectedAnnualAmount),
+    0,
+  )
 
   return (
-    <div style={parentDetailOverlayStyle} onClick={onClose}>
-      <div style={parentDetailModalStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={{ ...listModalHeaderStyle, background: headerColor }}>
-          <div>
+    <div style={listModalOverlayCenteredStyle} onClick={onClose}>
+      <div style={listModalCenteredStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={listModalHeaderStyle}>
+          <button
+            type="button"
+            onClick={onSwitchViewMode}
+            aria-label={isBudgetMode ? 'Afficher les projections ajustées au réel' : 'Afficher le budget théorique'}
+            style={{
+              border: '1px solid var(--color-warning)',
+              background: 'rgba(255,255,255,0.22)',
+              borderRadius: 'var(--radius-full)',
+              width: 32,
+              height: 32,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--color-warning)',
+              flexShrink: 0,
+            }}
+          >
+            {isBudgetMode ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
+          <div style={{ minWidth: 0, flex: 1, paddingLeft: 'var(--space-2)' }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--neutral-0)' }}>
-              {group.parentName}
+              Détails par bloc
             </h3>
             <p style={{ margin: '2px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              Détail par sous-catégorie
+              {isBudgetMode ? 'Budget théorique 2026' : 'Projection ajustée au réel'}
             </p>
           </div>
           <button
@@ -1268,63 +1525,116 @@ function ParentCategoryDetailsModal({
               padding: 4,
               lineHeight: 0,
             }}
-            aria-label={`Fermer le détail de ${group.parentName}`}
+            aria-label="Fermer la liste des blocs"
           >
             <X size={20} />
           </button>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', columnGap: 10, padding: '5px 0', borderBottom: '1px solid var(--neutral-150)', background: 'var(--neutral-50)', marginBottom: 1 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Bloc
+          </span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            {isBudgetMode ? 'Budget 2026' : 'Projection 2026'}
+          </span>
+        </div>
+
         <div style={{ display: 'grid', gap: 0 }}>
-          {visibleChildren.map((child) => {
-            const overBudget = child.projectedVsBudgetPct > 0
+          {sortedRows.map((row) => {
+            const isExpanded = expandedBlockKey === row.blockKey
+            const displayedAmount = isBudgetMode ? row.budgetAnnualAmount : row.projectedAnnualAmount
             return (
-              <div
-                key={child.categoryId}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1fr) auto',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '7px 0',
-                  borderBottom: '1px solid var(--neutral-100)',
-                }}
-              >
-                <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,1fr)', alignItems: 'center', gap: 8 }}>
-                    <CategoryIcon
-                      iconKey={categoryIconById.get(child.categoryId) ?? null}
-                      label={child.categoryName}
-                      size={28}
-                      style={{ width: 28, height: 28, display: 'block', objectFit: 'contain' }}
-                    />
-                    <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {child.categoryName}
-                        </span>
-                        {overBudget ? (
-                          <AlertTriangle size={13} color="var(--color-warning)" aria-label="Attention risque de dépassement" />
-                        ) : (
-                          <CheckCircle2 size={13} color="var(--color-success)" aria-label="Sous contrôle" />
-                        )}
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                        Budget annuel : {fmtCurrency(child.budgetAnnualAmount)}
-                      </span>
-                    </div>
+              <div key={row.blockKey} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedBlockKey((current) => (current === row.blockKey ? null : row.blockKey))}
+                  style={{
+                    border: 'none',
+                    background: isExpanded ? 'var(--neutral-50)' : 'transparent',
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0,1fr) auto',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 0',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background-color var(--transition-fast)',
+                  }}
+                >
+                  <div style={{ minWidth: 0, display: 'grid', gridTemplateColumns: '22px minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
+                    {row.iconSrc ? (
+                      <img src={row.iconSrc} alt="" width={20} height={20} aria-hidden="true" style={{ display: 'block', objectFit: 'contain' }} />
+                    ) : (
+                      <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: 'var(--radius-full)', background: row.color, display: 'inline-block' }} />
+                    )}
+                    <span style={{ fontSize: 14, lineHeight: 1.1, fontWeight: 600, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {`Socle ${row.name.toLowerCase()}`}
+                    </span>
                   </div>
-                </div>
-                <div style={{ display: 'grid', justifyItems: 'end', gap: 2 }}>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                    {fmtCurrency(child.projectedAnnualAmount)}
+                  <span style={{ fontSize: 13, lineHeight: 1.1, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                    {fmtCurrency(displayedAmount)}
                   </span>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: overBudget ? 'var(--color-negative)' : 'var(--color-success)' }}>
-                    {fmtPctSignedRounded(child.projectedVsBudgetPct)}
-                  </span>
-                </div>
+                </button>
+                {isExpanded ? (
+                  <div style={{ background: 'var(--neutral-50)' }}>
+                    {row.categories.length === 0 ? (
+                      <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
+                        Aucune sous-catégorie disponible
+                      </p>
+                    ) : (
+                      row.categories.map((category) => {
+                        const categoryDisplayedAmount = isBudgetMode ? category.budgetAnnualAmount : category.projectedAnnualAmount
+                        const isOverBudget = category.projectedVsBudgetPct > 0
+                        return (
+                          <div
+                            key={category.categoryId}
+                            style={{
+                              width: '100%',
+                              borderTop: '1px solid var(--neutral-150)',
+                              padding: '8px var(--space-4)',
+                              display: 'grid',
+                              gridTemplateColumns: '22px minmax(0,1fr) auto',
+                              alignItems: 'center',
+                              gap: 'var(--space-2)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <CategoryIcon iconKey={category.iconKey} label={category.categoryName} size={18} />
+                            </div>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
+                              {category.categoryName}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                lineHeight: 1.1,
+                                fontWeight: 700,
+                                color: isBudgetMode ? 'var(--primary-700)' : (isOverBudget ? 'var(--color-error)' : 'var(--primary-700)'),
+                                fontFamily: 'var(--font-mono)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {fmtCurrency(categoryDisplayedAmount)}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                ) : null}
               </div>
             )
           })}
+          <div style={{ ...listModalTotalRowStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0 2px' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#C88400', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {isBudgetMode ? 'Total budget' : 'Total projeté'}
+            </span>
+            <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#C88400' }}>
+              {fmtCurrency(totalDisplayedAmount)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -485,6 +485,7 @@ export function SavingsPlanning2026Section() {
               display: 'grid',
               rowGap: 7,
               padding: 'var(--space-2) 0',
+              marginTop: 'var(--space-3)',
             }}
           >
             {/* Ligne verticale centrale */}
@@ -499,6 +500,7 @@ export function SavingsPlanning2026Section() {
                 width: 2,
                 borderRadius: 'var(--radius-full)',
                 background: 'color-mix(in oklab, var(--primary-500) 45%, var(--neutral-200) 55%)',
+                zIndex: 0,
               }}
             />
 
@@ -524,8 +526,8 @@ export function SavingsPlanning2026Section() {
                   : 'color-mix(in oklab, var(--primary-500) 24%, var(--neutral-200) 76%)'}`,
                 background: past ? 'var(--primary-50)' : 'var(--neutral-0)',
                 borderRadius: 'var(--radius-md)',
-                padding: '4px 10px 5px',
-                minWidth: 72,
+                padding: '6px 12px 7px',
+                minWidth: 114,
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
@@ -550,6 +552,8 @@ export function SavingsPlanning2026Section() {
                       ? '0 0 0 3px color-mix(in oklab, var(--color-positive) 22%, transparent)'
                       : '0 0 0 3px color-mix(in oklab, var(--color-negative) 22%, transparent)',
                     flexShrink: 0,
+                    position: 'relative',
+                    zIndex: 2,
                   }
                 : {
                     width: 12,
@@ -560,6 +564,8 @@ export function SavingsPlanning2026Section() {
                     cursor: 'pointer',
                     padding: 0,
                     flexShrink: 0,
+                    position: 'relative',
+                    zIndex: 2,
                   }
 
               const connectorStyle: React.CSSProperties = {
@@ -577,8 +583,9 @@ export function SavingsPlanning2026Section() {
                     fontWeight: 700,
                     color: past ? 'var(--primary-700)' : 'var(--neutral-800)',
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}>
-                    {month.shortLabel}
+                    {month.fullLabel.replace(' 2026', '')}
                   </span>
                   {/* Montant mensuel versé avec signe + en vert profond — mois révolus uniquement */}
                   {past && savedAmount !== null && (
@@ -601,13 +608,14 @@ export function SavingsPlanning2026Section() {
                 <span
                   aria-label={`Cumul YTD ${formatYtd(ytdAmount)}`}
                   style={{
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: 600,
                     color: 'var(--neutral-400)',
                     fontFamily: 'var(--font-mono)',
                     whiteSpace: 'nowrap',
                     letterSpacing: '-0.01em',
                     flexShrink: 0,
+                    marginInline: 'var(--space-2)',
                   }}
                 >
                   {formatYtd(ytdAmount)}

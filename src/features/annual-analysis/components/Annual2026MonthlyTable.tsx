@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -159,9 +159,14 @@ export function MonthlyFlowsAnalysisCard({
   scopeSelection,
 }: MonthlyFlowsAnalysisCardProps) {
   const [activeSlide, setActiveSlide] = useState<'table' | 'chart'>(initialView)
+  const [animatedTableHeight, setAnimatedTableHeight] = useState<number | null>(null)
   const { user, loading: authLoading } = useAuth()
   const tableMonthCutoff = getCurrentMonthCutoff(year)
   const activeView = forcedView ?? activeSlide
+  const cardRootRef = useRef<HTMLDivElement | null>(null)
+  const tableContentRef = useRef<HTMLDivElement | null>(null)
+  const lastYearRef = useRef(year)
+  const scrollRafRef = useRef<number | null>(null)
 
   const isScopedMode =
     Boolean(scopeSelection) &&
@@ -308,7 +313,6 @@ export function MonthlyFlowsAnalysisCard({
   })
 
   const rows = (dbRows && dbRows.length > 0 ? dbRows : fallbackRows).filter((row) => row.month <= tableMonthCutoff)
-  if (rows.length === 0) return null
 
   const chartRows = rows
   const chartData = chartRows.map((row) => ({
@@ -356,10 +360,86 @@ export function MonthlyFlowsAnalysisCard({
     : 0
   const showHeaderRow = variant !== 'embedded' || (showInternalViewToggle && !forcedView)
 
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current != null) {
+        window.cancelAnimationFrame(scrollRafRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeView !== 'table') return
+    const nextHeight = tableContentRef.current?.scrollHeight ?? null
+    if (!nextHeight || nextHeight <= 0) return
+
+    if (animatedTableHeight == null) {
+      setAnimatedTableHeight(nextHeight)
+      lastYearRef.current = year
+      return
+    }
+
+    if (nextHeight === animatedTableHeight && lastYearRef.current === year) return
+
+    const previousHeight = animatedTableHeight
+    const isExpanding = nextHeight > previousHeight
+    const animationDurationMs = 720
+    const startScrollY = window.scrollY
+    const cardTop = cardRootRef.current
+      ? window.scrollY + cardRootRef.current.getBoundingClientRect().top
+      : window.scrollY
+    const getCardBottomScrollY = () => {
+      if (!cardRootRef.current) return startScrollY
+      const rect = cardRootRef.current.getBoundingClientRect()
+      return window.scrollY + rect.bottom - window.innerHeight + 20
+    }
+    const getPageBottomScrollY = () => Math.max(
+      0,
+      (document.scrollingElement?.scrollHeight ?? document.body.scrollHeight) - window.innerHeight,
+    )
+    const expandTargetScrollY = getPageBottomScrollY()
+    const collapseTargetScrollY = Math.max(0, cardTop - 12)
+    const targetScrollY = isExpanding ? expandTargetScrollY : collapseTargetScrollY
+    const travelDistance = targetScrollY - startScrollY
+    const start = performance.now()
+    const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (Math.pow(-2 * t + 2, 3) / 2))
+
+    if (scrollRafRef.current != null) {
+      window.cancelAnimationFrame(scrollRafRef.current)
+      scrollRafRef.current = null
+    }
+
+    const tick = (now: number) => {
+      const elapsed = now - start
+      const progress = Math.min(1, elapsed / animationDurationMs)
+      const eased = easeInOutCubic(progress)
+      if (isExpanding) {
+        const dynamicBottom = getPageBottomScrollY()
+        const dynamicCardBottom = getCardBottomScrollY()
+        const dynamicTarget = Math.max(dynamicBottom, dynamicCardBottom)
+        const dynamicDistance = dynamicTarget - startScrollY
+        window.scrollTo({ top: startScrollY + dynamicDistance * eased, left: 0, behavior: 'auto' })
+      } else {
+        window.scrollTo({ top: startScrollY + travelDistance * eased, left: 0, behavior: 'auto' })
+      }
+      if (progress < 1) {
+        scrollRafRef.current = window.requestAnimationFrame(tick)
+      } else {
+        scrollRafRef.current = null
+      }
+    }
+
+    scrollRafRef.current = window.requestAnimationFrame(tick)
+    setAnimatedTableHeight(nextHeight)
+    lastYearRef.current = year
+  }, [activeView, animatedTableHeight, rows.length, scopedData, year])
+
+  if (rows.length === 0) return null
+
   return (
     <div className={className} style={{ padding: variant === 'embedded' ? '0' : '0 var(--space-4)' }}>
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <div style={variant === 'embedded' ? cardStyleEmbedded : cardStyle}>
+        <div ref={cardRootRef} style={variant === 'embedded' ? cardStyleEmbedded : cardStyle}>
           {showHeaderRow ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
               <div>
@@ -417,15 +497,16 @@ export function MonthlyFlowsAnalysisCard({
               {activeView === 'table' ? (
                 <motion.div
                   key="table"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, x: -20, height: animatedTableHeight ?? 'auto' }}
+                  animate={{ opacity: 1, x: 0, height: animatedTableHeight ?? 'auto' }}
                   exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflowX: 'hidden', margin: 0 }}
                 >
-                  {isScopedMode && scopedData ? (
-                    // ── Mode scope : catégorie ou bloc ──────────────────────
-                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <div ref={tableContentRef}>
+                    {isScopedMode && scopedData ? (
+                      // ── Mode scope : catégorie ou bloc ──────────────────────
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '14%' }} />
                         <col style={{ width: '23%' }} />
@@ -509,10 +590,10 @@ export function MonthlyFlowsAnalysisCard({
                           )
                         })()}
                       </tbody>
-                    </table>
-                  ) : (
-                    // ── Mode défaut : Toutes catégories ─────────────────────
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
+                      </table>
+                    ) : (
+                      // ── Mode défaut : Toutes catégories ─────────────────────
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '14%' }} />
                         {useBalanceOutflowView ? (
@@ -672,8 +753,9 @@ export function MonthlyFlowsAnalysisCard({
                           )
                         })()}
                       </tbody>
-                    </table>
-                  )}
+                      </table>
+                    )}
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div

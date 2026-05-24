@@ -1728,10 +1728,10 @@ export function SavingsEvolutionFiveYearsChart() {
                     </p>
                   ) : (
                     <div style={{ display: 'grid', gap: 0 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '84px minmax(0,1fr) 92px 100px', columnGap: '12px', padding: '0 2px 6px', borderBottom: '1px solid var(--neutral-100)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1.45fr) 90px 92px', columnGap: '8px', padding: '0 2px 6px', borderBottom: '1px solid var(--neutral-100)' }}>
                         <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Date</span>
                         <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Portefeuille</span>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center' }}>Nature</span>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right', paddingRight: 10 }}>Nature</span>
                         <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Montant</span>
                       </div>
                       {overviewOperationsForSelectedYear.map((event, index) => (
@@ -1739,8 +1739,8 @@ export function SavingsEvolutionFiveYearsChart() {
                           key={`overview-year-op-${event.id}`}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '84px minmax(0,1fr) 92px 100px',
-                            columnGap: '12px',
+                            gridTemplateColumns: '64px minmax(0,1.45fr) 90px 92px',
+                            columnGap: '8px',
                             padding: '8px 2px',
                             borderBottom: index < overviewOperationsForSelectedYear.length - 1 ? '1px solid var(--neutral-50)' : 'none',
                             alignItems: 'center',
@@ -1749,10 +1749,10 @@ export function SavingsEvolutionFiveYearsChart() {
                           <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
                             {formatOperationDate(event.transaction_date)}
                           </span>
-                          <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             {resolveListLabel(event.account_label)}
                           </span>
-                          <span style={{ fontSize: 10, color: 'var(--neutral-600)', textAlign: 'center' }}>
+                          <span style={{ fontSize: 10, color: 'var(--neutral-600)', textAlign: 'right', paddingRight: 10 }}>
                             {event.nature}
                           </span>
                           <span style={{ fontSize: 11, color: event.amount >= 0 ? 'var(--neutral-900)' : 'var(--color-negative)', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>

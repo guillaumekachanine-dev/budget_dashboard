@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type RefObject } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
@@ -245,12 +245,14 @@ interface SubCategoryRealLine {
 interface SubModalProps {
   open: boolean
   onClose: () => void
+  onSwitchMode: () => void
   name: string
   iconKey: string | null
   iconSrc?: string | null
   color: string
   consumedAmount: number
   budgetAmount: number
+  clickedFrom: 'real' | 'budget'
   headerMetricLabel: 'Consommé' | 'Budgétisé'
   headerMetricAmount: number
   transactions: Transaction[]
@@ -259,6 +261,7 @@ interface SubModalProps {
   categoryById: Map<string, Category>
   subCategoryBudgets?: SubCategoryBudgetLine[]
   subCategoryReals?: SubCategoryRealLine[]
+  subCategoryBudgetById: ReadonlyMap<string, number>
   expandedRealSubCategoryId: string | null
   onToggleRealSubCategory: (subCategoryId: string) => void
 }
@@ -266,12 +269,14 @@ interface SubModalProps {
 function SubModal({
   open,
   onClose,
+  onSwitchMode,
   name,
   iconKey,
   iconSrc,
   color,
   consumedAmount,
   budgetAmount,
+  clickedFrom,
   headerMetricLabel,
   headerMetricAmount,
   transactions,
@@ -280,6 +285,7 @@ function SubModal({
   categoryById,
   subCategoryBudgets,
   subCategoryReals,
+  subCategoryBudgetById,
   expandedRealSubCategoryId,
   onToggleRealSubCategory,
 }: SubModalProps) {
@@ -288,7 +294,7 @@ function SubModal({
     ? (remaining >= 0 ? `Restant ${formatCurrencyFloored(remaining)}` : `Dépassé ${formatCurrencyFloored(Math.abs(remaining))}`)
     : null
   const isOverBudget = remaining < 0
-  const isBudgetMode = headerMetricLabel === 'Budgétisé'
+  const isBudgetMode = clickedFrom === 'budget'
 
   return (
     <AnimatePresence>
@@ -310,7 +316,17 @@ function SubModal({
               style={{ width: 'min(560px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', maxHeight: 'min(82dvh, calc(100dvh - var(--space-8)))', overflow: 'hidden', boxShadow: 'var(--shadow-lg)', pointerEvents: 'auto' }}
             >
               {/* Header */}
-              <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: color }}>
+              <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid rgba(255,255,255,0.15)', display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-3)', background: color }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', minWidth: 32 }}>
+                  <button
+                    type="button"
+                    onClick={onSwitchMode}
+                    aria-label={isBudgetMode ? 'Afficher la vue réel' : 'Afficher la vue budget'}
+                    style={{ border: '1px solid var(--color-warning)', background: 'rgba(255,255,255,0.22)', borderRadius: 'var(--radius-full)', width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-warning)', flexShrink: 0 }}
+                  >
+                    {isBudgetMode ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
                   {(iconKey || iconSrc) && (
                     <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -340,13 +356,15 @@ function SubModal({
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{ border: 'none', background: 'rgba(255,255,255,0.22)', borderRadius: 'var(--radius-full)', width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--neutral-0)', flexShrink: 0 }}
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 32 }}>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    style={{ border: 'none', background: 'rgba(255,255,255,0.22)', borderRadius: 'var(--radius-full)', width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--neutral-0)', flexShrink: 0 }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -383,6 +401,8 @@ function SubModal({
                     ) : (
                       subCategoryReals.map((line) => {
                         const isExpanded = expandedRealSubCategoryId === line.id
+                        const lineBudgetAmount = subCategoryBudgetById.get(line.id) ?? 0
+                        const isOverLineBudget = lineBudgetAmount > 0 && line.consumedAmount > lineBudgetAmount
                         return (
                           <div key={line.id} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
                             <button
@@ -400,7 +420,7 @@ function SubModal({
                               <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
                                 {line.name}
                               </span>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: isOverLineBudget ? 'var(--color-error)' : 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                                 {formatCurrencyFloored(line.consumedAmount)}
                               </span>
                             </button>
@@ -1151,6 +1171,18 @@ export function EnveloppesTab({
     { enabled: Boolean(modalTarget) && modalTarget?.clickedFrom !== 'budget' && hasModalCategoryIds },
   )
 
+  const subCategoryBudgetById = useMemo(() => {
+    if (!modalTarget) return new Map<string, number>()
+    const scopedRows = modalTarget.scopeKind === 'category'
+      ? payloadByCategory.filter((row) => row.parent_category_id === modalTarget.id || row.category_id === modalTarget.id)
+      : payloadByCategory.filter((row) => row.budget_bucket === modalTarget.id)
+    const next = new Map<string, number>()
+    for (const row of scopedRows) {
+      next.set(row.category_id, Number(row.budget_amount ?? 0))
+    }
+    return next
+  }, [modalTarget, payloadByCategory])
+
   const subCategoryBudgets = useMemo<SubCategoryBudgetLine[]>(() => {
     if (!modalTarget || modalTarget.clickedFrom !== 'budget') return []
     const scopedRows = modalTarget.scopeKind === 'category'
@@ -1282,6 +1314,21 @@ export function EnveloppesTab({
       clickedFrom,
     })
   }
+
+  const handleToggleModalMode = useCallback(() => {
+    setExpandedRealSubCategoryId(null)
+    setRealSubCategoryToReopenId(null)
+    setModalTarget((current) => {
+      if (!current) return null
+      const nextClickedFrom = current.clickedFrom === 'real' ? 'budget' : 'real'
+      return {
+        ...current,
+        headerMetricLabel: nextClickedFrom === 'budget' ? 'Budgétisé' : 'Consommé',
+        headerMetricAmount: nextClickedFrom === 'budget' ? current.budgetAmount : current.amount,
+        clickedFrom: nextClickedFrom,
+      }
+    })
+  }, [])
 
   function handleListRowClick(entry: PieDatum) {
     const budgetEntry = budgetPieData.find((d) => d.id === entry.id)
@@ -1874,12 +1921,14 @@ export function EnveloppesTab({
           setExpandedRealSubCategoryId(null)
           setRealSubCategoryToReopenId(null)
         }}
+        onSwitchMode={handleToggleModalMode}
         name={modalTarget?.name ?? ''}
         iconKey={modalTarget?.iconKey ?? null}
         iconSrc={modalTarget?.iconSrc ?? null}
         color={modalTarget?.color ?? 'var(--primary-500)'}
         consumedAmount={modalTarget?.amount ?? 0}
         budgetAmount={modalTarget?.budgetAmount ?? 0}
+        clickedFrom={modalTarget?.clickedFrom ?? 'real'}
         headerMetricLabel={modalTarget?.headerMetricLabel ?? 'Consommé'}
         headerMetricAmount={modalTarget?.headerMetricAmount ?? 0}
         transactions={modalTransactions}
@@ -1888,6 +1937,7 @@ export function EnveloppesTab({
         categoryById={categoryById}
         subCategoryBudgets={subCategoryBudgets}
         subCategoryReals={modalTarget?.clickedFrom === 'real' ? subCategoryReals : undefined}
+        subCategoryBudgetById={subCategoryBudgetById}
         expandedRealSubCategoryId={expandedRealSubCategoryId}
         onToggleRealSubCategory={(subCategoryId) => {
           setExpandedRealSubCategoryId((current) => (current === subCategoryId ? null : subCategoryId))

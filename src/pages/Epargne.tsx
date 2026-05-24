@@ -41,6 +41,19 @@ type KpiTileItem = {
   tone: KpiTone
   detail?: string
   detailTone?: 'neutral' | 'positive' | 'negative'
+  backgroundColor?: string
+  borderColor?: string
+  labelColor?: string
+  valueColor?: string
+  labelFontSize?: number
+  labelLetterSpacing?: string
+  labelNoWrap?: boolean
+}
+
+type PlanningProgress = {
+  currentAmount: number
+  targetAmount: number
+  progressionPct: number
 }
 
 function formatKpiCurrency(value: number | null | undefined): string {
@@ -92,6 +105,8 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
             key={item.label}
             style={{
               ...resolveKpiTileStyle(item.tone),
+              ...(item.backgroundColor ? { background: item.backgroundColor } : null),
+              ...(item.borderColor ? { border: `1.5px solid ${item.borderColor}` } : null),
               borderRadius: 'var(--radius-md)',
               padding: 'var(--space-2) var(--space-3)',
               minHeight: 58,
@@ -103,10 +118,10 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
               textAlign: 'center',
             }}
           >
-            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+            <p style={{ margin: 0, fontSize: item.labelFontSize ?? 9, fontWeight: 700, color: item.labelColor ?? 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: item.labelLetterSpacing ?? '0.06em', lineHeight: 1.2, whiteSpace: item.labelNoWrap ? 'nowrap' : 'normal' }}>
               {item.label}
             </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: item.valueColor ?? 'var(--neutral-900)', lineHeight: 1 }}>
               {item.value}
             </p>
             {item.detail ? (
@@ -128,6 +143,33 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
             ) : null}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function PlanningProgressBar({ progress }: { progress: PlanningProgress }) {
+  const safePct = Number.isFinite(progress.progressionPct) ? Math.max(0, Math.min(100, progress.progressionPct)) : 0
+
+  return (
+    <div style={{ padding: '0 var(--page-gutter)' }}>
+      <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+        <div
+          style={{
+            height: '100%',
+            width: `${safePct}%`,
+            background: 'linear-gradient(90deg, var(--color-warning) 0%, color-mix(in oklab, var(--color-warning) 65%, var(--primary-500) 35%) 100%)',
+            transition: 'width 480ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        />
+      </div>
+      <div style={{ marginTop: 6, display: 'grid', gap: 2, justifyItems: 'center' }}>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+          {formatKpiCurrency(progress.currentAmount)} / {formatKpiCurrency(progress.targetAmount)}
+        </p>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+          {formatKpiPercent(safePct)}
+        </p>
       </div>
     </div>
   )
@@ -179,26 +221,77 @@ export function Epargne() {
       .find((row) => row.ytd_saved_amount != null)
     const epargneYtd = latestYtdRow?.ytd_saved_amount
       ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
-
-    const objectif2026 = annual2026.summary ? annual2026.summary.totalSavingsBudget * 12 : null
-    const progressionPct = objectif2026 && objectif2026 > 0
-      ? (epargneYtd / objectif2026) * 100
-      : null
+    const objectif2026 = 9800
 
     return [
-      { label: 'Épargne YTD', value: formatKpiCurrency(epargneYtd), tone: 'neutral' },
-      { label: 'Objectif 2026', value: formatKpiCurrency(objectif2026), tone: 'warning' },
-      { label: 'Progression', value: formatKpiPercent(progressionPct), tone: 'primary' },
+      {
+        label: 'Épargne YTD',
+        value: formatKpiCurrency(epargneYtd),
+        tone: 'neutral',
+        backgroundColor: 'var(--color-warning)',
+        borderColor: 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-300) 22%)',
+        labelColor: '#fff',
+        valueColor: '#fff',
+      },
+      {
+        label: 'Objectif 2026',
+        value: formatKpiCurrency(objectif2026),
+        tone: 'warning',
+        backgroundColor: '#0E7490',
+        borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
+        labelColor: '#FCD34D',
+        valueColor: '#FCD34D',
+      },
     ]
-  }, [annual2026.summary, savingsAnalytics.data?.monthlyMetrics])
+  }, [savingsAnalytics.data?.monthlyMetrics])
+
+  const planningProgress = useMemo<PlanningProgress>(() => {
+    const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
+    const latestYtdRow = [...monthlyMetrics]
+      .reverse()
+      .find((row) => row.ytd_saved_amount != null)
+    const currentAmount = latestYtdRow?.ytd_saved_amount
+      ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
+    const targetAmount = 9800
+    const progressionPct = targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0
+    return { currentAmount, targetAmount, progressionPct }
+  }, [savingsAnalytics.data?.monthlyMetrics])
 
   const performanceKpis = useMemo<KpiTileItem[]>(() => {
     const payload = savingsEvolution.data
     const totalCurrentSavings = Number(savingsAnalytics.data?.currentSummary?.total_savings ?? 0)
     if (!payload) {
       return [
-        { label: 'Capital investi', value: '—', tone: 'neutral' },
-        { label: 'Valeur totale actuelle', value: '—', tone: 'primary', detail: 'Évolution —' },
+        {
+          label: 'Capital investi',
+          value: '—',
+          tone: 'neutral',
+          backgroundColor: '#C2410C',
+          borderColor: 'color-mix(in oklab, #C2410C 74%, var(--neutral-300) 26%)',
+          labelColor: '#fff',
+          valueColor: '#fff',
+        },
+        {
+          label: 'Valeur actuelle',
+          value: '—',
+          tone: 'primary',
+          backgroundColor: '#1D4ED8',
+          borderColor: 'color-mix(in oklab, #1D4ED8 74%, var(--neutral-300) 26%)',
+          labelColor: '#FCD34D',
+          valueColor: '#FCD34D',
+          labelFontSize: 8,
+          labelLetterSpacing: '0.04em',
+          labelNoWrap: true,
+        },
+        {
+          label: 'Rend.moyen',
+          value: '—',
+          tone: 'warning',
+          backgroundColor: '#059669',
+          borderColor: 'color-mix(in oklab, #059669 74%, var(--neutral-300) 26%)',
+          labelColor: '#FCD34D',
+          valueColor: '#FCD34D',
+        },
       ]
     }
 
@@ -207,8 +300,36 @@ export function Epargne() {
 
     if (!rowForYear) {
       return [
-        { label: 'Capital investi', value: '—', tone: 'neutral' },
-        { label: 'Valeur totale actuelle', value: '—', tone: 'primary', detail: 'Évolution —' },
+        {
+          label: 'Capital investi',
+          value: '—',
+          tone: 'neutral',
+          backgroundColor: '#C2410C',
+          borderColor: 'color-mix(in oklab, #C2410C 74%, var(--neutral-300) 26%)',
+          labelColor: '#fff',
+          valueColor: '#fff',
+        },
+        {
+          label: 'Valeur actuelle',
+          value: '—',
+          tone: 'primary',
+          backgroundColor: '#1D4ED8',
+          borderColor: 'color-mix(in oklab, #1D4ED8 74%, var(--neutral-300) 26%)',
+          labelColor: '#FCD34D',
+          valueColor: '#FCD34D',
+          labelFontSize: 8,
+          labelLetterSpacing: '0.04em',
+          labelNoWrap: true,
+        },
+        {
+          label: 'Rend.moyen',
+          value: '—',
+          tone: 'warning',
+          backgroundColor: '#059669',
+          borderColor: 'color-mix(in oklab, #059669 74%, var(--neutral-300) 26%)',
+          labelColor: '#FCD34D',
+          valueColor: '#FCD34D',
+        },
       ]
     }
 
@@ -230,13 +351,35 @@ export function Epargne() {
     const evolutionPct = capitalInvesti > 0 ? ((totalSavingsCurrent - capitalInvesti) / capitalInvesti) * 100 : null
 
     return [
-      { label: 'Capital investi / épargné', value: formatKpiCurrency(capitalInvesti), tone: 'neutral' },
       {
-        label: 'Valeur totale actuelle',
+        label: 'Capital placé',
+        value: formatKpiCurrency(capitalInvesti),
+        tone: 'neutral',
+        backgroundColor: '#C2410C',
+        borderColor: 'color-mix(in oklab, #C2410C 74%, var(--neutral-300) 26%)',
+        labelColor: '#fff',
+        valueColor: '#fff',
+      },
+      {
+        label: 'Valeur actuelle',
         value: formatKpiCurrency(totalSavingsCurrent),
         tone: 'primary',
-        detail: `Évolution ${formatKpiPercent(evolutionPct, { signed: true })}`,
-        detailTone: evolutionPct == null ? 'neutral' : evolutionPct >= 0 ? 'positive' : 'negative',
+        backgroundColor: '#1D4ED8',
+        borderColor: 'color-mix(in oklab, #1D4ED8 74%, var(--neutral-300) 26%)',
+        labelColor: '#FCD34D',
+        valueColor: '#FCD34D',
+        labelFontSize: 8,
+        labelLetterSpacing: '0.04em',
+        labelNoWrap: true,
+      },
+      {
+        label: 'Rend.moyen',
+        value: formatKpiPercent(evolutionPct, { signed: true }),
+        tone: 'warning',
+        backgroundColor: '#059669',
+        borderColor: 'color-mix(in oklab, #059669 74%, var(--neutral-300) 26%)',
+        labelColor: '#FCD34D',
+        valueColor: '#FCD34D',
       },
     ]
   }, [savingsAnalytics.data?.currentSummary?.total_savings, savingsEvolution.data])
@@ -375,7 +518,10 @@ export function Epargne() {
 
       {activeTab.id === 'planning_2026' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-6)' }}>
-          <KpiTilesRow items={planningKpis} />
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <KpiTilesRow items={planningKpis} />
+            <PlanningProgressBar progress={planningProgress} />
+          </div>
           <SavingsPlanning2026Section />
         </motion.section>
       ) : null}
