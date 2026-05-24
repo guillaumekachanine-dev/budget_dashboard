@@ -67,7 +67,7 @@ export function useMonthlyBudgetForecast(year: number) {
     queryKey: ['monthly-budget-forecast', year],
     queryFn: async (): Promise<MonthlyBudgetForecastRow[]> => {
       const { data, error } = await budgetDb
-        .from('v_optimization_monthly_budget_forecast')
+        .from('v_optimization_monthly_budget_forecast' as never)
         .select('*')
         .eq('period_year', year)
         .order('period_month', { ascending: true })
