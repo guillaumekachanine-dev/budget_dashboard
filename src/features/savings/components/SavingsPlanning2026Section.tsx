@@ -284,8 +284,8 @@ function PlanningModal({
   // Revenus : réels si mois passé et donnée disponible, sinon budget prévisionnel
   const revenus = metric?.income_total ?? forecast?.projected_income ?? data.revenus
 
-  // Budget dépenses : depuis la vue forecast (inclut les engagements futurs)
-  const budgetDepenses = forecast?.projected_non_savings_expenses_with_forward ?? data.budgetDepenses
+  // Budget dépenses de base (hors engagements futurs — ceux-ci s'affichent en ligne séparée)
+  const budgetDepenses = forecast?.projected_non_savings_expenses ?? data.budgetDepenses
 
   // Engagements futurs (hors budget standard)
   const forwardAmount = forecast?.forward_commitments_amount ?? 0
