@@ -670,27 +670,6 @@ export function Flux() {
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}
-        rightSlot={
-          <button
-            type="button"
-            aria-label="Nouvelle opération planifiée"
-            onClick={() => setShowPlannedOperationModal(true)}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 'var(--radius-full)',
-              border: '1.5px solid color-mix(in oklab, var(--neutral-0) 40%, transparent 60%)',
-              background: 'color-mix(in oklab, var(--neutral-0) 14%, transparent 86%)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            <img src={planifierOperationIcon} alt="" width={20} height={20} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
-          </button>
-        }
       />
 
       {/* ── Tab navigation circulaire ── */}
@@ -745,8 +724,8 @@ export function Flux() {
         </div>
       </motion.section>
 
-      {/* ── Bouton paramètres centré ── */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-8px' }}>
+      {/* ── Boutons d'action centrés ── */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: '-8px' }}>
         <button
           type="button"
           aria-label="Ouvrir les paramètres"
@@ -769,6 +748,30 @@ export function Flux() {
           <Settings2 size={13} strokeWidth={2.2} />
           Paramètres
         </button>
+        {isPlannedMode ? (
+          <button
+            type="button"
+            aria-label="Nouvelle opération planifiée"
+            onClick={() => setShowPlannedOperationModal(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              border: 'none',
+              background: '#0097A7',
+              borderRadius: 'var(--radius-full)',
+              padding: '6px 14px 6px 10px',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--neutral-0)',
+              boxShadow: '0 2px 8px rgba(0, 151, 167, 0.38)',
+            }}
+          >
+            <img src={planifierOperationIcon} alt="" width={13} height={13} style={{ display: 'block', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} aria-hidden="true" />
+            Planifier
+          </button>
+        ) : null}
       </div>
 
       <section>
