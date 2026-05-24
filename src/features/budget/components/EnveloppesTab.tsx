@@ -22,6 +22,7 @@ import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
+const YEAR_OPTIONS = [2025, 2026] as const
 
 function getPeriodRange(year: number, month: number): { startDate: string; endDate: string } {
   const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -987,6 +988,8 @@ export function EnveloppesTab({
   const currentMonth = now.getMonth() + 1
 
   function isMonthDisabled(_y: number, _m: number) {
+    void _y
+    void _m
     return false
   }
 
@@ -1410,6 +1413,30 @@ export function EnveloppesTab({
   const selectedBudgetAmountLabel = selectedEntry
     ? formatCurrencyFloored(selectedEntry.budgetAmount).replace(/\s+€/g, '€')
     : ''
+  const minYear = YEAR_OPTIONS[0]
+  const maxYear = YEAR_OPTIONS[YEAR_OPTIONS.length - 1]
+  const canGoToPreviousMonth = year > minYear || (year === minYear && month > 1)
+  const canGoToNextMonth = year < maxYear || (year === maxYear && month < 12)
+
+  const navigateMonth = (delta: -1 | 1) => {
+    const nextDate = new Date(year, month - 1 + delta, 1)
+    const rawYear = nextDate.getFullYear()
+    const rawMonth = nextDate.getMonth() + 1
+
+    const clampedYear = Math.max(minYear, Math.min(maxYear, rawYear))
+    const clampedMonth = clampedYear === minYear && rawYear < minYear
+      ? 1
+      : clampedYear === maxYear && rawYear > maxYear
+        ? 12
+        : rawMonth
+
+    if (clampedYear === year && clampedMonth === month) return
+
+    setYear(clampedYear)
+    setMonth(clampedMonth)
+    setModalPickerYear(clampedYear)
+    setSelectedEntry(null)
+  }
 
   return (
     <div>
@@ -1449,7 +1476,7 @@ export function EnveloppesTab({
             >
               {/* year row */}
               <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                {[2025, 2026].map((y) => (
+                {YEAR_OPTIONS.map((y) => (
                   <button
                     key={y}
                     type="button"
@@ -1522,45 +1549,106 @@ export function EnveloppesTab({
 
       {/* ── title + toggle ── */}
       <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginTop: 0, marginBottom: 'var(--space-3)' }}>
-        <button
-          type="button"
-          onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
-          aria-label="Choisir une période"
-          style={{
-            border: 'none',
-            background: 'transparent',
-            padding: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            textAlign: 'center',
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 700,
-            color: 'var(--neutral-700)',
-            letterSpacing: '0.01em',
-          }}
-        >
-          {monthLabel}
-          {isFutureMonth(year, month) && (
-            <span style={{
-              fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: '0.04em',
-              color: 'var(--neutral-400)',
-              background: 'var(--neutral-100)',
-              border: '1px dashed var(--neutral-300)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '1px 5px',
-              textTransform: 'uppercase',
-              lineHeight: 1.4,
-              marginLeft: 2,
-            }}>
-              Prévu
-            </span>
-          )}
-          <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
-        </button>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <button
+            type="button"
+            onClick={() => navigateMonth(-1)}
+            disabled={!canGoToPreviousMonth}
+            aria-label="Mois précédent"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              width: 24,
+              height: 24,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: canGoToPreviousMonth ? 'pointer' : 'not-allowed',
+              opacity: canGoToPreviousMonth ? 1 : 0.5,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 0,
+                height: 0,
+                borderTop: '5px solid transparent',
+                borderBottom: '5px solid transparent',
+                borderRight: '7px solid var(--neutral-600)',
+                marginLeft: -1,
+              }}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setModalPickerYear(year); setShowMonthModal(true) }}
+            aria-label="Choisir une période"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer',
+              textAlign: 'center',
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 700,
+              color: 'var(--neutral-700)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            {monthLabel}
+            {isFutureMonth(year, month) && (
+              <span style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                color: 'var(--neutral-400)',
+                background: 'var(--neutral-100)',
+                border: '1px dashed var(--neutral-300)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '1px 5px',
+                textTransform: 'uppercase',
+                lineHeight: 1.4,
+                marginLeft: 2,
+              }}>
+                Prévu
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateMonth(1)}
+            disabled={!canGoToNextMonth}
+            aria-label="Mois suivant"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              width: 24,
+              height: 24,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: canGoToNextMonth ? 'pointer' : 'not-allowed',
+              opacity: canGoToNextMonth ? 1 : 0.5,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 0,
+                height: 0,
+                borderTop: '5px solid transparent',
+                borderBottom: '5px solid transparent',
+                borderLeft: '7px solid var(--neutral-600)',
+                marginRight: -1,
+              }}
+            />
+          </button>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
           <button type="button" onClick={() => setViewModeAndNotify('categories')} style={{ ...toggleBtnStyle(viewMode === 'categories'), textAlign: 'center' }}>
             Catégories

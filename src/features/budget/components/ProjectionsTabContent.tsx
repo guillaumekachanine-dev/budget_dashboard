@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine } from 'recharts'
+import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
+import { budgetDb } from '@/lib/supabaseBudget'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
-import { getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
+import { EXPENSE_BUCKETS, getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
 import { QK, STALE } from '@/lib/queryKeys'
 import type { BudgetRevenueAnalytics, BudgetRevenueTransaction } from '@/features/budget/types'
@@ -20,14 +21,22 @@ type DisplayMode = 'depenses' | 'revenus'
 type ExpenseSlide = 0 | 1
 type ExpenseKpiModalKey = 'ytd' | 'gap' | 'projection' | null
 type ExpenseMonthlyMetric = { period_month: number; expense_total: number }
+type MonthlyExpenseBudgetRow = { period_month: number | null; budget_bucket: string | null; budget_amount: number | null }
+
+interface ExpenseProjectionDetailRow {
+  month: number
+  monthLabel: string
+  sourceLabel: string
+  amount: number
+}
 
 interface ExpenseHistoryPoint {
   month: number
   monthLabel: string
   amount: number
   budget: number
-  avg12m: number
-  median12m: number
+  avg2026: number
+  median2026: number
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -38,6 +47,7 @@ interface ExpenseHistoryPoint {
 const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD69D', '#94E3B7', '#B9EED1']
 const SCENARIO_1_COLOR = '#D58A83'
 const SCENARIO_2_COLOR = '#15A9A1'
+const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 /** Map known revenue-source names to semantic colours. Falls back to the green palette. */
 function resolveSourceColor(name: string, fallbackIndex: number): string {
@@ -887,12 +897,14 @@ function ExpenseSection2026({
   projectedExpense2026,
   monthlyMetrics,
   completedMonths,
+  projectionDetailRows,
 }: {
   ytdExpenseClosedMonths: number
   ytdBudgetClosedMonths: number
   projectedExpense2026: number | null
   monthlyMetrics: ExpenseMonthlyMetric[]
   completedMonths: number
+  projectionDetailRows: ExpenseProjectionDetailRow[]
 }) {
   const [expenseSlide, setExpenseSlide] = useState<ExpenseSlide>(0)
   const [activeExpenseKpiModal, setActiveExpenseKpiModal] = useState<ExpenseKpiModalKey>(null)
@@ -908,7 +920,7 @@ function ExpenseSection2026({
   const historyBudgetPerMonth = completedMonths > 0 ? ytdBudgetClosedMonths / completedMonths : 0
   const expenseHistoryRows = useMemo<ExpenseHistoryPoint[]>(() => {
     const monthCount = Math.max(1, completedMonths)
-    const rows = Array.from({ length: monthCount }, (_, index) => {
+    const baseRows = Array.from({ length: monthCount }, (_, index) => {
       const month = index + 1
       const monthMetric = monthlyMetrics.find((metric) => Number(metric.period_month) === month)
       return {
@@ -916,31 +928,36 @@ function ExpenseSection2026({
         monthLabel: MONTH_LABELS_SHORT[month - 1] ?? `M${month}`,
         amount: Number(monthMetric?.expense_total ?? 0),
         budget: historyBudgetPerMonth,
-        avg12m: 0,
-        median12m: 0,
+        avg2026: 0,
+        median2026: 0,
       }
     })
-    const values = rows.map((row) => row.amount)
-    const avg12m = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
-    const median12m = median(values)
-    return rows.map((row) => ({ ...row, avg12m, median12m }))
+
+    const ytdValues2026 = baseRows.map((row) => row.amount)
+    const avg2026 = ytdValues2026.length > 0
+      ? ytdValues2026.reduce((sum, value) => sum + value, 0) / ytdValues2026.length
+      : 0
+    const median2026 = median(ytdValues2026)
+
+    return baseRows.map((row) => ({ ...row, avg2026, median2026 }))
   }, [completedMonths, historyBudgetPerMonth, monthlyMetrics])
-  const historyAvg12m = expenseHistoryRows[0]?.avg12m ?? 0
-  const historyMedian12m = expenseHistoryRows[0]?.median12m ?? 0
+  const historyAvg2026 = expenseHistoryRows[0]?.avg2026 ?? 0
+  const historyMedian2026 = expenseHistoryRows[0]?.median2026 ?? 0
   const historyYMax = useMemo(() => {
     const maxVal = Math.max(
       1000,
       ...expenseHistoryRows.map((row) => row.amount),
       historyBudgetPerMonth,
-      historyAvg12m,
-      historyMedian12m,
+      historyAvg2026,
+      historyMedian2026,
     )
     return Math.ceil(maxVal / 500) * 500 + 500
-  }, [expenseHistoryRows, historyAvg12m, historyBudgetPerMonth, historyMedian12m])
+  }, [expenseHistoryRows, historyAvg2026, historyBudgetPerMonth, historyMedian2026])
   const historyLegend = [
+    { key: 'actual_2026', label: 'Réel 2026', color: '#4E4AE0' },
     { key: 'budget_2026', label: 'Budget 2026', color: '#EF4444' },
-    { key: 'avg_12m', label: 'Moyenne (12M)', color: '#7C4DFF' },
-    { key: 'median_12m', label: 'Médiane (12M)', color: '#FFB300' },
+    { key: 'avg_2026', label: 'Moyenne 2026 YTD', color: '#7C4DFF' },
+    { key: 'median_2026', label: 'Médiane 2026 YTD', color: '#FFB300' },
   ] as const
   const expenseSlideToggleButtonStyle = (active: boolean): React.CSSProperties => ({
     border: active ? '1px solid color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)' : '1px solid transparent',
@@ -1173,51 +1190,84 @@ function ExpenseSection2026({
                               <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.amount)}</strong>
                             </p>
                             <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 12, alignItems: 'center' }}>
-                              <span>Moy. 12m</span>
-                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.avg12m)}</strong>
+                              <span>Moy. 2026 YTD</span>
+                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.avg2026)}</strong>
                             </p>
                             <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 12, alignItems: 'center' }}>
-                              <span>Méd. 12m</span>
-                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.median12m)}</strong>
+                              <span>Méd. 2026 YTD</span>
+                              <strong style={{ justifySelf: 'end', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmt(selectedExpenseHistoryBar.median2026)}</strong>
                             </p>
                           </div>
                         </div>
                       ) : null}
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={expenseHistoryRows} margin={{ top: 10, right: 6, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-150)" vertical={false} />
-                          <XAxis dataKey="monthLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} />
-                          <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 11, fill: 'var(--neutral-500)' }}
-                            tickFormatter={(value) => fmt(Number(value))}
-                            width={68}
-                            domain={[0, historyYMax]}
-                            tickCount={5}
-                          />
-                          <ReferenceLine y={historyBudgetPerMonth} stroke="#EF4444" strokeWidth={2} />
-                          <ReferenceLine y={historyAvg12m} stroke="#7C4DFF" strokeWidth={2} strokeDasharray="4 4" />
-                          <ReferenceLine y={historyMedian12m} stroke="#FFB300" strokeWidth={2} strokeDasharray="4 4" />
-                          <Bar
-                            dataKey="amount"
-                            fill="var(--primary-500)"
-                            radius={[8, 8, 0, 0]}
-                            maxBarSize={40}
-                            onClick={(data, index) => {
-                              const payload = (data as { payload?: ExpenseHistoryPoint } | null)?.payload ?? null
-                              const fallback = typeof index === 'number' ? expenseHistoryRows[index] ?? null : null
-                              const next = payload ?? fallback
-                              if (!next) return
-                              setSelectedExpenseHistoryBar((prev) =>
-                                prev && prev.month === next.month ? null : next,
-                              )
-                            }}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <div
+                        style={{
+                          height: '100%',
+                          borderRadius: 'var(--radius-lg)',
+                          border: '1px solid color-mix(in oklab, var(--primary-500) 10%, var(--neutral-200) 90%)',
+                          background: 'linear-gradient(180deg, color-mix(in oklab, var(--primary-50) 52%, var(--neutral-0) 48%) 0%, var(--neutral-0) 64%)',
+                          padding: '8px 8px 4px',
+                        }}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={expenseHistoryRows} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="expenseYtdGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#5B57F5" stopOpacity={0.34} />
+                                <stop offset="100%" stopColor="#5B57F5" stopOpacity={0.04} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-200)" vertical={false} />
+                            <XAxis dataKey="monthLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-600)' }} />
+                            <YAxis
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 11, fill: 'var(--neutral-500)' }}
+                              tickFormatter={(value) => fmt(Number(value))}
+                              width={68}
+                              domain={[0, historyYMax]}
+                              tickCount={5}
+                            />
+                            <ReferenceLine y={historyBudgetPerMonth} stroke="#EF4444" strokeWidth={1.8} />
+                            <ReferenceLine y={historyAvg2026} stroke="#7C4DFF" strokeWidth={1.8} strokeDasharray="5 4" />
+                            <ReferenceLine y={historyMedian2026} stroke="#FFB300" strokeWidth={1.8} strokeDasharray="5 4" />
+                            <Area
+                              type="monotone"
+                              dataKey="amount"
+                              stroke="transparent"
+                              fill="url(#expenseYtdGradient)"
+                              isAnimationActive
+                              animationDuration={220}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="amount"
+                              stroke="#4E4AE0"
+                              strokeWidth={2.6}
+                              dot={{ r: 3.5, strokeWidth: 0, fill: '#4E4AE0' }}
+                              activeDot={{ r: 5, fill: '#4E4AE0', stroke: '#fff', strokeWidth: 2 }}
+                              isAnimationActive
+                              animationDuration={240}
+                            />
+                            <Bar
+                              dataKey="amount"
+                              fill="rgba(0,0,0,0)"
+                              maxBarSize={34}
+                              onClick={(data, index) => {
+                                const payload = (data as { payload?: ExpenseHistoryPoint } | null)?.payload ?? null
+                                const fallback = typeof index === 'number' ? expenseHistoryRows[index] ?? null : null
+                                const next = payload ?? fallback
+                                if (!next) return
+                                setSelectedExpenseHistoryBar((prev) =>
+                                  prev && prev.month === next.month ? null : next,
+                                )
+                              }}
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'nowrap', fontSize: 9, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 9, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', paddingTop: 6 }}>
                       {historyLegend.map((item) => (
                         <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
@@ -1239,12 +1289,57 @@ function ExpenseSection2026({
                     </p>
                   </div>
                 ) : (
-                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    <div style={{ display: 'grid', gap: 3 }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                        Dépenses réelles YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdExpenseClosedMonths)}</strong>
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
+                        Janvier à {getMonthShortLabel(completedMonths || 1).toLowerCase()} en réel, puis budgets enveloppes pour les mois restants.
+                      </p>
+                    </div>
+
+                    <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-100)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-700)', fontWeight: 700 }}>
+                        <span>Mois</span>
+                        <span>Source</span>
+                        <span style={{ textAlign: 'right' }}>Montant</span>
+                      </div>
+                      <div style={{ maxHeight: 332, overflowY: 'auto' }}>
+                        {projectionDetailRows.map((row) => (
+                          <div
+                            key={row.month}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(0,1fr) auto auto',
+                              gap: 'var(--space-2)',
+                              padding: 'var(--space-2) var(--space-3)',
+                              borderTop: '1px solid var(--neutral-200)',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600 }}>{row.monthLabel}</span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: row.sourceLabel === 'réel' ? 'var(--primary-600)' : 'var(--neutral-600)',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.03em',
+                              }}
+                            >
+                              {row.sourceLabel}
+                            </span>
+                            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, textAlign: 'right' }}>
+                              {fmt(row.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
-                      Dépenses YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdExpenseClosedMonths)}</strong>
-                    </p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
-                      Projection totale fin 2026: <strong style={{ fontFamily: 'var(--font-mono)' }}>{projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}</strong>
+                      Projection totale fin 2026 (somme des 12 mois): <strong style={{ fontFamily: 'var(--font-mono)' }}>{projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}</strong>
                     </p>
                   </div>
                 )}
@@ -1272,6 +1367,21 @@ export function ProjectionsTabContent() {
     queryFn: () => getMonthlyMetrics(2026),
     staleTime: STALE.ANALYTICS,
   })
+  const { data: monthlyExpenseBudgets2026 = [] } = useQuery({
+    queryKey: ['projection-expense-budgets-2026'],
+    staleTime: STALE.ANALYTICS,
+    queryFn: async (): Promise<MonthlyExpenseBudgetRow[]> => {
+      const { data, error } = await budgetDb
+        .from('v_monthly_bucket_budgets_clean' as never)
+        .select('period_month, budget_bucket, budget_amount')
+        .eq('period_year', 2026)
+        .in('budget_bucket', [...EXPENSE_BUCKETS])
+        .order('period_month', { ascending: true })
+
+      if (error) throw new Error(`projection-expense-budgets-2026 failed: ${error.message}`)
+      return (data ?? []) as MonthlyExpenseBudgetRow[]
+    },
+  })
 
   const now = new Date()
   const currentMonth = now.getMonth() + 1
@@ -1284,28 +1394,41 @@ export function ProjectionsTabContent() {
     [completedMonths, monthlyMetrics],
   )
   const ytdBudgetClosedMonths = (summary?.totalMonthlyBudget ?? 0) * completedMonths
-  const projectedExpenseFromStrictSeries = useMemo(() => {
-    if (completedMonths <= 0) return null
+  const monthlyExpenseBudgetByMonth = useMemo(() => {
+    return monthlyExpenseBudgets2026.reduce<Map<number, number>>((acc, row) => {
+      const month = Number(row.period_month ?? 0)
+      if (!Number.isFinite(month) || month < 1 || month > 12) return acc
+      acc.set(month, (acc.get(month) ?? 0) + Number(row.budget_amount ?? 0))
+      return acc
+    }, new Map<number, number>())
+  }, [monthlyExpenseBudgets2026])
 
-    const closedMonthExpenses = Array.from({ length: completedMonths }, (_, index) => {
+  const expenseProjectionDetailRows = useMemo<ExpenseProjectionDetailRow[]>(() => {
+    return Array.from({ length: 12 }, (_, index) => {
       const month = index + 1
-      const row = monthlyMetrics.find((metric) => Number(metric.period_month) === month)
-      return Number(row?.expense_total ?? 0)
+      const monthMetric = monthlyMetrics.find((metric) => Number(metric.period_month) === month)
+      const realAmount = Number(monthMetric?.expense_total ?? 0)
+      const futureBudgetAmount = Number(monthlyExpenseBudgetByMonth.get(month) ?? 0)
+      const isClosedMonth = month <= completedMonths
+      return {
+        month,
+        monthLabel: `${MONTHS_FR_FULL_PROJ[month - 1]} 2026`,
+        sourceLabel: isClosedMonth ? 'réel' : 'budget',
+        amount: isClosedMonth ? realAmount : futureBudgetAmount,
+      }
     })
+  }, [completedMonths, monthlyExpenseBudgetByMonth, monthlyMetrics])
 
-    if (closedMonthExpenses.length === 0) return null
-
-    const observedYtd = closedMonthExpenses.reduce((sum, value) => sum + value, 0)
-    const medianMonthlyExpense = median(closedMonthExpenses)
-    const remainingMonths = Math.max(0, 12 - completedMonths)
-
-    return observedYtd + medianMonthlyExpense * remainingMonths
-  }, [completedMonths, monthlyMetrics])
-  const projectedExpense2026 = projectedExpenseFromStrictSeries ?? projection?.projectedTotalExpensesAmount ?? null
+  const projectedExpenseFromStrictSeries = useMemo(
+    () => expenseProjectionDetailRows.reduce((sum, row) => sum + row.amount, 0),
+    [expenseProjectionDetailRows],
+  )
+  const projectedExpense2026 = projectedExpenseFromStrictSeries > 0
+    ? projectedExpenseFromStrictSeries
+    : projection?.projectedTotalExpensesAmount ?? null
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
   const periodLabel = projMonth === null ? '2026' : `${MONTHS_FR_FULL_PROJ[projMonth - 1]} 26`
 
   function toggleBtnStyle(active: boolean): React.CSSProperties {
@@ -1460,6 +1583,7 @@ export function ProjectionsTabContent() {
             projectedExpense2026={projectedExpense2026}
             monthlyMetrics={monthlyMetrics}
             completedMonths={completedMonths}
+            projectionDetailRows={expenseProjectionDetailRows}
           />
         )}
 
