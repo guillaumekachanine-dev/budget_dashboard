@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { QuickAddMenuModal } from '@/components/modals/QuickAddMenuModal'
+import { UpdateTransactionsModal } from '@/components/modals/UpdateTransactionsModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
 
@@ -10,9 +12,10 @@ const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: modu
 const Budgets = lazy(() => import('@/pages/Budgets').then((module) => ({ default: module.Budgets })))
 const Epargne = lazy(() => import('@/pages/Epargne').then((module) => ({ default: module.Epargne })))
 const Login = lazy(() => import('@/pages/Login').then((module) => ({ default: module.Login })))
+const loadAddTransactionModal = () => import('@/components/modals/AddTransactionModal')
 // Lazy-loaded to keep react-hook-form out of the initial bundle (modal is rarely opened on first load)
 const AddTransactionModal = lazy(() =>
-  import('@/components/modals/AddTransactionModal').then((m) => ({ default: m.AddTransactionModal }))
+  loadAddTransactionModal().then((m) => ({ default: m.AddTransactionModal }))
 )
 
 function RouteFallback() {
@@ -25,11 +28,14 @@ function RouteFallback() {
 
 export default function App() {
   const { user, loading } = useAuth()
-  const [modalOpen, setModalOpen] = useState(false)
+  const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false)
+  const [addTransactionModalOpen, setAddTransactionModalOpen] = useState(false)
+  const [updateModalOpen, setUpdateModalOpen] = useState(false)
   const location = useLocation()
 
   useEffect(() => {
     forceUnlockDocumentScroll()
+    setQuickAddMenuOpen(false)
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search])
 
@@ -45,7 +51,10 @@ export default function App() {
   useEffect(() => {
     if (!user) return
 
-    const schedule = () => prefetchPrimaryRoutes()
+    const schedule = () => {
+      prefetchPrimaryRoutes()
+      void loadAddTransactionModal()
+    }
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       const id = window.requestIdleCallback(schedule, { timeout: 1200 })
       return () => window.cancelIdleCallback(id)
@@ -54,6 +63,27 @@ export default function App() {
     const timeoutId = setTimeout(schedule, 350)
     return () => clearTimeout(timeoutId)
   }, [user])
+
+  const handleCenterActionClick = useCallback(() => {
+    void loadAddTransactionModal()
+    setQuickAddMenuOpen((current) => !current)
+  }, [])
+
+  const handleCloseQuickAddMenu = useCallback(() => {
+    setQuickAddMenuOpen(false)
+  }, [])
+
+  const handleOpenAddTransaction = useCallback(() => {
+    setQuickAddMenuOpen(false)
+    setUpdateModalOpen(false)
+    setAddTransactionModalOpen(true)
+  }, [])
+
+  const handleOpenUpdateModal = useCallback(() => {
+    setQuickAddMenuOpen(false)
+    setAddTransactionModalOpen(false)
+    setUpdateModalOpen(true)
+  }, [])
 
   if (loading) {
     return <RouteFallback />
@@ -86,8 +116,15 @@ export default function App() {
         </Suspense>
       </main>
 
-      <BottomNav onAddClick={() => setModalOpen(true)} />
-      <AddTransactionModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <BottomNav onAddClick={handleCenterActionClick} isAddMenuOpen={quickAddMenuOpen} />
+      <QuickAddMenuModal
+        open={quickAddMenuOpen}
+        onClose={handleCloseQuickAddMenu}
+        onAddTransaction={handleOpenAddTransaction}
+        onOpenUpdate={handleOpenUpdateModal}
+      />
+      <AddTransactionModal open={addTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} />
+      <UpdateTransactionsModal open={updateModalOpen} onClose={() => setUpdateModalOpen(false)} />
     </div>
   )
 }
