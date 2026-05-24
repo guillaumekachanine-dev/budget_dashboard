@@ -19,6 +19,7 @@ import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesFor
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
+import { TrajectoireChart } from '@/features/home/components/TrajectoireChart'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
@@ -2069,11 +2070,25 @@ export function Home() {
             </div>
           </motion.section>
 
+          {/* ── Tuile Trajectoire ── */}
+          {isMainCheckingAccount ? (
+            <motion.section
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.24 }}
+              style={{ padding: '0 var(--space-6)' }}
+            >
+              <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                <TrajectoireChart />
+              </div>
+            </motion.section>
+          ) : null}
+
           {/* ── Module libre Infos ── */}
           <motion.section
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.24 }}
+            transition={{ duration: 0.35, delay: 0.28 }}
             style={{
               padding: '0 var(--space-6)',
               paddingBottom: 'calc(var(--space-6) + env(safe-area-inset-bottom, 0px))',
