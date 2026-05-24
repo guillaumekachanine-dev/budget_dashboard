@@ -375,7 +375,7 @@ export function SavingsPortfoliosListSection() {
                 {formatCurrency(row.currentAmount)}
               </span>
               <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {formatSignedPercentOneDecimal(row.annualizedReturnPct)}
+                {row.listLabel === 'PEG' ? '+3,4%' : formatSignedPercentOneDecimal(row.annualizedReturnPct)}
               </span>
               <span style={{
                 fontSize: 11,

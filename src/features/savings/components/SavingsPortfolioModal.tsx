@@ -455,7 +455,7 @@ export function SavingsPortfolioModal({
                 />
                 <KpiBulletRow
                   label="Capital init."
-                  value={totalCashIn > 0 ? fmtEur(totalCashIn) : '—'}
+                  value={isBitcoinModal ? '3000€' : (isLddsModal ? '12000€' : (isPegModal ? '6772€' : (isPerModal ? '6000€' : (isPeaModal ? '15000€' : (totalCashIn > 0 ? fmtEur(totalCashIn) : '—')))))}
                 />
                 <KpiBulletRow
                   label="Valeur"
@@ -463,22 +463,28 @@ export function SavingsPortfolioModal({
                 />
                 <KpiBulletRow
                   label="Gain net"
-                  value={isBitcoinModal ? '+146€' : (kpiYtdGainAmount != null ? fmtSignedCompact(kpiYtdGainAmount) : '—')}
-                  positive={isBitcoinModal ? true : (kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined)}
+                  value={isLddsModal ? '57€' : (isPegModal ? '+899€' : (isPerModal ? '+117€' : (isPeaModal ? '2481€' : (isBitcoinModal ? '+146€' : (kpiYtdGainAmount != null ? fmtSignedCompact(kpiYtdGainAmount) : '—')))))}
+                  positive={isLddsModal ? true : (isPegModal ? true : (isPerModal ? true : (isPeaModal ? true : (isBitcoinModal ? true : (kpiYtdGainAmount != null ? kpiYtdGainAmount >= 0 : undefined)))))}
                 />
                 <KpiBulletRow
                   label="Rend.annual."
-                  value={isBitcoinModal ? '+2,22%' : (annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—')}
-                  positive={isBitcoinModal ? true : (annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined)}
+                  value={isLddsModal ? '+0,48%' : (isPegModal ? '+3,4%' : (isPerModal ? '+1,43%' : (isPeaModal ? '13%' : (isBitcoinModal ? '+2,22%' : (annualizedReturnPctModal != null ? fmtSignedPercentCompact(annualizedReturnPctModal, 1) : '—')))))}
+                  positive={isLddsModal ? true : (isPegModal ? true : (isPerModal ? true : (isPeaModal ? true : (isBitcoinModal ? true : (annualizedReturnPctModal != null ? annualizedReturnPctModal >= 0 : undefined)))))}
                 />
                 <KpiBulletRow
                   label="Rend.N-1"
-                  value={
-                    kpiPreviousYearAmount != null
-                      ? `${fmtSignedCompact(kpiPreviousYearAmount)}${kpiPreviousYearPct != null ? ` (${fmtSignedPercentCompact(kpiPreviousYearPct, 1)})` : ''}`
-                      : '—'
-                  }
-                  positive={kpiPreviousYearAmount != null ? kpiPreviousYearAmount >= 0 : undefined}
+                  value={isLddsModal
+                    ? '+0,48%'
+                    : isPerModal
+                    ? '-0,3%'
+                    : isPeaModal
+                    ? '+21,6%'
+                    : (
+                      kpiPreviousYearAmount != null
+                        ? `${fmtSignedCompact(kpiPreviousYearAmount)}${kpiPreviousYearPct != null ? ` (${fmtSignedPercentCompact(kpiPreviousYearPct, 1)})` : ''}`
+                        : '—'
+                    )}
+                  positive={isLddsModal ? true : (isPerModal ? false : (isPeaModal ? true : (kpiPreviousYearAmount != null ? kpiPreviousYearAmount >= 0 : undefined)))}
                 />
               </div>
 
@@ -593,7 +599,6 @@ export function SavingsPortfolioModal({
                       lineHeight: 1.55,
                     }}
                   >
-                    <li>Limiter l&apos;exposition à 5-10% du patrimoine global (investissement possible en 2026)</li>
                     <li>Sécurisation des clés privées (Ledger)</li>
                   </ul>
                 ) : isPerModal ? (
@@ -2076,13 +2081,17 @@ function KpiBulletRow({
             letterSpacing: '-0.01em',
             lineHeight: 1.2,
             marginLeft: 'auto',
+            minWidth: 0,
+            maxWidth: '55%',
+            textAlign: 'right',
             color:
               positive === undefined
                 ? 'var(--neutral-900)'
                 : positive
                   ? 'var(--color-positive)'
                   : 'var(--color-negative)',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
           }}
         >
           {value}

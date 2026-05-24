@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
-import categoriesHeaderIcon from '@/assets/icons/app/categories1.webp'
+import fluxActuelIcon from '@/assets/icons/app/flux_actuel.png'
 import type {
   FlowType,
   PlannedOperationFlowItem,
@@ -19,6 +19,7 @@ import type {
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
+import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.png'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'
@@ -27,8 +28,8 @@ type FluxTabId = 'actuel' | 'planifie'
 
 type FluxTabConfig = { id: FluxTabId; label: string; iconSrc: string }
 const FLUX_TABS: FluxTabConfig[] = [
-  { id: 'actuel', label: 'Flux actuels', iconSrc: categoriesHeaderIcon },
-  { id: 'planifie', label: 'Planifié', iconSrc: planifierOperationIcon },
+  { id: 'actuel', label: 'Flux actuels', iconSrc: fluxActuelIcon },
+  { id: 'planifie', label: 'Planifié', iconSrc: fluxPlanifieIcon },
 ]
 
 const HEADER_CATEGORY_ORDER = [
@@ -666,7 +667,7 @@ export function Flux() {
         actionIcon={
           selectedCategoryId || selectedParentCategoryId
             ? <CategoryIcon iconKey={selectedCategoryIconKey} label={selectedCategoryLabel} size={30} />
-            : <img src={categoriesHeaderIcon} alt="" width={30} height={30} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
+            : <img src={activeTab.iconSrc} alt="" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}

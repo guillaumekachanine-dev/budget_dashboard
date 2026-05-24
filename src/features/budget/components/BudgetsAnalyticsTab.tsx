@@ -1,12 +1,29 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { ComparedBucketChart } from '@/features/annual-analysis/components/ComparedBucketChart'
 import { ComparedCategoryBars } from '@/features/annual-analysis/components/ComparedCategoryBars'
-import { ComparedMonthlyChart } from '@/features/annual-analysis/components/ComparedMonthlyChart'
 import { useAnnual2025Analysis } from '@/features/annual-analysis/hooks/useAnnual2025Analysis'
+import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useComparedAnalysis } from '@/features/annual-analysis/hooks/useComparedAnalysis'
+import { EXPENSE_BUCKETS } from '@/features/annual-analysis/components/_constants'
 import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
+import type { YtdFlowSummary } from '@/features/annual-analysis/types.compared'
+import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
+import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
+import { useMonthlyBudgetForecast } from '@/features/savings/hooks/useMonthlyBudgetForecast'
+import { budgetDb } from '@/lib/supabaseBudget'
 
 type InsightId = 'savings' | 'income'
 type RepartitionInsightId = 'achats-divers' | 'transport'
@@ -17,6 +34,25 @@ const REPARTITION_SLIDE_FRAME_HEIGHT = 438
 const SECTION_BORDER_WIDTH = '4px'
 const DEEP_YELLOW = '#D4AF37'
 const STRUCTURAL_SPEND_MONTHLY = 145
+const INSIGHT_2026_MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'] as const
+const INSIGHT_2026_MONTH_LABELS_FULL = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+] as const
+const SCENARIO2_UNEMPLOYMENT_MONTHLY = 3338
+const SCENARIO2_SALARY_MONTHLY = 6500
+const SCENARIO2_UNEMPLOYMENT_MONTHS = 4
+const SCENARIO2_SALARY_MONTHS = 3
 
 const FLUX_INSIGHTS = {
   savings: {
@@ -481,15 +517,129 @@ function ExpandedInsightPanel({
 }: {
   insightId: InsightId
 }) {
-  const { loading, error, flows2025, flows2026, fluxMetrics } = useComparedAnalysis()
+  const { loading, error, flows2025, flows2026 } = useComparedAnalysis()
   const { annualTotals } = useAnnual2025Analysis()
+  const { summary: annual2026Summary } = useAnnual2026Analysis()
+  const { data: revenueData } = useBudgetRevenueAnalytics()
+  const { data: savingsAnalyticsData } = useSavingsAnalytics(2026)
+  const { data: planningForecastRows } = useMonthlyBudgetForecast(2026)
+  const { data: monthlyExpenseBudgets2026 = [] } = useQuery<Array<{ period_month: number | null; budget_amount: number | null }>>({
+    queryKey: ['analytics-insight-income-expense-budgets', 2026],
+    queryFn: async () => {
+      const { data, error: budgetError } = await budgetDb
+        .from('v_monthly_bucket_budgets_clean' as never)
+        .select('period_month, budget_bucket, budget_amount')
+        .eq('period_year', 2026)
+        .in('budget_bucket', [...EXPENSE_BUCKETS])
+        .order('period_month', { ascending: true })
+      if (budgetError) {
+        throw new Error(`analytics insight expense budgets: ${budgetError.message}`)
+      }
+      return (data ?? []) as Array<{ period_month: number | null; budget_amount: number | null }>
+    },
+    staleTime: 5 * 60_000,
+  })
 
-  const ASSURED_MONTHLY = 3334
-  const ASSURED_MONTHS = 7
   const income2025Ytd = flows2025?.income_total ?? 0
   const income2026Ytd = flows2026?.income_total ?? 0
   const annualIncome2025 = annualTotals?.income_total_year ?? null
-  const projectedIncome2026 = income2026Ytd + ASSURED_MONTHLY * ASSURED_MONTHS
+  const observedCutoffMonth = useMemo(
+    () => Math.max(0, ...((flows2026?.months ?? []).map((row) => Number(row.period_month ?? 0)).filter((month) => month >= 1 && month <= 12))),
+    [flows2026],
+  )
+  const monthlyRevenue2026 = useMemo(
+    () => (revenueData?.monthlySeries ?? []).filter((row) => row.month_start.startsWith('2026-')),
+    [revenueData],
+  )
+  const ytdRevenue2026 = useMemo(
+    () => monthlyRevenue2026.reduce((sum, row) => sum + Number(row.revenue_amount ?? 0), 0),
+    [monthlyRevenue2026],
+  )
+  const projectedIncome2026 = ytdRevenue2026
+    + SCENARIO2_UNEMPLOYMENT_MONTHLY * SCENARIO2_UNEMPLOYMENT_MONTHS
+    + SCENARIO2_SALARY_MONTHLY * SCENARIO2_SALARY_MONTHS
+  const projectedIncomeByMonth = useMemo(() => {
+    const map = new Map<number, number>()
+    const realIncomeByMonth = new Map<number, number>()
+
+    for (const row of monthlyRevenue2026) {
+      const month = Number(row.month_start.slice(5, 7))
+      if (month >= 1 && month <= 12) {
+        realIncomeByMonth.set(month, Number(row.revenue_amount ?? 0))
+      }
+    }
+
+    const lastRealMonth = Math.max(0, ...realIncomeByMonth.keys())
+    const ytdAnchorMonth = Math.max(
+      observedCutoffMonth,
+      Math.min(12, Number(annual2026Summary?.ytdMonths ?? lastRealMonth)),
+    )
+
+    for (let month = 1; month <= ytdAnchorMonth; month += 1) {
+      map.set(month, realIncomeByMonth.get(month) ?? 0)
+    }
+
+    for (let offset = 1; offset <= SCENARIO2_UNEMPLOYMENT_MONTHS; offset += 1) {
+      const month = ytdAnchorMonth + offset
+      if (month > 12) break
+      map.set(month, SCENARIO2_UNEMPLOYMENT_MONTHLY)
+    }
+
+    for (let offset = 1; offset <= SCENARIO2_SALARY_MONTHS; offset += 1) {
+      const month = ytdAnchorMonth + SCENARIO2_UNEMPLOYMENT_MONTHS + offset
+      if (month > 12) break
+      map.set(month, SCENARIO2_SALARY_MONTHLY)
+    }
+
+    return map
+  }, [annual2026Summary?.ytdMonths, monthlyRevenue2026, observedCutoffMonth])
+  const expenseBudgetByMonth = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const row of monthlyExpenseBudgets2026) {
+      const month = Number(row.period_month ?? 0)
+      if (!(month >= 1 && month <= 12)) continue
+      map.set(month, (map.get(month) ?? 0) + Number(row.budget_amount ?? 0))
+    }
+    return map
+  }, [monthlyExpenseBudgets2026])
+  const planningSavingsByMonth = useMemo(() => {
+    const map = new Map<number, number>()
+    const savingsMetricsByMonth = new Map<number, number>()
+
+    for (const row of savingsAnalyticsData?.monthlyMetrics ?? []) {
+      const month = Number(row.period_month ?? 0)
+      if (!(month >= 1 && month <= 12)) continue
+      const savedAmount = Number(row.saved_amount ?? 0)
+      if (Number.isFinite(savedAmount)) {
+        savingsMetricsByMonth.set(month, savedAmount)
+      }
+    }
+
+    const forecastByMonth = new Map<number, number>()
+    for (const row of planningForecastRows ?? []) {
+      const month = Number(row.period_month ?? 0)
+      if (!(month >= 1 && month <= 12)) continue
+      forecastByMonth.set(month, Number(row.planned_savings_budget ?? 0))
+    }
+
+    for (let month = 1; month <= 12; month += 1) {
+      const isPastOrObserved = month <= observedCutoffMonth
+      if (isPastOrObserved) {
+        const realized = savingsMetricsByMonth.get(month)
+        if (realized != null) {
+          map.set(month, realized)
+          continue
+        }
+      }
+
+      const planned = forecastByMonth.get(month)
+      if (planned != null) {
+        map.set(month, planned)
+      }
+    }
+
+    return map
+  }, [observedCutoffMonth, planningForecastRows, savingsAnalyticsData?.monthlyMetrics])
 
   return (
     <motion.section
@@ -540,25 +690,270 @@ function ExpandedInsightPanel({
               annualIncome2025={annualIncome2025}
               income2026Ytd={income2026Ytd}
               projectedIncome2026={projectedIncome2026}
-              assuredMonthlyIncome={ASSURED_MONTHLY}
-              assuredMonths={ASSURED_MONTHS}
+              assuredMonthlyIncome={SCENARIO2_UNEMPLOYMENT_MONTHLY}
+              assuredMonths={SCENARIO2_UNEMPLOYMENT_MONTHS}
+              salaryMonthlyIncome={SCENARIO2_SALARY_MONTHLY}
+              salaryMonths={SCENARIO2_SALARY_MONTHS}
             />
-            <ComparedMonthlyChart
-              flows2025={flows2025}
+            <IncomeFullYearProjectedChart
               flows2026={flows2026}
-              fluxMetrics={fluxMetrics}
-              minHeight={320}
-              mode="insight"
-              title="Flux mensuels comparés"
-              allowedMetrics={['income', 'savings', 'expense']}
-              defaultEnabledMetrics={['income']}
-              maxEnabledMetrics={1}
-              forceBothYears
+              observedCutoffMonth={observedCutoffMonth}
+              projectedIncomeByMonth={projectedIncomeByMonth}
+              expenseBudgetByMonth={expenseBudgetByMonth}
+              plannedSavingsByMonth={planningSavingsByMonth}
             />
           </div>
         )
       ) : null}
     </motion.section>
+  )
+}
+
+function formatKTick(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  const abs = Math.abs(value)
+  if (abs < 1000) return `${Math.round(value)}`
+  return `${Math.round(value / 1000)}k`
+}
+
+function IncomeFullYearProjectedChart({
+  flows2026,
+  observedCutoffMonth,
+  projectedIncomeByMonth,
+  expenseBudgetByMonth,
+  plannedSavingsByMonth,
+}: {
+  flows2026: YtdFlowSummary | null
+  observedCutoffMonth: number
+  projectedIncomeByMonth: Map<number, number>
+  expenseBudgetByMonth: Map<number, number>
+  plannedSavingsByMonth: Map<number, number>
+}) {
+  const realByMonth = useMemo(() => {
+    const map = new Map<number, { income: number; expense: number; savings: number }>()
+    for (const row of flows2026?.months ?? []) {
+      const month = Number(row.period_month ?? 0)
+      if (!(month >= 1 && month <= 12)) continue
+      map.set(month, {
+        income: Number(row.income_total ?? 0),
+        expense: Number(row.expense_total ?? 0),
+        savings: Number(row.savings_realized_total ?? 0),
+      })
+    }
+    return map
+  }, [flows2026])
+
+  const chartData = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, index) => {
+        const month = index + 1
+        const isPast = month <= observedCutoffMonth
+        const isBoundaryMonth = month === observedCutoffMonth
+        const real = realByMonth.get(month) ?? null
+        const projectedIncome = projectedIncomeByMonth.get(month)
+        const projectedSavings = plannedSavingsByMonth.get(month)
+
+        return {
+          month,
+          label: INSIGHT_2026_MONTH_LABELS[index],
+          labelFull: INSIGHT_2026_MONTH_LABELS_FULL[index],
+          period: isPast ? 'past' : 'future',
+          incomePast: isPast ? (real?.income ?? null) : null,
+          incomeFuture: !isPast ? (projectedIncome ?? null) : (isBoundaryMonth ? (real?.income ?? null) : null),
+          expensePast: isPast ? (real?.expense ?? null) : null,
+          expenseFuture: !isPast ? (expenseBudgetByMonth.get(month) ?? null) : (isBoundaryMonth ? (real?.expense ?? null) : null),
+          savingsPast: isPast ? (real?.savings ?? null) : null,
+          savingsFuture: !isPast ? (projectedSavings ?? null) : (isBoundaryMonth ? (real?.savings ?? null) : null),
+        }
+      }),
+    [expenseBudgetByMonth, observedCutoffMonth, plannedSavingsByMonth, projectedIncomeByMonth, realByMonth],
+  )
+
+  const chartMinY = 0
+  const chartMaxY = useMemo(() => {
+    const maxValue = chartData.reduce((acc, row) => {
+      const rowMax = Math.max(
+        row.incomePast ?? 0,
+        row.incomeFuture ?? 0,
+        row.expensePast ?? 0,
+        row.expenseFuture ?? 0,
+        row.savingsPast ?? 0,
+        row.savingsFuture ?? 0,
+      )
+      return Math.max(acc, rowMax)
+    }, 0)
+    return Math.max(1000, Math.ceil(maxValue / 1000) * 1000)
+  }, [chartData])
+
+  const cutoffLabel = observedCutoffMonth >= 1 && observedCutoffMonth <= 12
+    ? INSIGHT_2026_MONTH_LABELS[observedCutoffMonth - 1]
+    : null
+
+  return (
+    <div
+      style={{
+        background: 'var(--neutral-0)',
+        border: '1px solid var(--neutral-200)',
+        borderRadius: 'var(--radius-xl)',
+        padding: 'var(--space-3)',
+      }}
+    >
+      <div style={{ display: 'grid', gap: 3, marginBottom: 'var(--space-2)' }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)' }}>
+          Modélisation mensuelle 2026 · revenus, dépenses, épargne
+        </p>
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
+          <defs>
+            <linearGradient id="income-past" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2ED47A" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="#2ED47A" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="expense-past" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FC5A5A" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="#FC5A5A" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="savings-past" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FFAB2E" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="#FFAB2E" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
+          {cutoffLabel ? (
+            <ReferenceLine
+              x={cutoffLabel}
+              stroke="var(--neutral-400)"
+              strokeDasharray="4 3"
+              strokeWidth={1}
+            />
+          ) : null}
+
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={(props) => {
+              const { x, y, payload } = props as { x: number; y: number; payload: { value: string; payload?: { period?: 'past' | 'future' } } }
+              const isFuture = payload.payload?.period === 'future'
+              return (
+                <text
+                  x={x}
+                  y={y + 12}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontFamily="var(--font-mono)"
+                  fill={isFuture ? 'var(--neutral-300)' : 'var(--neutral-500)'}
+                >
+                  {payload.value}
+                </text>
+              )
+            }}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            width={34}
+            domain={[chartMinY, chartMaxY]}
+            tickCount={5}
+            tick={{ fontSize: 10, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+            tickFormatter={(value: number) => formatKTick(value)}
+          />
+          <Tooltip content={<IncomeInsightTooltip />} cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }} />
+
+          <Area type="monotone" dataKey="incomePast" stroke="#2ED47A" strokeWidth={2} fill="url(#income-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="expensePast" stroke="#FC5A5A" strokeWidth={2} fill="url(#expense-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="savingsPast" stroke="#FFAB2E" strokeWidth={2} fill="url(#savings-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+
+          <Area type="monotone" dataKey="incomeFuture" stroke="#2ED47A" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="expenseFuture" stroke="#FC5A5A" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="savingsFuture" stroke="#FFAB2E" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+        </AreaChart>
+      </ResponsiveContainer>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 9, color: 'var(--neutral-500)', fontWeight: 700 }}>
+          <span aria-hidden="true" style={{ width: 18, borderTop: '2px solid var(--neutral-600)' }} />
+          Réel observé
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 9, color: 'var(--neutral-500)', fontWeight: 700 }}>
+          <span aria-hidden="true" style={{ width: 18, borderTop: '2px dashed var(--neutral-600)' }} />
+          Projection
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function IncomeInsightTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{
+    payload?: {
+      labelFull?: string
+      period?: 'past' | 'future'
+      incomePast?: number | null
+      incomeFuture?: number | null
+      expensePast?: number | null
+      expenseFuture?: number | null
+      savingsPast?: number | null
+      savingsFuture?: number | null
+    }
+  }>
+}) {
+  if (!active || !payload || payload.length === 0) return null
+
+  const point = payload[0]?.payload
+  if (!point) return null
+
+  const income = point.incomePast ?? point.incomeFuture ?? null
+  const expense = point.expensePast ?? point.expenseFuture ?? null
+  const savings = point.savingsPast ?? point.savingsFuture ?? null
+  const periodLabel = point.period === 'future' ? 'Projection' : 'Réel'
+
+  return (
+    <div
+      style={{
+        background: 'var(--neutral-0)',
+        border: '1px solid var(--neutral-200)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-card)',
+        padding: '8px 10px',
+        minWidth: 190,
+        display: 'grid',
+        gap: 6,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-900)' }}>{point.labelFull ?? '—'}</span>
+        <span style={{ fontSize: 9, fontWeight: 800, color: point.period === 'future' ? '#EA580C' : 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {periodLabel}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gap: 3 }}>
+        <TooltipLine label="Revenus" value={income} color="#2ED47A" />
+        <TooltipLine label="Dépenses" value={expense} color="#FC5A5A" />
+        <TooltipLine label="Épargne" value={savings} color="#FFAB2E" />
+      </div>
+    </div>
+  )
+}
+
+function TooltipLine({ label, value, color }: { label: string; value: number | null; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--neutral-700)' }}>
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+        {label}
+      </span>
+      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+        {value == null ? '—' : formatCompactCurrency(value)}
+      </span>
+    </div>
   )
 }
 
@@ -1316,6 +1711,8 @@ function IncomeProjectionCards({
   projectedIncome2026,
   assuredMonthlyIncome,
   assuredMonths,
+  salaryMonthlyIncome,
+  salaryMonths,
 }: {
   income2025Ytd: number
   annualIncome2025: number | null
@@ -1323,6 +1720,8 @@ function IncomeProjectionCards({
   projectedIncome2026: number
   assuredMonthlyIncome: number
   assuredMonths: number
+  salaryMonthlyIncome: number
+  salaryMonths: number
 }) {
   const [modal, setModal] = useState<'2025' | '2026' | null>(null)
   const incomeYtdDeltaPct = income2025Ytd > 0
@@ -1407,6 +1806,8 @@ function IncomeProjectionCards({
             incomeYtd2026={income2026Ytd}
             assuredMonthlyIncome={assuredMonthlyIncome}
             assuredMonths={assuredMonths}
+            salaryMonthlyIncome={salaryMonthlyIncome}
+            salaryMonths={salaryMonths}
             projectedIncome2026={projectedIncome2026}
             onClose={() => setModal(null)}
           />
@@ -1470,12 +1871,16 @@ function IncomeModal2026({
   incomeYtd2026,
   assuredMonthlyIncome,
   assuredMonths,
+  salaryMonthlyIncome,
+  salaryMonths,
   projectedIncome2026,
   onClose,
 }: {
   incomeYtd2026: number
   assuredMonthlyIncome: number
   assuredMonths: number
+  salaryMonthlyIncome: number
+  salaryMonths: number
   projectedIncome2026: number
   onClose: () => void
 }) {
@@ -1504,7 +1909,8 @@ function IncomeModal2026({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <ModalLine label="Revenus encaissés YTD 2026" value={formatCompactCurrency(incomeYtd2026)} />
-          <ModalLine label={`Revenus assurés (${assuredMonths} mois × ${formatCompactCurrency(assuredMonthlyIncome)})`} value={formatCompactCurrency(assuredMonthlyIncome * assuredMonths)} />
+          <ModalLine label={`Indemnités chômage (${assuredMonths} mois × ${formatCompactCurrency(assuredMonthlyIncome)})`} value={formatCompactCurrency(assuredMonthlyIncome * assuredMonths)} />
+          <ModalLine label={`Salaire + primes (${salaryMonths} mois × ${formatCompactCurrency(salaryMonthlyIncome)})`} value={formatCompactCurrency(salaryMonthlyIncome * salaryMonths)} />
           <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
           <ModalLine label="Projection fin 2026" value={formatCompactCurrency(projectedIncome2026)} bold />
         </div>
