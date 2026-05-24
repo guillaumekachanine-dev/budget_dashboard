@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, MapPin, Trophy, Calendar, TrendingUp } from 'lucide-react'
 import { useVoyagesData } from '../hooks/useVoyagesData'
 import type { TripWithStats } from '../types'
+import { PlanVoyageModal } from './PlanVoyageModal'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState<number>(currentYear >= 2026 ? 2026 : 2025)
   const [viewMode, setViewMode] = useState<ViewMode>('par-voyage')
+  const [showPlanModal, setShowPlanModal] = useState(false)
 
   const { tripsWithStats, yearlyStats, isLoading } = useVoyagesData(year)
 
@@ -261,8 +263,8 @@ export function VoyagesFeaturePage({ onBack }: Props) {
       transition={{ duration: 0.28 }}
       style={{ padding: '0 var(--space-6)', maxWidth: 600, margin: '0 auto' }}
     >
-      {/* ── header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+      {/* ── header: back + title + planifier button ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <button
             type="button"
@@ -294,21 +296,49 @@ export function VoyagesFeaturePage({ onBack }: Props) {
           </div>
         </div>
 
-        {/* year selector */}
-        <div style={{ display: 'flex', gap: 4, background: 'var(--neutral-100)', borderRadius: 'var(--radius-full)', padding: 3 }}>
+        {/* Planifier un voyage button */}
+        <button
+          type="button"
+          onClick={() => setShowPlanModal(true)}
+          aria-label="Planifier un voyage"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            border: 'none', background: '#0097A7', borderRadius: 'var(--radius-full)',
+            padding: '6px 12px 6px 9px', cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, color: 'var(--neutral-0)',
+            boxShadow: '0 2px 8px rgba(0,151,167,0.38)',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1 }}>✈️</span>
+          Planifier
+        </button>
+      </div>
+
+      {/* ── year selector + view mode toggle (equal halves) ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 'var(--space-4)' }}>
+        {/* Year selector */}
+        <div style={{
+          display: 'flex',
+          gap: 3,
+          background: 'var(--neutral-100)',
+          borderRadius: 'var(--radius-full)',
+          padding: 3,
+        }}>
           {AVAILABLE_YEARS.map((y) => (
             <button
               key={y}
               type="button"
               onClick={() => setYear(y)}
               style={{
+                flex: 1,
                 border: 'none',
                 background: year === y ? 'var(--neutral-0)' : 'transparent',
                 color: year === y ? 'var(--neutral-900)' : 'var(--neutral-500)',
                 fontWeight: year === y ? 700 : 500,
                 fontSize: 'var(--font-size-xs)',
                 borderRadius: 'var(--radius-full)',
-                padding: '3px 10px',
+                padding: '4px 8px',
                 cursor: 'pointer',
                 boxShadow: year === y ? 'var(--shadow-card)' : 'none',
                 transition: 'all 0.15s ease',
@@ -318,49 +348,50 @@ export function VoyagesFeaturePage({ onBack }: Props) {
             </button>
           ))}
         </div>
-      </div>
 
-      {/* ── view mode toggle ── */}
-      <div style={{
-        display: 'flex',
-        gap: 0,
-        background: 'var(--neutral-100)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 3,
-        marginBottom: 'var(--space-4)',
-      }}>
-        {(['par-voyage', 'par-an'] as ViewMode[]).map((mode) => {
-          const label = mode === 'par-voyage' ? (
-            <><Calendar size={12} style={{ marginRight: 4 }} />Par voyage</>
-          ) : (
-            <><TrendingUp size={12} style={{ marginRight: 4 }} />Vue annuelle</>
-          )
-          return (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setViewMode(mode)}
-              style={{
-                flex: 1,
-                border: 'none',
-                background: viewMode === mode ? 'var(--neutral-0)' : 'transparent',
-                color: viewMode === mode ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                fontWeight: viewMode === mode ? 700 : 500,
-                fontSize: 'var(--font-size-xs)',
-                borderRadius: 'var(--radius-md)',
-                padding: '6px var(--space-3)',
-                cursor: 'pointer',
-                boxShadow: viewMode === mode ? 'var(--shadow-card)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {label}
-            </button>
-          )
-        })}
+        {/* View mode toggle */}
+        <div style={{
+          display: 'flex',
+          gap: 0,
+          background: 'var(--neutral-100)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 3,
+        }}>
+          {(['par-voyage', 'par-an'] as ViewMode[]).map((mode) => {
+            const isActive = viewMode === mode
+            const label = mode === 'par-voyage' ? (
+              <><Calendar size={11} style={{ marginRight: 3, flexShrink: 0 }} />Par voyage</>
+            ) : (
+              <><TrendingUp size={11} style={{ marginRight: 3, flexShrink: 0 }} />Annuel</>
+            )
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: isActive ? 'var(--neutral-0)' : 'transparent',
+                  color: isActive ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 11,
+                  borderRadius: 'var(--radius-md)',
+                  padding: '5px 6px',
+                  cursor: 'pointer',
+                  boxShadow: isActive ? 'var(--shadow-card)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── loading ── */}
@@ -455,6 +486,9 @@ export function VoyagesFeaturePage({ onBack }: Props) {
 
       {/* bottom spacer */}
       <div style={{ height: 'var(--space-6)' }} />
+
+      {/* ── Plan voyage modal ── */}
+      <PlanVoyageModal open={showPlanModal} onClose={() => setShowPlanModal(false)} />
     </motion.div>
   )
 }
