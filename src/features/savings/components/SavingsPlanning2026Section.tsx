@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, X } from 'lucide-react'
 import { StatsSection } from '@/features/stats/components/ui'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
+import { useMonthlyBudgetForecast } from '@/features/savings/hooks/useMonthlyBudgetForecast'
+import type { MonthlyBudgetForecastRow } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { SavingsMonthlyMetric } from '@/features/savings/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -31,7 +33,12 @@ type MonthPlanningData = {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const CURRENT_MONTH_ID = '2026-05'
+function getCurrentMonthId(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+const CURRENT_MONTH_ID = getCurrentMonthId()
 
 const MONTH_MILESTONES_2026: SavingsMonthMilestone[] = [
   { id: '2026-01', shortLabel: 'Jan', fullLabel: 'Janvier 2026' },
@@ -262,24 +269,38 @@ function PlanningModal({
   milestone,
   onClose,
   metric,
+  forecast,
 }: {
   milestone: SavingsMonthMilestone
   onClose: () => void
   metric: SavingsMonthlyMetric | undefined
+  forecast: MonthlyBudgetForecastRow | undefined
 }) {
   const data = PLANNING_DATA[milestone.id]
   const past = isPastMonth(milestone.id)
 
   if (!data) return null
 
-  // Valeurs réelles si disponibles, sinon placeholder
+  // Revenus : réels si mois passé et donnée disponible, sinon budget prévisionnel
+  const revenus = metric?.income_total ?? forecast?.projected_income ?? data.revenus
+
+  // Budget dépenses : depuis la vue forecast (inclut les engagements futurs)
+  const budgetDepenses = forecast?.projected_non_savings_expenses_with_forward ?? data.budgetDepenses
+
+  // Engagements futurs (hors budget standard)
+  const forwardAmount = forecast?.forward_commitments_amount ?? 0
+
+  // Épargne et objectif
   const realSaved   = metric?.saved_amount         ?? null
-  const realObjectif = metric?.savings_budget_total ?? null
+  const realObjectif = metric?.savings_budget_total ?? forecast?.planned_savings_budget ?? null
   const epargneMontant = realSaved ?? data.epargneMontant
   const objectif       = realObjectif ?? data.objectif
   const pctObjectif    = objectif > 0
     ? Math.round((epargneMontant / objectif) * 100)
     : data.virement.pctObjectif
+
+  // Insight capacité mensuelle
+  const capacityInsight = forecast?.monthly_capacity_insight
 
   return (
     <motion.div
@@ -391,14 +412,23 @@ function PlanningModal({
         {/* ── Section Flux mensuels ── */}
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
           <SectionLabel>Flux mensuels</SectionLabel>
-          <FluxRow label="Revenus" value={formatMoney(data.revenus)} valueColor="var(--color-positive)" />
-          <FluxRow label="Budget dépenses" value={formatMoney(data.budgetDepenses)} valueColor="var(--neutral-600)" />
+          {revenus > 0 && (
+            <FluxRow label="Revenus" value={formatMoney(revenus)} valueColor="var(--color-positive)" />
+          )}
+          <FluxRow label="Budget dépenses" value={formatMoney(budgetDepenses)} valueColor="var(--neutral-600)" />
+          {forwardAmount > 0 && (
+            <FluxRow
+              label="Engagements futurs"
+              value={`+ ${formatMoney(forwardAmount)}`}
+              valueColor="var(--color-warning)"
+            />
+          )}
           {past && data.depensesReelles !== undefined && (
             <FluxRow
               label="Dépenses réelles"
               value={formatMoney(data.depensesReelles)}
               valueColor={
-                data.depensesReelles > data.budgetDepenses
+                data.depensesReelles > budgetDepenses
                   ? 'var(--color-negative)'
                   : 'var(--neutral-700)'
               }
@@ -413,6 +443,18 @@ function PlanningModal({
                 : 'var(--primary-600)'
             }
           />
+          {capacityInsight && (
+            <p style={{
+              margin: 0,
+              marginTop: 2,
+              fontSize: 11,
+              color: 'var(--neutral-500)',
+              lineHeight: 1.5,
+              fontStyle: 'italic',
+            }}>
+              {capacityInsight}
+            </p>
+          )}
         </div>
 
         {/* ── Section Virement ── */}
@@ -463,6 +505,7 @@ export function SavingsPlanning2026Section() {
   const [activeMilestone, setActiveMilestone] = useState<SavingsMonthMilestone | null>(null)
 
   const { data: analyticsData } = useSavingsAnalytics(2026)
+  const { data: forecastRows } = useMonthlyBudgetForecast(2026)
 
   /** Map period_month (1-12) → SavingsMonthlyMetric */
   const metricsMap = useMemo(() => {
@@ -472,6 +515,15 @@ export function SavingsPlanning2026Section() {
     }
     return map
   }, [analyticsData])
+
+  /** Map period_month (1-12) → MonthlyBudgetForecastRow */
+  const forecastMap = useMemo(() => {
+    const map = new Map<number, MonthlyBudgetForecastRow>()
+    for (const row of (forecastRows ?? [])) {
+      map.set(row.period_month, row)
+    }
+    return map
+  }, [forecastRows])
 
   return (
     <>
@@ -509,6 +561,7 @@ export function SavingsPlanning2026Section() {
               const past       = isPastMonth(month.id)
               const monthNum   = monthNumFromId(month.id)
               const metric     = metricsMap.get(monthNum)
+              const forecast   = forecastMap.get(monthNum)
 
               // ── Indicateur de réussite (mois révolus avec données réelles)
               const hasRealData = past && metric !== undefined
@@ -576,6 +629,9 @@ export function SavingsPlanning2026Section() {
                 flexShrink: 0,
               }
 
+              // Forward commitments indicator on the pill (future months)
+              const hasForwardCommitments = !past && (forecast?.forward_commitments_amount ?? 0) > 0
+
               const pill = (
                 <button type="button" onClick={() => setActiveMilestone(month)} style={pillStyle}>
                   <span style={{
@@ -584,8 +640,24 @@ export function SavingsPlanning2026Section() {
                     color: past ? 'var(--primary-700)' : 'var(--neutral-800)',
                     lineHeight: 1.2,
                     whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
                   }}>
                     {month.fullLabel.replace(' 2026', '')}
+                    {hasForwardCommitments && (
+                      <span
+                        aria-label="Engagements futurs"
+                        style={{
+                          display: 'inline-block',
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--color-warning)',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
                   </span>
                   {/* Montant mensuel versé avec signe + en vert profond — mois révolus uniquement */}
                   {past && savedAmount !== null && (
@@ -738,6 +810,7 @@ export function SavingsPlanning2026Section() {
                 milestone={activeMilestone}
                 onClose={() => setActiveMilestone(null)}
                 metric={metricsMap.get(monthNumFromId(activeMilestone.id))}
+                forecast={forecastMap.get(monthNumFromId(activeMilestone.id))}
               />
             </div>
           </>

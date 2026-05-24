@@ -641,6 +641,27 @@ export function Flux() {
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}
+        rightSlot={
+          <button
+            type="button"
+            aria-label="Nouvelle opération planifiée"
+            onClick={() => setShowPlannedOperationModal(true)}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 'var(--radius-full)',
+              border: '1.5px solid color-mix(in oklab, var(--neutral-0) 40%, transparent 60%)',
+              background: 'color-mix(in oklab, var(--neutral-0) 14%, transparent 86%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            <img src={planifierOperationIcon} alt="" width={20} height={20} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
+          </button>
+        }
       />
 
       <motion.section
