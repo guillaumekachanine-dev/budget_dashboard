@@ -39,9 +39,11 @@ type FormValues = {
   personalShareRatio: number
   budgetImpact: PlannedOperationBudgetImpact
   isRecurringMonthly: boolean
+  recurrenceStartDate: string
+  recurrenceEndDate: string
 }
 
-type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'personalShareRatio' | 'submit', string>>
+type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'personalShareRatio' | 'recurrenceEndDate' | 'submit', string>>
 
 const FLOW_OPTIONS: Array<{ value: PlannedOperationFlowType; label: string }> = [
   { value: 'expense', label: 'Dépense planifiée' },
@@ -80,6 +82,8 @@ function createDefaultFormValues(): FormValues {
     personalShareRatio: 1,
     budgetImpact: 'already_budgeted',
     isRecurringMonthly: false,
+    recurrenceStartDate: '',
+    recurrenceEndDate: '',
   }
 }
 
@@ -236,6 +240,89 @@ function FlowTypePill({
     >
       {label}
     </button>
+  )
+}
+
+function RecurrenceDateRow({
+  label,
+  value,
+  onChange,
+  onClear,
+  emptyLabel = 'Sans limite',
+  isMobileViewport,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  onClear?: () => void
+  emptyLabel?: string
+  isMobileViewport: boolean
+}) {
+  const fontSize = isMobileViewport ? 'var(--font-size-sm)' : 'var(--font-size-base)'
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0,1fr) auto',
+        alignItems: 'center',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-2) var(--space-3)',
+        borderTop: '1px solid var(--neutral-200)',
+      }}
+    >
+      <span style={{ fontSize, fontWeight: 'var(--font-weight-medium)', color: 'var(--neutral-600)', lineHeight: 'var(--line-height-tight)' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        {value && onClear ? (
+          <button
+            type="button"
+            aria-label="Effacer la date"
+            onClick={onClear}
+            style={{
+              border: 'none',
+              background: 'none',
+              padding: '2px 4px',
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              color: 'var(--neutral-400)',
+              fontSize: 11,
+              lineHeight: 1,
+              fontWeight: 600,
+            }}
+          >
+            ×
+          </button>
+        ) : null}
+        <span style={{ position: 'relative', cursor: 'pointer' }}>
+          <span style={{
+            fontSize,
+            fontWeight: 700,
+            color: value ? 'var(--neutral-900)' : 'var(--neutral-400)',
+            lineHeight: 'var(--line-height-tight)',
+            whiteSpace: 'nowrap',
+            display: 'block',
+          }}>
+            {value ? formatLongDate(value) : emptyLabel}
+          </span>
+          <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              opacity: 0.001,
+              width: '100%',
+              height: '100%',
+              cursor: 'pointer',
+              WebkitAppearance: 'none',
+              appearance: 'none',
+            }}
+          />
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -627,6 +714,12 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       nextErrors.personalShareRatio = 'La part personnelle doit être entre 0 et 1.'
     }
 
+    if (values.isRecurringMonthly && values.recurrenceEndDate && values.recurrenceStartDate) {
+      if (values.recurrenceEndDate < values.recurrenceStartDate) {
+        nextErrors.recurrenceEndDate = 'La date de fin doit être après la date de début.'
+      }
+    }
+
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
@@ -638,13 +731,16 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     const parsedAmount = parseMoney(values.amount)
     if (parsedAmount == null) return
 
-    const recurringDayRaw = values.isRecurringMonthly
-      ? new Date(`${values.date}T00:00:00`).getDate()
+    const effectiveStartDate = values.isRecurringMonthly
+      ? (values.recurrenceStartDate || values.date)
+      : null
+    const recurringDayRaw = effectiveStartDate
+      ? new Date(`${effectiveStartDate}T00:00:00`).getDate()
       : null
     const recurringDay = recurringDayRaw != null && Number.isFinite(recurringDayRaw) ? recurringDayRaw : null
-    const recurrenceStartDate = values.isRecurringMonthly ? values.date : null
+    const recurrenceStartDate = effectiveStartDate
     const recurrenceEndDate = values.isRecurringMonthly
-      ? `${values.date.slice(0, 4)}-12-31`
+      ? (values.recurrenceEndDate || null)
       : null
 
     const payload: PlannedOperationInsert = {
@@ -936,9 +1032,58 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         value={values.isRecurringMonthly ? 'Oui' : 'Non'}
                         compactMobile={isMobileViewport}
                         onClick={() => {
-                          setValues((current) => ({ ...current, isRecurringMonthly: !current.isRecurringMonthly }))
+                          setValues((current) => {
+                            const next = !current.isRecurringMonthly
+                            return {
+                              ...current,
+                              isRecurringMonthly: next,
+                              recurrenceStartDate: next && !current.recurrenceStartDate
+                                ? current.date
+                                : current.recurrenceStartDate,
+                            }
+                          })
                         }}
                       />
+                      <AnimatePresence>
+                        {values.isRecurringMonthly && (
+                          <motion.div
+                            key="recurrence-dates"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div style={{ background: 'var(--neutral-50)' }}>
+                              <RecurrenceDateRow
+                                label="Début de la récurrence"
+                                value={values.recurrenceStartDate}
+                                onChange={(v) => setValues((current) => ({ ...current, recurrenceStartDate: v }))}
+                                isMobileViewport={isMobileViewport}
+                              />
+                              <RecurrenceDateRow
+                                label="Fin de la récurrence"
+                                value={values.recurrenceEndDate}
+                                onChange={(v) => {
+                                  setValues((current) => ({ ...current, recurrenceEndDate: v }))
+                                  setErrors((current) => { const n = { ...current }; delete n.recurrenceEndDate; return n })
+                                }}
+                                onClear={() => {
+                                  setValues((current) => ({ ...current, recurrenceEndDate: '' }))
+                                  setErrors((current) => { const n = { ...current }; delete n.recurrenceEndDate; return n })
+                                }}
+                                emptyLabel="Sans limite"
+                                isMobileViewport={isMobileViewport}
+                              />
+                              {errors.recurrenceEndDate ? (
+                                <p style={{ margin: 0, padding: '0 var(--space-3) var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }} role="alert">
+                                  {errors.recurrenceEndDate}
+                                </p>
+                              ) : null}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       {values.flowType === 'expense' || values.flowType === 'savings' ? (
                         <SettingsRow
                           label="Impact budget"
