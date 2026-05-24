@@ -986,8 +986,12 @@ export function EnveloppesTab({
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
 
-  function isMonthDisabled(y: number, m: number) {
-    return y === currentYear && m > currentMonth
+  function isMonthDisabled(_y: number, _m: number) {
+    return false
+  }
+
+  function isFutureMonth(y: number, m: number) {
+    return y > currentYear || (y === currentYear && m > currentMonth)
   }
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
@@ -1474,6 +1478,7 @@ export function EnveloppesTab({
                   const m = idx + 1
                   const disabled = isMonthDisabled(modalPickerYear, m)
                   const isSelected = modalPickerYear === year && m === month
+                  const isFuture = isFutureMonth(modalPickerYear, m)
                   return (
                     <button
                       key={m}
@@ -1487,15 +1492,23 @@ export function EnveloppesTab({
                       }}
                       style={{
                         padding: '7px 4px',
-                        border: isSelected ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                        border: isSelected
+                          ? '2px solid var(--primary-600)'
+                          : isFuture
+                            ? '1px dashed var(--neutral-300)'
+                            : '1px solid var(--neutral-200)',
                         borderRadius: 'var(--radius-sm)',
-                        background: isSelected ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : 'var(--neutral-50)',
-                        color: disabled ? 'var(--neutral-300)' : isSelected ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        background: isSelected
+                          ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
+                          : isFuture
+                            ? 'var(--neutral-0)'
+                            : 'var(--neutral-50)',
+                        color: isSelected ? 'var(--primary-600)' : isFuture ? 'var(--neutral-500)' : 'var(--neutral-800)',
                         fontSize: 11,
                         fontWeight: isSelected ? 700 : 500,
-                        cursor: disabled ? 'default' : 'pointer',
+                        fontStyle: isFuture && !isSelected ? 'italic' : 'normal',
+                        cursor: 'pointer',
                         transition: 'all var(--transition-base)',
-                        pointerEvents: disabled ? 'none' : 'auto',
                       }}
                     >
                       {label}
@@ -1530,6 +1543,23 @@ export function EnveloppesTab({
           }}
         >
           {monthLabel}
+          {isFutureMonth(year, month) && (
+            <span style={{
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              color: 'var(--neutral-400)',
+              background: 'var(--neutral-100)',
+              border: '1px dashed var(--neutral-300)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '1px 5px',
+              textTransform: 'uppercase',
+              lineHeight: 1.4,
+              marginLeft: 2,
+            }}>
+              Prévu
+            </span>
+          )}
           <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
         </button>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
