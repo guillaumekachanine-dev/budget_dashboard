@@ -41,6 +41,7 @@ type FormValues = {
   isRecurringMonthly: boolean
   recurrenceStartDate: string
   recurrenceEndDate: string
+  merchant: string
 }
 
 type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'personalShareRatio' | 'recurrenceEndDate' | 'submit', string>>
@@ -84,6 +85,7 @@ function createDefaultFormValues(): FormValues {
     isRecurringMonthly: false,
     recurrenceStartDate: '',
     recurrenceEndDate: '',
+    merchant: '',
   }
 }
 
@@ -248,14 +250,12 @@ function RecurrenceDateRow({
   value,
   onChange,
   onClear,
-  emptyLabel = 'Sans limite',
   isMobileViewport,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   onClear?: () => void
-  emptyLabel?: string
   isMobileViewport: boolean
 }) {
   const fontSize = isMobileViewport ? 'var(--font-size-sm)' : 'var(--font-size-base)'
@@ -294,33 +294,24 @@ function RecurrenceDateRow({
             ×
           </button>
         ) : null}
-        <span style={{ position: 'relative', cursor: 'pointer' }}>
-          <span style={{
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            fontFamily: 'inherit',
             fontSize,
             fontWeight: 700,
             color: value ? 'var(--neutral-900)' : 'var(--neutral-400)',
-            lineHeight: 'var(--line-height-tight)',
-            whiteSpace: 'nowrap',
-            display: 'block',
-          }}>
-            {value ? formatLongDate(value) : emptyLabel}
-          </span>
-          <input
-            type="date"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              opacity: 0.001,
-              width: '100%',
-              height: '100%',
-              cursor: 'pointer',
-              WebkitAppearance: 'none',
-              appearance: 'none',
-            }}
-          />
-        </span>
+            cursor: 'pointer',
+            outline: 'none',
+            padding: 0,
+            textAlign: 'right',
+            minWidth: 0,
+          }}
+        />
       </div>
     </div>
   )
@@ -749,7 +740,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       category_id: values.flowType === 'transfer'
         ? null
         : (values.subCategoryId || values.categoryId || null),
-      merchant_name: null,
+      merchant_name: values.merchant.trim() || null,
       label: values.label.trim(),
       planned_date: values.date,
       planned_amount: parsedAmount,
@@ -977,6 +968,16 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     }}
                   />
                   <FieldError message={errors.label} />
+                  <Input
+                    id="planned-operation-merchant"
+                    type="text"
+                    value={values.merchant}
+                    onChange={(event) => setValues((current) => ({ ...current, merchant: event.target.value }))}
+                    placeholder="marchand (optionnel)"
+                    aria-label="Marchand"
+                    className="mt-[var(--space-2)] rounded-[var(--radius-md)] border-transparent px-[var(--space-4)] py-[var(--space-3)] text-center placeholder:text-[var(--neutral-500)] placeholder:opacity-100 focus:border-transparent"
+                    style={{ minHeight: isMobileViewport ? 36 : 44 }}
+                  />
                 </div>
 
                 <div className="mt-[var(--space-3)]">
@@ -1072,7 +1073,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                                   setValues((current) => ({ ...current, recurrenceEndDate: '' }))
                                   setErrors((current) => { const n = { ...current }; delete n.recurrenceEndDate; return n })
                                 }}
-                                emptyLabel="Sans limite"
                                 isMobileViewport={isMobileViewport}
                               />
                               {errors.recurrenceEndDate ? (
