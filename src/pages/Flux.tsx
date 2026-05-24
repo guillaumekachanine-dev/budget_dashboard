@@ -755,15 +755,15 @@ export function Flux() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            border: '1px solid color-mix(in oklab, var(--color-warning) 38%, var(--neutral-200) 62%)',
-            background: 'color-mix(in oklab, var(--color-warning) 13%, var(--neutral-0) 87%)',
+            border: 'none',
+            background: 'var(--color-warning)',
             borderRadius: 'var(--radius-full)',
             padding: '6px 14px 6px 10px',
             cursor: 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            color: 'color-mix(in oklab, var(--color-warning) 52%, #5a2500 48%)',
-            boxShadow: '0 1px 6px color-mix(in oklab, var(--color-warning) 18%, transparent 82%)',
+            color: 'var(--neutral-0)',
+            boxShadow: '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
           }}
         >
           <Settings2 size={13} strokeWidth={2.2} />
