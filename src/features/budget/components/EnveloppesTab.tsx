@@ -1502,11 +1502,10 @@ export function EnveloppesTab({
                           ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
                           : isFuture
                             ? 'var(--neutral-0)'
-                            : 'var(--neutral-50)',
+                            : 'var(--neutral-150, #e8e8ee)',
                         color: isSelected ? 'var(--primary-600)' : isFuture ? 'var(--neutral-500)' : 'var(--neutral-800)',
                         fontSize: 11,
                         fontWeight: isSelected ? 700 : 500,
-                        fontStyle: isFuture && !isSelected ? 'italic' : 'normal',
                         cursor: 'pointer',
                         transition: 'all var(--transition-base)',
                       }}
