@@ -23,6 +23,13 @@ import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'
 type PlannedModalityFilter = 'all' | 'done' | 'upcoming'
+type FluxTabId = 'actuel' | 'planifie'
+
+type FluxTabConfig = { id: FluxTabId; label: string; iconSrc: string }
+const FLUX_TABS: FluxTabConfig[] = [
+  { id: 'actuel', label: 'Flux actuels', iconSrc: categoriesHeaderIcon },
+  { id: 'planifie', label: 'Planifié', iconSrc: planifierOperationIcon },
+]
 
 const HEADER_CATEGORY_ORDER = [
   'alimentation',
@@ -253,6 +260,8 @@ export function Flux() {
   const [showParametersCategoryModal, setShowParametersCategoryModal] = useState(false)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
   const [plannedModalityFilter, setPlannedModalityFilter] = useState<PlannedModalityFilter>('all')
+  const [activeTabId, setActiveTabId] = useState<FluxTabId>('actuel')
+  const activeTab = FLUX_TABS.find((t) => t.id === activeTabId) ?? FLUX_TABS[0]
 
   const activeFlowTypeForCategory = showAdvancedSheet ? draftFlow : flow
   const categoryFlowType = activeFlowTypeForCategory === 'income'
@@ -277,7 +286,7 @@ export function Flux() {
       .filter((category): category is (typeof rootCategories)[number] => category !== null)
   }, [rootCategories])
 
-  const isPlannedMode = false
+  const isPlannedMode = activeTabId === 'planifie'
   const isSavingsMode = flow === 'savings'
   const todayDateKey = getTodayDateKey()
   const range = useMemo(() => periodToRange(period), [period])
@@ -664,6 +673,33 @@ export function Flux() {
         }
       />
 
+      {/* ── Tab navigation circulaire ── */}
+      {(() => {
+        const currentIdx = FLUX_TABS.findIndex((t) => t.id === activeTabId)
+        const prevTab = FLUX_TABS[(currentIdx - 1 + FLUX_TABS.length) % FLUX_TABS.length]
+        const nextTab = FLUX_TABS[(currentIdx + 1) % FLUX_TABS.length]
+        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
+        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
+        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
+        const btnBase = { border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', minHeight: 'var(--touch-target-min)' } as const
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', paddingLeft: 'var(--page-gutter)', paddingRight: 'var(--page-gutter)', marginTop: '-8px' }}>
+            <button type="button" onClick={() => setActiveTabId(prevTab.id)} aria-label={`Aller à ${prevTab.label}`} style={btnBase}>
+              <div style={triLeft} />
+              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+            </button>
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              {activeTab.label}
+            </h2>
+            <button type="button" onClick={() => setActiveTabId(nextTab.id)} aria-label={`Aller à ${nextTab.label}`} style={btnBase}>
+              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+              <div style={triRight} />
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ── Hero compact : montant uniquement ── */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -675,80 +711,45 @@ export function Flux() {
             style={{
               background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 88%, #000 12%) 0%, color-mix(in oklab, var(--color-warning) 70%, #000 30%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
               borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-3) var(--space-5) var(--space-3)',
+              padding: 'var(--space-3) var(--space-6)',
               boxShadow: 'var(--shadow-card)',
-              position: 'relative',
-              overflow: 'hidden',
-              minHeight: 'clamp(80px, 18vw, 102px)',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <span
-              style={{
-                position: 'absolute',
-                right: -14,
-                top: -12,
-                fontSize: 88,
-                fontWeight: 900,
-                fontFamily: 'var(--font-mono)',
-                color: 'rgba(255,255,255,0.08)',
-                lineHeight: 1,
-                userSelect: 'none',
-                pointerEvents: 'none',
-                letterSpacing: '-0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              flux
-            </span>
-
-            <div
-              style={{
-                position: 'absolute',
-                top: -76,
-                right: -58,
-                width: 210,
-                height: 210,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.08) 56%, transparent 76%)',
-                pointerEvents: 'none',
-              }}
-            />
-
-            <button
-              type="button"
-              aria-label="Ouvrir les paramètres"
-              title="Paramètres"
-              onClick={openParametersModal}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                right: 'var(--space-4)',
-                transform: 'translateY(-50%)',
-                border: '1px solid rgba(255,255,255,0.38)',
-                background: 'rgba(255,255,255,0.12)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                width: 40,
-                height: 40,
-                borderRadius: 'var(--radius-full)',
-                zIndex: 2,
-              }}
-            >
-              <Settings2 size={16} color="var(--neutral-0)" strokeWidth={2.2} />
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <p style={{ margin: 0, fontSize: 'clamp(30px, 8.6vw, 44px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-                {formatMoneyInteger(heroMainAmount)}
-              </p>
-            </div>
+            <p style={{ margin: 0, fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              {formatMoneyInteger(heroMainAmount)}
+            </p>
           </div>
         </div>
       </motion.section>
+
+      {/* ── Bouton paramètres centré ── */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-8px' }}>
+        <button
+          type="button"
+          aria-label="Ouvrir les paramètres"
+          onClick={openParametersModal}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            border: '1px solid var(--neutral-200)',
+            background: 'var(--neutral-0)',
+            borderRadius: 'var(--radius-full)',
+            padding: '6px 14px 6px 10px',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--neutral-600)',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          }}
+        >
+          <Settings2 size={13} strokeWidth={2.2} />
+          Paramètres
+        </button>
+      </div>
 
       <section>
           <div
