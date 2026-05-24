@@ -157,23 +157,6 @@ export interface IncomeSource {
   updated_at: string
 }
 
-export interface RecurringObligation {
-  id: string
-  user_id: string
-  label: string
-  category_id: string | null
-  account_id: string | null
-  amount: number
-  currency: string
-  due_day: number
-  recurrence_frequency: RecurrenceFrequency
-  starts_on: string | null
-  ends_on: string | null
-  is_active: boolean
-  notes: string | null
-  created_at: string
-  updated_at: string
-}
 
 export interface PlannedOperation {
   id: string
@@ -526,7 +509,7 @@ export type Database = {
       transactions: TableDef<Transaction, Omit<Transaction, 'id' | 'created_at' | 'updated_at'>, Partial<Transaction>>
       planned_operations: TableDef<PlannedOperation, PlannedOperationInsert, Partial<PlannedOperation>>
       income_sources: TableDef<IncomeSource, Omit<IncomeSource, 'id' | 'created_at' | 'updated_at'>, Partial<IncomeSource>>
-      recurring_obligations: TableDef<RecurringObligation, Omit<RecurringObligation, 'id' | 'created_at' | 'updated_at'>, Partial<RecurringObligation>>
+
       analytics_monthly_metrics: TableDef<AnalyticsMonthlyMetrics, Omit<AnalyticsMonthlyMetrics, never>, Partial<AnalyticsMonthlyMetrics>>
       analytics_monthly_category_metrics: TableDef<AnalyticsMonthlyCategoryMetrics, Omit<AnalyticsMonthlyCategoryMetrics, never>, Partial<AnalyticsMonthlyCategoryMetrics>>
       analytics_variable_category_summary: TableDef<AnalyticsVariableCategorySummary, Omit<AnalyticsVariableCategorySummary, never>, Partial<AnalyticsVariableCategorySummary>>

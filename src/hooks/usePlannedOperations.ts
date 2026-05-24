@@ -117,10 +117,9 @@ export async function getPlannedOperationsForFlow({
     .filter((row) => Boolean(row.id && row.planned_date))
     .map<PlannedOperationFlowItem>((row) => {
       const plannedDateKey = toLocalDateKey(row.planned_date)
+      // planned_status est calculé directement par la vue SQL — on lui fait confiance.
       const plannedStatus: PlannedOperationFlowItem['planned_status'] =
-        row.planned_status === 'done' || row.planned_status === 'upcoming'
-          ? row.planned_status
-          : (plannedDateKey <= todayKey ? 'done' : 'upcoming')
+        row.planned_status ?? (plannedDateKey <= todayKey ? 'done' : 'upcoming')
 
       return {
         id: row.id as string,

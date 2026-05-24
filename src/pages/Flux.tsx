@@ -437,10 +437,10 @@ export function Flux() {
   }, [filteredTransactions, generalPlannedRows])
 
   const generalTotalAmount = useMemo(() => {
-    const transactionsSum = filteredTransactions.reduce((sum, transaction) => sum + signedAmount(transaction), 0)
-    const plannedSum = generalPlannedRows.reduce((sum, operation) => sum + signedPlannedAmount(operation), 0)
-    return transactionsSum + plannedSum
-  }, [filteredTransactions, generalPlannedRows])
+    // Option A : seules les transactions réelles entrent dans le total.
+    // Les planifiées sont un overlay informatif, pas des montants comptabilisés.
+    return filteredTransactions.reduce((sum, transaction) => sum + signedAmount(transaction), 0)
+  }, [filteredTransactions])
 
   const heroMainAmount = isPlannedMode ? plannedDoneTotal : generalTotalAmount
   const listHeaderAmount = isPlannedMode ? plannedTotal : generalTotalAmount
@@ -663,6 +663,38 @@ export function Flux() {
               alignItems: 'center',
             }}
           >
+            <span
+              style={{
+                position: 'absolute',
+                right: -14,
+                top: -12,
+                fontSize: 88,
+                fontWeight: 900,
+                fontFamily: 'var(--font-mono)',
+                color: 'rgba(255,255,255,0.08)',
+                lineHeight: 1,
+                userSelect: 'none',
+                pointerEvents: 'none',
+                letterSpacing: '-0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              flux
+            </span>
+
+            <div
+              style={{
+                position: 'absolute',
+                top: -76,
+                right: -58,
+                width: 210,
+                height: 210,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.08) 56%, transparent 76%)',
+                pointerEvents: 'none',
+              }}
+            />
+
             <button
               type="button"
               aria-label="Ouvrir les paramètres"
