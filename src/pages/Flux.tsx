@@ -270,6 +270,7 @@ export function Flux() {
       ? 'savings'
       : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
+  const { data: allCategoriesData } = useCategories()
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
   const subCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id !== null), [flowCategories])
@@ -422,6 +423,25 @@ export function Flux() {
     [plannedModeOperations],
   )
   const plannedTotal = plannedDoneTotal + plannedUpcomingTotal
+
+  // Planned mode: unique parent category names present in the loaded planned operations
+  const plannedParentCategoryNames = useMemo((): Set<string> | null => {
+    if (!isPlannedMode) return null
+    const names = new Set<string>()
+    for (const op of plannedModeOperations) {
+      const name = op.parent_category_name ?? op.category_name
+      if (name) names.add(name.toLowerCase())
+    }
+    return names
+  }, [isPlannedMode, plannedModeOperations])
+
+  // Root categories restricted to those with planned operations (all flow types)
+  const plannedModalRootCategories = useMemo(() => {
+    if (!plannedParentCategoryNames || !allCategoriesData) return null
+    return allCategoriesData.filter(
+      (c) => c.parent_id === null && plannedParentCategoryNames.has(c.name.toLowerCase()),
+    )
+  }, [allCategoriesData, plannedParentCategoryNames])
 
   const generalMergedRows = useMemo(() => {
     type TimelineRow =
@@ -1540,7 +1560,10 @@ export function Flux() {
                     }}
                   >
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-                      {orderedHeaderRootCategories.slice(0, 11).map((category) => {
+                      {(isPlannedMode && plannedModalRootCategories && plannedModalRootCategories.length > 0
+                        ? plannedModalRootCategories
+                        : orderedHeaderRootCategories.slice(0, 11)
+                      ).map((category) => {
                         const isSelected = draftSelectedParentCategoryId === category.id && draftSelectedCategoryId == null
                         const displayName = headerCategoryLabel(category.name) === 'Famille/enfant' ? 'Famille\nenfant' : headerCategoryLabel(category.name)
                         return (
