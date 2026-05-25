@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSm, LayoutGrid, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, LayoutGrid, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -1265,26 +1265,11 @@ function DeltaBreakdownModal({
 function TripListSection({
   trips,
   tripTotals,
-  onTripClick,
 }: {
   trips: import('@/features/voyages/types').Trip[]
   tripTotals: Map<string, number>
   onTripClick: (tripId: string) => void
 }) {
-  const today = new Date()
-
-  const formatDateRange = (start: string, end: string): string => {
-    const s = new Date(`${start}T00:00:00`)
-    const e = new Date(`${end}T00:00:00`)
-    const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'short' })
-    const sMonth = monthFmt.format(s)
-    const eMonth = monthFmt.format(e)
-    const sDay = s.getDate()
-    const eDay = e.getDate()
-    if (sMonth === eMonth) return `${sDay}–${eDay} ${sMonth}`
-    return `${sDay} ${sMonth} – ${eDay} ${eMonth}`
-  }
-
   if (trips.length === 0) {
     return (
       <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
@@ -1296,91 +1281,39 @@ function TripListSection({
   return (
     <>
       {trips.map((trip) => {
-        const tripEnd = new Date(`${trip.end_date}T23:59:59`)
-        const tripStart = new Date(`${trip.start_date}T00:00:00`)
-        const isRealized = tripEnd < today
-        const isOngoing = tripStart <= today && today <= tripEnd
         const actualTotal = tripTotals.get(trip.id) ?? 0
         const hasActualData = actualTotal > 0
 
-        let statusLabel: string
-        let statusColor: string
-        if (isOngoing) {
-          statusLabel = 'En cours'
-          statusColor = 'var(--color-info)'
-        } else if (isRealized) {
-          statusLabel = 'Réalisé'
-          statusColor = 'var(--color-success)'
-        } else {
-          statusLabel = 'Prévu'
-          statusColor = 'var(--neutral-400)'
-        }
-
         return (
-          <button
+          <div
             key={trip.id}
-            type="button"
-            onClick={() => onTripClick(trip.id)}
             style={{
               width: '100%',
-              padding: '9px var(--space-4) 9px var(--space-3)',
+              borderTop: '1px solid var(--neutral-150)',
+              padding: '8px var(--space-4)',
               display: 'grid',
-              gridTemplateColumns: '26px minmax(0,1fr) auto auto',
+              gridTemplateColumns: '22px minmax(0,1fr) auto',
               alignItems: 'center',
               gap: 'var(--space-2)',
-              background: 'transparent',
-              border: 'none',
-              borderTop: '1px solid var(--neutral-150)',
-              cursor: 'pointer',
-              textAlign: 'left',
             }}
           >
-            {/* Emoji */}
-            <span
-              aria-hidden="true"
-              style={{ fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14, lineHeight: 1 }}>
               {trip.emoji ?? '✈️'}
-            </span>
-
-            {/* Name + date */}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {trip.name}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 500 }}>
-                  {formatDateRange(trip.start_date, trip.end_date)}
-                </span>
-                <span style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: statusColor,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  background: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
-                  borderRadius: 3,
-                  padding: '1px 4px',
-                }}>
-                  {statusLabel}
-                </span>
-              </div>
             </div>
-
-            {/* Amount */}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
+              {trip.name}
+            </span>
             <span style={{
               fontSize: 12,
-              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.1,
               fontWeight: 700,
               color: hasActualData ? 'var(--primary-700)' : 'var(--neutral-400)',
+              fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
             }}>
               {hasActualData ? fmtCurrency(actualTotal) : '—'}
             </span>
-
-            {/* Chevron placeholder */}
-            <ChevronRightSm size={14} color="var(--neutral-300)" />
-          </button>
+          </div>
         )
       })}
     </>
