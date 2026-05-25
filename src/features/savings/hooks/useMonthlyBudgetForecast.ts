@@ -10,11 +10,18 @@ export type MonthlyBudgetForecastRow = {
   variable_essentielle_budget: number
   discretionnaire_budget: number
   provision_budget: number
+  voyage_budget: number
   planned_savings_budget: number
   hors_pilotage_budget: number
   projected_non_savings_expenses: number
+  projected_non_savings_expenses_before_travel: number
+  projected_non_savings_expenses_after_travel: number
   gross_savings_capacity: number
+  gross_savings_capacity_before_travel: number
+  gross_savings_capacity_after_travel: number
   additional_capacity_after_planned_savings: number
+  additional_capacity_before_travel_after_planned_savings: number
+  additional_capacity_after_travel_after_planned_savings: number
   monthly_capacity_status: string
   monthly_capacity_insight: string
   forward_commitments_amount: number
@@ -22,10 +29,20 @@ export type MonthlyBudgetForecastRow = {
   forward_variable_essentielle: number
   forward_discretionnaire: number
   forward_provision: number
+  forward_voyage: number
   forward_epargne: number
   projected_non_savings_expenses_with_forward: number
+  projected_non_savings_expenses_before_travel_with_forward: number
+  projected_non_savings_expenses_after_travel_with_forward: number
   gross_savings_capacity_adjusted: number
+  gross_savings_capacity_before_travel_adjusted: number
+  gross_savings_capacity_after_travel_adjusted: number
   additional_capacity_adjusted: number
+  additional_capacity_before_travel_adjusted: number
+  additional_capacity_after_travel_adjusted: number
+  has_travel_impact: boolean
+  total_travel_impact_amount: number
+  travel_capacity_delta_amount: number
 }
 
 function asNumber(v: unknown): number {
@@ -43,11 +60,18 @@ function normalize(row: Record<string, unknown>): MonthlyBudgetForecastRow {
     variable_essentielle_budget: asNumber(row.variable_essentielle_budget),
     discretionnaire_budget: asNumber(row.discretionnaire_budget),
     provision_budget: asNumber(row.provision_budget),
+    voyage_budget: asNumber(row.voyage_budget),
     planned_savings_budget: asNumber(row.planned_savings_budget),
     hors_pilotage_budget: asNumber(row.hors_pilotage_budget),
     projected_non_savings_expenses: asNumber(row.projected_non_savings_expenses),
+    projected_non_savings_expenses_before_travel: asNumber(row.projected_non_savings_expenses_before_travel),
+    projected_non_savings_expenses_after_travel: asNumber(row.projected_non_savings_expenses_after_travel),
     gross_savings_capacity: asNumber(row.gross_savings_capacity),
+    gross_savings_capacity_before_travel: asNumber(row.gross_savings_capacity_before_travel),
+    gross_savings_capacity_after_travel: asNumber(row.gross_savings_capacity_after_travel),
     additional_capacity_after_planned_savings: asNumber(row.additional_capacity_after_planned_savings),
+    additional_capacity_before_travel_after_planned_savings: asNumber(row.additional_capacity_before_travel_after_planned_savings),
+    additional_capacity_after_travel_after_planned_savings: asNumber(row.additional_capacity_after_travel_after_planned_savings),
     monthly_capacity_status: String(row.monthly_capacity_status ?? ''),
     monthly_capacity_insight: String(row.monthly_capacity_insight ?? ''),
     forward_commitments_amount: asNumber(row.forward_commitments_amount),
@@ -55,10 +79,20 @@ function normalize(row: Record<string, unknown>): MonthlyBudgetForecastRow {
     forward_variable_essentielle: asNumber(row.forward_variable_essentielle),
     forward_discretionnaire: asNumber(row.forward_discretionnaire),
     forward_provision: asNumber(row.forward_provision),
+    forward_voyage: asNumber(row.forward_voyage),
     forward_epargne: asNumber(row.forward_epargne),
     projected_non_savings_expenses_with_forward: asNumber(row.projected_non_savings_expenses_with_forward),
+    projected_non_savings_expenses_before_travel_with_forward: asNumber(row.projected_non_savings_expenses_before_travel_with_forward),
+    projected_non_savings_expenses_after_travel_with_forward: asNumber(row.projected_non_savings_expenses_after_travel_with_forward),
     gross_savings_capacity_adjusted: asNumber(row.gross_savings_capacity_adjusted),
+    gross_savings_capacity_before_travel_adjusted: asNumber(row.gross_savings_capacity_before_travel_adjusted),
+    gross_savings_capacity_after_travel_adjusted: asNumber(row.gross_savings_capacity_after_travel_adjusted),
     additional_capacity_adjusted: asNumber(row.additional_capacity_adjusted),
+    additional_capacity_before_travel_adjusted: asNumber(row.additional_capacity_before_travel_adjusted),
+    additional_capacity_after_travel_adjusted: asNumber(row.additional_capacity_after_travel_adjusted),
+    has_travel_impact: Boolean(row.has_travel_impact),
+    total_travel_impact_amount: asNumber(row.total_travel_impact_amount),
+    travel_capacity_delta_amount: asNumber(row.travel_capacity_delta_amount),
   }
 }
 

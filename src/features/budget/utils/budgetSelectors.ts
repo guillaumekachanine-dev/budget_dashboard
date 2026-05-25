@@ -46,8 +46,7 @@ export function buildBudgetSummary(
     variableEssentielleBudget: 0,
     provisionBudget: 0,
     discretionnaireBudget: 0,
-    cagnotteProjetBudget: 0,
-    horsPilotageBudget: 0,
+    voyageBudget: 0,
   } satisfies BudgetSummary
 
   for (const line of categoryLines) {
@@ -76,13 +75,8 @@ export function buildBudgetSummary(
       continue
     }
 
-    if (bucket === 'cagnotte_projet') {
-      summary.cagnotteProjetBudget += amount
-      continue
-    }
-
-    if (bucket === 'hors_pilotage') {
-      summary.horsPilotageBudget += amount
+    if (bucket === 'voyage') {
+      summary.voyageBudget += amount
     }
   }
 

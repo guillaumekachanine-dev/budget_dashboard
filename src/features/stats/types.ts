@@ -5,7 +5,7 @@ export type StatsBudgetBucketKey =
   | 'variable_essentielle'
   | 'provision'
   | 'discretionnaire'
-  | 'cagnotte_projet'
+  | 'voyage'
 
 export type StatsSelectedPeriod = {
   id: string | null
@@ -34,7 +34,7 @@ export interface StatsMonthlyReference {
     variableEssentielleBudget: number
     provisionBudget: number
     discretionnaireBudget: number
-    cagnotteProjetBudget: number
+    voyageBudget: number
   }
   budgetBucketVsActual: Array<{
     budgetBucket: string
@@ -69,7 +69,7 @@ export interface StatsReferenceSnapshot {
     variableEssentielleBudget: number
     provisionBudget: number
     discretionnaireBudget: number
-    cagnotteProjetBudget: number
+    voyageBudget: number
   }
   budgetBucketVsActual: Array<{
     budgetBucket: string

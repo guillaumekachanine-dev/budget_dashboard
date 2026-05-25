@@ -3,10 +3,10 @@ export type BudgetBucketColorKey =
   | 'variable_essentielle'
   | 'discretionnaire'
   | 'provision'
+  | 'voyage'
   | 'revenu'
   | 'epargne'
   | 'hors_pilotage'
-  | 'cagnotte_projet'
   | 'cagnotte'
 
 // Source de vérité pour les couleurs des blocs/socles dans toute l'app.
@@ -15,10 +15,10 @@ export const BUDGET_BUCKET_COLORS: Record<BudgetBucketColorKey, string> = {
   variable_essentielle: 'var(--bucket-variable-essentielle)',
   discretionnaire: 'var(--bucket-discretionnaire)',
   provision: 'var(--bucket-provision)',
+  voyage: 'var(--bucket-voyage)',
   revenu: 'var(--bucket-revenu)',
   epargne: 'var(--bucket-epargne)',
   hors_pilotage: 'var(--bucket-hors-pilotage)',
-  cagnotte_projet: 'var(--bucket-cagnotte-projet)',
   cagnotte: 'var(--bucket-cagnotte)',
 }
 

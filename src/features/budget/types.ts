@@ -71,8 +71,7 @@ export interface BudgetSummary {
   variableEssentielleBudget: number
   provisionBudget: number
   discretionnaireBudget: number
-  cagnotteProjetBudget: number
-  horsPilotageBudget: number
+  voyageBudget: number
 }
 
 export interface BudgetParentGroup {

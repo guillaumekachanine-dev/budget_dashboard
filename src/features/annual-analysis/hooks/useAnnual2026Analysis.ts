@@ -261,7 +261,7 @@ function buildOptimizations(
   categories: Budget2026CategorySummary[],
 ): Budget2026OptimizationScenario[] {
   // On propose des scénarios sur les buckets discrétionnaires + provision
-  const targets = ['discretionnaire', 'provision', 'variable_essentielle', 'cagnotte_projet']
+  const targets = ['discretionnaire', 'provision', 'variable_essentielle', 'voyage']
   const reductions = [10, 8, 6, 12]
 
   return targets
@@ -410,9 +410,9 @@ const STATIC_BUDGET_LINES: Budget2026Line[] = [
   { category_name: 'Alimentation rapide', parent_category_name: 'Alimentation', amount: 60.0, effective_bucket: 'discretionnaire', method: 'discretionary_minus_10' },
   { category_name: 'Courses', parent_category_name: 'Alimentation', amount: 250.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_08' },
   { category_name: 'Petits achats alimentaires', parent_category_name: 'Alimentation', amount: 205.0, effective_bucket: 'discretionnaire', method: 'essential_buffer_05' },
-  { category_name: 'Abonnements professionnels', parent_category_name: 'Business', amount: 10.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Achats professionnels', parent_category_name: 'Business', amount: 60.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Formations', parent_category_name: 'Business', amount: 80.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
+  { category_name: 'Abonnements professionnels', parent_category_name: 'Business', amount: 10.0, effective_bucket: 'provision', method: 'provision_monthly' },
+  { category_name: 'Achats professionnels', parent_category_name: 'Business', amount: 60.0, effective_bucket: 'provision', method: 'provision_monthly' },
+  { category_name: 'Formations', parent_category_name: 'Business', amount: 80.0, effective_bucket: 'provision', method: 'provision_monthly' },
   { category_name: 'Achats bébé', parent_category_name: 'Famille / enfant', amount: 145.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_08' },
   { category_name: 'Divers enfant', parent_category_name: 'Famille / enfant', amount: 10.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_10' },
   { category_name: 'Frais bancaires', parent_category_name: 'Frais bancaires / impôts', amount: 15.64, effective_bucket: 'socle_fixe', method: 'fixed_real' },
@@ -438,9 +438,9 @@ const STATIC_BUDGET_LINES: Budget2026Line[] = [
   { category_name: 'Parking', parent_category_name: 'Transport', amount: 5.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_05' },
   { category_name: 'Péages', parent_category_name: 'Transport', amount: 10.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_05' },
   { category_name: 'Transport public', parent_category_name: 'Transport', amount: 15.0, effective_bucket: 'variable_essentielle', method: 'essential_buffer_05' },
-  { category_name: 'Activités', parent_category_name: 'Voyages', amount: 10.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Froustilles', parent_category_name: 'Voyages', amount: 20.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Logement voyage', parent_category_name: 'Voyages', amount: 50.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Repas voyage', parent_category_name: 'Voyages', amount: 10.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
-  { category_name: 'Trajet', parent_category_name: 'Voyages', amount: 60.0, effective_bucket: 'cagnotte_projet', method: 'project_cagnotte' },
+  { category_name: 'Activités', parent_category_name: 'Voyages', amount: 10.0, effective_bucket: 'voyage', method: 'voyage_budget' },
+  { category_name: 'Froustilles', parent_category_name: 'Voyages', amount: 20.0, effective_bucket: 'voyage', method: 'voyage_budget' },
+  { category_name: 'Logement voyage', parent_category_name: 'Voyages', amount: 50.0, effective_bucket: 'voyage', method: 'voyage_budget' },
+  { category_name: 'Repas voyage', parent_category_name: 'Voyages', amount: 10.0, effective_bucket: 'voyage', method: 'voyage_budget' },
+  { category_name: 'Trajet', parent_category_name: 'Voyages', amount: 60.0, effective_bucket: 'voyage', method: 'voyage_budget' },
 ]

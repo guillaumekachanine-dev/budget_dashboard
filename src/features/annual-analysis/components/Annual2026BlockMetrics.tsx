@@ -71,6 +71,7 @@ type BudgetBucketId =
   | 'variable_essentielle'
   | 'discretionnaire'
   | 'provision'
+  | 'voyage'
   | 'epargne'
   | 'hors_pilotage'
 

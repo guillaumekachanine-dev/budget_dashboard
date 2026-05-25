@@ -323,7 +323,7 @@ const BUCKET_SCOPE_ICON_SRC: Record<string, string> = {
   discretionnaire: blockDiscretionnaireIcon,
   epargne: blockEpargneIcon,
   revenu: blockRevenusIcon,
-  cagnotte_projet: blockEpargneIcon,
+  voyage: blockProvisionsIcon,
 }
 
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
@@ -1351,7 +1351,7 @@ export function Budgets() {
   }, [childCategories, epargneRootCategory])
   const slideThreeBlockOptions = useMemo(
     () => BUCKET_ORDER
-      .filter((bucketKey) => bucketKey !== 'hors_pilotage')
+      .filter((bucketKey) => bucketKey !== 'hors_pilotage' && bucketKey !== 'revenu')
       .map((bucketKey) => ({
         id: bucketKey,
         label: BUCKET_LABELS[bucketKey] ?? bucketKey,

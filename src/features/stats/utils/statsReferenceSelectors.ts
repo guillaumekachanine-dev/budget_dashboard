@@ -16,9 +16,9 @@ import type {
 export const BUDGET_BUCKET_CONFIG: Array<{ key: StatsBudgetBucketKey; label: string }> = [
   { key: 'socle_fixe', label: 'Socle fixe' },
   { key: 'variable_essentielle', label: 'Variable essentielle' },
-  { key: 'provision', label: 'Provision' },
+  { key: 'provision', label: 'Provisions' },
   { key: 'discretionnaire', label: 'Discrétionnaire' },
-  { key: 'cagnotte_projet', label: 'Cagnotte projet' },
+  { key: 'voyage', label: 'Voyage' },
 ]
 
 const SAVINGS_CATEGORY_DEFAULTS = ['Réserve sécurité', 'Projet / apport', 'Investissement']
@@ -76,8 +76,8 @@ function normalizeBudgetBucket(value: string | null): StatsBudgetBucketKey | nul
     return 'discretionnaire'
   }
 
-  if (['cagnotte_projet', 'project_bucket', 'project_pot'].includes(key)) {
-    return 'cagnotte_projet'
+  if (['voyage', 'voyages', 'travel', 'trip'].includes(key)) {
+    return 'voyage'
   }
 
   return null
@@ -106,10 +106,10 @@ export function buildBudgetSummary(
   const variableEssentielleBudget = byBucket.get('variable_essentielle') ?? 0
   const provisionBudget = byBucket.get('provision') ?? 0
   const discretionnaireBudget = byBucket.get('discretionnaire') ?? 0
-  const cagnotteProjetBudget = byBucket.get('cagnotte_projet') ?? 0
+  const voyageBudget = byBucket.get('voyage') ?? 0
 
   const derivedExpenseTotal =
-    socleFixeBudget + variableEssentielleBudget + provisionBudget + discretionnaireBudget + cagnotteProjetBudget
+    socleFixeBudget + variableEssentielleBudget + provisionBudget + discretionnaireBudget + voyageBudget
 
   return {
     totalExpenseBudget: totalExpenseBudget > 0 ? totalExpenseBudget : derivedExpenseTotal,
@@ -118,7 +118,7 @@ export function buildBudgetSummary(
     variableEssentielleBudget,
     provisionBudget,
     discretionnaireBudget,
-    cagnotteProjetBudget,
+    voyageBudget,
   }
 }
 

@@ -16,9 +16,9 @@ export const BUCKET_COLORS: Record<string, string> = {
   variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
   provision: BUDGET_BUCKET_COLORS.provision,
   discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  voyage: BUDGET_BUCKET_COLORS.voyage,
   revenu: BUDGET_BUCKET_COLORS.revenu,
   epargne: BUDGET_BUCKET_COLORS.epargne,
-  cagnotte_projet: BUDGET_BUCKET_COLORS.cagnotte_projet,
   hors_pilotage: BUDGET_BUCKET_COLORS.hors_pilotage,
 }
 
@@ -27,6 +27,7 @@ export const BUCKET_LABELS: Record<string, string> = {
   variable_essentielle: 'Variable essentielle',
   provision:            'Provisions',
   discretionnaire:      'Discrétionnaire',
+  voyage:               'Voyage',
   epargne:              'Épargne',
   revenu:               'Revenus',
   hors_pilotage:        'Hors pilotage',
@@ -37,13 +38,13 @@ export const EXPENSE_BUCKETS = [
   'variable_essentielle',
   'discretionnaire',
   'provision',
+  'voyage',
 ] as const
 
 export const NON_EXPENSE_BUCKETS = [
   'revenu',
   'epargne',
   'hors_pilotage',
-  'cagnotte_projet',
 ] as const
 
 export type ExpenseBucket = typeof EXPENSE_BUCKETS[number]
@@ -78,6 +79,7 @@ export const PILOTAGE_BUCKET_ORDER = [
   'variable_essentielle',
   'discretionnaire',
   'provision',
+  'voyage',
 ] as const
 
 export const TECHNICAL_BUCKETS = [
