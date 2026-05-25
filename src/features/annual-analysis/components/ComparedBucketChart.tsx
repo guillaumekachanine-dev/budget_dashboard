@@ -28,7 +28,6 @@ type ChartEntry = {
 type ViewMode = 'bars' | 'allocation'
 
 // ─── Couleurs unifiées ────────────────────────────────────────────────────────
-const COLOR_2025 = 'rgba(44, 58, 96, 0.92)'
 const COLOR_2026 = 'rgba(44, 58, 96, 0.92)'
 const BLOCK_SECTION_FIXED_HEIGHT = 438
 const CONTENT_HEIGHT = 332

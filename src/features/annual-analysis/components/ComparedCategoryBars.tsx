@@ -15,8 +15,6 @@ type Props = {
 const MAX_VISIBLE = 7
 type CategoryViewMode = 'bars' | 'donuts'
 const CATEGORY_ROW_COLUMNS = 'minmax(0,1fr) minmax(0,1fr) 78px 16px 86px'
-const CATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(12px)' } as const
-const SUBCATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(16px)' } as const
 const CATEGORY_SECTION_FIXED_HEIGHT = 438
 const CATEGORY_ANALYZED_PERIOD_LABEL = 'janvier-avril'
 
