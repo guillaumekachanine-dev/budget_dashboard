@@ -41,37 +41,43 @@ async function getComparedSavingsCategoryBreakdown(): Promise<BucketCategoryBrea
   const allowedYears = new Set<number>(COMPARED_YEARS as readonly number[])
   const allowedMonths = new Set<number>(COMPARED_MONTHS as readonly number[])
 
-  const { data, error } = await budgetDb
-    .from('transactions')
-    .select('transaction_date, amount, category_id')
-    .eq('flow_type', 'savings')
-    .eq('is_hidden', false)
-    .gte('transaction_date', `${minYear}-01-01`)
-    .lt('transaction_date', `${maxYear + 1}-01-01`)
-    .order('transaction_date', { ascending: true })
-
-  if (error) throw new Error(`getComparedBucketCategoryBreakdown (savings): ${error.message}`)
-
-  const categoryIds = [...new Set((data ?? [])
-    .map((row) => String((row as SavingsTransactionRow).category_id ?? ''))
-    .filter((id) => id.length > 0))]
-
-  let categoryById = new Map<string, SavingsCategoryRow>()
-  if (categoryIds.length > 0) {
-    const { data: categories, error: categoriesError } = await budgetDb
+  // ① Fetch transactions + all categories in parallel (eliminates 1 sequential round-trip).
+  //    Categories table is small; fetching all avoids a second waterfall awaiting transaction
+  //    categoryIds to filter on. Parent lookup uses the same dataset → 2 round-trips total.
+  const [txResult, catResult] = await Promise.all([
+    budgetDb
+      .from('transactions')
+      .select('transaction_date, amount, category_id')
+      .eq('flow_type', 'savings')
+      .eq('is_hidden', false)
+      .gte('transaction_date', `${minYear}-01-01`)
+      .lt('transaction_date', `${maxYear + 1}-01-01`)
+      .order('transaction_date', { ascending: true }),
+    budgetDb
       .from('categories')
-      .select('id, name, parent_id')
-      .in('id', categoryIds)
+      .select('id, name, parent_id'),
+  ])
 
-    if (categoriesError) throw new Error(`getComparedBucketCategoryBreakdown (savings categories): ${categoriesError.message}`)
+  if (txResult.error) throw new Error(`getComparedBucketCategoryBreakdown (savings): ${txResult.error.message}`)
+  if (catResult.error) throw new Error(`getComparedBucketCategoryBreakdown (savings categories): ${catResult.error.message}`)
 
-    categoryById = new Map((categories ?? []).map((row) => {
-      const category = row as SavingsCategoryRow
-      return [category.id, category]
-    }))
-  }
+  const data = txResult.data ?? []
 
-  const parentIds = new Set<string>()
+  // Build category lookup and parent name lookup from the single categories fetch
+  const categoryById = new Map<string, SavingsCategoryRow>(
+    (catResult.data ?? []).map((row) => {
+      const cat = row as SavingsCategoryRow
+      return [cat.id, cat]
+    })
+  )
+  // Parent names available from the same dataset — no 3rd DB call needed
+  const parentNameById = new Map<string, string>(
+    (catResult.data ?? []).map((row) => {
+      const cat = row as SavingsCategoryRow
+      return [cat.id, cat.name ?? '']
+    })
+  )
+
   const grouped = new Map<string, {
     category_id: string | null
     category_name: string
@@ -80,7 +86,7 @@ async function getComparedSavingsCategoryBreakdown(): Promise<BucketCategoryBrea
     amount_2026: number
   }>()
 
-  for (const row of (data ?? []) as SavingsTransactionRow[]) {
+  for (const row of data as SavingsTransactionRow[]) {
     const parsed = getYearMonth(row.transaction_date)
     if (!parsed) continue
     if (!allowedYears.has(parsed.year) || !allowedMonths.has(parsed.month)) continue
@@ -89,7 +95,6 @@ async function getComparedSavingsCategoryBreakdown(): Promise<BucketCategoryBrea
     const category = categoryId ? categoryById.get(categoryId) : null
     const categoryName = category?.name?.trim() || 'Épargne'
     const parentId = category?.parent_id ?? null
-    if (parentId) parentIds.add(parentId)
 
     const key = `${categoryId ?? ''}__${parentId ?? ''}__${categoryName}`
     const amount = Math.abs(Number(row.amount ?? 0))
@@ -107,18 +112,6 @@ async function getComparedSavingsCategoryBreakdown(): Promise<BucketCategoryBrea
     if (parsed.year === 2026) entry.amount_2026 += amount
 
     grouped.set(key, entry)
-  }
-
-  let parentNameById = new Map<string, string>()
-  if (parentIds.size > 0) {
-    const { data: parents, error: parentError } = await budgetDb
-      .from('categories')
-      .select('id, name')
-      .in('id', [...parentIds])
-
-    if (parentError) throw new Error(`getComparedBucketCategoryBreakdown (savings parents): ${parentError.message}`)
-
-    parentNameById = new Map((parents ?? []).map((parent) => [String(parent.id), String(parent.name ?? '')]))
   }
 
   return [...grouped.values()]

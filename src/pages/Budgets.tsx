@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -33,12 +33,8 @@ import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetReve
 import { useCategoryRolling12mStats } from '@/features/budget/hooks/useCategoryRolling12mStats'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
-import {
-  Annual2026BlockMetrics,
-  type MetricsScopeSelection,
-} from '@/features/annual-analysis/components/Annual2026BlockMetrics'
-import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
-import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
+// Type-only import (erased at runtime — safe to keep static)
+import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
@@ -50,11 +46,33 @@ import enveloppesMensuellesIcon from '@/assets/icons/app/metriques_budgets.webp'
 import projectionsAnnuellesIcon from '@/assets/icons/app/budgets_projections.webp'
 import rechercheRapideIcon from '@/assets/icons/app/budgets_metriques.webp'
 import analyticsIcon from '@/assets/icons/app/analytics.webp'
-import { VoyagesFeaturePage } from '@/features/voyages/components/VoyagesFeaturePage'
-import { EnveloppesTab } from '@/features/budget/components/EnveloppesTab'
-import { ProjectionsTab } from '@/features/budget/components/ProjectionsTab'
-import { ProjectionsTabContent } from '@/features/budget/components/ProjectionsTabContent'
-import { BudgetsAnalyticsTab } from '@/features/budget/components/BudgetsAnalyticsTab'
+
+// Lazy-loaded tabs & heavy sub-components — only fetched when the user activates
+// the corresponding tab or slide, keeping the initial Budgets chunk lean.
+const Annual2026BlockMetrics = lazy(() =>
+  import('@/features/annual-analysis/components/Annual2026BlockMetrics').then(m => ({ default: m.Annual2026BlockMetrics }))
+)
+const MonthlyFlowsAnalysisCard = lazy(() =>
+  import('@/features/annual-analysis/components/Annual2026MonthlyTable').then(m => ({ default: m.MonthlyFlowsAnalysisCard }))
+)
+const AnnualProjectionSectionConnected = lazy(() =>
+  import('@/features/annual-analysis/components/AnnualCostProjection2026').then(m => ({ default: m.AnnualProjectionSectionConnected }))
+)
+const VoyagesFeaturePage = lazy(() =>
+  import('@/features/voyages/components/VoyagesFeaturePage').then(m => ({ default: m.VoyagesFeaturePage }))
+)
+const EnveloppesTab = lazy(() =>
+  import('@/features/budget/components/EnveloppesTab').then(m => ({ default: m.EnveloppesTab }))
+)
+const ProjectionsTab = lazy(() =>
+  import('@/features/budget/components/ProjectionsTab').then(m => ({ default: m.ProjectionsTab }))
+)
+const ProjectionsTabContent = lazy(() =>
+  import('@/features/budget/components/ProjectionsTabContent').then(m => ({ default: m.ProjectionsTabContent }))
+)
+const BudgetsAnalyticsTab = lazy(() =>
+  import('@/features/budget/components/BudgetsAnalyticsTab').then(m => ({ default: m.BudgetsAnalyticsTab }))
+)
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
@@ -3563,9 +3581,11 @@ export function Budgets() {
 
       {isCategoryMode ? (
         isVoyagesCategoryMode ? (
-          <VoyagesFeaturePage
-            onBack={handleReturnToEnveloppes}
-          />
+          <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+            <VoyagesFeaturePage
+              onBack={handleReturnToEnveloppes}
+            />
+          </Suspense>
         ) : (
           <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
             <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
@@ -4083,6 +4103,7 @@ export function Budgets() {
                     </h3>
                   </div>
                 </section>
+                <Suspense fallback={<div style={{ minHeight: 240 }} />}>
                 {selectedYtdSlideView === 'kpi' ? (
                   <div style={{ padding: isCompactMobile ? '0 var(--space-2)' : '0 var(--space-4)' }}>
                     <Annual2026BlockMetrics
@@ -4116,6 +4137,7 @@ export function Budgets() {
                     />
                   </div>
                 )}
+                </Suspense>
               </div>
             ) : null}
           </div>
@@ -4429,7 +4451,9 @@ export function Budgets() {
               <h3 ref={projectionSectionTitleRef} style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
                 Projection coûts annuels
               </h3>
-              <AnnualProjectionSectionConnected />
+              <Suspense fallback={<div style={{ minHeight: 280 }} />}>
+                <AnnualProjectionSectionConnected />
+              </Suspense>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
@@ -4872,20 +4896,28 @@ export function Budgets() {
       </AnimatePresence>
       </>
       ) : budgetsTabId === 'enveloppes' ? (
-        <EnveloppesTab
-          onCategoryClick={handleEnveloppesCategoryClick}
-          onBlockClick={handleEnveloppesBlockClick}
-          onRevenueClick={handleEnveloppesRevenueClick}
-          initialViewMode={enveloppesViewMode}
-          onViewModeChange={setEnveloppesViewMode}
-          restoreRequest={enveloppesRestoreRequest}
-        />
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <EnveloppesTab
+            onCategoryClick={handleEnveloppesCategoryClick}
+            onBlockClick={handleEnveloppesBlockClick}
+            onRevenueClick={handleEnveloppesRevenueClick}
+            initialViewMode={enveloppesViewMode}
+            onViewModeChange={setEnveloppesViewMode}
+            restoreRequest={enveloppesRestoreRequest}
+          />
+        </Suspense>
       ) : budgetsTabId === 'analytics' ? (
-        <BudgetsAnalyticsTab />
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <BudgetsAnalyticsTab />
+        </Suspense>
       ) : budgetsTabId === 'metriques' ? (
-        <ProjectionsTab />
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <ProjectionsTab />
+        </Suspense>
       ) : budgetsTabId === 'projections' ? (
-        <ProjectionsTabContent />
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <ProjectionsTabContent />
+        </Suspense>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8) var(--page-gutter)', gap: 'var(--space-3)', minHeight: 240 }}>
           <img src={activeBudgetsTab.iconSrc} alt={activeBudgetsTab.label} width={48} height={48} style={{ objectFit: 'contain', opacity: 0.35 }} loading="lazy" decoding="async" />
