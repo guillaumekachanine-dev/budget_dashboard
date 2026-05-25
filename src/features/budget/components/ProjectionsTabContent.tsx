@@ -93,6 +93,12 @@ interface RevenueMonthGroup {
 type RevenueKpiModalKey = 'ytd' | 'scenario1' | 'scenario2' | null
 type RevenueDisplayMode = 'real_ytd' | 'scenario1' | 'scenario2'
 
+interface ScenarioMonthPoint {
+  monthLabel: string
+  actual: number | null
+  projected: number | null
+}
+
 interface RevenueKpiModalConfig {
   title: string
   subtitle?: string
@@ -100,6 +106,7 @@ interface RevenueKpiModalConfig {
   lines: Array<{ label: string; value: string }>
   totalLabel: string
   totalValue: string
+  chartPoints?: ScenarioMonthPoint[]
 }
 
 function capitalizeFirst(text: string): string {
@@ -151,20 +158,21 @@ function RevenueTransactionsYtdModal({
           position: 'fixed',
           left: 'var(--page-gutter)',
           right: 'var(--page-gutter)',
-          top: '9vh',
-          bottom: '9vh',
+          top: '18vh',
+          bottom: '12vh',
           zIndex: 91,
           maxWidth: 640,
           margin: '0 auto',
           background: 'var(--neutral-0)',
           borderRadius: 'var(--radius-2xl)',
-          padding: 'var(--space-4)',
           boxShadow: '0 12px 48px rgba(13,13,31,0.22)',
-          overflowY: 'auto',
-          overscrollBehavior: 'contain',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+        {/* Titre fixe — hors zone de scroll */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-4) var(--space-3)', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, lineHeight: 1.2 }}>
             Transactions revenus 2026 YTD
           </h3>
@@ -176,47 +184,130 @@ function RevenueTransactionsYtdModal({
             <X size={13} />
           </button>
         </div>
-        <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'color-mix(in oklab, var(--color-success) 30%, var(--neutral-0) 70%)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
-            <span>Date</span>
-            <span style={{ paddingLeft: 'var(--space-1)' }}>Libellé / catégorie</span>
-            <span>Montant</span>
-          </div>
-          <div style={{ display: 'grid' }}>
-            {groups.length > 0 ? groups.map((group) => (
-              <div key={group.monthKey} style={{ display: 'grid' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', borderTop: '1px solid color-mix(in oklab, var(--neutral-700) 55%, transparent)', background: 'color-mix(in oklab, var(--neutral-200) 42%, var(--neutral-0) 58%)', padding: '6px var(--space-3)' }}>
-                  <span style={{ fontSize: 10, color: 'var(--neutral-700)', fontWeight: 700, letterSpacing: '0.02em' }}>{group.monthLabel}</span>
-                  <span style={{ fontSize: 10, color: 'var(--neutral-800)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{fmt(group.total)}</span>
-                </div>
-                {group.transactions.map((tx) => (
-                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      {formatTxDateDayMonth(tx.transaction_date)}
-                    </span>
-                    <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.label || '—'}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.category_name ?? '—'}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {fmt(tx.pilotage_amount)}
-                    </span>
+
+        {/* Zone scrollable — pas de padding-top pour que les sticky touchent le bord */}
+        <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 var(--space-4) var(--space-4)' }}>
+          <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'clip', display: 'grid' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'color-mix(in oklab, var(--color-success) 30%, var(--neutral-0) 70%)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+              <span>Date</span>
+              <span style={{ paddingLeft: 'var(--space-1)' }}>Libellé / catégorie</span>
+              <span>Montant</span>
+            </div>
+            <div style={{ display: 'grid' }}>
+              {groups.length > 0 ? groups.map((group) => (
+                <div key={group.monthKey} style={{ display: 'grid' }}>
+                  <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', borderTop: '1px solid color-mix(in oklab, var(--neutral-700) 55%, transparent)', background: 'color-mix(in oklab, var(--neutral-200) 42%, var(--neutral-0) 58%)', padding: '9px var(--space-3)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700, letterSpacing: '0.02em' }}>{group.monthLabel}</span>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{fmt(group.total)}</span>
                   </div>
-                ))}
-              </div>
-            )) : (
-              <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
-                Aucune transaction de revenus sur 2026.
-              </p>
-            )}
+                  {group.transactions.map((tx) => (
+                    <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                        {formatTxDateDayMonth(tx.transaction_date)}
+                      </span>
+                      <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {tx.label || '—'}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {tx.category_name ?? '—'}
+                        </span>
+                      </span>
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                        {fmt(tx.pilotage_amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )) : (
+                <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+                  Aucune transaction de revenus sur 2026.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </motion.div>
     </>
+  )
+}
+
+function ScenarioRevenueChart({
+  points,
+  accentColor,
+}: {
+  points: ScenarioMonthPoint[]
+  accentColor: string
+}) {
+  const gradId = `srev-act-${accentColor.replace('#', '')}`
+  const gradProjId = `srev-proj-${accentColor.replace('#', '')}`
+  return (
+    <ResponsiveContainer width="100%" height={130}>
+      <ComposedChart data={points} margin={{ top: 8, right: 4, bottom: 0, left: -28 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4E4AE0" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#4E4AE0" stopOpacity={0.0} />
+          </linearGradient>
+          <linearGradient id={gradProjId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={accentColor} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={accentColor} stopOpacity={0.0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke="var(--neutral-200)" strokeDasharray="3 3" />
+        <XAxis
+          dataKey="monthLabel"
+          tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+        />
+        <YAxis
+          tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
+          width={36}
+        />
+        <ReferenceLine y={3338} stroke="var(--neutral-400)" strokeDasharray="4 3" strokeWidth={1} />
+        <ReferenceLine y={6500} stroke={accentColor} strokeDasharray="4 3" strokeWidth={1} opacity={0.55} />
+        <Area
+          type="monotone"
+          dataKey="actual"
+          fill={`url(#${gradId})`}
+          stroke="none"
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        <Area
+          type="monotone"
+          dataKey="projected"
+          fill={`url(#${gradProjId})`}
+          stroke="none"
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="actual"
+          stroke="#4E4AE0"
+          strokeWidth={2}
+          dot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="projected"
+          stroke={accentColor}
+          strokeWidth={2}
+          strokeDasharray="5 3"
+          dot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -250,7 +341,7 @@ function RevenueKpiDetailModal({
           background: 'var(--neutral-0)',
           borderRadius: 'var(--radius-xl)',
           padding: 'var(--space-5)',
-          maxWidth: 340,
+          maxWidth: 420,
           width: '100%',
           boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
         }}
@@ -277,6 +368,13 @@ function RevenueKpiDetailModal({
               </span>
             </div>
           ))}
+
+          {config.chartPoints && config.chartPoints.length > 0 ? (
+            <div style={{ margin: '4px 0 2px', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+              <ScenarioRevenueChart points={config.chartPoints} accentColor={config.accentColor} />
+            </div>
+          ) : null}
+
           <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontSize: 14, color: 'var(--neutral-900)', fontWeight: 700 }}>
@@ -456,6 +554,14 @@ function RevenueSection2026({
     }
 
     if (activeRevenueKpiModal === 'scenario1') {
+      const chartPoints: ScenarioMonthPoint[] = MONTH_LABELS_SHORT.map((monthLabel, idx) => {
+        const month = idx + 1
+        const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
+        const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
+        if (month < ytdMonths) return { monthLabel, actual, projected: null }
+        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
+        return { monthLabel, actual: null, projected: guaranteedMonthlyIncome }
+      })
       return {
         title: 'Scenario #1 : chômage full year',
         accentColor: SCENARIO_1_COLOR,
@@ -466,9 +572,25 @@ function RevenueSection2026({
         ],
         totalLabel: 'Projection #1',
         totalValue: fmt(projectedScenario1),
+        chartPoints,
       }
     }
 
+    const chartPoints2: ScenarioMonthPoint[] = MONTH_LABELS_SHORT.map((monthLabel, idx) => {
+      const month = idx + 1
+      const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
+      const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
+      if (month < ytdMonths) return { monthLabel, actual, projected: null }
+      if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
+      // months ytdMonths+1 … ytdMonths+scenario2UnemploymentMonths: chômage
+      // months after that (up to 12): salary
+      const projectedMonthOffset = month - ytdMonths // 1-indexed offset into projected period
+      const projected =
+        projectedMonthOffset <= scenario2UnemploymentMonths
+          ? guaranteedMonthlyIncome
+          : salaryAndPrimeMonthlyIncome
+      return { monthLabel, actual: null, projected }
+    })
     return {
       title: 'Scenario #2 : reprise salariat octobre',
       accentColor: SCENARIO_2_COLOR,
@@ -479,6 +601,7 @@ function RevenueSection2026({
       ],
       totalLabel: 'Projection #2',
       totalValue: fmt(projectedScenario2),
+      chartPoints: chartPoints2,
     }
   }, [
     activeRevenueKpiModal,
@@ -489,6 +612,7 @@ function RevenueSection2026({
     salaryAndPrimeMonthlyIncome,
     scenario2SalaryMonths,
     scenario2UnemploymentMonths,
+    series2026,
     ytdMonths,
     ytdRevenue2026,
   ])
@@ -1290,15 +1414,6 @@ function ExpenseSection2026({
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-                    <div style={{ display: 'grid', gap: 3 }}>
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
-                        Dépenses réelles YTD (mois révolus): <strong style={{ fontFamily: 'var(--font-mono)' }}>{fmt(ytdExpenseClosedMonths)}</strong>
-                      </p>
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
-                        Janvier à {getMonthShortLabel(completedMonths || 1).toLowerCase()} en réel, puis budgets enveloppes pour les mois restants.
-                      </p>
-                    </div>
-
                     <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-100)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-700)', fontWeight: 700 }}>
                         <span>Mois</span>
@@ -1339,7 +1454,7 @@ function ExpenseSection2026({
                     </div>
 
                     <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
-                      Projection totale fin 2026 (somme des 12 mois): <strong style={{ fontFamily: 'var(--font-mono)' }}>{projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}</strong>
+                      Projection fin 2026 : <strong style={{ fontFamily: 'var(--font-mono)' }}>{projectedExpense2026 != null ? fmt(projectedExpense2026) : '—'}</strong>
                     </p>
                   </div>
                 )}

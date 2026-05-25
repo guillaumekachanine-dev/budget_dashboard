@@ -14,7 +14,7 @@ type Props = {
 
 const MAX_VISIBLE = 7
 type CategoryViewMode = 'bars' | 'donuts'
-const CATEGORY_ROW_COLUMNS = 'minmax(0,1fr) 78px 8px 86px'
+const CATEGORY_ROW_COLUMNS = 'minmax(0,1fr) minmax(0,1fr) 78px 16px 86px'
 const CATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(12px)' } as const
 const SUBCATEGORY_VALUE_COLUMNS_SHIFT_STYLE = { transform: 'translateX(16px)' } as const
 const CATEGORY_SECTION_FIXED_HEIGHT = 438
@@ -332,14 +332,15 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
               }}
             >
               <span />
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+              <span />
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
                   2025
                 </span>
               </span>
-              <span style={CATEGORY_VALUE_COLUMNS_SHIFT_STYLE} />
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+              <span />
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>
                   2026
                 </span>
               </span>
@@ -633,14 +634,15 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
               }}
             >
               <span />
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+              <span />
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
                   2025
                 </span>
               </span>
-              <span style={CATEGORY_VALUE_COLUMNS_SHIFT_STYLE} />
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+              <span />
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-400)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>
                   2026
                 </span>
               </span>
@@ -1031,7 +1033,7 @@ function CategoryRow({
               size={14}
               style={{ flexShrink: 0 }}
             />
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-700)', lineHeight: 1.05 }}>
               {parent_category_name}
             </p>
             {delta_pct != null ? (
@@ -1056,11 +1058,12 @@ function CategoryRow({
               </span>
             ) : null}
           </div>
-          <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+          <span />
+          <span style={{ fontSize: 10, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
             {fmt(total_2025)}
           </span>
           <span />
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...CATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', fontFamily: 'var(--font-mono)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
             {fmt(total_2026)}
           </span>
         </div>
@@ -1103,10 +1106,8 @@ function CategoryRow({
       {expandable && isExpanded ? (
         <div style={{
           marginTop: 'var(--space-2)',
-          background: 'var(--neutral-50)',
-          borderRadius: 'var(--radius-lg)',
-          border: `1px solid color-mix(in oklab, ${bar2026Color} 42%, var(--neutral-0) 58%)`,
-          padding: '8px 10px',
+          borderLeft: `3px solid ${bar2026Color}`,
+          paddingLeft: 10,
           display: 'grid',
           gap: 4,
         }}>
@@ -1132,7 +1133,7 @@ function CategoryRow({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 4, minWidth: 0 }}>
                   <CategoryIcon iconKey={row.iconKey ?? row.name} label={row.name} size={12} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, lineHeight: 1.05, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 10, lineHeight: 1.05, color: 'var(--neutral-700)' }}>
                     {row.name}
                   </span>
                   {row.deltaPct != null ? (
@@ -1155,11 +1156,12 @@ function CategoryRow({
                     </span>
                   ) : null}
                 </div>
-                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: has2025 ? 'var(--neutral-600)' : 'var(--neutral-300)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...SUBCATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+                <span />
+                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: has2025 ? 'var(--neutral-600)' : 'var(--neutral-300)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {has2025 ? fmt(row.amount2025) : '-'}
                 </span>
                 <span />
-                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: has2026 ? 'var(--neutral-800)' : 'var(--neutral-300)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, ...SUBCATEGORY_VALUE_COLUMNS_SHIFT_STYLE }}>
+                <span style={{ fontSize: 10, lineHeight: 1.05, fontFamily: 'var(--font-mono)', color: has2026 ? 'var(--neutral-800)' : 'var(--neutral-300)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                   {has2026 ? fmt(row.amount2026) : '-'}
                 </span>
               </div>

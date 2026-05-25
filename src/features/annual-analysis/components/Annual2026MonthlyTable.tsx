@@ -167,6 +167,10 @@ export function MonthlyFlowsAnalysisCard({
   const tableContentRef = useRef<HTMLDivElement | null>(null)
   const lastYearRef = useRef(year)
   const scrollRafRef = useRef<number | null>(null)
+  // Saves scroll position the moment year changes, before the component may briefly
+  // unmount (rows.length === 0 while query loads), which would collapse page height
+  // and cause the browser to clamp scrollY — producing a visible jump to top.
+  const preYearChangeScrollRef = useRef<number | null>(null)
 
   const isScopedMode =
     Boolean(scopeSelection) &&
@@ -370,21 +374,36 @@ export function MonthlyFlowsAnalysisCard({
 
   useEffect(() => {
     if (activeView !== 'table') return
+
+    // Year just changed: save the current scroll position immediately, before the
+    // component potentially returns null (empty rows while query loads), which would
+    // shrink page height and cause the browser to clamp scrollY.
+    if (lastYearRef.current !== year && preYearChangeScrollRef.current === null) {
+      preYearChangeScrollRef.current = window.scrollY
+    }
+
     const nextHeight = tableContentRef.current?.scrollHeight ?? null
     if (!nextHeight || nextHeight <= 0) return
 
     if (animatedTableHeight == null) {
       setAnimatedTableHeight(nextHeight)
       lastYearRef.current = year
+      preYearChangeScrollRef.current = null
       return
     }
 
-    if (nextHeight === animatedTableHeight && lastYearRef.current === year) return
+    if (nextHeight === animatedTableHeight && lastYearRef.current === year) {
+      preYearChangeScrollRef.current = null
+      return
+    }
 
     const previousHeight = animatedTableHeight
     const isExpanding = nextHeight > previousHeight
     const animationDurationMs = 720
-    const startScrollY = window.scrollY
+    // Use the scroll position saved before the year-change unmount cycle, if available.
+    // This prevents starting the animation from a browser-clamped (near-zero) position.
+    const startScrollY = preYearChangeScrollRef.current ?? window.scrollY
+    preYearChangeScrollRef.current = null
     const cardTop = cardRootRef.current
       ? window.scrollY + cardRootRef.current.getBoundingClientRect().top
       : window.scrollY

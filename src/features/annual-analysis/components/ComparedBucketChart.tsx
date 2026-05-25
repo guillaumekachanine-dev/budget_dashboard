@@ -7,6 +7,7 @@ import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
+import blockVoyageIcon from '@/assets/icons/blocks/voyages.webp'
 import { BUCKET_COLORS, BUCKET_LABELS, PILOTAGE_BUCKET_ORDER, CHART_TOOLTIP_STYLE } from './_constants'
 import type { ComparedBucketMetric, ComparedFluxMetric } from '@/features/annual-analysis/types.compared'
 import {
@@ -42,6 +43,7 @@ const BUCKET_SHORT: Record<string, string> = {
   provision:            'Provisions',
   discretionnaire:      'Discrétion.',
   epargne:              'Épargne',
+  voyage:               'Voyage',
 }
 
 const ANALYZED_BUCKET_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
@@ -49,6 +51,7 @@ const ANALYZED_BUCKET_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
   'variable_essentielle',
   'discretionnaire',
   'provision',
+  'voyage',
 ]
 
 const ALLOCATION_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
@@ -56,6 +59,7 @@ const ALLOCATION_ORDER: Array<(typeof PILOTAGE_BUCKET_ORDER)[number]> = [
   'variable_essentielle',
   'discretionnaire',
   'provision',
+  'voyage',
 ]
 
 const ALLOCATION_COLORS: Record<string, string> = BUCKET_COLORS
@@ -66,6 +70,7 @@ const BLOCK_ICON_BY_BUCKET: Record<string, string | null> = {
   discretionnaire: blockDiscretionnaireIcon,
   provision: blockProvisionsIcon,
   epargne: blockEpargneIcon,
+  voyage: blockVoyageIcon,
 }
 
 type Props = {
@@ -273,8 +278,8 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
   }
 
   const headerLegend = [
-    { label: '2025', type: 'solid' as const },
-    { label: '2026', type: 'hatched' as const },
+    { label: '2025', pale: false },
+    { label: '2026', pale: true },
   ]
 
   const openBlockListModal = () => {
@@ -369,7 +374,7 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
             </p>
             {effectiveViewMode === 'bars' ? (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', whiteSpace: 'nowrap' }}>
-                {headerLegend.map(({ label, type }) => (
+                {headerLegend.map(({ label, pale }) => (
                   <div key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                     <span
                       aria-hidden="true"
@@ -377,10 +382,9 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                         width: 11,
                         height: 9,
                         borderRadius: 2,
-                        border: '1px solid rgba(44,58,96,0.3)',
-                        background: type === 'solid'
-                          ? COLOR_2025
-                          : 'repeating-linear-gradient(135deg, rgba(44,58,96,0.92) 0px, rgba(44,58,96,0.92) 2px, rgba(255,255,255,0.0) 2px, rgba(255,255,255,0.0) 5px)',
+                        background: pale
+                          ? 'rgba(44,58,96,0.18)'
+                          : 'rgba(44,58,96,0.92)',
                       }}
                     />
                     <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -513,21 +517,6 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                     onClick={handleChartClick}
                     style={{ cursor: 'pointer' }}
                   >
-                    <defs>
-                      {data.map((entry) => (
-                        <pattern
-                          key={`hatch-${entry.bucket}`}
-                          id={`hatch-2026-${entry.bucket}`}
-                          patternUnits="userSpaceOnUse"
-                          width="6"
-                          height="6"
-                          patternTransform="rotate(135)"
-                        >
-                          <rect width="6" height="6" fill="rgba(255,255,255,0)" />
-                          <line x1="0" y1="0" x2="0" y2="6" stroke={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'} strokeWidth="2" />
-                        </pattern>
-                      ))}
-                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
                     <XAxis
                       dataKey="bucket"
@@ -573,20 +562,13 @@ export function ComparedBucketChart({ metrics, fluxMetrics, barsOnly = false }: 
                       name="v2026"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={16}
-                      shape={(props: CappedBarShapeProps) => (
-                        <CappedBarShape
-                          {...props}
-                          maxDomain={yAxisMax}
-                          stroke={ALLOCATION_COLORS[(props.payload as ChartEntry | undefined)?.bucket ?? ''] ?? '#5B6070'}
-                          strokeWidth={1.15}
-                        />
-                      )}
+                      shape={(props: CappedBarShapeProps) => <CappedBarShape {...props} maxDomain={yAxisMax} />}
                     >
                       {data.map((entry) => (
                         <Cell
                           key={`bar-2026-${entry.bucket}`}
-                          fill={`url(#hatch-2026-${entry.bucket})`}
-                          fillOpacity={1}
+                          fill={ALLOCATION_COLORS[entry.bucket] ?? '#B0BEC5'}
+                          fillOpacity={0.2}
                         />
                       ))}
                     </Bar>
