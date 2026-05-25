@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useDeferredValue, Fragment } from 'react'
+import { useEffect, useMemo, useState, useDeferredValue, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Search, ArrowUp, Settings2, X } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -231,6 +231,48 @@ function signedPlannedAmount(item: PlannedOperationFlowItem): number {
 
   return raw
 }
+
+// ─── Module-level style constants ────────────────────────────────────────────
+// Created once at module load; each transaction row references the same object
+// instead of allocating a new one per render (avoids 300-600 allocs per redraw).
+
+/** Static style for the category icon slot in every row */
+const TX_ROW_ICON_STYLE: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+}
+
+/** Static style for the label/description slot in every row */
+const TX_ROW_LABEL_STYLE: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 400,
+  color: 'var(--neutral-700)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+/** Static base for the planned-row amount span (color set inline) */
+const TX_ROW_AMOUNT_BASE: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 400,
+  fontFamily: 'var(--font-mono)',
+  textAlign: 'right',
+  whiteSpace: 'nowrap',
+}
+
+/** Static base for date text (color set inline for joint accounts) */
+const TX_ROW_DATE_BASE: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function Flux() {
   const { user } = useAuth()
@@ -659,6 +701,118 @@ export function Flux() {
     setDraftSelectedCategoryId(null)
   }
 
+  // ─── Stable callback for opening transaction detail ──────────────────────
+  const handleOpenDetailsTxn = useCallback((transaction: Transaction) => {
+    setDetailsTxn(transaction)
+  }, [])
+
+  // ─── Memoized list JSX ───────────────────────────────────────────────────
+  // Prevents re-diffing all rows when unrelated state (modal open, filter
+  // sheet, etc.) changes while `generalMergedRows` stays the same reference.
+  const generalRowItems = useMemo(() => generalMergedRows.map((row, index) => {
+    const prevRow = index > 0 ? generalMergedRows[index - 1] : null
+    const prevKey = prevRow?.dateKey ?? null
+    const curMonth = row.dateKey.slice(0, 7)
+    const prevMonth = prevKey?.slice(0, 7) ?? null
+    const monthChanged = prevMonth !== curMonth
+    const hasSeparator = monthChanged
+
+    let monthRowsSum = 0
+    if (monthChanged) {
+      let j = index
+      while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
+        const r = generalMergedRows[j]
+        const amt = r.source === 'transaction' ? signedAmount(r.transaction) : signedPlannedAmount(r.planned)
+        monthRowsSum += amt
+        j++
+      }
+    }
+
+    const separators = monthChanged && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px var(--space-6) 3px' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          {formatMonthLabel(row.dateKey)}
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          {formatCurrencyRounded(monthRowsSum)}
+        </span>
+      </div>
+    )
+
+    if (row.source === 'transaction') {
+      const transaction = row.transaction
+      const label = getTxLabel(transaction)
+      const category = displayTxnCategoryName(transaction)
+      const amount = signedAmount(transaction)
+      const isJoint = transaction.account?.name?.toLowerCase().includes('joint') ?? false
+      const amountColor = (transaction.flow_type === 'transfer' || transaction.flow_type === 'savings')
+        ? 'var(--neutral-700)'
+        : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
+
+      return (
+        <Fragment key={row.id}>
+          {separators}
+          <button
+            type="button"
+            onClick={() => handleOpenDetailsTxn(transaction)}
+            style={{
+              width: '100%', border: 'none', background: 'transparent',
+              display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
+              alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer',
+              transition: 'background-color var(--transition-fast)',
+              padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <span style={{ ...TX_ROW_DATE_BASE, color: isJoint ? '#C9A26A' : 'var(--neutral-600)' }}>
+              {formatDateLabel(transaction.transaction_date)}
+            </span>
+            <span style={TX_ROW_ICON_STYLE}>
+              <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
+            </span>
+            <span style={TX_ROW_LABEL_STYLE}>{label}</span>
+            <span style={{ ...TX_ROW_AMOUNT_BASE, color: amountColor }}>
+              {formatRowAmount(amount, transaction.flow_type, Number(transaction.amount) || 0)}
+            </span>
+          </button>
+        </Fragment>
+      )
+    }
+
+    const planned = row.planned
+    const amount = signedPlannedAmount(planned)
+    const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
+    const amountColor = (planned.flow_type === 'transfer' || planned.flow_type === 'savings')
+      ? 'var(--neutral-700)'
+      : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
+
+    return (
+      <Fragment key={row.id}>
+        {separators}
+        <div style={{
+          width: '100%', background: 'transparent',
+          display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
+          alignItems: 'center', gap: 8,
+          padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+        }}>
+          <span style={{ ...TX_ROW_DATE_BASE, color: 'var(--neutral-600)' }}>
+            {formatDateLabel(planned.planned_date)}
+          </span>
+          <span style={TX_ROW_ICON_STYLE}>
+            <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
+          </span>
+          <span style={TX_ROW_LABEL_STYLE}>{planned.label ?? categoryName}</span>
+          <span style={{ ...TX_ROW_AMOUNT_BASE, color: amountColor }}>
+            {formatRowAmount(amount, planned.flow_type, Number(planned.planned_personal_amount) || 0)}
+          </span>
+        </div>
+      </Fragment>
+    )
+  }), [generalMergedRows, handleOpenDetailsTxn])
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <PageHeader
@@ -981,188 +1135,7 @@ export function Flux() {
           </motion.div>
         ) : (
           <div>
-            {generalMergedRows.map((row, index) => {
-              const prevRow = index > 0 ? generalMergedRows[index - 1] : null
-              const prevKey = prevRow?.dateKey ?? null
-              const curMonth = row.dateKey.slice(0, 7)
-              const prevMonth = prevKey?.slice(0, 7) ?? null
-              const monthChanged = prevMonth !== curMonth
-              const hasSeparator = monthChanged
-
-              let monthRowsSum = 0
-              if (monthChanged) {
-                let j = index
-                while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
-                  const r = generalMergedRows[j]
-                  const amt = r.source === 'transaction' ? signedAmount(r.transaction) : signedPlannedAmount(r.planned)
-                  monthRowsSum += amt
-                  j++
-                }
-              }
-
-              const separators = monthChanged && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px var(--space-6) 3px',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: 'var(--neutral-500)',
-                      letterSpacing: '0.01em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {formatMonthLabel(row.dateKey)}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: 'var(--neutral-500)',
-                      letterSpacing: '0.01em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {formatCurrencyRounded(monthRowsSum)}
-                  </span>
-                </div>
-              )
-
-              if (row.source === 'transaction') {
-                const transaction = row.transaction
-                const label = getTxLabel(transaction)
-                const category = displayTxnCategoryName(transaction)
-                const amount = signedAmount(transaction)
-                const isJoint = transaction.account?.name?.toLowerCase().includes('joint') ?? false
-
-                return (
-                  <Fragment key={row.id}>
-                    {separators}
-                    <button
-                      type="button"
-                      onClick={() => setDetailsTxn(transaction)}
-                      style={{
-                        width: '100%',
-                        border: 'none',
-                        background: 'transparent',
-                        display: 'grid',
-                        gridTemplateColumns: '42px 26px 1fr auto',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        transition: 'background-color var(--transition-fast)',
-                      }}
-                      onMouseEnter={(event) => {
-                        event.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                      }}
-                      onMouseLeave={(event) => {
-                        event.currentTarget.style.backgroundColor = 'transparent'
-                      }}
-                    >
-                      <span style={{ fontSize: 12, fontWeight: 700, color: isJoint ? '#C9A26A' : 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-                        {formatDateLabel(transaction.transaction_date)}
-                      </span>
-                      <span style={{
-                        width: 26, height: 26,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}>
-                        <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 400,
-                          color: 'var(--neutral-700)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 400,
-                          fontFamily: 'var(--font-mono)',
-                          textAlign: 'right',
-                          whiteSpace: 'nowrap',
-                          color: (transaction.flow_type === 'transfer' || transaction.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                        }}
-                      >
-                        {formatRowAmount(amount, transaction.flow_type, Number(transaction.amount) || 0)}
-                      </span>
-                    </button>
-                  </Fragment>
-                )
-              }
-
-              const planned = row.planned
-              const amount = signedPlannedAmount(planned)
-              const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
-
-              return (
-                <Fragment key={row.id}>
-                  {separators}
-                  <div
-                    style={{
-                      width: '100%',
-                      background: 'transparent',
-                      display: 'grid',
-                      gridTemplateColumns: '42px 26px 1fr auto',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
-                    }}
-                  >
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-                      {formatDateLabel(planned.planned_date)}
-                    </span>
-                    <span style={{
-                      width: 26, height: 26,
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 400,
-                        color: 'var(--neutral-700)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {planned.label ?? categoryName}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 400,
-                        fontFamily: 'var(--font-mono)',
-                        textAlign: 'right',
-                        whiteSpace: 'nowrap',
-                        color: (planned.flow_type === 'transfer' || planned.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                      }}
-                    >
-                      {formatRowAmount(amount, planned.flow_type, Number(planned.planned_personal_amount) || 0)}
-                    </span>
-                  </div>
-                </Fragment>
-              )
-            })}
+            {generalRowItems}
             {!isPlannedMode && isGeneralPlannedLoading ? (
               <div
                 style={{
