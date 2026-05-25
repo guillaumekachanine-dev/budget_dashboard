@@ -5,9 +5,9 @@ import { useSavingsAnnualPerformance } from '@/features/savings/hooks/useSavings
 import { EmptyState, SkeletonCard, StatsSection, formatEuro } from '@/features/stats/components/ui'
 import amundiEpargneIcon from '@/assets/icons/accounts/amundi_epargne.webp'
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
-import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
+import peaIcon from '@/assets/icons/accounts/boursorama_pea.webp'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
-import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.png'
+import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.webp'
 import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
 
 type SavingsFamily = 'livrets' | 'placements'

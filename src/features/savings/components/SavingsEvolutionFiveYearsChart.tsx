@@ -20,9 +20,9 @@ import type { SavingsEvolutionFiveYearsSeries, SavingsEvolutionFiveYearsRow, Sav
 import { SavingsPortfolioModal } from '@/features/savings/components/SavingsPortfolioModal'
 import amundiEpargneIcon from '@/assets/icons/accounts/amundi_epargne.webp'
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
-import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
+import peaIcon from '@/assets/icons/accounts/boursorama_pea.webp'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
-import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.png'
+import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.webp'
 import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
 
 const EURO_ROUNDED = new Intl.NumberFormat('fr-FR', {

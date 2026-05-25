@@ -5,8 +5,8 @@ import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque
 import compteJointIcon from '@/assets/icons/accounts/banque_postale_compte_joint.webp'
 import amundiIcon from '@/assets/icons/accounts/amundi_epargne.webp'
 import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
-import peaIcon from '@/assets/icons/accounts/boursorama_pea.png'
-import pegIcon from '@/assets/icons/accounts/peg_capgemini.png'
+import peaIcon from '@/assets/icons/accounts/boursorama_pea.webp'
+import pegIcon from '@/assets/icons/accounts/peg_capgemini.webp'
 
 // ─── Static account data (mechanism plugged in later) ─────────────────────────
 

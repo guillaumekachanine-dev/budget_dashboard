@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
-import fluxActuelIcon from '@/assets/icons/app/flux_actuel.png'
+import fluxActuelIcon from '@/assets/icons/app/flux_actuel.webp'
 import type {
   FlowType,
   PlannedOperationFlowItem,
@@ -19,7 +19,7 @@ import type {
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
-import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.png'
+import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.webp'
 
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, Check, Minus, TriangleAlert, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -19,10 +19,14 @@ import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesFor
 import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
-import { TrajectoireChart } from '@/features/home/components/TrajectoireChart'
+// Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
+// the Home initial bundle free of the chart library until the chart section renders.
+const TrajectoireChart = lazy(() =>
+  import('@/features/home/components/TrajectoireChart').then(m => ({ default: m.TrajectoireChart }))
+)
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
-import peaIcon from "@/assets/icons/accounts/boursorama_pea.png";
+import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
 import percolIcon from "@/assets/icons/accounts/amundi_epargne.webp";
 import cryptoIcon from "@/assets/icons/accounts/bitcoin.webp";
 
@@ -2079,7 +2083,9 @@ export function Home() {
               style={{ padding: '0 var(--space-6)' }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto' }}>
-                <TrajectoireChart />
+                <Suspense fallback={<div style={{ height: 220 }} />}>
+                  <TrajectoireChart />
+                </Suspense>
               </div>
             </motion.section>
           ) : null}

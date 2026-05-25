@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useSavingsCurrentSummary } from '@/features/savings/hooks/useSavingsCurrentSummary'
-import repartitionEpargneIcon from '@/assets/icons/app/repartition_epargne.png'
+import repartitionEpargneIcon from '@/assets/icons/app/repartition_epargne.webp'
 import {
   DataQualityNotice,
   StatsSection,
