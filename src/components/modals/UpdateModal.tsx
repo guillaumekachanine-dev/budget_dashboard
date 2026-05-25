@@ -298,7 +298,7 @@ function AccountSelectorButton({ selectedId, onSelect }: {
   )
 }
 
-function TransactionsContent({ onClose, onBack }: { onClose: () => void; onBack: () => void }) {
+function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => void }) {
   const [selectedAccount, setSelectedAccount] = useState<CheckingAccountId>('principal')
   const [files, setFiles] = useState<File[]>([])
   const [dateFrom, setDateFrom] = useState('')

@@ -803,7 +803,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                 {isSubmitting
                   ? 'En cours…'
                   : tripName
-                    ? `Planifier · ${selectedEmoji} ${tripName}`
+                    ? `Planifier · ${AMBIANCE_CONFIG[ambiance].emoji} ${tripName}`
                     : 'Planifier ce voyage'}
               </button>
             </div>

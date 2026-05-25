@@ -202,6 +202,7 @@ const HISTOGRAM_BUCKET_COLOR: Record<BudgetBucketId, string> = {
   variable_essentielle: BUCKET_COLORS.variable_essentielle,
   discretionnaire: BUCKET_COLORS.discretionnaire,
   provision: BUCKET_COLORS.provision,
+  voyage: BUCKET_COLORS.voyage,
   epargne: BUCKET_COLORS.epargne,
   hors_pilotage: BUCKET_COLORS.hors_pilotage,
 }

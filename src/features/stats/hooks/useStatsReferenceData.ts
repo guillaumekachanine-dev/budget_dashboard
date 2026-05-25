@@ -36,7 +36,7 @@ function buildEmptyBudgetSummary(): StatsReferenceSnapshot['budgetSummary'] {
     variableEssentielleBudget: 0,
     provisionBudget: 0,
     discretionnaireBudget: 0,
-    cagnotteProjetBudget: 0,
+    voyageBudget: 0,
   }
 }
 
