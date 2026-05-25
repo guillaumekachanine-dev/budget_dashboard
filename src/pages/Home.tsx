@@ -586,13 +586,14 @@ function DriftsTile({
 }
 
 // ─── Budget progress constants ────────────────────────────────────────────────
-const EXPENSE_BUCKET_IDS = ['socle_fixe', 'variable_essentielle', 'provision', 'discretionnaire'] as const
+const EXPENSE_BUCKET_IDS = ['socle_fixe', 'variable_essentielle', 'provision', 'voyage', 'discretionnaire'] as const
 type ExpenseBucketId = (typeof EXPENSE_BUCKET_IDS)[number]
 
 const EXPENSE_BUCKET_LABELS: Record<ExpenseBucketId, string> = {
   socle_fixe: 'Fixe',
   variable_essentielle: 'Variable',
   provision: 'Provision',
+  voyage: 'Voyage',
   discretionnaire: 'Discrétionnaire',
 }
 

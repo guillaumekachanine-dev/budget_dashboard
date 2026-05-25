@@ -957,6 +957,8 @@ export function Budgets() {
     if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
       setSelectedBlockPage(blockId)
     }
+    // 'voyage' : pas de block-page dédié dans ce système, VoyagesFeaturePage est accessible
+    // via la vue catégories (cliquer sur la catégorie parent Voyages)
     scrollViewportToTop()
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 

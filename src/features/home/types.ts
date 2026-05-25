@@ -3,6 +3,7 @@ export type HomeBudgetBucketId =
   | 'variable_essentielle'
   | 'discretionnaire'
   | 'provision'
+  | 'voyage'
   | 'epargne'
 
 export interface HomeBudgetBucket {
@@ -69,12 +70,14 @@ export interface HomeDailyBudgetPayload {
     variable_essential_budget_amount: number
     discretionary_budget_amount: number
     provision_budget_amount: number
+    voyage_budget_amount: number
     savings_budget_amount: number
   }
   realized: {
     revenue_amount: number
     savings_actual_amount: number
     provision_actual_amount: number
+    travel_actual_amount: number
     total_transaction_count: number
     pilotage_operation_amount: number
     consumption_expense_amount: number
