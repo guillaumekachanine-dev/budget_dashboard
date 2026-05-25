@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, LayoutGrid, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSm, LayoutGrid, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell, ReferenceLine } from 'recharts'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -14,6 +15,8 @@ import {
 } from '@/features/annual-analysis/components/_constants'
 import { useCategories } from '@/hooks/useCategories'
 import { formatCurrencyFloored, getCategoryColor } from '@/lib/utils'
+import { getTrips, getTripTransactions } from '@/features/voyages/api/getVoyagesData'
+import { QK, STALE } from '@/lib/queryKeys'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
@@ -118,6 +121,7 @@ const BLOCK_DELTA_COLORS: Record<string, string> = {
   variable_essentielle: BUCKET_COLORS.variable_essentielle,
   discretionnaire: BUCKET_COLORS.discretionnaire,
   provision: BUCKET_COLORS.provision,
+  voyage: BUCKET_COLORS.voyage,
   epargne: BUCKET_COLORS.epargne,
 }
 const BLOCK_ICON_BY_BUCKET: Record<string, string> = {
@@ -259,6 +263,30 @@ function AnnualCostProjectionCard({
   const deltaTooltipRef = useRef<HTMLDivElement | null>(null)
   const { data: categories = [] } = useCategories()
   const viewMode = controlledViewMode ?? internalViewMode
+
+  // ── Trip data for voyage rows in projection modals ──────────────────────────
+  const { data: tripsData = [] } = useQuery({
+    queryKey: [QK.VOYAGES, 2026],
+    queryFn: () => getTrips(2026),
+    staleTime: STALE.ANALYTICS,
+  })
+  const tripIds = useMemo(() => tripsData.map((t) => t.id), [tripsData])
+  const { data: tripTransactions = [] } = useQuery({
+    queryKey: [QK.VOYAGES_TRANSACTIONS, tripIds],
+    queryFn: () => getTripTransactions(tripIds),
+    enabled: tripIds.length > 0,
+    staleTime: STALE.ANALYTICS,
+  })
+  const tripTotals = useMemo<Map<string, number>>(() => {
+    const map = new Map<string, number>()
+    for (const tx of tripTransactions) {
+      map.set(tx.trip_id, (map.get(tx.trip_id) ?? 0) + Number(tx.amount))
+    }
+    return map
+  }, [tripTransactions])
+  const handleTripClick = (_tripId: string) => {
+    // Placeholder — dedicated trip detail modal to be implemented later
+  }
 
   const handleViewModeChange = (nextMode: ProjectionViewMode) => {
     if (controlledViewMode == null) setInternalViewMode(nextMode)
@@ -900,6 +928,9 @@ function AnnualCostProjectionCard({
         setProjectionListViewMode((current) => (current === 'real' ? 'budget' : 'real'))
       }}
       onClose={() => setShowListModal(false)}
+      trips={tripsData}
+      tripTotals={tripTotals}
+      onTripClick={handleTripClick}
     />
   ) : null
   const deltaBreakdownModal = openedDeltaBreakdownBlockKey
@@ -922,6 +953,9 @@ function AnnualCostProjectionCard({
         setBlockListViewMode((current) => (current === 'real' ? 'budget' : 'real'))
       }}
       onClose={() => setShowBlockListModal(false)}
+      trips={tripsData}
+      tripTotals={tripTotals}
+      onTripClick={handleTripClick}
     />
   ) : null
 
@@ -1226,6 +1260,133 @@ function DeltaBreakdownModal({
   )
 }
 
+// ── Shared trip list section for voyage rows ─────────────────────────────────
+
+function TripListSection({
+  trips,
+  tripTotals,
+  onTripClick,
+}: {
+  trips: import('@/features/voyages/types').Trip[]
+  tripTotals: Map<string, number>
+  onTripClick: (tripId: string) => void
+}) {
+  const today = new Date()
+
+  const formatDateRange = (start: string, end: string): string => {
+    const s = new Date(`${start}T00:00:00`)
+    const e = new Date(`${end}T00:00:00`)
+    const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'short' })
+    const sMonth = monthFmt.format(s)
+    const eMonth = monthFmt.format(e)
+    const sDay = s.getDate()
+    const eDay = e.getDate()
+    if (sMonth === eMonth) return `${sDay}–${eDay} ${sMonth}`
+    return `${sDay} ${sMonth} – ${eDay} ${eMonth}`
+  }
+
+  if (trips.length === 0) {
+    return (
+      <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
+        Aucun voyage enregistré pour 2026
+      </p>
+    )
+  }
+
+  return (
+    <>
+      {trips.map((trip) => {
+        const tripEnd = new Date(`${trip.end_date}T23:59:59`)
+        const tripStart = new Date(`${trip.start_date}T00:00:00`)
+        const isRealized = tripEnd < today
+        const isOngoing = tripStart <= today && today <= tripEnd
+        const actualTotal = tripTotals.get(trip.id) ?? 0
+        const hasActualData = actualTotal > 0
+
+        let statusLabel: string
+        let statusColor: string
+        if (isOngoing) {
+          statusLabel = 'En cours'
+          statusColor = 'var(--color-info)'
+        } else if (isRealized) {
+          statusLabel = 'Réalisé'
+          statusColor = 'var(--color-success)'
+        } else {
+          statusLabel = 'Prévu'
+          statusColor = 'var(--neutral-400)'
+        }
+
+        return (
+          <button
+            key={trip.id}
+            type="button"
+            onClick={() => onTripClick(trip.id)}
+            style={{
+              width: '100%',
+              padding: '9px var(--space-4) 9px var(--space-3)',
+              display: 'grid',
+              gridTemplateColumns: '26px minmax(0,1fr) auto auto',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              background: 'transparent',
+              border: 'none',
+              borderTop: '1px solid var(--neutral-150)',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            {/* Emoji */}
+            <span
+              aria-hidden="true"
+              style={{ fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              {trip.emoji ?? '✈️'}
+            </span>
+
+            {/* Name + date */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {trip.name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 500 }}>
+                  {formatDateRange(trip.start_date, trip.end_date)}
+                </span>
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: statusColor,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  background: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
+                  borderRadius: 3,
+                  padding: '1px 4px',
+                }}>
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+
+            {/* Amount */}
+            <span style={{
+              fontSize: 12,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              color: hasActualData ? 'var(--primary-700)' : 'var(--neutral-400)',
+              whiteSpace: 'nowrap',
+            }}>
+              {hasActualData ? fmtCurrency(actualTotal) : '—'}
+            </span>
+
+            {/* Chevron placeholder */}
+            <ChevronRightSm size={14} color="var(--neutral-300)" />
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
 function ProjectionListModal({
   rows,
   parentIconByName,
@@ -1233,6 +1394,9 @@ function ProjectionListModal({
   viewMode,
   onSwitchViewMode,
   onClose,
+  trips,
+  tripTotals,
+  onTripClick,
 }: {
   rows: ParentProjectionGroup[]
   parentIconByName: Map<string, string | null>
@@ -1240,6 +1404,9 @@ function ProjectionListModal({
   viewMode: ProjectionListViewMode
   onSwitchViewMode: () => void
   onClose: () => void
+  trips: import('@/features/voyages/types').Trip[]
+  tripTotals: Map<string, number>
+  onTripClick: (tripId: string) => void
 }) {
   const [expandedParentKey, setExpandedParentKey] = useState<string | null>(null)
   const isBudgetMode = viewMode === 'budget'
@@ -1388,7 +1555,13 @@ function ProjectionListModal({
                 </button>
                 {isExpanded ? (
                   <div style={{ background: 'var(--neutral-50)' }}>
-                    {visibleChildren.length === 0 ? (
+                    {row.parentKey === 'voyages' ? (
+                      <TripListSection
+                        trips={trips}
+                        tripTotals={tripTotals}
+                        onTripClick={onTripClick}
+                      />
+                    ) : visibleChildren.length === 0 ? (
                       <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
                         Aucune sous-catégorie disponible
                       </p>
@@ -1459,11 +1632,17 @@ function BlockProjectionListModal({
   viewMode,
   onSwitchViewMode,
   onClose,
+  trips,
+  tripTotals,
+  onTripClick,
 }: {
   rows: BlockProjectionListRow[]
   viewMode: ProjectionListViewMode
   onSwitchViewMode: () => void
   onClose: () => void
+  trips: import('@/features/voyages/types').Trip[]
+  tripTotals: Map<string, number>
+  onTripClick: (tripId: string) => void
 }) {
   const [expandedBlockKey, setExpandedBlockKey] = useState<string | null>(null)
   const isBudgetMode = viewMode === 'budget'
@@ -1579,7 +1758,13 @@ function BlockProjectionListModal({
                 </button>
                 {isExpanded ? (
                   <div style={{ background: 'var(--neutral-50)' }}>
-                    {row.categories.length === 0 ? (
+                    {row.blockKey === 'voyage' ? (
+                      <TripListSection
+                        trips={trips}
+                        tripTotals={tripTotals}
+                        onTripClick={onTripClick}
+                      />
+                    ) : row.categories.length === 0 ? (
                       <p style={{ margin: 0, padding: 'var(--space-3) var(--space-4)', fontSize: 12, color: 'var(--neutral-500)' }}>
                         Aucune sous-catégorie disponible
                       </p>
