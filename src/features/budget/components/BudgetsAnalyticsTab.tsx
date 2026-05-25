@@ -33,7 +33,7 @@ type ExpandableCardId = InsightId | RepartitionInsightId
 const REPARTITION_SLIDE_FRAME_HEIGHT = 438
 const SECTION_BORDER_WIDTH = '4px'
 const DEEP_YELLOW = '#D4AF37'
-const STRUCTURAL_SPEND_MONTHLY = 145
+const STRUCTURAL_SPEND_MONTHLY = 110 // Achats bébé 100 + Divers enfant 10
 const INSIGHT_2026_MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'] as const
 const INSIGHT_2026_MONTH_LABELS_FULL = [
   'Janvier',
