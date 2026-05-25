@@ -106,7 +106,7 @@ export const CATEGORY_COLOR_MAP: Record<string, string> = {
   alimentation: '#35C17B',
   divers:       '#FDAA1B',
   sorties:      '#FB5534',
-  voyages:      '#2B94FF',
+  voyages:      '#38BDF8',
   transport:    '#FA8728',
   famille:      '#D98880',
   business:     '#8B7954',

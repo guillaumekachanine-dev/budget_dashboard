@@ -46,12 +46,12 @@
 
   /* BUDGET BUCKET COLORS — source de vérité (socles/blocs) */
   --bucket-socle-fixe: #5B57F5;
-  --bucket-variable-essentielle: #4CC9F0;
+  --bucket-variable-essentielle: #F5B731;
   --bucket-discretionnaire: #FC5A5A;
   --bucket-provision: #8BC34A;
   --bucket-revenu: #2ED47A;
   --bucket-epargne: #FFAB2E;
-  --bucket-voyage: #2B94FF;
+  --bucket-voyage: #38BDF8;
   --bucket-hors-pilotage: #B0BEC5;
   --bucket-cagnotte: #4A4A62;
 
@@ -60,7 +60,7 @@
   --cat-alimentation:  #35C17B;  /* Alimentation */
   --cat-divers:        #FDAA1B;  /* Achats divers */
   --cat-sorties:       #FB5534;  /* Sorties */
-  --cat-voyages:       #2B94FF;  /* Voyages */
+  --cat-voyages:       #38BDF8;  /* Voyages */
   --cat-transport:     #FA8728;  /* Transport */
   --cat-famille:       #D98880;  /* Famille/Enfant */
   --cat-business:      #8B7954;  /* Business */

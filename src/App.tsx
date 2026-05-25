@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { QuickAddMenuModal } from '@/components/modals/QuickAddMenuModal'
-import { UpdateTransactionsModal } from '@/components/modals/UpdateTransactionsModal'
+import { UpdateModal } from '@/components/modals/UpdateModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
 
@@ -124,7 +124,7 @@ export default function App() {
         onOpenUpdate={handleOpenUpdateModal}
       />
       <AddTransactionModal open={addTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} />
-      <UpdateTransactionsModal open={updateModalOpen} onClose={() => setUpdateModalOpen(false)} />
+      <UpdateModal open={updateModalOpen} onClose={() => setUpdateModalOpen(false)} />
     </div>
   )
 }

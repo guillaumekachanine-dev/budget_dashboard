@@ -593,7 +593,7 @@ function CalcModal({
   projected: number | null
   onClose: () => void
 }) {
-  const accentColor = year === '2025' ? '#FFAB2E' : '#4CC9F0'
+  const accentColor = year === '2025' ? '#FFAB2E' : '#F5B731'
   const nbMonths = 12 - remainingMonths
 
   return (

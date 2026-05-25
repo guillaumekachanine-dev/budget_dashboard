@@ -15,6 +15,7 @@ import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
 import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
+import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 
@@ -62,9 +63,9 @@ function extractPiePayload(slice: unknown): PieDatum | null {
 }
 
 const CATEGORY_DISPLAY_ORDER = [
-  'logement', 'alimentation', 'achats divers', 'sorties', 'voyages',
-  'transport', 'famille enfant', 'business', 'abonnements', 'sante',
-  'taxes frais', 'epargne',
+  'achats divers', 'alimentation', 'voyages', 'sorties',
+  'transport', 'logement', 'famille enfant', 'business', 'sante',
+  'abonnements', 'taxes frais', 'epargne',
 ] as const
 
 function normalizeCategoryLabel(value?: string | null): string {
@@ -76,15 +77,17 @@ const BUCKET_LABELS: Record<string, string> = {
   socle_fixe: 'Fixe',
   variable_essentielle: 'Variable',
   discretionnaire: 'Discrétionnaire',
+  voyage: 'Voyages',
   provision: 'Provisions',
   epargne: 'Épargne',
 }
 
-const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'provision']
+const PILOTAGE_BUCKETS = ['socle_fixe', 'variable_essentielle', 'discretionnaire', 'voyage', 'provision']
 const SOCLE_LIST_LABELS: Record<string, string> = {
   socle_fixe: 'Fixe',
   variable_essentielle: 'Variable essentielle',
   discretionnaire: 'Discrétionnaire',
+  voyage: 'Voyages',
   provision: 'Provision',
   epargne: 'Épargne',
 }
@@ -92,6 +95,7 @@ const SOCLE_LIST_ICON_SRC: Record<string, string> = {
   socle_fixe: blockFixeIcon,
   variable_essentielle: blockVariableIcon,
   discretionnaire: blockDiscretionnaireIcon,
+  voyage: blockVoyagesIcon,
   provision: blockProvisionsIcon,
   epargne: blockEpargneIcon,
 }
@@ -99,12 +103,14 @@ const BUCKET_MODAL_ICON_SRC: Record<string, string> = {
   socle_fixe: blockFixeIcon,
   variable_essentielle: blockVariableIcon,
   discretionnaire: blockDiscretionnaireIcon,
+  voyage: blockVoyagesIcon,
   provision: blockProvisionsIcon,
 }
 const SOCLE_LIST_PROGRESS_COLORS: Record<string, string> = {
   socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
   variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
   discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  voyage: BUDGET_BUCKET_COLORS.voyage,
   provision: BUDGET_BUCKET_COLORS.provision,
   epargne: BUDGET_BUCKET_COLORS.epargne,
 }
@@ -768,15 +774,42 @@ interface CategoryDetailsSectionProps {
 
 function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRef, onShowAllEnvelopes }: CategoryDetailsSectionProps) {
   const sorted = useMemo(() => {
-    return [...rows]
-      .filter((row) => Number(row.budget_amount) > 0 || Number(row.actual_amount) > 0)
-      .sort((a, b) => {
-        const ra = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(a.parent_category_name)) ?? 999
-        const rb = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(b.parent_category_name)) ?? 999
-        if (ra !== rb) return ra - rb
-        return a.parent_category_name.localeCompare(b.parent_category_name, 'fr')
-      })
-  }, [rows])
+    const filtered = [...rows].filter((row) => Number(row.budget_amount) > 0 || Number(row.actual_amount) > 0)
+
+    // La ligne Voyages doit toujours apparaître pour permettre la navigation vers sa page dédiée
+    const hasVoyages = filtered.some((row) => normalizeCategoryLabel(row.parent_category_name) === 'voyages')
+    let rowsToSort = filtered
+    if (!hasVoyages) {
+      const voyagesCat = [...categoryById.values()].find(
+        (cat) => cat.parent_id === null && normalizeCategoryLabel(cat.name) === 'voyages',
+      )
+      if (voyagesCat) {
+        rowsToSort = [
+          ...filtered,
+          {
+            parent_category_id: voyagesCat.id,
+            parent_category_name: voyagesCat.name,
+            actual_amount: 0,
+            budget_amount: 0,
+            variance_amount: 0,
+            variance_pct: null,
+            share_actual_pct: null,
+            share_budget_pct: null,
+            avg_actual_last_6m: 0,
+            avg_budget_last_6m: 0,
+            avg_variance_pct_last_6m: null,
+          } satisfies BudgetPageParentCategoryRow,
+        ]
+      }
+    }
+
+    return rowsToSort.sort((a, b) => {
+      const ra = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(a.parent_category_name)) ?? 999
+      const rb = CATEGORY_ORDER_MAP.get(normalizeCategoryLabel(b.parent_category_name)) ?? 999
+      if (ra !== rb) return ra - rb
+      return a.parent_category_name.localeCompare(b.parent_category_name, 'fr')
+    })
+  }, [rows, categoryById])
 
   if (sorted.length === 0) return null
 
