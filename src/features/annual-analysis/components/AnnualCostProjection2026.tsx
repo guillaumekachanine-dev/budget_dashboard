@@ -1278,11 +1278,20 @@ function TripListSection({
     )
   }
 
+  const today = new Date()
+
   return (
     <>
       {trips.map((trip) => {
         const actualTotal = tripTotals.get(trip.id) ?? 0
         const hasActualData = actualTotal > 0
+        const isFuture = new Date(`${trip.start_date}T00:00:00`) > today
+
+        // Display priority: actual transactions > planned_budget > "—"
+        const displayAmount = hasActualData
+          ? actualTotal
+          : (isFuture && trip.planned_budget != null ? trip.planned_budget : null)
+        const isPlanned = !hasActualData && displayAmount != null
 
         return (
           <div
@@ -1307,11 +1316,14 @@ function TripListSection({
               fontSize: 12,
               lineHeight: 1.1,
               fontWeight: 700,
-              color: hasActualData ? 'var(--primary-700)' : 'var(--neutral-400)',
+              color: displayAmount != null
+                ? (isPlanned ? 'var(--neutral-500)' : 'var(--primary-700)')
+                : 'var(--neutral-300)',
               fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
+              fontStyle: isPlanned ? 'italic' : 'normal',
             }}>
-              {hasActualData ? fmtCurrency(actualTotal) : '—'}
+              {displayAmount != null ? fmtCurrency(displayAmount) : '—'}
             </span>
           </div>
         )

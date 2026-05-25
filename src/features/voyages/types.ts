@@ -7,6 +7,7 @@ export interface Trip {
   year: number
   emoji: string | null
   notes: string | null
+  planned_budget: number | null
   created_at: string
   updated_at: string
 }
