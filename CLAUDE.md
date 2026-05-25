@@ -13,7 +13,7 @@ Web app personnelle de suivi financier. Un seul utilisateur. Pas de features sup
 | API Claude (Anthropic) | Feature NLP text-to-SQL |
 
 ## Design System
-- **Fonts** : DM Sans (UI) + DM Mono (chiffres)
+- **Fonts** : Nunito Variable (UI + chiffres) — self-hosted via `@fontsource-variable/nunito`
 - **Primaire** : `#5B57F5` (violet/indigo)
 - **Positif** : `#2ED47A` · **Négatif** : `#FC5A5A` · **Warning** : `#FFAB2E`
 - **Radius** : `sm=8` `md=12` `lg=16` `xl=20` `2xl=24` `full=9999`

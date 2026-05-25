@@ -69,10 +69,12 @@
   --cat-taxes:         #6B6B6B;  /* Taxes / Frais */
   --cat-epargne:       #12B4A9;  /* Épargne */
 
-  /* TYPOGRAPHY — DM Sans (UI) + DM Mono (chiffres) */
-  --font-display: 'DM Sans', sans-serif;
-  --font-sans:    'DM Sans', sans-serif;
-  --font-mono:    'DM Mono', monospace;
+  /* TYPOGRAPHY — Nunito Variable (UI + chiffres) */
+  /* --font-mono conserve son token pour compatibilité ; tabular-nums global
+     assure l'alignement des chiffres sans recourir à une fonte monospace. */
+  --font-display: 'Nunito Variable', sans-serif;
+  --font-sans:    'Nunito Variable', sans-serif;
+  --font-mono:    'Nunito Variable', sans-serif;
 
   --font-size-xs:    11px;
   --font-size-sm:    12px;
@@ -197,6 +199,9 @@
     min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Nunito Variable : chiffres tabulaires globaux — remplace le comportement
+       à chasse fixe de DM Mono pour l'alignement des montants et tableaux. */
+    font-variant-numeric: tabular-nums;
   }
 
   #root {

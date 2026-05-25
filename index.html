@@ -14,23 +14,12 @@
     <title>Budget</title>
     <link rel="dns-prefetch" href="https://ssrxraibinzmpndzudrs.supabase.co" />
     <link rel="preconnect" href="https://ssrxraibinzmpndzudrs.supabase.co" crossorigin />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      Non-blocking font load: preload triggers the fetch early; onload swaps rel to stylesheet
-      once ready. The noscript fallback covers JS-disabled environments.
-      font-display=swap in the URL ensures text renders immediately in system font,
-      then swaps to DM Sans/Mono once loaded — no invisible text during load.
+      Nunito Variable — self-hosted via @fontsource-variable/nunito (bundled by Vite).
+      Preload the primary latin subset so the font is ready before first paint.
+      font-display: swap is set in the @font-face rule inside wght.css.
+      No external DNS lookup needed — eliminates the Google Fonts round-trip.
     -->
-    <link
-      rel="preload"
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700;800&display=swap"
-      as="style"
-      onload="this.onload=null;this.rel='stylesheet'"
-    />
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet" />
-    </noscript>
   </head>
   <body>
     <div id="root"></div>
