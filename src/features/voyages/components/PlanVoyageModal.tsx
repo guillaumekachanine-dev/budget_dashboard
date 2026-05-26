@@ -242,8 +242,6 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     setEndDate(editingTrip.end_date ?? '')
     setSubmitError(null)
 
-    if (isPastTrip) return
-
     let cancelled = false
     const loadPlannedOperations = async () => {
       setIsLoadingPrefill(true)
@@ -326,7 +324,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     () => voyageSubcategories.reduce((sum, sub) => sum + (sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0), 0),
     [realizedTotalsByCategory, voyageSubcategories],
   )
-  const displayedBudgetTotal = isEditMode && isPastTrip ? realizedTotal : personalImputedBudget
+  const displayedBudgetTotal = personalImputedBudget
   const categoryIconKeyById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const category of categoriesQuery.data ?? []) {
@@ -387,99 +385,97 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
           .eq('user_id', user.id)
         if (updateTripErr) throw updateTripErr
 
-        if (!isPastTrip) {
-          const oldCategoryIds = voyageSubcategoryIds
-          const { data: existingPlannedRows, error: existingPlannedErr } = oldCategoryIds.length > 0
-            ? await budgetDb
+        const oldCategoryIds = voyageSubcategoryIds
+        const { data: existingPlannedRows, error: existingPlannedErr } = oldCategoryIds.length > 0
+          ? await budgetDb
+            .from('planned_operations')
+            .select('id, category_id')
+            .eq('user_id', user.id)
+            .eq('label', editingTrip.name)
+            .gte('planned_date', editingTrip.start_date)
+            .lte('planned_date', editingTrip.end_date)
+            .in('category_id', oldCategoryIds)
+          : { data: [], error: null }
+        if (existingPlannedErr) throw existingPlannedErr
+
+        const existingRowsByCategory = new Map<string, string[]>()
+        for (const row of existingPlannedRows ?? []) {
+          const catId = typeof row.category_id === 'string' ? row.category_id : null
+          if (!catId) continue
+          const prev = existingRowsByCategory.get(catId) ?? []
+          prev.push(row.id)
+          existingRowsByCategory.set(catId, prev)
+        }
+
+        const reusedRowIds = new Set<string>()
+
+        for (const sub of nonZeroSubs) {
+          const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
+          const isJointExpense = Boolean(subJointFlags[sub.key])
+          const personalShareRatio = isJointExpense ? 0.5 : 1
+          const categoryRowIds = existingRowsByCategory.get(sub.id) ?? []
+          const rowIdToReuse = categoryRowIds.shift()
+          existingRowsByCategory.set(sub.id, categoryRowIds)
+
+          if (rowIdToReuse) {
+            reusedRowIds.add(rowIdToReuse)
+            const { error: opUpdateErr } = await budgetDb
               .from('planned_operations')
-              .select('id, category_id')
-              .eq('user_id', user.id)
-              .eq('label', editingTrip.name)
-              .gte('planned_date', editingTrip.start_date)
-              .lte('planned_date', editingTrip.end_date)
-              .in('category_id', oldCategoryIds)
-            : { data: [], error: null }
-          if (existingPlannedErr) throw existingPlannedErr
-
-          const existingRowsByCategory = new Map<string, string[]>()
-          for (const row of existingPlannedRows ?? []) {
-            const catId = typeof row.category_id === 'string' ? row.category_id : null
-            if (!catId) continue
-            const prev = existingRowsByCategory.get(catId) ?? []
-            prev.push(row.id)
-            existingRowsByCategory.set(catId, prev)
-          }
-
-          const reusedRowIds = new Set<string>()
-
-          for (const sub of nonZeroSubs) {
-            const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
-            const isJointExpense = Boolean(subJointFlags[sub.key])
-            const personalShareRatio = isJointExpense ? 0.5 : 1
-            const categoryRowIds = existingRowsByCategory.get(sub.id) ?? []
-            const rowIdToReuse = categoryRowIds.shift()
-            existingRowsByCategory.set(sub.id, categoryRowIds)
-
-            if (rowIdToReuse) {
-              reusedRowIds.add(rowIdToReuse)
-              const { error: opUpdateErr } = await budgetDb
-                .from('planned_operations')
-                .update({
-                  account_id: accountId,
-                  category_id: sub.id,
-                  label: normalizedTripName,
-                  planned_date: startDate,
-                  planned_amount: amt,
-                  personal_share_ratio: personalShareRatio,
-                  notes: normalizedTripNotes,
-                  is_joint_expense: isJointExpense,
-                  recurrence_day_of_month: null,
-                  recurrence_start_date: null,
-                  recurrence_end_date: null,
-                })
-                .eq('id', rowIdToReuse)
-                .eq('user_id', user.id)
-
-              if (opUpdateErr) throw opUpdateErr
-            } else {
-              const { error: opInsertErr } = await budgetDb.from('planned_operations').insert({
-                user_id: user.id,
+              .update({
                 account_id: accountId,
                 category_id: sub.id,
-                merchant_name: null,
                 label: normalizedTripName,
                 planned_date: startDate,
                 planned_amount: amt,
-                currency: 'EUR',
-                flow_type: 'expense',
-                status: 'planned',
-                budget_impact: 'additional_commitment',
                 personal_share_ratio: personalShareRatio,
-                matched_transaction_id: null,
                 notes: normalizedTripNotes,
                 is_joint_expense: isJointExpense,
-                is_recurring: false,
-                recurrence_frequency: 'none',
                 recurrence_day_of_month: null,
                 recurrence_start_date: null,
                 recurrence_end_date: null,
               })
-              if (opInsertErr) throw opInsertErr
-            }
-          }
-
-          const rowIdsToDelete = (existingPlannedRows ?? [])
-            .map((row) => row.id)
-            .filter((id) => !reusedRowIds.has(id))
-
-          if (rowIdsToDelete.length > 0) {
-            const { error: deleteErr } = await budgetDb
-              .from('planned_operations')
-              .delete()
-              .in('id', rowIdsToDelete)
+              .eq('id', rowIdToReuse)
               .eq('user_id', user.id)
-            if (deleteErr) throw deleteErr
+
+            if (opUpdateErr) throw opUpdateErr
+          } else {
+            const { error: opInsertErr } = await budgetDb.from('planned_operations').insert({
+              user_id: user.id,
+              account_id: accountId,
+              category_id: sub.id,
+              merchant_name: null,
+              label: normalizedTripName,
+              planned_date: startDate,
+              planned_amount: amt,
+              currency: 'EUR',
+              flow_type: 'expense',
+              status: 'planned',
+              budget_impact: 'additional_commitment',
+              personal_share_ratio: personalShareRatio,
+              matched_transaction_id: null,
+              notes: normalizedTripNotes,
+              is_joint_expense: isJointExpense,
+              is_recurring: false,
+              recurrence_frequency: 'none',
+              recurrence_day_of_month: null,
+              recurrence_start_date: null,
+              recurrence_end_date: null,
+            })
+            if (opInsertErr) throw opInsertErr
           }
+        }
+
+        const rowIdsToDelete = (existingPlannedRows ?? [])
+          .map((row) => row.id)
+          .filter((id) => !reusedRowIds.has(id))
+
+        if (rowIdsToDelete.length > 0) {
+          const { error: deleteErr } = await budgetDb
+            .from('planned_operations')
+            .delete()
+            .in('id', rowIdsToDelete)
+            .eq('user_id', user.id)
+          if (deleteErr) throw deleteErr
         }
 
         void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
@@ -1102,7 +1098,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                       textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--neutral-400)',
                     }}
                   >
-                    {isEditMode && isPastTrip ? 'Dépenses réalisées' : 'Budget prévu'}
+                    Budget prévu
                   </p>
                   <span
                     style={{
@@ -1115,156 +1111,98 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   </span>
                 </div>
 
-                {isEditMode && isPastTrip ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {voyageSubcategories.map((sub) => {
-                      const amount = sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0
-                      const txRows = sub.id
-                        ? (tripToEdit?.transactions ?? []).filter((tx) => tx.category_id === sub.id)
-                        : []
-                      const hasVal = amount > 0
-                      return (
-                        <button
-                          key={sub.key}
-                          type="button"
-                          onClick={() => setRealizedCategoryTxModal({
-                            open: true,
-                            title: sub.label,
-                            transactions: txRows.sort((a, b) => `${a.transaction_date}::${a.id}`.localeCompare(`${b.transaction_date}::${b.id}`)),
-                          })}
-                          style={{
-                            border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
-                            borderRadius: 10, padding: '6px 8px',
-                            background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 6,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {voyageSubcategories.map((sub) => {
+                    const amountInputId = `sub-amount-${sub.key}`
+                    const jointInputId = `sub-joint-${sub.key}`
+                    const val = subBudgets[sub.key] ?? ''
+                    const isSubJoint = Boolean(subJointFlags[sub.key])
+                    const hasVal = (parseFloat(val) || 0) > 0
+                    return (
+                      <div
+                        key={sub.key}
+                        style={{
+                          border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
+                          borderRadius: 10, padding: '5px 9px',
+                          background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
+                          display: 'flex', flexDirection: 'column', gap: 4,
+                          transition: 'border-color 0.15s, background 0.15s',
+                        }}
+                      >
+                        <label
+                          htmlFor={amountInputId}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'text', margin: 0 }}
                         >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                            <CategoryIcon
-                              iconKey={sub.id ? (categoryIconKeyById.get(sub.id) ?? null) : null}
-                              label={sub.label}
-                              size={16}
-                              style={{ flexShrink: 0 }}
-                            />
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {sub.label}
-                            </span>
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: hasVal ? '#7C3AED' : 'var(--neutral-400)' }}>
-                            {fmt(amount)}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {voyageSubcategories.map((sub) => {
-                      const amountInputId = `sub-amount-${sub.key}`
-                      const jointInputId = `sub-joint-${sub.key}`
-                      const val = subBudgets[sub.key] ?? ''
-                      const isSubJoint = Boolean(subJointFlags[sub.key])
-                      const hasVal = (parseFloat(val) || 0) > 0
-                      return (
-                        <div
-                          key={sub.key}
-                          style={{
-                            border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
-                            borderRadius: 10, padding: '5px 9px',
-                            background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
-                            display: 'flex', flexDirection: 'column', gap: 4,
-                            transition: 'border-color 0.15s, background 0.15s',
-                          }}
-                        >
-                          <label
-                            htmlFor={amountInputId}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'text', margin: 0 }}
-                          >
-                            <span style={{ fontSize: 14, flexShrink: 0 }}>{sub.emoji}</span>
-                            <span
-                              style={{
-                                flex: 1, fontSize: 11, fontWeight: 600, minWidth: 0,
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
-                              }}
-                            >
-                              {sub.label}
-                            </span>
-                            <input
-                              id={amountInputId}
-                              type="number"
-                              min="0"
-                              step="10"
-                              value={val}
-                              onChange={(e) => handleSubBudget(sub.key, e.target.value)}
-                              placeholder="0"
-                              style={{
-                                width: 52, border: 'none', background: 'transparent', outline: 'none',
-                                fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                                color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
-                                letterSpacing: '-0.02em', textAlign: 'right', flexShrink: 0,
-                                cursor: 'text',
-                              }}
-                            />
-                            <span
-                              style={{
-                                fontSize: 11, fontWeight: 600, flexShrink: 0,
-                                color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
-                              }}
-                            >
-                              €
-                            </span>
-                          </label>
-
-                          <label
-                            htmlFor={jointInputId}
+                          <span style={{ fontSize: 14, flexShrink: 0 }}>{sub.emoji}</span>
+                          <span
                             style={{
-                              marginTop: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 6,
-                              cursor: 'pointer',
+                              flex: 1, fontSize: 11, fontWeight: 600, minWidth: 0,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: 10.5,
-                                fontWeight: 700,
-                                textTransform: 'lowercase',
-                                color: isSubJoint ? '#6D28D9' : 'var(--neutral-400)',
-                              }}
-                            >
-                              joint
-                            </span>
-                            <input
-                              id={jointInputId}
-                              type="checkbox"
-                              checked={isSubJoint}
-                              onChange={(e) => handleSubJointFlag(sub.key, e.target.checked)}
-                              style={{ width: 13, height: 13, accentColor: '#6D28D9', cursor: 'pointer' }}
-                              aria-label={`Dépense jointe pour ${sub.label}`}
-                            />
-                          </label>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                            {sub.label}
+                          </span>
+                          <input
+                            id={amountInputId}
+                            type="number"
+                            min="0"
+                            step="10"
+                            value={val}
+                            onChange={(e) => handleSubBudget(sub.key, e.target.value)}
+                            placeholder="0"
+                            style={{
+                              width: 52, border: 'none', background: 'transparent', outline: 'none',
+                              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+                              color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
+                              letterSpacing: '-0.02em', textAlign: 'right', flexShrink: 0,
+                              cursor: 'text',
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: 11, fontWeight: 600, flexShrink: 0,
+                              color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
+                            }}
+                          >
+                            €
+                          </span>
+                        </label>
+
+                        <label
+                          htmlFor={jointInputId}
+                          style={{
+                            marginTop: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              textTransform: 'lowercase',
+                              color: isSubJoint ? '#6D28D9' : 'var(--neutral-400)',
+                            }}
+                          >
+                            joint
+                          </span>
+                          <input
+                            id={jointInputId}
+                            type="checkbox"
+                            checked={isSubJoint}
+                            onChange={(e) => handleSubJointFlag(sub.key, e.target.checked)}
+                            style={{ width: 13, height: 13, accentColor: '#6D28D9', cursor: 'pointer' }}
+                            aria-label={`Dépense jointe pour ${sub.label}`}
+                          />
+                        </label>
+                      </div>
+                    )
+                  })}
+                </div>
                 {isLoadingPrefill && !(isEditMode && isPastTrip) ? (
                   <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--neutral-500)' }}>
                     Chargement des données prévues...
@@ -1272,44 +1210,42 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                 ) : null}
               </div>
 
-              {!(isEditMode && isPastTrip) ? (
-                <div style={{ marginBottom: 12 }}>
-                  <label
-                    htmlFor="trip-global-notes"
-                    style={{
-                      margin: '0 0 7px',
-                      display: 'block',
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.07em',
-                      color: 'var(--neutral-400)',
-                    }}
-                  >
-                    Notes
-                  </label>
-                  <textarea
-                    id="trip-global-notes"
-                    value={tripNotes}
-                    onChange={(e) => setTripNotes(e.target.value)}
-                    placeholder="Ajouter une note pour ce voyage…"
-                    maxLength={500}
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      resize: 'vertical',
-                      border: '1.5px solid var(--neutral-200)',
-                      borderRadius: 10,
-                      padding: '8px 10px',
-                      fontSize: 12,
-                      color: 'var(--neutral-800)',
-                      background: 'var(--neutral-0)',
-                      boxSizing: 'border-box',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-              ) : null}
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  htmlFor="trip-global-notes"
+                  style={{
+                    margin: '0 0 7px',
+                    display: 'block',
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    color: 'var(--neutral-400)',
+                  }}
+                >
+                  Notes
+                </label>
+                <textarea
+                  id="trip-global-notes"
+                  value={tripNotes}
+                  onChange={(e) => setTripNotes(e.target.value)}
+                  placeholder="Ajouter une note pour ce voyage…"
+                  maxLength={500}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    resize: 'vertical',
+                    border: '1.5px solid var(--neutral-200)',
+                    borderRadius: 10,
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    color: 'var(--neutral-800)',
+                    background: 'var(--neutral-0)',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+              </div>
 
               {submitError && (
                 <p

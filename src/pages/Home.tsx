@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
@@ -16,8 +15,6 @@ import { getBudgetBucketColor } from '@/lib/budgetBuckets'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
-import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
 // Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
@@ -120,11 +117,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 }
 
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
-
-const MOCK_SAVINGS_MONTHLY_GOAL = 600
-const MOCK_SAVINGS_MONTHLY_SAVED = 500
-const MOCK_SAVINGS_2026_YTD = 4_240
-const MOCK_SAVINGS_2026_ANNUAL_GOAL = 7_200
 
 type SavingsTileStatus = 'validated' | 'pending' | 'alert'
 
@@ -1097,8 +1089,6 @@ export function Home() {
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
 
-  const totalBudget = summaries?.reduce((s, b) => s + b.budget_amount, 0) ?? 0
-
   const todayDate = now.toISOString().slice(0, 10)
   const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
@@ -1114,99 +1104,6 @@ export function Home() {
     endDate: monthEnd,
     flowType: 'expense',
   })
-  const { data: monthSavingsTxns } = useTransactions({
-    startDate: monthStart,
-    endDate: monthEnd,
-    flowType: 'savings',
-  })
-  const { data: homeBudgetLines } = useQuery<{
-    categoryLines: BudgetLineWithCategory[]
-    globalVariableAmount: number
-  } | null>({
-    queryKey: ['home', 'budget-lines', year, month],
-    queryFn: async () => {
-      try {
-        const budgetLines = await getBudgetLinesForPeriod({ year, month })
-        return {
-          categoryLines: budgetLines.categoryLines,
-          globalVariableAmount: Number(budgetLines.globalVariableLine?.amount ?? 0),
-        }
-      } catch {
-        return null
-      }
-    },
-    staleTime: 60_000,
-  })
-  const realToDate = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date <= todayDate)
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayDate])
-
-  const plannedFuture = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.is_recurring && t.transaction_date > todayDate)
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayDate])
-
-  const fallbackVariableBudget = useMemo(() => {
-    const rows = summaries ?? []
-    return rows
-      .filter((row) => row.category.budget_behavior === 'variable')
-      .reduce((sum, row) => sum + Number(row.budget_amount), 0)
-  }, [summaries])
-
-  const variableBudgetMonthly = useMemo(() => {
-    if (typeof homeBudgetLines?.globalVariableAmount === 'number' && Number.isFinite(homeBudgetLines.globalVariableAmount)) {
-      return homeBudgetLines.globalVariableAmount
-    }
-    return fallbackVariableBudget
-  }, [fallbackVariableBudget, homeBudgetLines?.globalVariableAmount])
-
-  const variableSpentToDate = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'variable')
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayDate])
-
-  const fixedChargesToDate = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date <= todayDate && t.budget_behavior === 'fixed')
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayDate])
-
-  const savingsContributionsToDate = useMemo(() => {
-    const rows = monthSavingsTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date <= todayDate)
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthSavingsTxns, todayDate])
-
-  const certainUpcomingExpenses = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
-    return rows
-      .filter((t) => t.transaction_date > todayDate && (t.is_recurring || t.budget_behavior === 'fixed'))
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-  }, [monthExpenseTxns, todayDate])
-
-  const resteUtile = useMemo(() => {
-    return Math.max(0, totalBudget - realToDate - plannedFuture)
-  }, [plannedFuture, realToDate, totalBudget])
-
-  const budgetParJour = useMemo(() => {
-    if (daysRemaining <= 0) return 0
-    return resteUtile / daysRemaining
-  }, [daysRemaining, resteUtile])
-
-  const previsionFinDeMois = useMemo(() => {
-    if (plannedFuture > 0) return realToDate + plannedFuture
-    if (daysElapsed <= 0) return realToDate
-    return (realToDate / daysElapsed) * daysInMonth
-  }, [daysElapsed, daysInMonth, plannedFuture, realToDate])
 
   const upcomingOpsWindows = useMemo(() => {
     const items = dailyPayload?.planned_operations?.items ?? []
@@ -1398,31 +1295,19 @@ export function Home() {
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-
-  const mainAccountResteUtile = useMemo(() => (
-    selectedBalance
-    - fixedChargesToDate
-    - variableSpentToDate
-    - savingsContributionsToDate
-    - certainUpcomingExpenses
-  ), [
-    certainUpcomingExpenses,
-    fixedChargesToDate,
-    savingsContributionsToDate,
-    selectedBalance,
-    variableSpentToDate,
-  ])
-
-  const mainAccountDailyAvailable = useMemo(() => {
-    if (daysRemaining <= 0) return mainAccountResteUtile
-    return mainAccountResteUtile / daysRemaining
-  }, [daysRemaining, mainAccountResteUtile])
   const todayDayMonthLabel = useMemo(
     () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
     [now],
   )
-  const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
-  const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
+  const resteUtileDisplay = Number(dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
+  const budgetPerDayDisplay = Number(dailyPayload?.daily_pilotage.budget_per_remaining_day ?? 0)
+  const plannedFutureDisplay = Number(dailyPayload?.planned_operations_impact.additional_commitment_amount ?? 0)
+  const previsionFinDeMoisDisplay = Number(dailyPayload?.totals.projected_end_of_month_expense_amount ?? 0)
+  const variableBudgetMonthlyDisplay = Number(dailyPayload?.totals.variable_budget_amount ?? 0)
+  const variableSpentToDateDisplay = Number(dailyPayload?.totals.variable_actual_amount ?? 0)
+  const mainAccountResteUtileDisplay = Number(dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
+  const mainAccountDailyAvailableDisplay = Number(dailyPayload?.daily_pilotage.budget_per_remaining_day ?? 0)
+  const mainAccountBalanceDisplay = Number(dailyPayload?.account.main_account_balance ?? 0)
 
   useEffect(() => {
     const controls = animate(0, resteUtileDisplay, {
@@ -1435,16 +1320,10 @@ export function Home() {
     return () => controls.stop()
   }, [resteUtileDisplay])
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
-  const expenseMonthAmountDisplay = useMemo(
-    () => (monthExpenseTxns ?? []).reduce((sum, txn) => sum + Number(txn.amount), 0),
-    [monthExpenseTxns],
-  )
+  const expenseMonthAmountDisplay = Number(dailyPayload?.totals.month_actual_total ?? 0)
   const overallConsumedPct = useMemo(() => {
-    if (!dailyPayload) return 0
-    const buckets = dailyPayload.by_bucket.filter((b) => (EXPENSE_BUCKET_IDS as readonly string[]).includes(b.budget_bucket))
-    const totalBudget = buckets.reduce((s, b) => s + Number(b.budget_amount), 0)
-    const totalActual = buckets.reduce((s, b) => s + Number(b.actual_amount), 0)
-    return totalBudget > 0 ? Math.min(100, (totalActual / totalBudget) * 100) : 0
+    const consumed = Number(dailyPayload?.totals.consumed_pct ?? 0)
+    return Math.max(0, Math.min(100, consumed))
   }, [dailyPayload])
   const heroRingSize = 332
   const heroRingStroke = 2
@@ -1454,34 +1333,26 @@ export function Home() {
   const heroRingOffset = heroRingCircumference * (1 - heroRingProgress / 100)
 
   const monthlyBlockProgress = useMemo<MonthlyBlockProgressItem[]>(() => {
-    // Map category_id → budget_bucket using dailyPayload.by_category
-    const catToBucket = new Map<string, string>()
-    for (const c of dailyPayload?.by_category ?? []) {
-      if (c.category_id && c.budget_bucket) catToBucket.set(c.category_id, c.budget_bucket)
-    }
-    // Sum monthly expense amounts by bucket
-    const bucketActuals: Record<string, number> = {}
-    for (const txn of monthExpenseTxns ?? []) {
-      if (!txn.category_id) continue
-      if (txn.transaction_date > todayDate) continue
-      const bucket = catToBucket.get(txn.category_id)
-      if (!bucket) continue
-      bucketActuals[bucket] = (bucketActuals[bucket] ?? 0) + Number(txn.amount)
-    }
     return EXPENSE_BUCKET_IDS.map((id) => {
       const monthlyBudget = Number(
         dailyPayload?.by_bucket.find((b) => b.budget_bucket === id)?.budget_amount ?? 0,
       )
-      const actual = bucketActuals[id] ?? 0
+      const actual = Number(
+        dailyPayload?.by_bucket.find((b) => b.budget_bucket === id)?.actual_amount ?? 0,
+      )
       const pct = monthlyBudget > 0 ? (actual / monthlyBudget) * 100 : 0
       return { id, label: EXPENSE_BUCKET_LABELS[id], actual, budget: monthlyBudget, pct }
     })
-  }, [monthExpenseTxns, dailyPayload, todayDate])
-  
+  }, [dailyPayload])
+
+  const savingsMonthlyGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
+  const savingsMonthlySavedDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
+  const savingsYtdDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
+  const savingsAnnualGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0) * 12
   const savingsProgressPct = useMemo(() => {
-    if (MOCK_SAVINGS_MONTHLY_GOAL <= 0) return 0
-    return Math.max(0, Math.min(100, (MOCK_SAVINGS_MONTHLY_SAVED / MOCK_SAVINGS_MONTHLY_GOAL) * 100))
-  }, [])
+    if (savingsMonthlyGoalDisplay <= 0) return 0
+    return Math.max(0, Math.min(100, (savingsMonthlySavedDisplay / savingsMonthlyGoalDisplay) * 100))
+  }, [savingsMonthlyGoalDisplay, savingsMonthlySavedDisplay])
   const savingsGoalReached = savingsProgressPct >= 100
   const savingsTileStatus: SavingsTileStatus = useMemo(() => {
     if (savingsGoalReached) return 'validated'
@@ -1493,8 +1364,8 @@ export function Home() {
     [month, year],
   )
   const savingsTileMonthAmountLabel = useMemo(
-    () => `${savingsMonthLabel} ${formatCurrencyFloored(MOCK_SAVINGS_MONTHLY_SAVED)}`,
-    [savingsMonthLabel],
+    () => `${savingsMonthLabel} ${formatCurrencyFloored(savingsMonthlySavedDisplay)}`,
+    [savingsMonthLabel, savingsMonthlySavedDisplay],
   )
   const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
   const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
@@ -1525,22 +1396,22 @@ export function Home() {
 
   const heroMetrics = useMemo(
     () => [
-      { key: 'reste', label: 'Reste utile', value: formatCurrencyFloored(resteUtile) },
-      { key: 'jour', label: 'Budget / jour', value: formatCurrencyFloored(budgetParJour) },
-      { key: 'avenir', label: 'Dépenses à venir', value: formatCurrencyFloored(plannedFuture) },
-      { key: 'fin', label: 'Fin de mois', value: formatCurrencyFloored(previsionFinDeMois) },
+      { key: 'reste', label: 'Reste utile', value: formatCurrencyFloored(resteUtileDisplay) },
+      { key: 'jour', label: 'Budget / jour', value: formatCurrencyFloored(budgetPerDayDisplay) },
+      { key: 'avenir', label: 'Dépenses à venir', value: formatCurrencyFloored(plannedFutureDisplay) },
+      { key: 'fin', label: 'Fin de mois', value: formatCurrencyFloored(previsionFinDeMoisDisplay) },
     ],
-    [budgetParJour, plannedFuture, previsionFinDeMois, resteUtile],
+    [budgetPerDayDisplay, plannedFutureDisplay, previsionFinDeMoisDisplay, resteUtileDisplay],
   )
 
   const mainCheckingHeroMetrics = useMemo(
     () => [
-      { key: 'variable-budget', label: 'Budget variable', value: formatCurrencyFloored(variableBudgetMonthly) },
-      { key: 'variable-spent', label: 'Variable consommé', value: formatCurrencyFloored(variableSpentToDate) },
-      { key: 'reste-utile-main', label: 'Reste utile', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountResteUtile) },
-      { key: 'daily-available', label: 'Disponible / jour', value: formatCurrencyFloored(variableSpentToDate > variableBudgetMonthly ? 0 : mainAccountDailyAvailable) },
+      { key: 'variable-budget', label: 'Budget variable', value: formatCurrencyFloored(variableBudgetMonthlyDisplay) },
+      { key: 'variable-spent', label: 'Variable consommé', value: formatCurrencyFloored(variableSpentToDateDisplay) },
+      { key: 'reste-utile-main', label: 'Reste utile', value: formatCurrencyFloored(mainAccountResteUtileDisplay) },
+      { key: 'daily-available', label: 'Disponible / jour', value: formatCurrencyFloored(mainAccountDailyAvailableDisplay) },
     ],
-    [mainAccountDailyAvailable, mainAccountResteUtile, variableBudgetMonthly, variableSpentToDate],
+    [mainAccountDailyAvailableDisplay, mainAccountResteUtileDisplay, variableBudgetMonthlyDisplay, variableSpentToDateDisplay],
   )
 
   const savingsBookletCeiling = useMemo(() => {
@@ -2097,7 +1968,7 @@ export function Home() {
                         }}
                       >
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)' }}>
-                          {`Solde ${formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}`}
+                          {`Solde ${formatCurrencyFloored(mainAccountBalanceDisplay)}`}
                         </span>
                       </button>
                       <button
@@ -2535,7 +2406,7 @@ export function Home() {
                   Objectif mensuel d'épargne
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(MOCK_SAVINGS_MONTHLY_GOAL)}
+                  {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
                 </p>
               </div>
 
@@ -2555,7 +2426,7 @@ export function Home() {
                   Épargné 2026 YTD
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(MOCK_SAVINGS_2026_YTD)}
+                  {formatCurrencyFloored(savingsYtdDisplay)}
                 </p>
               </div>
 
@@ -2564,7 +2435,7 @@ export function Home() {
                   Objectif annuel global
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(MOCK_SAVINGS_2026_ANNUAL_GOAL)}
+                  {formatCurrencyFloored(savingsAnnualGoalDisplay)}
                 </p>
               </div>
             </motion.div>
