@@ -127,7 +127,7 @@ async function getComparedSavingsCategoryBreakdown(): Promise<BucketCategoryBrea
 
 /**
  * Dépenses YTD par sous-catégorie pour un bloc donné (Jan-Avr 2025+2026).
- * Jointure client-side : category_budget_bucket_map → analytics_monthly_category_metrics.
+ * Jointure client-side : category_budget_bucket_map → v_monthly_category_actuals_clean.
  */
 export async function getComparedBucketCategoryBreakdown(
   bucket: string,
