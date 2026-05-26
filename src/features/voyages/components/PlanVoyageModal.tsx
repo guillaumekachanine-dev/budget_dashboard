@@ -7,7 +7,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { QK } from '@/lib/queryKeys'
-import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import type { TripTransaction, TripWithStats } from '../types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -320,18 +319,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     }
     return map
   }, [tripToEdit])
-  const realizedTotal = useMemo(
-    () => voyageSubcategories.reduce((sum, sub) => sum + (sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0), 0),
-    [realizedTotalsByCategory, voyageSubcategories],
-  )
   const displayedBudgetTotal = personalImputedBudget
-  const categoryIconKeyById = useMemo(() => {
-    const map = new Map<string, string | null>()
-    for (const category of categoriesQuery.data ?? []) {
-      map.set(category.id, category.icon_key ?? null)
-    }
-    return map
-  }, [categoriesQuery.data])
 
   function handleSubBudget(catId: string, val: string) {
     setSubBudgets((prev) => ({ ...prev, [catId]: val }))
