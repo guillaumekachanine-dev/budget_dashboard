@@ -172,6 +172,7 @@ export interface PlannedOperation {
   status: PlannedOperationStatus
   budget_impact: PlannedOperationBudgetImpact
   personal_share_ratio: number
+  is_joint_expense: boolean
   notes: string | null
   matched_transaction_id: string | null
   is_recurring: boolean
@@ -229,6 +230,7 @@ export type PlannedOperationInsert = {
   status: 'planned'
   budget_impact: PlannedOperationBudgetImpact
   personal_share_ratio: number
+  is_joint_expense?: boolean
   matched_transaction_id: null
   notes?: string | null
   is_recurring: boolean

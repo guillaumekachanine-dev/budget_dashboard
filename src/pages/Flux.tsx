@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useDeferredValue, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Search, ArrowUp, Settings2, X } from 'lucide-react'
+import { ChevronDown, Search, ArrowUp, Settings2, X, RotateCcw } from 'lucide-react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
@@ -24,6 +24,7 @@ import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.webp'
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'
 type PlannedModalityFilter = 'all' | 'done' | 'upcoming'
+type PlannedTypeFilter = 'all' | 'recurring' | 'one_time'
 type FluxTabId = 'actuel' | 'planifie'
 
 type FluxTabConfig = { id: FluxTabId; label: string; iconSrc: string }
@@ -108,6 +109,19 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'month', label: 'Mois' },
   { value: 'year_2026', label: '2026' },
   { value: 'year_2025', label: '2025' },
+  { value: 'all', label: 'Toutes' },
+]
+
+const PLANNED_TYPE_OPTIONS: Array<{ value: PlannedTypeFilter; label: string }> = [
+  { value: 'all', label: 'Toutes' },
+  { value: 'recurring', label: 'Fixes récurrentes' },
+  { value: 'one_time', label: 'Ponctuelles' },
+]
+
+const PLANNED_PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
+  { value: 'week', label: 'Semaine' },
+  { value: 'month', label: 'Mois' },
+  { value: 'year_2026', label: '2026' },
   { value: 'all', label: 'Toutes' },
 ]
 
@@ -303,6 +317,8 @@ export function Flux() {
   const [showParametersCategoryModal, setShowParametersCategoryModal] = useState(false)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
   const [plannedModalityFilter, setPlannedModalityFilter] = useState<PlannedModalityFilter>('all')
+  const [plannedTypeFilter, setPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
+  const [draftPlannedTypeFilter, setDraftPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
   const [activeTabId, setActiveTabId] = useState<FluxTabId>('actuel')
   const activeTab = FLUX_TABS.find((t) => t.id === activeTabId) ?? FLUX_TABS[0]
 
@@ -354,11 +370,27 @@ export function Flux() {
   const plannedModeStartDate = useMemo(() => {
     if (period === 'year_2025') return '2025-01-01'
     if (period === 'year_2026') return '2026-01-01'
+    if (period === 'all') return undefined
+    if (period === 'week') {
+      const now = new Date()
+      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - day)
+      return startOfIsoDay(monday)
+    }
     return startOfIsoMonth(new Date())
   }, [period])
   const plannedModeEndDate = useMemo(() => {
     if (period === 'year_2025') return '2025-12-31'
     if (period === 'year_2026') return '2026-12-31'
+    if (period === 'all') return undefined
+    if (period === 'week') {
+      const now = new Date()
+      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
+      const sunday = new Date(now)
+      sunday.setDate(now.getDate() + (6 - day))
+      return startOfIsoDay(sunday)
+    }
     return endOfIsoMonth(new Date())
   }, [period])
 
@@ -437,6 +469,9 @@ export function Flux() {
     if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
     if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
 
+    if (plannedTypeFilter === 'recurring') list = list.filter((operation) => operation.is_generated_occurrence)
+    if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_generated_occurrence)
+
     if (deferredSearch.trim()) {
       const q = deferredSearch.trim().toLowerCase()
       list = list.filter((operation) => {
@@ -446,7 +481,7 @@ export function Flux() {
     }
 
     return [...list].sort((a, b) => toDateKey(a.planned_date).localeCompare(toDateKey(b.planned_date)))
-  }, [plannedModeOperations, plannedModalityFilter, deferredSearch])
+  }, [plannedModeOperations, plannedModalityFilter, plannedTypeFilter, deferredSearch])
 
   const plannedDoneSection = useMemo(
     () => plannedOperationsForList.filter((operation) => operation.planned_status === 'done'),
@@ -641,10 +676,15 @@ export function Flux() {
   )
   const selectedPeriodHeader = useMemo(() => {
     if (isPlannedMode) {
+      const hasRange = Boolean(plannedModeStartDate && plannedModeEndDate)
+      const startLabel = hasRange ? formatDateLabel(plannedModeStartDate as string) : 'Toutes périodes'
+      const endLabel = hasRange ? formatDateLabel(plannedModeEndDate as string) : 'Toutes périodes'
       return {
-        startLabel: formatDateLabel(plannedModeStartDate),
-        endLabel: formatDateLabel(plannedModeEndDate),
-        text: `Du ${formatDateLabel(plannedModeStartDate)} au ${formatDateLabel(plannedModeEndDate)}`,
+        startLabel,
+        endLabel,
+        text: hasRange
+          ? `Du ${startLabel} au ${endLabel}`
+          : 'Toutes périodes',
       }
     }
 
@@ -669,6 +709,7 @@ export function Flux() {
     setAccountFilter(draftAccountFilter)
     setSelectedParentCategoryId(draftSelectedParentCategoryId)
     setSelectedCategoryId(draftSelectedCategoryId)
+    setPlannedTypeFilter(draftPlannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
@@ -679,6 +720,7 @@ export function Flux() {
     setDraftAccountFilter(accountFilter)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
+    setDraftPlannedTypeFilter(plannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
@@ -689,6 +731,7 @@ export function Flux() {
     setDraftAccountFilter(accountFilter)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
+    setDraftPlannedTypeFilter(plannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(true)
   }
@@ -699,6 +742,7 @@ export function Flux() {
     setDraftAccountFilter('all')
     setDraftSelectedParentCategoryId(null)
     setDraftSelectedCategoryId(null)
+    setDraftPlannedTypeFilter('all')
   }
 
   // ─── Stable callback for opening transaction detail ──────────────────────
@@ -1288,7 +1332,33 @@ export function Flux() {
                 gap: 'var(--space-3)',
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)', textAlign: 'center' }}>Paramètres</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Paramètres</p>
+                <button
+                  type="button"
+                  onClick={resetDraftParametersToDefaults}
+                  aria-label="Réinitialiser les paramètres"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-500)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'background 130ms, color 130ms',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-200)'; e.currentTarget.style.color = 'var(--neutral-700)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--neutral-100)'; e.currentTarget.style.color = 'var(--neutral-500)' }}
+                >
+                  <RotateCcw size={13} strokeWidth={2.4} />
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -1323,45 +1393,75 @@ export function Flux() {
 
               <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Type d’opération</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Type d'opérations</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                  {FLOW_OPTIONS.map((option) => {
-                    const isSelected = draftFlow === option.value
-                    const isOverridingDefault = isSelected && option.value !== 'all'
-                    return (
-                      <button
-                        key={`type-${option.value}`}
-                        type="button"
-                        onClick={() => setDraftFlow(option.value)}
-                        style={{
-                          padding: '7px 4px',
-                          border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
-                          borderRadius: 'var(--radius-sm)',
-                          background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
-                          color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
-                          fontSize: 11,
-                          fontWeight: isSelected ? 700 : 500,
-                          cursor: 'pointer',
-                          transition: 'all var(--transition-base)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    )
-                  })}
-                </div>
+                {isPlannedMode ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                    {PLANNED_TYPE_OPTIONS.map((option) => {
+                      const isSelected = draftPlannedTypeFilter === option.value
+                      const isOverridingDefault = isSelected && option.value !== 'all'
+                      return (
+                        <button
+                          key={`planned-type-${option.value}`}
+                          type="button"
+                          onClick={() => setDraftPlannedTypeFilter(option.value)}
+                          style={{
+                            padding: '7px 4px',
+                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                            fontSize: 11,
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-base)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                    {FLOW_OPTIONS.map((option) => {
+                      const isSelected = draftFlow === option.value
+                      const isOverridingDefault = isSelected && option.value !== 'all'
+                      return (
+                        <button
+                          key={`type-${option.value}`}
+                          type="button"
+                          onClick={() => setDraftFlow(option.value)}
+                          style={{
+                            padding: '7px 4px',
+                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                            fontSize: 11,
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-base)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Période</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                  {PERIOD_OPTIONS.map((option) => {
+                  {(isPlannedMode ? PLANNED_PERIOD_OPTIONS : PERIOD_OPTIONS).map((option) => {
                     const isSelected = draftPeriod === option.value
-                    const isOverridingDefault = isSelected && option.value !== 'month'
+                    const isOverridingDefault = isSelected && option.value !== (isPlannedMode ? 'month' : 'month')
                     return (
                       <button
                         key={`period-${option.value}`}
@@ -1455,28 +1555,7 @@ export function Flux() {
                 >
                   Annuler
                 </button>
-                <button
-                  type="button"
-                  onClick={resetDraftParametersToDefaults}
-                  style={{
-                    border: '1px solid var(--neutral-300)',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-800)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    width: '100%',
-                    height: 36,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  réinitialiser
-                </button>
+                <div />
                 <button
                   type="button"
                   onClick={applyParameters}

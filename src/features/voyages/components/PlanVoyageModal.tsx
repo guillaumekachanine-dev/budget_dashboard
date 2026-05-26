@@ -93,6 +93,7 @@ interface Props {
 }
 
 type SubBudgets = Record<string, string>
+type SubJointFlags = Record<string, boolean>
 
 function resolveAmbianceFromEmoji(emoji: string | null | undefined): Ambiance {
   if (emoji === AMBIANCE_CONFIG.sunset.emoji) return 'sunset'
@@ -138,9 +139,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [subBudgets, setSubBudgets] = useState<SubBudgets>({})
-  const [subNotes, setSubNotes] = useState<Record<string, string>>({})
-  const [isJoint, setIsJoint] = useState(false)
-  const [shareRatio, setShareRatio] = useState(50)
+  const [subJointFlags, setSubJointFlags] = useState<SubJointFlags>({})
+  const [tripNotes, setTripNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isLoadingPrefill, setIsLoadingPrefill] = useState(false)
@@ -243,14 +243,13 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
         if (categoryIds.length === 0) {
           if (cancelled) return
           setSubBudgets({})
-          setSubNotes({})
-          setIsJoint(false)
-          setShareRatio(100)
+          setSubJointFlags({})
+          setTripNotes('')
           return
         }
         const { data, error } = await budgetDb
           .from('planned_operations')
-          .select('category_id, planned_amount, notes, account_id, personal_share_ratio')
+          .select('category_id, planned_amount, notes, personal_share_ratio, is_joint_expense')
           .eq('user_id', user.id)
           .eq('label', editingTrip.name)
           .gte('planned_date', editingTrip.start_date)
@@ -261,9 +260,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
         if (cancelled) return
 
         const nextBudgets: SubBudgets = {}
-        const nextNotes: Record<string, string> = {}
-        let accountIdForTrip: string | null = null
-        let ratioForTrip: number | null = null
+        const nextJointFlags: SubJointFlags = {}
+        let nextTripNotes: string | null = null
 
         for (const row of data ?? []) {
           const catId = String(row.category_id ?? '')
@@ -272,24 +270,20 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
           if (!matchedSub) continue
           const amount = Number(row.planned_amount ?? 0)
           nextBudgets[matchedSub.key] = String((Number(nextBudgets[matchedSub.key] ?? '0') || 0) + amount)
-          if (typeof row.notes === 'string' && row.notes.trim()) nextNotes[matchedSub.key] = row.notes
-          if (!accountIdForTrip && row.account_id) accountIdForTrip = row.account_id
-          if (ratioForTrip == null && typeof row.personal_share_ratio === 'number') ratioForTrip = row.personal_share_ratio
+          if (Boolean(row.is_joint_expense) || Number(row.personal_share_ratio ?? 1) < 1) {
+            nextJointFlags[matchedSub.key] = true
+          }
+          if (nextTripNotes == null && typeof row.notes === 'string' && row.notes.trim()) nextTripNotes = row.notes.trim()
         }
 
         setSubBudgets(nextBudgets)
-        setSubNotes(nextNotes)
-        if (jointAccountId && accountIdForTrip === jointAccountId) {
-          setIsJoint(true)
-          setShareRatio(Math.round((ratioForTrip ?? 0.5) * 100))
-        } else {
-          setIsJoint(false)
-          setShareRatio(100)
-        }
+        setSubJointFlags(nextJointFlags)
+        setTripNotes(nextTripNotes ?? '')
       } catch {
         if (cancelled) return
         setSubBudgets({})
-        setSubNotes({})
+        setSubJointFlags({})
+        setTripNotes('')
       } finally {
         if (!cancelled) setIsLoadingPrefill(false)
       }
@@ -299,16 +293,16 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     return () => {
       cancelled = true
     }
-  }, [editingTrip, isEditMode, isPastTrip, jointAccountId, open, user?.id, voyageSubcategoryById, voyageSubcategoryIds])
+  }, [editingTrip, isEditMode, isPastTrip, open, user?.id, voyageSubcategoryById, voyageSubcategoryIds])
 
   const duration = useMemo(() => dateDiffDays(startDate, endDate), [startDate, endDate])
-  const totalBudget = useMemo(
-    () =>
-      voyageSubcategories.reduce(
-        (sum, sub) => sum + (parseFloat(subBudgets[sub.key] ?? '0') || 0),
-        0,
-      ),
-    [subBudgets, voyageSubcategories],
+  const personalImputedBudget = useMemo(
+    () => voyageSubcategories.reduce((sum, sub) => {
+      const amount = parseFloat(subBudgets[sub.key] ?? '0') || 0
+      const ratio = subJointFlags[sub.key] ? 0.5 : 1
+      return sum + amount * ratio
+    }, 0),
+    [subBudgets, subJointFlags, voyageSubcategories],
   )
   const realizedTotalsByCategory = useMemo(() => {
     if (!tripToEdit) return new Map<string, number>()
@@ -323,7 +317,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     () => voyageSubcategories.reduce((sum, sub) => sum + (sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0), 0),
     [realizedTotalsByCategory, voyageSubcategories],
   )
-  const displayedBudgetTotal = isEditMode && isPastTrip ? realizedTotal : totalBudget
+  const displayedBudgetTotal = isEditMode && isPastTrip ? realizedTotal : personalImputedBudget
   const categoryIconKeyById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const category of categoriesQuery.data ?? []) {
@@ -336,8 +330,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     setSubBudgets((prev) => ({ ...prev, [catId]: val }))
   }
 
-  function handleSubNote(catId: string, val: string) {
-    setSubNotes((prev) => ({ ...prev, [catId]: val }))
+  function handleSubJointFlag(catId: string, next: boolean) {
+    setSubJointFlags((prev) => ({ ...prev, [catId]: next }))
   }
 
   async function handleSubmit() {
@@ -345,22 +339,24 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const accountId = isJoint
-        ? (jointAccountId ?? personalAccountId)
-        : (personalAccountId ?? jointAccountId)
+      const accountId = personalAccountId ?? jointAccountId
       if (!accountId) {
         throw new Error('Aucun compte disponible pour enregistrer ce voyage.')
       }
-      const personalShareRatio = isJoint ? shareRatio / 100 : 1
       const normalizedTripName = tripName.trim()
       const normalizedDestination = destination.trim() || null
+      const normalizedTripNotes = tripNotes.trim() || null
       const resolvedEndDate = endDate || startDate
       const nonZeroSubs = voyageSubcategories.filter(
         (sub): sub is (typeof voyageSubcategories)[number] & { id: string } =>
           Boolean(sub.id) && (parseFloat(subBudgets[sub.key] ?? '0') || 0) > 0,
       )
       const computedPlannedBudget = nonZeroSubs.reduce(
-        (sum, sub) => sum + (parseFloat(subBudgets[sub.key] ?? '0') || 0),
+        (sum, sub) => {
+          const amount = parseFloat(subBudgets[sub.key] ?? '0') || 0
+          const ratio = subJointFlags[sub.key] ? 0.5 : 1
+          return sum + amount * ratio
+        },
         0,
       )
       const nextPlannedBudget = isEditMode && isPastTrip
@@ -413,8 +409,9 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                 label: normalizedTripName,
                 planned_date: startDate,
                 planned_amount: 0,
-                personal_share_ratio: personalShareRatio,
-                notes: normalizedDestination,
+                personal_share_ratio: 1,
+                notes: normalizedTripNotes,
+                is_joint_expense: false,
                 recurrence_day_of_month: null,
                 recurrence_start_date: null,
                 recurrence_end_date: null,
@@ -427,6 +424,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
 
           for (const sub of nonZeroSubs) {
             const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
+            const isJointExpense = Boolean(subJointFlags[sub.key])
+            const personalShareRatio = isJointExpense ? 0.5 : 1
             const categoryRowIds = existingRowsByCategory.get(sub.id) ?? []
             const rowIdToReuse = categoryRowIds.shift()
             existingRowsByCategory.set(sub.id, categoryRowIds)
@@ -441,7 +440,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   planned_date: startDate,
                   planned_amount: amt,
                   personal_share_ratio: personalShareRatio,
-                  notes: subNotes[sub.key]?.trim() || normalizedDestination,
+                  notes: normalizedTripNotes,
+                  is_joint_expense: isJointExpense,
                   recurrence_day_of_month: null,
                   recurrence_start_date: null,
                   recurrence_end_date: null,
@@ -465,7 +465,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                 budget_impact: 'additional_commitment',
                 personal_share_ratio: personalShareRatio,
                 matched_transaction_id: null,
-                notes: subNotes[sub.key]?.trim() || normalizedDestination,
+                notes: normalizedTripNotes,
+                is_joint_expense: isJointExpense,
                 is_recurring: false,
                 recurrence_frequency: 'none',
                 recurrence_day_of_month: null,
@@ -499,6 +500,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
 
       for (const sub of nonZeroSubs) {
         const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
+        const isJointExpense = Boolean(subJointFlags[sub.key])
+        const personalShareRatio = isJointExpense ? 0.5 : 1
         const { error: opErr } = await budgetDb.from('planned_operations').insert({
           user_id: user.id,
           account_id: accountId,
@@ -513,7 +516,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
           budget_impact: 'additional_commitment',
           personal_share_ratio: personalShareRatio,
           matched_transaction_id: null,
-          notes: subNotes[sub.key]?.trim() || normalizedDestination,
+          notes: normalizedTripNotes,
+          is_joint_expense: isJointExpense,
           is_recurring: false,
           recurrence_frequency: 'none',
           recurrence_day_of_month: null,
@@ -543,9 +547,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     setStartDate('')
     setEndDate('')
     setSubBudgets({})
-    setSubNotes({})
-    setIsJoint(false)
-    setShareRatio(50)
+    setSubJointFlags({})
+    setTripNotes('')
     setSubmitError(null)
     setIsLoadingPrefill(false)
     setRealizedCategoryTxModal({ open: false, title: '', transactions: [] })
@@ -1028,8 +1031,9 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {voyageSubcategories.map((sub) => {
                       const amountInputId = `sub-amount-${sub.key}`
+                      const jointInputId = `sub-joint-${sub.key}`
                       const val = subBudgets[sub.key] ?? ''
-                      const note = subNotes[sub.key] ?? ''
+                      const isSubJoint = Boolean(subJointFlags[sub.key])
                       const hasVal = (parseFloat(val) || 0) > 0
                       return (
                         <div
@@ -1082,21 +1086,36 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                             </span>
                           </label>
 
-                          <input
-                            type="text"
-                            value={note}
-                            onChange={(e) => handleSubNote(sub.key, e.target.value)}
-                            placeholder="note…"
-                            maxLength={120}
+                          <label
+                            htmlFor={jointInputId}
                             style={{
-                              width: '100%', border: 'none', outline: 'none',
-                              borderBottom: `1px solid ${note ? 'color-mix(in oklab, #7C3AED 22%, white)' : 'var(--neutral-150)'}`,
-                              background: 'transparent', fontSize: 10.5, fontWeight: 500,
-                              color: note ? '#5B21B6' : 'var(--neutral-400)',
-                              padding: '2px 0', boxSizing: 'border-box',
-                              transition: 'border-color 0.15s, color 0.15s',
+                              marginTop: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: 6,
+                              cursor: 'pointer',
                             }}
-                          />
+                          >
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                textTransform: 'lowercase',
+                                color: isSubJoint ? '#6D28D9' : 'var(--neutral-400)',
+                              }}
+                            >
+                              joint
+                            </span>
+                            <input
+                              id={jointInputId}
+                              type="checkbox"
+                              checked={isSubJoint}
+                              onChange={(e) => handleSubJointFlag(sub.key, e.target.checked)}
+                              style={{ width: 13, height: 13, accentColor: '#6D28D9', cursor: 'pointer' }}
+                              aria-label={`Dépense jointe pour ${sub.label}`}
+                            />
+                          </label>
                         </div>
                       )
                     })}
@@ -1109,86 +1128,43 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                 ) : null}
               </div>
 
-              {/* Account */}
               {!(isEditMode && isPastTrip) ? (
-              <div style={{ marginBottom: 12 }}>
-                <p
-                  style={{
-                    margin: '0 0 10px', fontSize: 10.5, fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--neutral-400)',
-                  }}
-                >
-                  Compte
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {[
-                    { joint: false, label: 'Personnel', emoji: '👤' },
-                    { joint: true, label: 'Partagé', emoji: '👥' },
-                  ].map(({ joint, label, emoji: btnEmoji }) => (
-                    <button
-                      key={String(joint)}
-                      type="button"
-                      onClick={() => setIsJoint(joint)}
-                      style={{
-                        border: '1.5px solid',
-                        borderColor: isJoint === joint
-                          ? 'color-mix(in oklab, #7C3AED 42%, white)'
-                          : 'var(--neutral-200)',
-                        background: isJoint === joint
-                          ? 'color-mix(in oklab, #7C3AED 8%, white)'
-                          : 'var(--neutral-0)',
-                        borderRadius: 10, padding: '9px 12px',
-                        fontSize: 13, fontWeight: 600,
-                        color: isJoint === joint ? '#5B21B6' : 'var(--neutral-500)',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', gap: 6, transition: 'all 0.15s',
-                      }}
-                    >
-                      <span>{btnEmoji}</span> {label}
-                    </button>
-                  ))}
+                <div style={{ marginBottom: 12 }}>
+                  <label
+                    htmlFor="trip-global-notes"
+                    style={{
+                      margin: '0 0 7px',
+                      display: 'block',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      color: 'var(--neutral-400)',
+                    }}
+                  >
+                    Notes
+                  </label>
+                  <textarea
+                    id="trip-global-notes"
+                    value={tripNotes}
+                    onChange={(e) => setTripNotes(e.target.value)}
+                    placeholder="Ajouter une note pour ce voyage…"
+                    maxLength={500}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      resize: 'vertical',
+                      border: '1.5px solid var(--neutral-200)',
+                      borderRadius: 10,
+                      padding: '8px 10px',
+                      fontSize: 12,
+                      color: 'var(--neutral-800)',
+                      background: 'var(--neutral-0)',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
                 </div>
-
-                <AnimatePresence>
-                  {isJoint && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.18 }}
-                      style={{ marginTop: 10, overflow: 'hidden' }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          marginBottom: 5,
-                        }}
-                      >
-                        <label style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 500 }}>
-                          Ma part
-                        </label>
-                        <span
-                          style={{
-                            fontSize: 13, fontWeight: 700, color: '#7C3AED',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {shareRatio}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={shareRatio}
-                        onChange={(e) => setShareRatio(parseInt(e.target.value))}
-                        style={{ width: '100%', accentColor: '#7C3AED' }}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
               ) : null}
 
               {submitError && (
