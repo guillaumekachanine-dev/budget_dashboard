@@ -11,6 +11,7 @@ import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useTripsForMonth } from '@/features/budget/hooks/useTripsForMonth'
 import type { Category, Transaction } from '@/lib/types'
+import type { Trip } from '@/features/voyages/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow, BudgetPageCategoryRow } from '../types'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
 import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
@@ -518,12 +519,24 @@ function SubModal({
 interface AllEnvelopesModalProps {
   open: boolean
   onClose: () => void
+  displayMonthLabel: string
   parentCategoryRows: BudgetPageParentCategoryRow[]
   subCategoryRows: BudgetPageCategoryRow[]
   categoryById: Map<string, Category>
+  tripsForMonth: Trip[]
+  onTripClick?: (tripId: string) => void
 }
 
-function AllEnvelopesModal({ open, onClose, parentCategoryRows, subCategoryRows, categoryById }: AllEnvelopesModalProps) {
+function AllEnvelopesModal({
+  open,
+  onClose,
+  displayMonthLabel,
+  parentCategoryRows,
+  subCategoryRows,
+  categoryById,
+  tripsForMonth,
+  onTripClick,
+}: AllEnvelopesModalProps) {
   const [expandedParentId, setExpandedParentId] = useState<string | null>(null)
 
   const sortedParents = useMemo(() => {
@@ -616,7 +629,7 @@ function AllEnvelopesModal({ open, onClose, parentCategoryRows, subCategoryRows,
                     letterSpacing: '-0.01em',
                   }}
                 >
-                  Toutes les enveloppes
+                  {`Toutes les enveloppes - ${displayMonthLabel}`}
                 </h2>
                 <button
                   type="button"
@@ -645,6 +658,7 @@ function AllEnvelopesModal({ open, onClose, parentCategoryRows, subCategoryRows,
                   const isExpanded = expandedParentId === parent.parent_category_id
                   const cat = categoryById.get(parent.parent_category_id)
                   const normalizedName = normalizeCategoryLabel(parent.parent_category_name)
+                  const isVoyagesParent = normalizedName === 'voyages'
                   const iconKey = normalizedName === 'epargne' ? 'epargne' : (cat?.icon_key ?? null)
                   const subs = subsByParentId.get(parent.parent_category_id) ?? []
 
@@ -698,7 +712,84 @@ function AllEnvelopesModal({ open, onClose, parentCategoryRows, subCategoryRows,
                       </button>
 
                       {/* Sub-categories */}
-                      {isExpanded && subs.length > 0 && (
+                      {isExpanded && isVoyagesParent && (
+                        <div style={{ background: 'var(--neutral-50)' }}>
+                          {tripsForMonth.length === 0 ? (
+                            <div
+                              style={{
+                                padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
+                                display: 'grid',
+                                gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                alignItems: 'center',
+                                gap: 'var(--space-2)',
+                                borderTop: '1px solid var(--neutral-150)',
+                              }}
+                            >
+                              <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
+                              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                aucun voyage ce mois-ci
+                              </span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                -
+                              </span>
+                            </div>
+                          ) : (
+                            tripsForMonth.map((trip) => (
+                              <button
+                                key={trip.id}
+                                type="button"
+                                onClick={() => onTripClick?.(trip.id)}
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
+                                  display: 'grid',
+                                  gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                  alignItems: 'center',
+                                  gap: 'var(--space-2)',
+                                  borderTop: '1px solid var(--neutral-150)',
+                                  background: 'transparent',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-0)' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                                aria-label={`Ouvrir le voyage ${trip.name}`}
+                              >
+                                <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
+                                  {trip.emoji ?? '✈'}
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    color: 'var(--neutral-600)',
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {trip.name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: 'var(--primary-400)',
+                                    fontFamily: 'var(--font-mono)',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {formatCurrencyFloored(Number(trip.planned_budget ?? 0))}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {isExpanded && !isVoyagesParent && subs.length > 0 && (
                         <div style={{ background: 'var(--neutral-50)' }}>
                           {subs.map((sub) => {
                             const subCat = categoryById.get(sub.category_id)
@@ -1020,6 +1111,13 @@ export function EnveloppesTab({
   const voyageTripsBudget = useMemo(
     () => tripsForMonth.reduce((sum, t) => sum + (t.planned_budget ?? 0), 0),
     [tripsForMonth],
+  )
+  const voyagesRootCategoryId = useMemo(
+    () =>
+      categories.find(
+        (category) => category.parent_id === null && normalizeCategoryLabel(category.name) === 'voyages',
+      )?.id ?? null,
+    [categories],
   )
 
   const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
@@ -2088,9 +2186,18 @@ export function EnveloppesTab({
       <AllEnvelopesModal
         open={showAllEnvelopes}
         onClose={() => setShowAllEnvelopes(false)}
+        displayMonthLabel={monthLabel}
         parentCategoryRows={parentCategoryRowsWithoutSavings}
         subCategoryRows={payloadByCategory}
         categoryById={categoryById}
+        tripsForMonth={tripsForMonth}
+        onTripClick={(tripId) => {
+          void tripId
+          setShowAllEnvelopes(false)
+          if (voyagesRootCategoryId) {
+            onCategoryClick?.(voyagesRootCategoryId)
+          }
+        }}
       />
 
       <SubModal

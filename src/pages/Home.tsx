@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -15,7 +15,6 @@ import {
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
 import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import type { BudgetLineWithCategory } from '@/features/budget/types'
@@ -59,7 +58,11 @@ const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
   { id: 'compte_crypto', label: 'Compte crypto', iconSrc: cryptoIcon, keywords: ['crypto', 'bitcoin'], missing: true },
 ]
 
-const VISIBLE_ACCOUNT_PRESET_IDS = new Set(['compte_principal', 'compte_joint'])
+const HOME_SWIPE_PILLS = [
+  { id: 'compte_principal', label: 'Compte courant' },
+  { id: 'budget_voyage', label: 'Budget voyage' },
+] as const
+const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 
 function mapPresetIdToDisplayed(presetId: string): string {
   if (presetId === 'per') {
@@ -119,7 +122,7 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 
 const MOCK_SAVINGS_MONTHLY_GOAL = 600
-const MOCK_SAVINGS_MONTHLY_SAVED = 0
+const MOCK_SAVINGS_MONTHLY_SAVED = 500
 const MOCK_SAVINGS_2026_YTD = 4_240
 const MOCK_SAVINGS_2026_ANNUAL_GOAL = 7_200
 
@@ -565,6 +568,7 @@ function PlannedWindowTile({
   operationsCount: number
   totalAmount: number
 }) {
+  const isJ7 = label === 'J+7'
   const contentLabel =
     operationsCount <= 0
       ? 'aucune opération'
@@ -580,47 +584,52 @@ function PlannedWindowTile({
       }
       style={{
         width: '100%',
-        minHeight: 56,
-        border: '1px solid rgba(131, 126, 245, 0.34)',
-        background:
-          'radial-gradient(120% 88% at 14% -8%, rgba(177,170,255,0.38) 0%, rgba(177,170,255,0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(120,113,245,0.28) 0%, rgba(120,113,245,0) 62%), linear-gradient(146deg, #EEF0FF 0%, #F8F8FF 100%)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
-        padding: 'var(--space-2) var(--space-3)',
-        display: 'grid',
-        gridTemplateRows: 'auto 1fr',
+        minHeight: 52,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--space-3)',
       }}
     >
-      <p
+      <span
+        aria-hidden="true"
         style={{
-          margin: 0,
-          fontSize: 16,
-          fontWeight: 800,
-          color: 'var(--primary-700)',
-          justifySelf: 'start',
-          alignSelf: 'start',
-          letterSpacing: '0.04em',
-          fontFamily: 'var(--font-mono)',
+          width: 12,
+          height: 12,
+          borderRadius: 'var(--radius-full)',
+          background: isJ7 ? '#FFAB2E' : '#94A3B8',
+          boxShadow: isJ7 ? '0 0 0 4px rgba(255,171,46,0.2)' : 'none',
+          marginLeft: -22,
+          flexShrink: 0,
         }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          margin: 0,
-          fontSize: 13,
-          fontWeight: 800,
-          color: 'var(--neutral-900)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          justifySelf: 'center',
-          alignSelf: 'center',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        {contentLabel}
-      </p>
+      />
+      <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 17,
+            fontWeight: 800,
+            color: isJ7 ? '#0F172A' : '#94A3B8',
+            letterSpacing: '0.03em',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {label}
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 13,
+            fontWeight: isJ7 ? 800 : 600,
+            color: isJ7 ? '#0F172A' : '#94A3B8',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {contentLabel}
+        </p>
+      </div>
     </div>
   )
 }
@@ -852,9 +861,11 @@ function BudgetProgressModal({
 
 function SavingsTile({
   status,
+  monthAmountLabel,
   onClick,
 }: {
   status: SavingsTileStatus
+  monthAmountLabel: string
   onClick: () => void
 }) {
   return (
@@ -866,10 +877,10 @@ function SavingsTile({
         position: 'relative',
         width: '100%',
         minHeight: 60,
-        border: '1px solid rgba(124, 211, 224, 0.4)',
-        background: 'radial-gradient(120% 90% at 14% -8%, rgba(148,231,244,0.5) 0%, rgba(148,231,244,0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(70,170,188,0.42) 0%, rgba(70,170,188,0) 62%), linear-gradient(144deg, #0B3F4A 0%, #0F5461 46%, #166C7A 100%)',
+        border: 'none',
+        background: 'rgba(255,255,255,0.82)',
         borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
+        boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
         cursor: 'pointer',
         overflow: 'hidden',
         display: 'flex',
@@ -887,20 +898,35 @@ function SavingsTile({
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 10,
-          fontWeight: 800,
-          color: 'rgba(232,250,255,0.9)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.09em',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        Épargne
-      </p>
+      <div style={{ display: 'grid', gap: 2, textAlign: 'left' }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'var(--neutral-800)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          Épargne
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--neutral-700)',
+            fontFamily: 'var(--font-mono)',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          {monthAmountLabel}
+        </p>
+      </div>
 
       <span
         style={{
@@ -912,7 +938,7 @@ function SavingsTile({
           <Check size={30} color="var(--color-success)" strokeWidth={3} />
         ) : null}
         {status === 'pending' || status === 'alert' ? (
-          <X size={30} color={status === 'pending' ? 'rgba(232,250,255,0.9)' : 'var(--color-error)'} strokeWidth={3} />
+          <X size={30} color={status === 'pending' ? 'var(--neutral-500)' : 'var(--color-error)'} strokeWidth={3} />
         ) : null}
       </span>
     </button>
@@ -951,16 +977,16 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 148,
-        border: '1px solid rgba(135, 236, 224, 0.42)',
-        background: 'radial-gradient(120% 90% at 18% -10%, rgba(151,255,236,0.58) 0%, rgba(151,255,236,0) 58%), radial-gradient(105% 85% at 100% 100%, rgba(90,242,226,0.46) 0%, rgba(90,242,226,0) 62%), linear-gradient(142deg, #0A5B63 0%, #0F7B83 46%, #13A0A8 100%)',
+        minHeight: 112,
+        border: 'none',
+        background: 'rgba(255,255,255,0.72)',
         borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
+        boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
         cursor: 'pointer',
         overflow: 'hidden',
-        padding: 'var(--space-3)',
+        padding: 'var(--space-2) var(--space-3)',
         display: 'grid',
-        gap: 'var(--space-2)',
+        gap: 'var(--space-1)',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
@@ -975,26 +1001,26 @@ function OptimizationsTile({
       <p
         style={{
           margin: 0,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 800,
-          color: 'rgba(235,255,251,0.94)',
+          color: 'var(--neutral-800)',
           textTransform: 'uppercase',
-          letterSpacing: '0.09em',
+          letterSpacing: '0.07em',
           textAlign: 'left',
         }}
       >
         Optimisations
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
         {rows.map((row) => (
-          <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 4 }}>
-            <CategoryIcon iconKey={row.iconKey} label={row.label} size={20} />
-            <p style={{ margin: 0, fontSize: 9, color: 'rgba(235,255,251,0.9)', lineHeight: 1.1 }}>
+          <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 3, flex: 1 }}>
+            <CategoryIcon iconKey={row.iconKey} label={row.label} size={18} />
+            <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-700)', lineHeight: 1.1 }}>
               {row.label}
             </p>
             <OptimizationGauge tone={row.gaugeTone} />
-            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: 'rgba(235,255,251,0.88)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
               {`${formatCurrencyFloored(row.spentAmount)} / ${formatCurrencyFloored(row.budgetAmount)}`}
             </p>
           </div>
@@ -1016,89 +1042,49 @@ function InfosTile({ showSnapshotReminder }: { showSnapshotReminder: boolean }) 
       role="region"
       aria-label="Informations et rappels"
       style={{
-        background: 'var(--neutral-0)',
-        border: '1px solid var(--neutral-150)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
+        position: 'fixed',
+        left: 'var(--space-4)',
+        right: 'var(--space-4)',
+        bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
+        zIndex: 50,
+        background: '#0F172A',
+        color: '#FFFFFF',
+        border: 'none',
+        borderRadius: 'var(--radius-2xl)',
+        boxShadow: '0 20px 36px rgba(2, 6, 23, 0.45)',
         padding: 'var(--space-3) var(--space-4)',
-        minHeight: 72,
+        minHeight: 64,
         display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-2)',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-3)',
       }}
     >
-      {/* En-tête */}
-      <p
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <Bell size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.94)', lineHeight: 1.35 }}>
+          {hasContent
+            ? 'Snapshot fin de mois prêt : valide tes catégories.'
+            : 'Aucune info pour le moment.'}
+        </p>
+      </div>
+      <button
+        type="button"
         style={{
-          margin: 0,
-          fontSize: 10,
-          fontWeight: 800,
-          color: 'var(--neutral-500)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.09em',
+          border: 'none',
+          background: 'rgba(255,255,255,0.16)',
+          borderRadius: 'var(--radius-lg)',
+          minHeight: 36,
+          padding: '0 var(--space-3)',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#FFFFFF',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
         }}
       >
-        Infos
-      </p>
-
-      {/* Placeholder si aucun contenu */}
-      {!hasContent ? (
-        <p
-          style={{
-            margin: 0,
-            fontSize: 12,
-            color: 'var(--neutral-300)',
-            fontStyle: 'italic',
-            lineHeight: 1.4,
-          }}
-        >
-          Aucune info pour le moment.
-        </p>
-      ) : null}
-
-      {/* Rappel automatique snapshot — visible J-1 et J (dernier jour du mois) */}
-      <AnimatePresence>
-        {showSnapshotReminder ? (
-          <motion.div
-            key="snapshot-reminder"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-          >
-            <div
-              style={{
-                background: 'color-mix(in oklab, var(--primary-500) 9%, var(--neutral-0) 91%)',
-                border: '1px solid color-mix(in oklab, var(--primary-500) 22%, var(--neutral-0) 78%)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-2) var(--space-3)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <Bell
-                size={14}
-                color="var(--primary-600)"
-                strokeWidth={2.2}
-                style={{ flexShrink: 0 }}
-                aria-hidden="true"
-              />
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 12,
-                  color: 'var(--primary-700)',
-                  fontWeight: 600,
-                  lineHeight: 1.4,
-                }}
-              >
-                Fin de mois — Pense à mettre à jour les snapshots épargne
-              </p>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+        Vérifier
+      </button>
     </div>
   )
 }
@@ -1121,6 +1107,7 @@ export function Home() {
   const daysRemaining = getDaysRemainingInMonth()
   // Rappel snapshot : visible les 2 derniers jours du mois, disparaît le 1er du mois suivant
   const showSnapshotReminder = daysElapsed >= daysInMonth - 1
+  const sectionHorizontalPadding = '0 calc(var(--space-6) + 6px)'
 
   const { data: monthExpenseTxns } = useTransactions({
     startDate: monthStart,
@@ -1315,7 +1302,6 @@ export function Home() {
   }, [accounts])
 
   const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(null)
-  const [showAccountsModal, setShowAccountsModal] = useState(false)
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
   const [showDriftsModal, setShowDriftsModal] = useState(false)
@@ -1324,6 +1310,7 @@ export function Home() {
   const [showSavingsModal, setShowSavingsModal] = useState(false)
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
+  const [animatedResteUtile, setAnimatedResteUtile] = useState(0)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -1331,15 +1318,16 @@ export function Home() {
       return
     }
     setSelectedAccountPresetId((current) => {
+      if (current === BUDGET_VOYAGE_TAB_ID) return current
       if (current && accountEntries.some((entry) => entry.preset.id === current)) return current
       return accountEntries[0].preset.id
     })
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showAccountsModal && !showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal) return
     return lockDocumentScroll()
-  }, [showAccountsModal, showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal])
 
   useEffect(() => {
     if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal) return
@@ -1396,6 +1384,7 @@ export function Home() {
   const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
   const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
+  const isBudgetVoyageTab = selectedAccountPresetId === BUDGET_VOYAGE_TAB_ID
   const isLivretA = selectedPresetId === 'livret_a'
   const isLDDS = selectedPresetId === 'ldds'
   const isPER = selectedPresetId === 'per'
@@ -1434,6 +1423,17 @@ export function Home() {
   )
   const resteUtileDisplay = dailyPayload?.daily_pilotage.remaining_useful_amount ?? resteUtile
   const budgetPerDayDisplay = dailyPayload?.daily_pilotage.budget_per_remaining_day ?? budgetParJour
+
+  useEffect(() => {
+    const controls = animate(0, resteUtileDisplay, {
+      duration: 0.4,
+      ease: 'easeOut',
+      onUpdate: (latestValue) => {
+        setAnimatedResteUtile(latestValue)
+      },
+    })
+    return () => controls.stop()
+  }, [resteUtileDisplay])
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
   const expenseMonthAmountDisplay = useMemo(
     () => (monthExpenseTxns ?? []).reduce((sum, txn) => sum + Number(txn.amount), 0),
@@ -1446,6 +1446,12 @@ export function Home() {
     const totalActual = buckets.reduce((s, b) => s + Number(b.actual_amount), 0)
     return totalBudget > 0 ? Math.min(100, (totalActual / totalBudget) * 100) : 0
   }, [dailyPayload])
+  const heroRingSize = 332
+  const heroRingStroke = 2
+  const heroRingRadius = (heroRingSize - heroRingStroke) / 2
+  const heroRingCircumference = 2 * Math.PI * heroRingRadius
+  const heroRingProgress = Math.max(0, Math.min(100, overallConsumedPct))
+  const heroRingOffset = heroRingCircumference * (1 - heroRingProgress / 100)
 
   const monthlyBlockProgress = useMemo<MonthlyBlockProgressItem[]>(() => {
     // Map category_id → budget_bucket using dailyPayload.by_category
@@ -1482,6 +1488,14 @@ export function Home() {
     if (daysRemaining <= 10) return 'alert'
     return 'pending'
   }, [daysRemaining, savingsGoalReached])
+  const savingsMonthLabel = useMemo(
+    () => new Date(year, month - 1, 1).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', ''),
+    [month, year],
+  )
+  const savingsTileMonthAmountLabel = useMemo(
+    () => `${savingsMonthLabel} ${formatCurrencyFloored(MOCK_SAVINGS_MONTHLY_SAVED)}`,
+    [savingsMonthLabel],
+  )
   const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
   const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
   const savingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
@@ -1504,14 +1518,9 @@ export function Home() {
     console.log('[Home planned operations items]', dailyPayload?.planned_operations?.items)
   }, [dailyPayload])
 
-  const handleOpenAccountsModal = useCallback(() => {
-    setShowAccountsModal((current) => !current)
-  }, [])
-
   const handleSelectAccountPreset = useCallback((presetId: string) => {
     const normalized = presetId === 'ldds' ? 'livret_a' : mapPresetIdToDisplayed(presetId)
     setSelectedAccountPresetId(normalized)
-    setShowAccountsModal(false)
   }, [])
 
   const heroMetrics = useMemo(
@@ -1853,39 +1862,84 @@ export function Home() {
         gap: 'var(--space-4)',
       }}
     >
-      <PageHeader
-        title="Accueil"
-        rightLabel={selectedAccountEntry?.preset.label ?? ''}
-        actionIcon={
-          selectedAccountEntry ? (
-            <img
-              src={selectedAccountEntry.preset.iconSrc}
-              alt={selectedAccountEntry.preset.label}
-              width={46}
-              height={46}
-              style={{
-                width: 46,
-                height: 46,
-                objectFit: 'contain',
-                transform: `scale(${selectedAccountEntry.preset.iconScale ?? 1})`,
-              }}
-              loading="lazy"
-              decoding="async"
-            />
-          ) : null
-        }
-        actionAriaLabel="Changer de compte"
-        onActionClick={handleOpenAccountsModal}
-      />
+      <header
+        style={{
+          paddingTop: 'calc(var(--safe-top) + var(--space-2))',
+          paddingRight: 'var(--page-gutter)',
+          paddingBottom: 'var(--space-4)',
+          paddingLeft: 'var(--page-gutter)',
+          minHeight: 'calc(64px + var(--safe-top))',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+          borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
+          position: 'relative',
+          zIndex: 120,
+          marginBottom: 'var(--space-6)',
+        }}
+      >
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 'var(--font-size-2xl)',
+              lineHeight: 1.1,
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--neutral-0)',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Accueil
+          </h1>
+          <div
+            className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{ paddingBottom: '2px' }}
+          >
+            <div style={{ display: 'inline-flex', minWidth: '100%', gap: 'var(--space-2)' }}>
+              {HOME_SWIPE_PILLS.map((pill) => {
+                const isActive = selectedAccountPresetId === pill.id
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => handleSelectAccountPreset(pill.id)}
+                    aria-pressed={isActive}
+                    style={{
+                      border: `1px solid ${isActive ? '#5B57F5' : 'rgba(255,255,255,0.46)'}`,
+                      background: 'rgba(255,255,255,0.7)',
+                      backdropFilter: 'blur(12px)',
+                      color: isActive ? '#5B57F5' : 'var(--neutral-800)',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '8px var(--space-3)',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: 146,
+                      transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
+                    }}
+                  >
+                    {pill.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </header>
 
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        style={{ padding: '0 var(--space-6)' }}
+        style={{ padding: sectionHorizontalPadding }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          {isCombinedSavingsPage ? (
+          {isBudgetVoyageTab ? (
+            <div aria-label="Contenu budget voyage vide" style={{ minHeight: 320 }} />
+          ) : isCombinedSavingsPage ? (
             <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
               {combinedSavingsSections.map((section) => (
                 <div key={section.id} style={{ display: 'grid', gap: 'var(--space-2)' }}>
@@ -1920,97 +1974,161 @@ export function Home() {
           ) : (
             <>
               {isMainCheckingAccount ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'start' }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowResteUtileModal(true)}
-                    aria-label="Voir le détail du calcul du reste utile"
+                <div
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: 'var(--radius-2xl)',
+                    padding: 'var(--space-5) var(--space-3) var(--space-4)',
+                    display: 'grid',
+                    justifyItems: 'center',
+                    gap: 'var(--space-4)',
+                  }}
+                >
+                  <motion.div
+                    aria-hidden="true"
+                    initial={{ scale: 1, opacity: 0.92 }}
+                    animate={{ scale: [1, 1.05, 1], opacity: [0.88, 1, 0.88] }}
+                    transition={{ duration: 5.2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
                     style={{
-                      border: '1px solid rgba(255, 218, 130, 0.45)',
-                      background: 'radial-gradient(120% 90% at 14% -8%, rgba(255,239,178,0.56) 0%, rgba(255,239,178,0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(255,181,72,0.4) 0%, rgba(255,181,72,0) 62%), linear-gradient(145deg, #5B3B06 0%, #A97512 46%, #E3AF30 100%)',
-                      borderRadius: 'var(--radius-xl)',
-                      boxShadow: 'var(--shadow-card)',
-                      padding: 'var(--space-3)',
-                      display: 'grid',
-                      gap: 'var(--space-1)',
-                      alignContent: 'start',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      minHeight: 104,
+                      position: 'absolute',
+                      inset: '-12% -10% 8%',
+                      background:
+                        'radial-gradient(70% 70% at 30% 40%, rgba(91,87,245,0.26) 0%, rgba(91,87,245,0) 72%), radial-gradient(74% 72% at 74% 54%, rgba(255,171,46,0.24) 0%, rgba(255,171,46,0) 75%), linear-gradient(135deg, rgba(91,87,245,0.2) 0%, rgba(255,171,46,0.2) 100%)',
+                      filter: 'blur(46px)',
+                      pointerEvents: 'none',
                     }}
-                  >
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,244,221,0.92)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                      Reste utile
-                    </p>
-                    <p style={{ margin: 0, fontSize: 'clamp(24px, 7vw, 34px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFD550', lineHeight: 1.05, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
-                      {formatCurrencyFloored(resteUtileDisplay)}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'rgba(255,244,221,0.9)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                      Budget/jour
-                    </p>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFF8EC', lineHeight: 1.05, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                      {formatCurrencyFloored(budgetPerDayDisplay)}
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowHeroBalanceModal(true)}
-                    aria-label="Voir le détail revenus du mois et dépenses du mois"
-                    style={{
-                      border: 'none',
-                      background: 'linear-gradient(140deg, #1A1730 0%, #2D2B6B 45%, #3D3AB8 100%)',
-                      borderRadius: 'var(--radius-xl)',
-                      boxShadow: 'var(--shadow-card)',
-                      padding: 'var(--space-3) var(--space-4)',
-                      minHeight: 104,
-                      display: 'grid',
-                      alignContent: 'start',
-                      gap: 6,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <p style={{
-                      margin: 0,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: 'rgba(255,255,255,0.56)',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}>
+                  />
+
+                  <div style={{ position: 'relative', width: '100%', display: 'grid', justifyItems: 'center', gap: 'var(--space-4)', zIndex: 1 }}>
+                    <div style={{ position: 'relative', minHeight: 248, width: '100%', maxWidth: 460, display: 'grid', placeItems: 'center' }}>
+                      <svg
+                        width={heroRingSize}
+                        height={heroRingSize}
+                        viewBox={`0 0 ${heroRingSize} ${heroRingSize}`}
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          top: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          overflow: 'visible',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <circle
+                          cx={heroRingSize / 2}
+                          cy={heroRingSize / 2}
+                          r={heroRingRadius}
+                          fill="none"
+                          stroke="rgba(46, 212, 122, 0.2)"
+                          strokeWidth={heroRingStroke}
+                        />
+                        <circle
+                          cx={heroRingSize / 2}
+                          cy={heroRingSize / 2}
+                          r={heroRingRadius}
+                          fill="none"
+                          stroke="#2ED47A"
+                          strokeWidth={heroRingStroke}
+                          strokeLinecap="round"
+                          strokeDasharray={heroRingCircumference}
+                          strokeDashoffset={heroRingOffset}
+                          transform={`rotate(-90 ${heroRingSize / 2} ${heroRingSize / 2})`}
+                        />
+                      </svg>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowResteUtileModal(true)}
+                        aria-label="Voir le détail du calcul du reste utile"
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          textAlign: 'center',
+                          display: 'grid',
+                          gap: 'var(--space-1)',
+                          justifyItems: 'center',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                      >
+                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '0.01em' }}>
+                          Reste utile
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'clamp(52px, 15vw, 88px)',
+                            fontWeight: 900,
+                            lineHeight: 0.95,
+                            fontFamily: 'var(--font-mono)',
+                            color: '#0F172A',
+                            letterSpacing: '-0.03em',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatCurrencyFloored(animatedResteUtile)}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.02em' }}>
+                          {`Budget/jour ${formatCurrencyFloored(budgetPerDayDisplay)}`}
+                        </p>
+                      </button>
+                    </div>
+
+                    <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowHeroBalanceModal(true)}
+                        aria-label="Voir le détail revenus du mois et dépenses du mois"
+                        style={{
+                          border: '1px solid rgba(255,255,255,0.58)',
+                          background: 'rgba(255,255,255,0.8)',
+                          backdropFilter: 'blur(12px)',
+                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
+                          borderRadius: 'var(--radius-full)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 'var(--space-2)',
+                          padding: '10px var(--space-4)',
+                          minHeight: 48,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)' }}>
+                          {`Solde ${formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}`}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDriftsModal(true)}
+                        aria-label="Voir le détail des dérives"
+                        style={{
+                          border: '1px solid rgba(255,255,255,0.58)',
+                          background: 'rgba(255,255,255,0.8)',
+                          backdropFilter: 'blur(12px)',
+                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
+                          borderRadius: 'var(--radius-full)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 'var(--space-2)',
+                          padding: '10px var(--space-4)',
+                          minHeight: 48,
+                          cursor: 'pointer',
+                          color: '#FC5A5A',
+                        }}
+                      >
+                        <TriangleAlert size={16} color="#FC5A5A" />
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>
+                          {`Dérives ${driftRows.length}`}
+                        </span>
+                      </button>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-500)' }}>
                       {`solde au ${todayDayMonthLabel}`}
                     </p>
-                    <p style={{
-                      margin: 0,
-                      fontSize: 'clamp(24px, 7vw, 34px)',
-                      fontWeight: 800,
-                      fontFamily: 'var(--font-mono)',
-                      color: '#FFFFFF',
-                      lineHeight: 1.05,
-                      letterSpacing: '-0.02em',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
-                    </p>
-                  </button>
-                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'start', paddingBottom: 'var(--space-1)' }}>
-                    <div style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
-                      <ProgressCircleTile
-                        pct={overallConsumedPct}
-                        onClick={() => setShowProgressModal(true)}
-                        mode="fixed"
-                        ariaLabel={`${Math.round(overallConsumedPct)}% du budget global consommé — voir la progression par bloc`}
-                        title="Budget global"
-                      />
-                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'lowercase', letterSpacing: '0.03em', color: 'var(--neutral-600)' }}>
-                        budget
-                      </span>
-                    </div>
-                    <DriftsTile
-                      count={driftRows.length}
-                      totalOverrunAmount={driftOverrunTotal}
-                      onClick={() => setShowDriftsModal(true)}
-                    />
                   </div>
                 </div>
               ) : (
@@ -2108,14 +2226,14 @@ export function Home() {
         </div>
       </motion.section>
 
-      {!isCombinedSavingsPage ? (
+      {!isCombinedSavingsPage && !isBudgetVoyageTab ? (
         <>
           {!isMainCheckingAccount ? (
             <motion.section
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: 0.12 }}
-              style={{ padding: '0 var(--space-6)' }}
+              style={{ padding: sectionHorizontalPadding }}
             >
               <div
                 style={{
@@ -2177,13 +2295,11 @@ export function Home() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: 0.16 }}
-              style={{ padding: '0 var(--space-6)' }}
+              style={{ padding: sectionHorizontalPadding }}
             >
-              <div style={{ maxWidth: 600, margin: '0 auto' }}>
-                <Suspense fallback={<div style={{ height: 220 }} />}>
-                  <TrajectoireChart />
-                </Suspense>
-              </div>
+              <Suspense fallback={<div style={{ height: 220 }} />}>
+                <TrajectoireChart />
+              </Suspense>
             </motion.section>
           ) : null}
 
@@ -2192,15 +2308,17 @@ export function Home() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: 0.18 }}
-              style={{ padding: '0 var(--space-6)' }}
+              style={{ padding: sectionHorizontalPadding }}
             >
               <div
                 style={{
                   maxWidth: 600,
                   margin: '0 auto',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 'var(--space-3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-4)',
+                  paddingLeft: 'var(--space-3)',
+                  borderLeft: '2px solid #E2E8F0',
                 }}
               >
                 <PlannedWindowTile
@@ -2217,64 +2335,78 @@ export function Home() {
             </motion.section>
           ) : null}
 
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.2 }}
-            style={{ padding: '0 var(--space-6)' }}
-          >
-            <div
-              style={{
-                maxWidth: 600,
-                margin: '0 auto',
-                display: 'grid',
-                gridTemplateColumns: isMainCheckingAccount ? '1fr' : '1fr 1fr',
-                gap: 'var(--space-3)',
-              }}
+          {isMainCheckingAccount ? (
+            <motion.section
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.2 }}
+              style={{ padding: sectionHorizontalPadding }}
             >
-              <SavingsTile status={savingsTileStatus} onClick={() => setShowSavingsModal(true)} />
-              {!isMainCheckingAccount ? (
-                <DriftsTile
-                  count={driftRows.length}
-                  totalOverrunAmount={driftOverrunTotal}
-                  onClick={() => setShowDriftsModal(true)}
-                />
-              ) : null}
-            </div>
-          </motion.section>
-
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.24 }}
-            style={{ padding: '0 var(--space-6)' }}
-          >
-            <div
-              style={{
-                maxWidth: 600,
-                margin: '0 auto',
-                display: 'grid',
-                gridTemplateColumns: '1fr',
-              }}
-            >
-              <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
-            </div>
-          </motion.section>
+              <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                <div
+                  style={{
+                    background: 'rgba(46, 212, 122, 0.1)',
+                    borderRadius: 'var(--radius-2xl)',
+                    padding: 'var(--space-4)',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 0.78fr) minmax(0, 1.22fr)',
+                    gap: 'var(--space-3)',
+                    alignItems: 'stretch',
+                  }}
+                >
+                  <SavingsTile
+                    status={savingsTileStatus}
+                    monthAmountLabel={savingsTileMonthAmountLabel}
+                    onClick={() => setShowSavingsModal(true)}
+                  />
+                  <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
+                </div>
+              </div>
+            </motion.section>
+          ) : (
+            <>
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.2 }}
+                style={{ padding: sectionHorizontalPadding }}
+              >
+                <div
+                  style={{
+                    maxWidth: 600,
+                    margin: '0 auto',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 'var(--space-3)',
+                  }}
+                >
+                  <SavingsTile
+                    status={savingsTileStatus}
+                    monthAmountLabel={savingsTileMonthAmountLabel}
+                    onClick={() => setShowSavingsModal(true)}
+                  />
+                  <DriftsTile
+                    count={driftRows.length}
+                    totalOverrunAmount={driftOverrunTotal}
+                    onClick={() => setShowDriftsModal(true)}
+                  />
+                </div>
+              </motion.section>
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.24 }}
+                style={{ padding: sectionHorizontalPadding }}
+              >
+                <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                  <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
+                </div>
+              </motion.section>
+            </>
+          )}
 
           {/* ── Module libre Infos ── */}
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.28 }}
-            style={{
-              padding: '0 var(--space-6)',
-              paddingBottom: 'calc(var(--space-6) + env(safe-area-inset-bottom, 0px))',
-            }}
-          >
-            <div style={{ maxWidth: 600, margin: '0 auto' }}>
-              <InfosTile showSnapshotReminder={showSnapshotReminder} />
-            </div>
-          </motion.section>
+          <InfosTile showSnapshotReminder={showSnapshotReminder} />
         </>
       ) : null}
 
@@ -2644,74 +2776,6 @@ export function Home() {
           </>
         ) : null}
 
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showAccountsModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowAccountsModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Sélectionner un compte"
-              initial={{ y: '-100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '-100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--space-3)',
-                right: 'var(--space-3)',
-                top: 0,
-                zIndex: 61,
-                width: 'auto',
-                maxWidth: 430,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
-                boxShadow: 'var(--shadow-lg)',
-              }}
-            >
-              <div style={{ width: 28, height: 3, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '0 auto var(--space-2)' }} />
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-2)' }}>
-                {accountEntries.filter((entry) => VISIBLE_ACCOUNT_PRESET_IDS.has(entry.preset.id)).map((entry) => {
-                  const isActive = entry.preset.id === selectedAccountEntry?.preset.id
-                  return (
-                    <button
-                      key={entry.preset.id}
-                      type="button"
-                      onClick={() => handleSelectAccountPreset(entry.preset.id)}
-                      style={{
-                        border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
-                        background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '6px var(--space-2)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'background 150ms ease, border-color 150ms ease',
-                      }}
-                    >
-                      <span style={{ fontSize: 12, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', whiteSpace: 'nowrap' }}>
-                        {entry.preset.label}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </motion.div>
-          </>
-        ) : null}
       </AnimatePresence>
 
       <BudgetProgressModal

@@ -206,12 +206,15 @@ function PlanningProgressBar({ progress }: { progress: PlanningProgress }) {
           }}
         />
       </div>
-      <div style={{ marginTop: 6, display: 'grid', gap: 2, justifyItems: 'center' }}>
-        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-          {formatKpiCurrency(progress.currentAmount)} / {formatKpiCurrency(progress.targetAmount)}
-        </p>
-        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+      <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', columnGap: 'var(--space-3)' }}>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'left', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
           {formatKpiPercent(safePct)}
+        </p>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+          {formatKpiCurrency(progress.currentAmount)}
+        </p>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+          {formatKpiCurrency(progress.targetAmount)}
         </p>
       </div>
     </div>

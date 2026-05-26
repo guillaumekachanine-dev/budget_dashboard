@@ -97,9 +97,9 @@ const PLANNING_DATA: Record<string, MonthPlanningData> = {
     objectif: 1000,
     revenus: 3400,
     budgetDepenses: 2200,
-    epargneMontant: 1000,
-    virement: { date: '15 mai 2026', montant: 1000, compteSource: 'Compte courant', destination: 'Livret A', pctObjectif: 100 },
-    facteursDeTerminants: "Mois en cours. Pas d'événement exceptionnel anticipé.",
+    epargneMontant: 500,
+    virement: { date: '31 mai 2026', montant: 500, compteSource: 'Compte courant', destination: 'PEA', pctObjectif: 50 },
+    facteursDeTerminants: 'Réception tardive de mes indemnités ayant conduit à un décalage de trésorerie.',
   },
   '2026-06': {
     objectif: 800,

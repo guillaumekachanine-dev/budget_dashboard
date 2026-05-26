@@ -33,7 +33,7 @@ const DISPLAY_MODE_OPTIONS: Array<{ id: TrajectoryDisplayMode; label: string }> 
 ]
 
 const SERIES_COLORS = {
-  depenses: '#FF7A1A',
+  depenses: '#FFAB2E',
   cashflow: '#5B57F5',
   revenus: '#12B4A9',
 } as const
@@ -385,11 +385,11 @@ export function TrajectoireChart() {
   return (
     <div
       style={{
-        background: 'radial-gradient(120% 85% at 14% -8%, rgba(148,140,255,0.26) 0%, rgba(148,140,255,0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91,87,245,0.2) 0%, rgba(91,87,245,0) 62%), linear-gradient(145deg, #F7F7FF 0%, #EEF0FF 100%)',
-        border: '1px solid rgba(133,126,245,0.28)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
-        padding: 'var(--space-4)',
+        background: '#FFFFFF',
+        border: 'none',
+        borderRadius: 0,
+        boxShadow: 'none',
+        padding: 'var(--space-4) 0 var(--space-4)',
         display: 'grid',
         gap: 'var(--space-3)',
       }}
@@ -604,14 +604,14 @@ export function TrajectoireChart() {
 
       {side === 'front' ? (
         <>
-          <div style={{ height: 168, marginLeft: -8, marginRight: -4 }}>
+          <div style={{ height: 176, width: '100%', background: '#FFFFFF' }}>
             {isLoading ? (
-              <div style={{ height: '100%', background: 'var(--neutral-50)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ height: '100%', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-400)' }}>Chargement…</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <AreaChart data={chartData} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
                   <defs>
                     <linearGradient id="cashflowGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={SERIES_COLORS.cashflow} stopOpacity={0.2} />
