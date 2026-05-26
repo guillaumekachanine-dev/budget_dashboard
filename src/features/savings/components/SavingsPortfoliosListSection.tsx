@@ -45,6 +45,8 @@ const LEGEND_ORDER: Record<string, number> = {
   bitcoin: 5,
 }
 
+const SHORTCUT_GRID_ORDER = ['Livret A', 'PEA', 'PEG', 'LDDS', 'PER', 'BTC'] as const
+
 function normalizeLabel(value: string): string {
   return value
     .normalize('NFD')
@@ -199,7 +201,12 @@ export function SavingsPortfoliosListSection() {
     }
   }), [orderedLegendSeries, latestYearRow, previousYearRow, yearlyAccountMetrics, operationEvents])
 
-  const shortcutRows = useMemo(() => listRows.slice(0, 6), [listRows])
+  const shortcutRows = useMemo(() => {
+    const rowsByLabel = new Map(listRows.map((row) => [row.listLabel, row] as const))
+    return SHORTCUT_GRID_ORDER
+      .map((label) => rowsByLabel.get(label))
+      .filter((row): row is (typeof listRows)[number] => row != null)
+  }, [listRows])
 
   if (isLoading) {
     return (
@@ -219,7 +226,16 @@ export function SavingsPortfoliosListSection() {
 
   return (
     <StatsSection>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '2px var(--space-16)', width: 'fit-content', margin: '0 auto' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: '2px var(--space-3)',
+          width: '100%',
+          maxWidth: 360,
+          margin: '0 auto',
+        }}
+      >
         {shortcutRows.map((row) => (
           <button
             key={`shortcut-${row.key}`}
@@ -236,7 +252,8 @@ export function SavingsPortfoliosListSection() {
               padding: 'var(--space-2) var(--space-2)',
               display: 'flex',
               alignItems: 'center',
-              gap: 'var(--space-2)',
+              gap: '7px',
+              minWidth: 0,
               cursor: 'pointer',
               textAlign: 'left',
             }}
@@ -267,11 +284,12 @@ export function SavingsPortfoliosListSection() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                fontSize: 23,
+                fontSize: 20,
                 fontWeight: 600,
                 color: 'var(--neutral-400)',
                 lineHeight: 1,
                 flexShrink: 0,
+                marginLeft: 1,
               }}
             >
               ›

@@ -58,6 +58,11 @@ type OverviewPointBubbleState = {
   y: number
 }
 
+type OverviewKpiItem = {
+  label: string
+  value: string
+}
+
 const OVERVIEW_START_YEAR = 2020
 const OVERVIEW_END_YEAR = 2026
 
@@ -204,7 +209,7 @@ function buildAccountTimeline(
   return points
 }
 
-export function SavingsEvolutionFiveYearsChart() {
+export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overviewKpis?: OverviewKpiItem[] }) {
   const { data, isLoading, error } = useSavingsEvolutionFiveYears()
   const [displayMode, setDisplayMode] = useState<DisplayMode>('portfolio')
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
@@ -1061,6 +1066,66 @@ export function SavingsEvolutionFiveYearsChart() {
           </div>
         </div>
 
+        {displayMode === 'overview' && overviewKpis.length > 0 ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 'var(--space-2)',
+              marginTop: 'calc(var(--space-2) * -1)',
+            }}
+          >
+            {overviewKpis.map((item) => (
+              (() => {
+                const isCurrentValueLabel = normalizeLabel(item.label) === 'valeur actuelle'
+                return (
+              <div
+                key={item.label}
+                style={{
+                  background: 'var(--neutral-0)',
+                  border: '1px solid var(--neutral-200)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: 52,
+                  padding: '6px 8px',
+                  display: 'grid',
+                  alignContent: 'center',
+                  gap: 4,
+                  textAlign: 'center',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: isCurrentValueLabel ? 8 : 9,
+                    fontWeight: 700,
+                    color: 'var(--neutral-500)',
+                    textTransform: 'uppercase',
+                    letterSpacing: isCurrentValueLabel ? '0.03em' : '0.05em',
+                    lineHeight: 1.15,
+                    whiteSpace: isCurrentValueLabel ? 'nowrap' : 'normal',
+                  }}
+                >
+                  {item.label}
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--neutral-900)',
+                    lineHeight: 1,
+                  }}
+                >
+                  {item.value}
+                </p>
+              </div>
+                )
+              })()
+            ))}
+          </div>
+        ) : null}
+
         {/* Badges */}
         <div
           style={{
@@ -1070,7 +1135,6 @@ export function SavingsEvolutionFiveYearsChart() {
             marginTop: 'var(--space-2)',
             flexWrap: 'wrap',
             minWidth: 0,
-            minHeight: displayMode === 'overview' ? 40 : undefined,
           }}
         >
           {displayMode === 'portfolio' ? (

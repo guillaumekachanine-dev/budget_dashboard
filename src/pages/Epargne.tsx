@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.webp'
 import planning2026Icon from '@/assets/icons/app/epargne_planning_2026.webp'
 import performanceIcon from '@/assets/icons/app/epargne_performance.webp'
 import epargneIcon from '@/assets/icons/app/epargne_accueil.webp'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
-import { Annual2026Optimization } from '@/features/annual-analysis/components/Annual2026Optimization'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
-import { SavingsHeroCard } from '@/features/savings/components/SavingsHeroCard'
 import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
@@ -19,7 +17,9 @@ import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytic
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
-import { EmptyState, StatsSection } from '@/features/stats/components/ui'
+import { StatsSection } from '@/features/stats/components/ui'
+import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 
 type StatsTabId = 'epargne' | 'planning_2026' | 'performance' | 'optimisation'
 type StatsTabConfig = {
@@ -77,8 +77,9 @@ type OptimizationPeriodOption = {
 }
 
 const PLANNED_SAVINGS_2026 = 9800
-const OPTIMIZATION_OBJECTIVE_2026 = 3000
 const OPTIMIZATION_YEAR = 2026
+const OPTIMIZATION_ANNUAL_GAIN_MONTHS = 6
+const PLANNED_SAVINGS_PCT_2026 = 17.8
 const OPTIMIZATION_PERIOD_OPTIONS: OptimizationPeriodOption[] = [
   { id: '2026-05', label: 'Mai 2026', shortLabel: 'Mai 26', mode: 'month' },
   { id: '2026-06', label: 'Juin 2026', shortLabel: 'Juin 26', mode: 'month' },
@@ -90,16 +91,6 @@ const OPTIMIZATION_PERIOD_OPTIONS: OptimizationPeriodOption[] = [
   { id: '2026-12', label: 'Décembre 2026', shortLabel: 'Déc 26', mode: 'month' },
   { id: '2026-full', label: 'année 2026', shortLabel: '2026', mode: 'year' },
 ]
-
-type OptimizationKpiCardItem = {
-  label: string
-  value: string
-  iconKey: string | null
-  backgroundColor: string
-  borderColor: string
-  labelColor: string
-  valueColor: string
-}
 
 function formatKpiCurrency(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'
@@ -115,6 +106,13 @@ function formatKpiPercent(value: number | null | undefined, options?: { signed?:
   if (value == null || !Number.isFinite(value)) return '—'
   const sign = options?.signed && value > 0 ? '+' : ''
   return `${sign}${new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value)}%`
+}
+
+function formatFixedPercent(value: number): string {
+  return `${new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(value)}%`
@@ -235,66 +233,6 @@ function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
   }
 }
 
-function resolveOptimizationCategoryIconKey(categoryName: string | null | undefined): string | null {
-  const normalized = (categoryName ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
-  if (!normalized) return null
-  if (normalized.includes('retrait') && normalized.includes('espece')) return 'achats_divers_retrait_d_especes'
-  if (normalized.includes('petits achats alimentaires')) return 'alimentation_petits_achats_alimentaires'
-  if (normalized.includes('cafe') && normalized.includes('bar')) return 'sorties_cafe_bars'
-  if (normalized.includes('restaurant')) return 'sorties_restaurant'
-  if (normalized.includes('courses')) return 'alimentation_courses'
-  if (normalized.includes('e-commerce')) return 'achats_divers_e_commerce'
-  if (normalized.includes('vetement')) return 'achats_divers_vetements'
-  if (normalized.includes('transport')) return 'transport'
-  if (normalized.includes('abonnement')) return 'abonnements'
-  if (normalized.includes('enfant') || normalized.includes('famille')) return 'famille_enfant'
-  return null
-}
-
-function OptimizationKpiCardsRow({ items }: { items: OptimizationKpiCardItem[] }) {
-  return (
-    <div style={{ padding: '0 var(--page-gutter)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
-        {items.map((item, index) => (
-          <article
-            key={`${item.label}-${index}`}
-            style={{
-              border: `1.5px solid ${item.borderColor}`,
-              background: item.backgroundColor,
-              borderRadius: 'var(--radius-md)',
-              padding: '10px var(--space-2)',
-              minHeight: 86,
-              display: 'grid',
-              gridTemplateRows: 'auto auto auto',
-              gap: 4,
-              justifyItems: 'center',
-              textAlign: 'center',
-            }}
-          >
-            <CategoryIcon
-              iconKey={item.iconKey}
-              label={item.label}
-              size={18}
-              style={{ width: 18, height: 18, objectFit: 'contain' }}
-            />
-            <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: item.labelColor, textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.2 }}>
-              {item.label}
-            </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: item.valueColor, lineHeight: 1 }}>
-              {item.value}
-            </p>
-          </article>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export function Epargne() {
   const currentYear = new Date().getFullYear()
   const {
@@ -329,6 +267,61 @@ export function Epargne() {
     () => OPTIMIZATION_PERIOD_OPTIONS.findIndex((option) => option.id === optimizationPeriod.id),
     [optimizationPeriod.id],
   )
+  const optimizationSelectedMonth = useMemo<number | null>(() => {
+    if (optimizationPeriod.mode !== 'month') return null
+    const monthRaw = optimizationPeriod.id.slice(-2)
+    const month = Number(monthRaw)
+    if (!Number.isFinite(month) || month < 1 || month > 12) return null
+    return month
+  }, [optimizationPeriod.id, optimizationPeriod.mode])
+
+  const { data: optimizationBudgetLines } = useQuery({
+    queryKey: ['optimization-period-budget-lines', OPTIMIZATION_YEAR, optimizationSelectedMonth],
+    enabled: optimizationSelectedMonth != null,
+    queryFn: async () => {
+      if (optimizationSelectedMonth == null) return []
+      const result = await getBudgetLinesForPeriod({ year: OPTIMIZATION_YEAR, month: optimizationSelectedMonth })
+      return result.categoryLines
+    },
+    staleTime: 1000 * 60 * 10,
+  })
+
+  const optimizationMonthlyBudgetByCategory = useMemo(() => {
+    const normalize = (value: string | null | undefined) => (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+
+    const byCategory = new Map<string, number>()
+    for (const line of optimizationBudgetLines ?? []) {
+      const key = normalize(line.category_name)
+      if (!key) continue
+      byCategory.set(key, Number(line.amount ?? 0))
+    }
+    return byCategory
+  }, [optimizationBudgetLines])
+  const optimizationBudgetPayloadQuery = useBudgetPagePayload({
+    periodYear: OPTIMIZATION_YEAR,
+    periodMonth: optimizationSelectedMonth ?? 12,
+    monthsBack: 6,
+  })
+  const optimizationMonthlyActualByCategory = useMemo(() => {
+    const normalize = (value: string | null | undefined) => (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+
+    const byCategory = new Map<string, number>()
+    const rows = optimizationBudgetPayloadQuery.data?.by_category ?? []
+    for (const row of rows) {
+      const key = normalize(row.category_name)
+      if (!key) continue
+      byCategory.set(key, Number(row.actual_amount ?? 0))
+    }
+    return byCategory
+  }, [optimizationBudgetPayloadQuery.data?.by_category])
 
   const planningKpis = useMemo<KpiTileItem[]>(() => {
     const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
@@ -360,92 +353,59 @@ export function Epargne() {
     ]
   }, [savingsAnalytics.data?.monthlyMetrics])
 
-  const optimizationTopExpenseTargets = useMemo(() => {
-    const levers = optimizationCapacity.data?.optimization_levers ?? []
-    return [...levers]
-      .filter((lever) => {
-        const avgMonthlyAmount = Number(lever.avg_monthly_amount_6m ?? 0)
-        return Number.isFinite(avgMonthlyAmount) && avgMonthlyAmount > 0
-      })
-      .sort((a, b) => Number(b.avg_monthly_amount_6m ?? 0) - Number(a.avg_monthly_amount_6m ?? 0))
-      .slice(0, 3)
-      .map((lever) => ({
-        label: lever.category_name ?? 'Poste',
-        iconKey: resolveOptimizationCategoryIconKey(lever.category_name),
-        optimizationTarget: Number(lever.realistic_monthly_gain ?? 0),
-      }))
+  const epargneHomeKpis = useMemo<KpiTileItem[]>(() => {
+    const currentSummary = savingsAnalytics.data?.currentSummary
+    return [
+      {
+        label: 'Livrets',
+        value: formatKpiCurrency(currentSummary?.livrets_total),
+        tone: 'neutral',
+        backgroundColor: 'var(--color-positive)',
+        borderColor: 'color-mix(in oklab, var(--color-positive) 78%, var(--neutral-300) 22%)',
+        labelColor: '#fff',
+        valueColor: '#fff',
+      },
+      {
+        label: 'Placements',
+        value: formatKpiCurrency(currentSummary?.placements_total),
+        tone: 'warning',
+        backgroundColor: 'var(--color-warning)',
+        borderColor: 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-300) 22%)',
+        labelColor: '#fff',
+        valueColor: '#fff',
+      },
+    ]
+  }, [savingsAnalytics.data?.currentSummary])
+
+  const optimizationAnnualObjective = useMemo(() => {
+    const listedLevers = (optimizationCapacity.data?.optimization_levers ?? []).slice(0, 8)
+    return listedLevers.reduce((sum, lever) => {
+      const monthlyOptimization = Number(lever.realistic_monthly_gain ?? 0)
+      if (!Number.isFinite(monthlyOptimization)) return sum
+      return sum + (monthlyOptimization * OPTIMIZATION_ANNUAL_GAIN_MONTHS)
+    }, 0)
   }, [optimizationCapacity.data?.optimization_levers])
 
-  const optimizationKpis = useMemo<OptimizationKpiCardItem[]>(() => {
-    if (optimizationPeriod.mode === 'year') {
-      const finalObjective = PLANNED_SAVINGS_2026 + OPTIMIZATION_OBJECTIVE_2026
-      return [
-        {
-          label: 'Épargne planifiée',
-          value: formatKpiCurrency(PLANNED_SAVINGS_2026),
-          iconKey: 'epargne',
-          backgroundColor: 'var(--neutral-0)',
-          borderColor: 'var(--neutral-200)',
-          labelColor: 'var(--neutral-600)',
-          valueColor: 'var(--neutral-900)',
-        },
-        {
-          label: 'Ob.optimisation 2026',
-          value: formatKpiCurrency(OPTIMIZATION_OBJECTIVE_2026),
-          iconKey: 'epargne_placement',
-          backgroundColor: 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)',
-          borderColor: 'color-mix(in oklab, var(--primary-500) 24%, var(--neutral-200) 76%)',
-          labelColor: 'var(--primary-700)',
-          valueColor: 'var(--primary-700)',
-        },
-        {
-          label: 'Obj.épargne finale',
-          value: formatKpiCurrency(finalObjective),
-          iconKey: 'epargne_projet',
-          backgroundColor: '#0E7490',
-          borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
-          labelColor: '#FCD34D',
-          valueColor: '#FCD34D',
-        },
-      ]
-    }
-
-    const fallbackRows = [
-      { label: 'Poste 1', iconKey: null, optimizationTarget: null as number | null },
-      { label: 'Poste 2', iconKey: null, optimizationTarget: null as number | null },
-      { label: 'Poste 3', iconKey: null, optimizationTarget: null as number | null },
-    ]
-    const rows = optimizationTopExpenseTargets.length > 0
-      ? optimizationTopExpenseTargets
-      : fallbackRows
-
-    return rows.map((row) => ({
-      label: row.label,
-      value: formatKpiCurrency(row.optimizationTarget),
-      iconKey: row.iconKey,
-      backgroundColor: 'var(--neutral-0)',
-      borderColor: 'var(--neutral-200)',
-      labelColor: 'var(--neutral-600)',
-      valueColor: 'var(--neutral-900)',
-    }))
-  }, [optimizationPeriod.mode, optimizationTopExpenseTargets])
-
   const annualHorizon = useMemo(() => {
-    if (!annual2026.summary || annual2026.optimizations.length === 0) return null
+    if (!annual2026.summary) return null
 
-    const potentialAnnual = annual2026.optimizations.reduce((sum, scenario) => sum + scenario.annualSaving, 0)
-    const plannedAnnual = annual2026.summary.totalSavingsBudget * 12
+    const potentialAnnual = optimizationAnnualObjective
+    const plannedAnnual = PLANNED_SAVINGS_2026
     const projectedAnnual = plannedAnnual + potentialAnnual
     const plannedShare = projectedAnnual > 0 ? (plannedAnnual / projectedAnnual) * 100 : 0
     const potentialShare = projectedAnnual > 0 ? (potentialAnnual / projectedAnnual) * 100 : 0
+    const revenueReference = plannedAnnual / (PLANNED_SAVINGS_PCT_2026 / 100)
+    const finalObjectivePct = revenueReference > 0 ? (projectedAnnual / revenueReference) * 100 : 0
 
     return {
       plannedAnnual,
       potentialAnnual,
+      projectedAnnual,
       plannedShare,
       potentialShare,
+      finalObjectivePct,
     }
-  }, [annual2026.optimizations, annual2026.summary])
+  }, [annual2026.summary, optimizationAnnualObjective])
 
   const planningProgress = useMemo<PlanningProgress>(() => {
     const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
@@ -585,6 +545,11 @@ export function Epargne() {
       },
     ]
   }, [savingsAnalytics.data?.currentSummary?.total_savings, savingsEvolution.data])
+
+  const performanceOverviewKpis = useMemo(
+    () => performanceKpis.map((item) => ({ label: item.label, value: item.value })),
+    [performanceKpis],
+  )
 
   const handleToggleTabModal = useCallback(() => {
     setShowTabModal((current) => !current)
@@ -769,25 +734,22 @@ export function Epargne() {
                   </button>
                 </div>
 
-                <OptimizationKpiCardsRow items={optimizationKpis} />
               </div>
             </StatsSection>
 
             {annualHorizon ? (
               <StatsSection style={{ gap: 'var(--space-2)' }}>
+                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', textAlign: 'center' }}>
+                  objectif épargne 2026 : +{formatKpiCurrency(annualHorizon.projectedAnnual)} ({formatFixedPercent(annualHorizon.finalObjectivePct)} revenus)
+                </p>
                 <div style={{ height: 14, borderRadius: 'var(--radius-full)', overflow: 'hidden', display: 'flex', gap: 2 }}>
                   <div style={{ flex: annualHorizon.plannedShare, background: 'var(--primary-500)', minWidth: 0 }} />
                   <div style={{ flex: annualHorizon.potentialShare, background: 'var(--color-positive)', minWidth: 0, opacity: 0.72 }} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', alignItems: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                    Épargne planifiée: {formatKpiCurrency(annualHorizon.plannedAnnual)}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    Objectif optimisation: +{formatKpiCurrency(annualHorizon.potentialAnnual)}
-                  </p>
-                </div>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                  Épargne planifiée: {formatKpiCurrency(annualHorizon.plannedAnnual)} ({formatFixedPercent(PLANNED_SAVINGS_PCT_2026)} revenus) · optimisations: +{formatKpiCurrency(annualHorizon.potentialAnnual)}
+                </p>
               </StatsSection>
             ) : null}
 
@@ -916,27 +878,19 @@ export function Epargne() {
               </div>
             ) : null}
 
-            <StatsOptimizationsTab />
-
-            {annual2026.optimizations.length > 0 && annual2026.summary ? (
-              <Annual2026Optimization
-                scenarios={annual2026.optimizations}
-                totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
-                totalSavings={annual2026.summary.totalSavingsBudget}
-                hideAnnualHorizon
-              />
-            ) : (
-              <StatsSection>
-                <EmptyState message="Aucun scénario d’optimisation disponible." />
-              </StatsSection>
-            )}
+            <StatsOptimizationsTab
+              monthlyBudgetByCategory={optimizationMonthlyBudgetByCategory}
+              monthlyActualByCategory={optimizationMonthlyActualByCategory}
+              selectedMonth={optimizationSelectedMonth}
+              selectedYear={OPTIMIZATION_YEAR}
+            />
           </div>
         </motion.div>
       ) : null}
 
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'calc(var(--space-2) * -1)' }}>
-          <SavingsHeroCard />
+          <KpiTilesRow items={epargneHomeKpis} />
           <SavingsAllocationDonut />
         </motion.section>
       ) : null}
@@ -972,10 +926,10 @@ export function Epargne() {
             </div>
           </div>
 
-          {performanceViewMode !== 'performance' ? <KpiTilesRow items={performanceKpis} /> : null}
-
           <div style={performanceViewMode === 'performance' ? { marginTop: 'var(--space-4)' } : undefined}>
-            {performanceViewMode === 'performance' ? <SavingsPortfoliosListSection /> : <SavingsEvolutionFiveYearsChart />}
+            {performanceViewMode === 'performance'
+              ? <SavingsPortfoliosListSection />
+              : <SavingsEvolutionFiveYearsChart overviewKpis={performanceOverviewKpis} />}
           </div>
         </motion.section>
       ) : null}

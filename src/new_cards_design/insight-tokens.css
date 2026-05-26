@@ -1,0 +1,150 @@
+/**
+ * insight-tokens.css
+ *
+ * Ajouter dans ton fichier de tokens global (ex: tokens.css, globals.css,
+ * ou dans le fichier qui définit déjà tes --neutral-*, --primary-* etc.)
+ *
+ * Ces tokens couvrent les deux modes : light (défaut) + dark.
+ * Le mode sombre s'active via la classe .dark sur <html> ou <body>,
+ * selon ce que tu utilises déjà dans ta codebase.
+ */
+
+
+/* ─────────────────────────────────────────────────────────────── */
+/* PALETTE SIGNAL — identique en light et dark                     */
+/* Utiliser avec parcimonie : valeur chiffrée, strip, sparkline    */
+/* ─────────────────────────────────────────────────────────────── */
+
+:root {
+  --color-bordeaux:       #7c2130;   /* signal critique              */
+  --color-bordeaux-muted: #a84455;   /* version plus claire pour dark */
+  --color-petrol:         #1a5c74;   /* vigilance / référence 2025   */
+  --color-petrol-muted:   #2a7a96;   /* version plus claire pour dark */
+  --color-cyan-insight:   #0097b2;   /* projections / revenus 2026   */
+  --color-teal-insight:   #1d7a6d;   /* valeur positive              */
+}
+
+
+/* ─────────────────────────────────────────────────────────────── */
+/* MODE CLAIR (défaut)                                             */
+/* ─────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --insight-bg:           #eaecf0;   /* fond de page (légèrement teinté) */
+  --insight-card:         #ffffff;
+  --insight-panel-bg:     #ffffff;
+
+  /* Bordures */
+  --insight-border:       #e6e9ef;
+  --insight-border-active:#0d1117;   /* carte ouverte                */
+  --insight-divider:      #e6e9ef;   /* hairlines KPI row + charts   */
+
+  /* Texte */
+  --insight-text:         #0d1117;
+  --insight-muted:        #6e7685;   /* labels, texte insight         */
+  --insight-dim:          #adb5c0;   /* notes, axes graphiques        */
+
+  /* Graphiques */
+  --insight-bar-2025:     #b8d4df;   /* barres référence 2025        */
+  --insight-grid-line:    #f0f2f5;   /* lignes horizontales chart     */
+
+  /* Éléments UI */
+  --insight-btn-bg:       #f0f2f5;   /* fond bouton chevron fermé    */
+  --insight-pill-bg:      #ffffff;   /* fond pill période            */
+  --insight-pill-border:  #e6e9ef;
+}
+
+
+/* ─────────────────────────────────────────────────────────────── */
+/* MODE SOMBRE                                                     */
+/* Adapter le sélecteur selon ton système :                        */
+/*   .dark :root  →  si tu utilises une classe sur <html>          */
+/*   [data-theme="dark"] :root  →  si tu utilises un data-attr     */
+/*   @media (prefers-color-scheme: dark) :root  →  si auto         */
+/* ─────────────────────────────────────────────────────────────── */
+
+.dark {
+
+  /* Surfaces */
+  --insight-bg:           #0c1018;   /* fond de page quasi-noir      */
+  --insight-card:         #141b27;   /* cartes : bleu nuit profond   */
+  --insight-panel-bg:     #141b27;   /* panneau déplié               */
+
+  /* Bordures */
+  --insight-border:       #222d3e;   /* subtil, à peine visible      */
+  --insight-border-active:#dde3ec;   /* carte ouverte : presque blanc */
+  --insight-divider:      #1e2a3a;   /* hairlines très sombres       */
+
+  /* Texte */
+  --insight-text:         #dde3ec;   /* titres / valeurs             */
+  --insight-muted:        #8893a0;   /* labels, insight text         */
+  --insight-dim:          #445060;   /* notes, axes, badges discrets */
+
+  /* Graphiques */
+  --insight-bar-2025:     #1e3d4f;   /* barres 2025 : pétrol sombre  */
+  --insight-grid-line:    #1a2434;   /* grille quasi-invisible       */
+
+  /* Éléments UI */
+  --insight-btn-bg:       #1e2a3a;   /* fond bouton chevron fermé    */
+  --insight-pill-bg:      #141b27;
+  --insight-pill-border:  #222d3e;
+
+  /*
+   * Couleurs signal en mode sombre :
+   * On utilise les variantes "muted" pour éviter le choc visuel
+   * sur fond sombre, tout en gardant la lisibilité.
+   *
+   * Dans les composants :
+   *   signal critique  → var(--color-bordeaux-muted)  (#a84455)
+   *   vigilance        → var(--color-petrol-muted)    (#2a7a96)
+   *   projections      → var(--color-cyan-insight)    (inchangé)
+   */
+}
+
+
+/* ─────────────────────────────────────────────────────────────── */
+/* FONT MONO — ajouter si DM Mono pas encore dans le projet        */
+/* ─────────────────────────────────────────────────────────────── */
+
+/*
+  Dans ton <head> (index.html ou _document.tsx) :
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  Puis dans tes tokens existants, étendre --font-mono :
+*/
+
+:root {
+  --font-mono: 'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+
+/* ─────────────────────────────────────────────────────────────── */
+/* USAGE DANS LES COMPOSANTS                                       */
+/* ─────────────────────────────────────────────────────────────── */
+
+/*
+  Exemples d'utilisation dans InsightCards.tsx :
+
+  background: var(--insight-card)
+  border: 1px solid var(--insight-border)
+  color: var(--insight-text)
+  color: var(--insight-muted)           ← texte secondaire
+  color: var(--insight-dim)             ← notes, axes
+  border-top: 1px solid var(--insight-divider)   ← KPI row separators
+  stroke: var(--insight-bar-2025)       ← barres référence SVG/Recharts
+  stroke: var(--insight-grid-line)      ← grille graphique
+
+  Signal couleur (en JS) :
+    signal === 'critique'
+      ? 'var(--color-bordeaux-muted)'   ← dark mode
+      : 'var(--color-bordeaux)'         ← light mode
+
+  Ou via une helper CSS class :
+    .signal-critique { color: var(--color-bordeaux); }
+    .dark .signal-critique { color: var(--color-bordeaux-muted); }
+*/
