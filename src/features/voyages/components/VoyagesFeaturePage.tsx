@@ -1,21 +1,20 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MapPin, Trophy, Calendar, TrendingUp } from 'lucide-react'
+import { ArrowLeft, MapPin, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react'
 import { useVoyagesData } from '../hooks/useVoyagesData'
-import type { TripWithStats } from '../types'
+import type { TripTransaction, TripWithStats } from '../types'
 import { PlanVoyageModal } from './PlanVoyageModal'
-
-// ─── constants ────────────────────────────────────────────────────────────────
 
 const TRIP_COLORS = [
   '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#14B8A6',
   '#F97316', '#8B5CF6', '#06B6D4', '#84CC16', '#EF4444',
 ]
 
-const MONTH_NAMES_SHORT = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin',
-  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const MONTH_NAMES_SHORT = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+const VOYAGES_ACCENT = '#F59E0B'
+const AVAILABLE_YEARS = [2025, 2026] as const
+const UNKNOWN_CATEGORY_KEY = '__unknown__'
 
 function tripColor(index: number): string {
   return TRIP_COLORS[index % TRIP_COLORS.length]
@@ -38,33 +37,100 @@ function formatAmount(n: number): string {
   }).format(Math.round(n)) + ' €'
 }
 
-// ─── sub-components ───────────────────────────────────────────────────────────
+function formatTxDateDayMonthYear(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '--/--/----'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
 
-function KpiChip({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div style={{
-      border: '1px solid var(--neutral-200)',
-      background: 'var(--neutral-0)',
-      borderRadius: 'var(--radius-md)',
-      padding: '6px var(--space-3)',
-      display: 'grid',
-      justifyItems: 'center',
-      gap: 2,
-    }}>
+function getTxLabel(tx: TripTransaction): string {
+  const normalized = (tx.normalized_label ?? '').trim()
+  if (normalized.length > 0) return normalized
+  const merchant = (tx.merchant_name ?? '').trim()
+  if (merchant.length > 0) return merchant
+  const raw = (tx.raw_label ?? '').trim()
+  if (raw.length > 0) return raw
+  return 'Opération'
+}
+
+function isTripPast(tripEndDateIso: string, todayKey: string): boolean {
+  return tripEndDateIso < todayKey
+}
+
+function KpiChip({
+  label,
+  value,
+  mono = false,
+  onClick,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  onClick?: () => void
+}) {
+  const content = (
+    <>
       <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>
         {label}
       </span>
       <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: mono ? 'var(--font-mono)' : undefined, color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
         {value}
       </span>
-    </div>
+    </>
+  )
+
+  if (!onClick) {
+    return (
+      <div style={{
+        border: '1px solid var(--neutral-200)',
+        background: 'var(--neutral-0)',
+        borderRadius: 'var(--radius-md)',
+        padding: '6px var(--space-3)',
+        display: 'grid',
+        justifyItems: 'center',
+        gap: 2,
+      }}>
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: '1px solid var(--neutral-200)',
+        background: 'var(--neutral-0)',
+        borderRadius: 'var(--radius-md)',
+        padding: '6px var(--space-3)',
+        display: 'grid',
+        justifyItems: 'center',
+        gap: 2,
+        cursor: 'pointer',
+      }}
+    >
+      {content}
+    </button>
   )
 }
 
-function CategoryBar({ name, amount, pct, color }: { name: string; amount: number; pct: number; color: string }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr auto', alignItems: 'center', gap: 'var(--space-2)' }}>
-      <span style={{ fontSize: 11, color: 'var(--neutral-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+function CategoryBar({
+  name,
+  amount,
+  pct,
+  color,
+  onClick,
+}: {
+  name: string
+  amount: number
+  pct: number
+  color: string
+  onClick?: () => void
+}) {
+  const inner = (
+    <>
+      <span style={{ fontSize: 11, color: 'var(--neutral-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>
         {name}
       </span>
       <div style={{ height: 7, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
@@ -75,18 +141,196 @@ function CategoryBar({ name, amount, pct, color }: { name: string; amount: numbe
           background: color,
         }} />
       </div>
-      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--neutral-700)', whiteSpace: 'nowrap', textAlign: 'right' }}>
         {formatAmount(amount)}
       </span>
-    </div>
+    </>
+  )
+
+  if (!onClick) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+        {inner}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: '100%',
+        border: 'none',
+        background: 'transparent',
+        display: 'grid',
+        gridTemplateColumns: '80px 1fr auto',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        cursor: 'pointer',
+        padding: '2px 0',
+      }}
+    >
+      {inner}
+    </button>
   )
 }
 
-function TripCard({ item, index, isLast }: { item: TripWithStats; index: number; isLast: boolean }) {
+function TripTransactionsModal({
+  open,
+  title,
+  transactions,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  transactions: TripTransaction[]
+  onClose: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [open, onClose])
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.42)',
+            zIndex: 120,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            padding: 'var(--space-4)',
+          }}
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 28, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 28, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 620,
+              maxHeight: '82vh',
+              background: 'var(--neutral-0)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow: 'var(--shadow-card)',
+              border: '1px solid var(--neutral-150)',
+              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateRows: 'auto 1fr',
+            }}
+          >
+            <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--neutral-150)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {title}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-500)' }}>
+                  {transactions.length} opération{transactions.length > 1 ? 's' : ''} · ordre chronologique
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Fermer la liste des opérations"
+                style={{
+                  width: 28,
+                  height: 28,
+                  border: 'none',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--neutral-100)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'var(--neutral-700)',
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ overflow: 'auto', padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>
+              {transactions.length === 0 ? (
+                <p style={{ margin: 'var(--space-4) 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+                  Aucune opération sur ce périmètre.
+                </p>
+              ) : (
+                transactions.map((tx) => (
+                  <div
+                    key={tx.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '74px minmax(0,1fr) auto',
+                      gap: 'var(--space-2)',
+                      alignItems: 'center',
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--neutral-100)',
+                    }}
+                  >
+                    <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                      {formatTxDateDayMonthYear(tx.transaction_date)}
+                    </span>
+                    <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {getTxLabel(tx)}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.merchant_name ?? tx.raw_label ?? '—'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
+                      {formatAmount(Number(tx.amount)).replace(/\s+€/, '€')}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+function TripAccordionItem({
+  item,
+  index,
+  isLast,
+  expanded,
+  onToggle,
+  onEditTrip,
+  onOpenCategoryTransactions,
+  onOpenAllTransactions,
+}: {
+  item: TripWithStats
+  index: number
+  isLast: boolean
+  expanded: boolean
+  onToggle: () => void
+  onEditTrip: (trip: TripWithStats) => void
+  onOpenCategoryTransactions: (payload: { tripName: string; categoryId: string; categoryName: string; transactions: TripTransaction[] }) => void
+  onOpenAllTransactions: (payload: { tripName: string; transactions: TripTransaction[] }) => void
+}) {
   const color = tripColor(index)
-  const dateRange = `${formatDateShort(item.trip.start_date)} → ${formatDate(item.trip.end_date)}`
-  const rankLabel = item.hasData ? `#${item.rankByAvgPerDay} /jour` : null
+  const dateRange = `${formatDateShort(item.trip.start_date)} -> ${formatDate(item.trip.end_date)}`
   const maxCatAmount = item.byCategory[0]?.amount ?? 1
+  const tripEmoji = item.trip.emoji?.trim() || '✈️'
 
   return (
     <motion.div
@@ -101,394 +345,514 @@ function TripCard({ item, index, isLast }: { item: TripWithStats; index: number;
         marginBottom: isLast ? 0 : 'var(--space-3)',
       }}
     >
-      {/* header strip */}
-      <div style={{
-        background: color,
-        padding: '10px var(--space-4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 'var(--space-2)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{item.trip.emoji ?? '✈️'}</span>
-          <div>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'rgba(255,255,255,0.97)', lineHeight: 1.1 }}>
-              {item.trip.name}
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 1.3, marginTop: 2 }}>
+      <div
+        style={{
+          width: '100%',
+          background: color,
+          padding: '10px var(--space-4)',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0,1fr) auto',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          style={{
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            padding: 0,
+            margin: 0,
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0,1fr)',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 28, lineHeight: 1, width: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {tripEmoji}
+          </span>
+
+          <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+              <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'rgba(255,255,255,0.97)', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {item.trip.name}
+              </p>
+              {expanded ? (
+                <span style={{ width: 20, height: 20, flexShrink: 0 }} />
+              ) : null}
+            </span>
+            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 1.3 }}>
               {dateRange} · {item.duration} jour{item.duration > 1 ? 's' : ''}
             </p>
           </div>
-        </div>
-        {rankLabel && (
-          <div style={{
-            background: 'rgba(255,255,255,0.22)',
-            borderRadius: 'var(--radius-full)',
-            padding: '3px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}>
-            <Trophy size={11} color="rgba(255,255,255,0.9)" />
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--font-mono)' }}>
-              {rankLabel}
+        </button>
+
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          {expanded ? (
+            <button
+              type="button"
+              onClick={() => onEditTrip(item)}
+              aria-label={`Modifier ${item.trip.name}`}
+              style={{
+                width: 20,
+                height: 20,
+                border: '1px solid rgba(28, 18, 58, 0.58)',
+                borderRadius: 'var(--radius-full)',
+                background: 'rgba(255,255,255,0.2)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'rgba(255,255,255,0.96)',
+                cursor: 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              }}
+            >
+              <Pencil size={11} />
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              margin: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--neutral-0)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              {formatAmount(item.total).replace(/\s+€/, '€')}
             </span>
-          </div>
-        )}
+            {expanded ? (
+              <ChevronUp size={14} color="rgba(255,255,255,0.92)" />
+            ) : (
+              <ChevronDown size={14} color="rgba(255,255,255,0.92)" />
+            )}
+          </button>
+        </span>
       </div>
 
-      {/* body */}
-      <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
-        {!item.hasData ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-3) 0', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
-            <MapPin size={16} style={{ marginBottom: 4, display: 'block', margin: '0 auto 6px' }} />
-            Aucune dépense catégorisée «&nbsp;Voyages&nbsp;» sur cette période.<br />
-            <span style={{ fontSize: 11 }}>Assigne des dépenses manuellement via le détail de transaction.</span>
-          </div>
-        ) : (
-          <>
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-              <KpiChip label="Total" value={formatAmount(item.total)} mono />
-              <KpiChip label="Moy./jour" value={formatAmount(item.avgPerDay)} mono />
-              <KpiChip label="Dépenses" value={String(item.txCount)} />
-            </div>
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
+              {!item.hasData ? (
+                <div style={{ textAlign: 'center', padding: 'var(--space-3) 0', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                  <MapPin size={16} style={{ marginBottom: 4, display: 'block', margin: '0 auto 6px' }} />
+                  Aucune dépense catégorisée « Voyages » sur cette période.<br />
+                  <span style={{ fontSize: 11 }}>Assigne des dépenses manuellement via le détail de transaction.</span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                    <KpiChip label="Total" value={formatAmount(item.total)} mono />
+                    <KpiChip label="Moy./jour" value={formatAmount(item.avgPerDay)} mono />
+                    <KpiChip
+                      label="Dépenses"
+                      value={String(item.txCount)}
+                      onClick={() => onOpenAllTransactions({ tripName: item.trip.name, transactions: item.transactions })}
+                    />
+                  </div>
 
-            {/* subcategory breakdown */}
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              {item.byCategory.map((cat) => (
-                <CategoryBar
-                  key={cat.categoryId}
-                  name={cat.categoryName}
-                  amount={cat.amount}
-                  pct={maxCatAmount > 0 ? (cat.amount / maxCatAmount) * 100 : 0}
-                  color={color}
-                />
-              ))}
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    {item.byCategory.map((cat) => (
+                      <CategoryBar
+                        key={cat.categoryId}
+                        name={cat.categoryName}
+                        amount={cat.amount}
+                        pct={maxCatAmount > 0 ? (cat.amount / maxCatAmount) * 100 : 0}
+                        color={color}
+                        onClick={() => onOpenCategoryTransactions({
+                          tripName: item.trip.name,
+                          categoryId: cat.categoryId,
+                          categoryName: cat.categoryName,
+                          transactions: item.transactions,
+                        })}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          </>
-        )}
-      </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   )
 }
 
-function RankingRow({ item, index, maxAvg }: { item: TripWithStats; index: number; maxAvg: number }) {
-  const color = tripColor(index)
-  const barWidth = maxAvg > 0 && item.avgPerDay > 0 ? (item.avgPerDay / maxAvg) * 100 : 0
-
+function VoyagesKpiCards({
+  tripCount,
+  annualBudget,
+  monthlyBudget,
+}: {
+  tripCount: number
+  annualBudget: number
+  monthlyBudget: number
+}) {
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '20px 1fr auto',
-      alignItems: 'center',
-      gap: 'var(--space-3)',
-      padding: '8px 0',
-      borderBottom: '1px solid var(--neutral-100)',
-    }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-400)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-        {item.hasData ? item.rankByAvgPerDay : '—'}
-      </span>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 14 }}>{item.trip.emoji ?? '✈️'}</span>
-          <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-            {item.trip.name}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--neutral-400)' }}>
-            {formatDateShort(item.trip.start_date)} · {item.duration}j
-          </span>
-        </div>
-        <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-          <div style={{
-            width: `${barWidth}%`,
-            height: '100%',
-            borderRadius: 'var(--radius-full)',
-            background: color,
-            transition: 'width 0.4s ease',
-          }} />
-        </div>
+    <div style={{ marginBottom: 'var(--space-4)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+      <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Voyages</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+          {tripCount}
+        </span>
       </div>
-      <div style={{ textAlign: 'right' }}>
-        {item.hasData ? (
-          <>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-              {formatAmount(item.avgPerDay)}<span style={{ color: 'var(--neutral-400)', fontWeight: 400 }}>/j</span>
-            </p>
-            <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-              {formatAmount(item.total)} total
-            </p>
-          </>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--neutral-400)' }}>pas de données</span>
-        )}
+      <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget annuel</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatAmount(annualBudget).replace(/\s+€/, '€')}</span>
+      </div>
+      <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget mensuel</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatAmount(monthlyBudget).replace(/\s+€/, '€')}</span>
       </div>
     </div>
   )
 }
 
-// ─── main component ───────────────────────────────────────────────────────────
+function YearPicker({
+  year,
+  onChange,
+}: {
+  year: number
+  onChange: (nextYear: number) => void
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [isOpen])
+
+  return (
+    <div ref={menuRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-label="Choisir l'année"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--neutral-700)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 'var(--font-size-sm)',
+          fontWeight: 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          cursor: 'pointer',
+          padding: '2px var(--space-1)',
+          borderRadius: 'var(--radius-sm)',
+        }}
+      >
+        <span>{year}</span>
+        <ChevronDown size={12} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.12 }}
+            role="listbox"
+            aria-label="Années disponibles"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              minWidth: 82,
+              background: 'var(--neutral-0)',
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-card)',
+              padding: 4,
+              zIndex: 20,
+            }}
+          >
+            {AVAILABLE_YEARS.map((y) => {
+              const active = y === year
+              return (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => {
+                    onChange(y)
+                    setIsOpen(false)
+                  }}
+                  role="option"
+                  aria-selected={active}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    background: active ? 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)' : 'transparent',
+                    color: active ? 'var(--primary-700)' : 'var(--neutral-700)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '6px var(--space-2)',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 600,
+                    fontFamily: 'var(--font-mono)',
+                    textAlign: 'left',
+                  }}
+                >
+                  {y}
+                </button>
+              )
+            })}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 interface Props {
   onBack: () => void
 }
 
-type ViewMode = 'par-voyage' | 'par-an'
-
-const VOYAGES_ACCENT = '#F59E0B'
-const AVAILABLE_YEARS = [2025, 2026] as const
+interface TransactionsModalState {
+  open: boolean
+  title: string
+  transactions: TripTransaction[]
+}
 
 export function VoyagesFeaturePage({ onBack }: Props) {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState<number>(currentYear >= 2026 ? 2026 : 2025)
-  const [viewMode, setViewMode] = useState<ViewMode>('par-voyage')
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [tripToEdit, setTripToEdit] = useState<TripWithStats | null>(null)
+  const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({})
+  const [transactionsModalState, setTransactionsModalState] = useState<TransactionsModalState>({
+    open: false,
+    title: '',
+    transactions: [],
+  })
 
-  const { tripsWithStats, yearlyStats, isLoading } = useVoyagesData(year)
+  const { tripsWithStats, isLoading } = useVoyagesData(year)
 
-  const sortedByAvg = useMemo(
-    () => [...tripsWithStats].sort((a, b) => b.avgPerDay - a.avgPerDay),
-    [tripsWithStats],
-  )
-  const maxAvgPerDay = sortedByAvg[0]?.avgPerDay ?? 1
+  const annualTripCount = tripsWithStats.length
+  const annualBudget = useMemo(() => {
+    const now = new Date()
+    const todayKey = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
 
-  const isCurrentYear = year === currentYear
-  const ytdNote = isCurrentYear ? ` (YTD — ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })})` : ''
+    return tripsWithStats.reduce((sum, item) => {
+      const planned = Number(item.trip.planned_budget ?? 0)
+      if (isTripPast(item.trip.end_date, todayKey)) {
+        return sum + item.total
+      }
+      return sum + planned
+    }, 0)
+  }, [tripsWithStats])
+  const monthlyBudget = annualBudget / 12
+
+  useEffect(() => {
+    setExpandedTripIds({})
+    setTripToEdit(null)
+  }, [year])
+
+  const toggleTripExpanded = (tripId: string) => {
+    setExpandedTripIds((prev) => ({
+      ...prev,
+      [tripId]: !prev[tripId],
+    }))
+  }
+
+  const handleOpenAllTransactions = ({
+    tripName,
+    transactions,
+  }: {
+    tripName: string
+    transactions: TripTransaction[]
+  }) => {
+    setTransactionsModalState({
+      open: true,
+      title: `${tripName} · Toutes les opérations`,
+      transactions,
+    })
+  }
+
+  const handleOpenCategoryTransactions = ({
+    tripName,
+    categoryId,
+    categoryName,
+    transactions,
+  }: {
+    tripName: string
+    categoryId: string
+    categoryName: string
+    transactions: TripTransaction[]
+  }) => {
+    const filtered = transactions.filter((tx) => {
+      if (categoryId === UNKNOWN_CATEGORY_KEY) return tx.category_id == null
+      return tx.category_id === categoryId
+    })
+
+    setTransactionsModalState({
+      open: true,
+      title: `${tripName} · ${categoryName}`,
+      transactions: filtered,
+    })
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28 }}
-      style={{ padding: '0 var(--space-6)', maxWidth: 600, margin: '0 auto' }}
-    >
-      {/* ── header: back + title + planifier button ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28 }}
+        style={{ padding: '0 var(--space-6)', maxWidth: 600, margin: '0 auto' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)', gap: 'var(--space-2)' }}>
+          <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Retour"
+              style={{
+                border: 'none',
+                background: VOYAGES_ACCENT,
+                color: 'var(--neutral-0)',
+                width: 24,
+                height: 24,
+                minWidth: 24,
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                padding: 0,
+                flexShrink: 0,
+              }}
+            >
+              <ArrowLeft size={14} />
+            </button>
+
+            <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>
+              Voyages
+            </p>
+
+            <YearPicker year={year} onChange={setYear} />
+          </div>
+
           <button
             type="button"
-            onClick={onBack}
-            aria-label="Retour"
+            onClick={() => setShowPlanModal(true)}
+            aria-label="Nouveau voyage"
             style={{
-              border: 'none',
-              background: VOYAGES_ACCENT,
-              color: 'var(--neutral-0)',
-              width: 24,
-              height: 24,
-              minWidth: 24,
-              borderRadius: 'var(--radius-full)',
               display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              border: 'none',
+              background: '#0097A7',
+              borderRadius: 'var(--radius-full)',
+              padding: '6px 12px',
               cursor: 'pointer',
-              padding: 0,
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'var(--neutral-0)',
+              boxShadow: '0 2px 8px rgba(0,151,167,0.38)',
               flexShrink: 0,
             }}
           >
-            <ArrowLeft size={14} />
+            Nouveau
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <span style={{ fontSize: 20 }}>✈️</span>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.1 }}>
-              Voyages
-            </p>
+        </div>
+
+        <VoyagesKpiCards
+          tripCount={annualTripCount}
+          annualBudget={annualBudget}
+          monthlyBudget={monthlyBudget}
+        />
+
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+            Chargement...
           </div>
-        </div>
+        ) : null}
 
-        {/* Planifier un voyage button */}
-        <button
-          type="button"
-          onClick={() => setShowPlanModal(true)}
-          aria-label="Planifier un voyage"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            border: 'none', background: '#0097A7', borderRadius: 'var(--radius-full)',
-            padding: '6px 12px 6px 9px', cursor: 'pointer',
-            fontSize: 12, fontWeight: 600, color: 'var(--neutral-0)',
-            boxShadow: '0 2px 8px rgba(0,151,167,0.38)',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 14, lineHeight: 1 }}>✈️</span>
-          Planifier
-        </button>
-      </div>
-
-      {/* ── year selector + view mode toggle (equal halves) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 'var(--space-4)' }}>
-        {/* Year selector */}
-        <div style={{
-          display: 'flex',
-          gap: 3,
-          background: 'var(--neutral-100)',
-          borderRadius: 'var(--radius-full)',
-          padding: 3,
-        }}>
-          {AVAILABLE_YEARS.map((y) => (
-            <button
-              key={y}
-              type="button"
-              onClick={() => setYear(y)}
-              style={{
-                flex: 1,
-                border: 'none',
-                background: year === y ? 'var(--neutral-0)' : 'transparent',
-                color: year === y ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                fontWeight: year === y ? 700 : 500,
-                fontSize: 'var(--font-size-xs)',
-                borderRadius: 'var(--radius-full)',
-                padding: '4px 8px',
-                cursor: 'pointer',
-                boxShadow: year === y ? 'var(--shadow-card)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {y}
-            </button>
-          ))}
-        </div>
-
-        {/* View mode toggle */}
-        <div style={{
-          display: 'flex',
-          gap: 0,
-          background: 'var(--neutral-100)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 3,
-        }}>
-          {(['par-voyage', 'par-an'] as ViewMode[]).map((mode) => {
-            const isActive = viewMode === mode
-            const label = mode === 'par-voyage' ? (
-              <><Calendar size={11} style={{ marginRight: 3, flexShrink: 0 }} />Par voyage</>
-            ) : (
-              <><TrendingUp size={11} style={{ marginRight: 3, flexShrink: 0 }} />Annuel</>
-            )
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                style={{
-                  flex: 1,
-                  border: 'none',
-                  background: isActive ? 'var(--neutral-0)' : 'transparent',
-                  color: isActive ? 'var(--neutral-900)' : 'var(--neutral-500)',
-                  fontWeight: isActive ? 700 : 500,
-                  fontSize: 11,
-                  borderRadius: 'var(--radius-md)',
-                  padding: '5px 6px',
-                  cursor: 'pointer',
-                  boxShadow: isActive ? 'var(--shadow-card)' : 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── loading ── */}
-      {isLoading && (
-        <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
-          Chargement…
-        </div>
-      )}
-
-      {/* ── par voyage view ── */}
-      <AnimatePresence mode="wait">
-        {!isLoading && viewMode === 'par-voyage' && (
-          <motion.div key="par-voyage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-            {tripsWithStats.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
-                Aucun voyage enregistré pour {year}.
-              </div>
-            ) : (
-              tripsWithStats.map((item, i) => (
-                <TripCard key={item.trip.id} item={item} index={i} isLast={i === tripsWithStats.length - 1} />
-              ))
-            )}
-          </motion.div>
-        )}
-
-        {/* ── vue annuelle ── */}
-        {!isLoading && viewMode === 'par-an' && (
-          <motion.div key="par-an" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-
-            {/* year summary card */}
-            <div style={{
-              border: `1px solid color-mix(in oklab, ${VOYAGES_ACCENT} 40%, transparent)`,
-              borderRadius: 'var(--radius-xl)',
-              background: `color-mix(in oklab, ${VOYAGES_ACCENT} 6%, var(--neutral-0))`,
-              padding: 'var(--space-4)',
-              marginBottom: 'var(--space-4)',
-            }}>
-              <p style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)' }}>
-                Bilan {year}{ytdNote}
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
-                    {formatAmount(yearlyStats.total)}
-                  </p>
-                  <p style={{ margin: '3px 0 0', fontSize: 10, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-                    Total
-                  </p>
+        <AnimatePresence mode="wait">
+          {!isLoading ? (
+            <motion.div key={`voyages-${year}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+              {tripsWithStats.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                  Aucun voyage enregistré pour {year}.
                 </div>
-                <div style={{ textAlign: 'center', borderLeft: '1px solid var(--neutral-200)', borderRight: '1px solid var(--neutral-200)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
-                    {formatAmount(yearlyStats.monthlyAvg)}
-                  </p>
-                  <p style={{ margin: '3px 0 0', fontSize: 10, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-                    Moy./mois
-                  </p>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
-                    {yearlyStats.tripCount}
-                  </p>
-                  <p style={{ margin: '3px 0 0', fontSize: 10, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-                    Voyage{yearlyStats.tripCount > 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
-            </div>
+              ) : (
+                tripsWithStats.map((item, i) => (
+                  <TripAccordionItem
+                    key={item.trip.id}
+                    item={item}
+                    index={i}
+                    isLast={i === tripsWithStats.length - 1}
+                    expanded={Boolean(expandedTripIds[item.trip.id])}
+                    onToggle={() => toggleTripExpanded(item.trip.id)}
+                    onEditTrip={(trip) => setTripToEdit(trip)}
+                    onOpenCategoryTransactions={handleOpenCategoryTransactions}
+                    onOpenAllTransactions={handleOpenAllTransactions}
+                  />
+                ))
+              )}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-            {/* ranking */}
-            <div style={{
-              border: '1px solid var(--neutral-200)',
-              borderRadius: 'var(--radius-xl)',
-              background: 'var(--neutral-0)',
-              padding: 'var(--space-3) var(--space-4)',
-            }}>
-              <p style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                Classement par coût journalier
-              </p>
-              {sortedByAvg.map((item) => (
-                <RankingRow
-                  key={item.trip.id}
-                  item={item}
-                  index={tripsWithStats.findIndex((t) => t.trip.id === item.trip.id)}
-                  maxAvg={maxAvgPerDay}
-                />
-              ))}
-            </div>
+        <div style={{ height: 'var(--space-6)' }} />
 
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <PlanVoyageModal
+          open={showPlanModal}
+          onClose={() => setShowPlanModal(false)}
+          mode="create"
+          tripToEdit={null}
+        />
+        <PlanVoyageModal
+          open={tripToEdit != null}
+          onClose={() => setTripToEdit(null)}
+          mode="edit"
+          tripToEdit={tripToEdit}
+        />
+      </motion.div>
 
-      {/* bottom spacer */}
-      <div style={{ height: 'var(--space-6)' }} />
-
-      {/* ── Plan voyage modal ── */}
-      <PlanVoyageModal open={showPlanModal} onClose={() => setShowPlanModal(false)} />
-    </motion.div>
+      <TripTransactionsModal
+        open={transactionsModalState.open}
+        title={transactionsModalState.title}
+        transactions={transactionsModalState.transactions}
+        onClose={() => setTransactionsModalState((prev) => ({ ...prev, open: false }))}
+      />
+    </>
   )
 }

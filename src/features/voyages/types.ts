@@ -51,6 +51,7 @@ export interface TripWithStats {
   duration: number
   avgPerDay: number
   txCount: number
+  transactions: TripTransaction[]
   byCategory: TripCategoryBreakdown[]
   rankByAvgPerDay: number
   hasData: boolean

@@ -4,21 +4,22 @@ import { X, MapPin, Clock, ChevronDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { useAuth } from '@/hooks/useAuth'
+import { useAccounts } from '@/hooks/useAccounts'
+import { useCategories } from '@/hooks/useCategories'
 import { QK } from '@/lib/queryKeys'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import type { TripTransaction, TripWithStats } from '../types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const VOYAGE_SUBCATEGORIES = [
-  { id: 'fc0e644a-6082-42d0-b2d4-c947b4d7f8a2', name: 'Trajet', emoji: '🚂' },
-  { id: '1e0fbcd1-1183-42af-a73a-4e5ffd7dea62', name: 'Logement', emoji: '🏨' },
-  { id: 'a64508ca-1f7f-4a62-a5d4-7adcc6061fc3', name: 'Repas', emoji: '🍽️' },
-  { id: 'acacac44-fecb-46f3-972f-e0c54704c6b3', name: 'Activités', emoji: '🎭' },
-  { id: '74e08170-3b7e-429d-a90e-2e0766bd41a6', name: 'Sorties', emoji: '🥂' },
-  { id: '39adc1a6-713d-4821-af5b-14fa46dfa60d', name: 'Extras', emoji: '🛍️' },
+const VOYAGE_SUBCATEGORY_BLUEPRINTS = [
+  { key: 'trajet', name: 'Trajet', emoji: '🚂', aliases: ['trajet', 'trajets'] },
+  { key: 'logement', name: 'Logement', emoji: '🏨', aliases: ['logement', 'hebergement', 'hébergement'] },
+  { key: 'repas', name: 'Repas', emoji: '🍽️', aliases: ['repas', 'restaurant'] },
+  { key: 'activites', name: 'Activités', emoji: '🎭', aliases: ['activites', 'activités', 'activite', 'activité'] },
+  { key: 'sorties', name: 'Sorties', emoji: '🥂', aliases: ['sorties', 'sortie'] },
+  { key: 'extras', name: 'Extras', emoji: '🛍️', aliases: ['extras', 'extra', 'froustilles', 'froustilles voyage'] },
 ] as const
-
-const ACCOUNT_PERSO_ID = 'bcffa4d1-92b0-4feb-a492-51ea328cfce2'
-const ACCOUNT_JOINT_ID = 'bdf30750-6152-4ffa-9bd6-b2d7859cd509'
 
 type Ambiance = 'city_lights' | 'sunset' | 'natural'
 
@@ -72,18 +73,62 @@ function fmt(n: number) {
   )
 }
 
+function normalizeToken(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 
 interface Props {
   open: boolean
   onClose: () => void
+  mode?: 'create' | 'edit'
+  tripToEdit?: TripWithStats | null
 }
 
 type SubBudgets = Record<string, string>
 
-export function PlanVoyageModal({ open, onClose }: Props) {
+function resolveAmbianceFromEmoji(emoji: string | null | undefined): Ambiance {
+  if (emoji === AMBIANCE_CONFIG.sunset.emoji) return 'sunset'
+  if (emoji === AMBIANCE_CONFIG.natural.emoji) return 'natural'
+  return 'city_lights'
+}
+
+function toIsoToday(): string {
+  const now = new Date()
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function getSupabaseErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const maybe = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const message = typeof maybe.message === 'string' ? maybe.message.trim() : ''
+    const details = typeof maybe.details === 'string' ? maybe.details.trim() : ''
+    const hint = typeof maybe.hint === 'string' ? maybe.hint.trim() : ''
+    const code = typeof maybe.code === 'string' ? maybe.code.trim() : ''
+
+    const parts = [message, details, hint].filter((part) => part.length > 0)
+    if (parts.length > 0) return parts.join(' — ')
+    if (code.length > 0) return `Erreur Supabase (${code})`
+  }
+  return 'Une erreur est survenue'
+}
+
+export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = null }: Props) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const accountsQuery = useAccounts()
+  const categoriesQuery = useCategories()
 
   const [tripName, setTripName] = useState('')
   const [destination, setDestination] = useState('')
@@ -98,6 +143,73 @@ export function PlanVoyageModal({ open, onClose }: Props) {
   const [shareRatio, setShareRatio] = useState(50)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isLoadingPrefill, setIsLoadingPrefill] = useState(false)
+  const [realizedCategoryTxModal, setRealizedCategoryTxModal] = useState<{
+    open: boolean
+    title: string
+    transactions: TripTransaction[]
+  }>({ open: false, title: '', transactions: [] })
+  const [selectedTripTransaction, setSelectedTripTransaction] = useState<TripTransaction | null>(null)
+
+  const isEditMode = mode === 'edit' && tripToEdit != null
+  const editingTrip = tripToEdit?.trip ?? null
+  const isPastTrip = useMemo(() => {
+    if (!editingTrip) return false
+    return editingTrip.end_date < toIsoToday()
+  }, [editingTrip])
+  const personalAccountId = useMemo(() => {
+    const accounts = accountsQuery.data ?? []
+    if (!accounts.length) return null
+    const withoutJoint = accounts.filter((account) => !/joint/i.test(account.name))
+    return (
+      withoutJoint.find((account) => account.account_type === 'checking')?.id
+      ?? withoutJoint[0]?.id
+      ?? accounts.find((account) => account.account_type === 'checking')?.id
+      ?? accounts[0]?.id
+      ?? null
+    )
+  }, [accountsQuery.data])
+  const jointAccountId = useMemo(() => {
+    const accounts = accountsQuery.data ?? []
+    return accounts.find((account) => /joint/i.test(account.name))?.id ?? null
+  }, [accountsQuery.data])
+  const voyageSubcategories = useMemo(() => {
+    const categories = categoriesQuery.data ?? []
+    const expenseCategories = categories.filter((category) => category.flow_type === 'expense')
+    const voyagesRoot = expenseCategories.find(
+      (category) => category.parent_id === null && normalizeToken(category.name) === 'voyages',
+    ) ?? null
+    const preferredPool = voyagesRoot
+      ? expenseCategories.filter((category) => category.parent_id === voyagesRoot.id)
+      : expenseCategories
+    const preferredPoolOrdered = [...preferredPool].sort((a, b) => a.sort_order - b.sort_order)
+
+    return VOYAGE_SUBCATEGORY_BLUEPRINTS.map((blueprint, index) => {
+      const aliases = blueprint.aliases as readonly string[]
+      const direct = preferredPool.find((category) => aliases.includes(normalizeToken(category.name)))
+      const fallback = expenseCategories.find((category) => aliases.includes(normalizeToken(category.name)))
+      const fallbackByIndex = preferredPoolOrdered[index] ?? null
+      const matched = direct ?? fallback ?? fallbackByIndex
+
+      return {
+        ...blueprint,
+        id: matched?.id ?? null,
+        label: matched?.name ?? blueprint.name,
+      }
+    })
+  }, [categoriesQuery.data])
+  const voyageSubcategoryIds = useMemo(
+    () => voyageSubcategories.map((sub) => sub.id).filter((id): id is string => Boolean(id)),
+    [voyageSubcategories],
+  )
+  const voyageSubcategoryById = useMemo(() => {
+    const map = new Map<string, (typeof voyageSubcategories)[number]>()
+    for (const sub of voyageSubcategories) {
+      if (!sub.id) continue
+      map.set(sub.id, sub)
+    }
+    return map
+  }, [voyageSubcategories])
 
   // Ferme le menu ambiance sur clic extérieur
   useEffect(() => {
@@ -110,15 +222,115 @@ export function PlanVoyageModal({ open, onClose }: Props) {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [ambianceMenuOpen])
 
+  useEffect(() => {
+    if (!open) return
+    if (!isEditMode || !editingTrip || !user?.id) return
+
+    setTripName(editingTrip.name ?? '')
+    setDestination(editingTrip.notes ?? '')
+    setAmbiance(resolveAmbianceFromEmoji(editingTrip.emoji))
+    setStartDate(editingTrip.start_date ?? '')
+    setEndDate(editingTrip.end_date ?? '')
+    setSubmitError(null)
+
+    if (isPastTrip) return
+
+    let cancelled = false
+    const loadPlannedOperations = async () => {
+      setIsLoadingPrefill(true)
+      try {
+        const categoryIds = voyageSubcategoryIds
+        if (categoryIds.length === 0) {
+          if (cancelled) return
+          setSubBudgets({})
+          setSubNotes({})
+          setIsJoint(false)
+          setShareRatio(100)
+          return
+        }
+        const { data, error } = await budgetDb
+          .from('planned_operations')
+          .select('category_id, planned_amount, notes, account_id, personal_share_ratio')
+          .eq('user_id', user.id)
+          .eq('label', editingTrip.name)
+          .gte('planned_date', editingTrip.start_date)
+          .lte('planned_date', editingTrip.end_date)
+          .in('category_id', categoryIds)
+
+        if (error) throw error
+        if (cancelled) return
+
+        const nextBudgets: SubBudgets = {}
+        const nextNotes: Record<string, string> = {}
+        let accountIdForTrip: string | null = null
+        let ratioForTrip: number | null = null
+
+        for (const row of data ?? []) {
+          const catId = String(row.category_id ?? '')
+          if (!catId) continue
+          const matchedSub = voyageSubcategoryById.get(catId)
+          if (!matchedSub) continue
+          const amount = Number(row.planned_amount ?? 0)
+          nextBudgets[matchedSub.key] = String((Number(nextBudgets[matchedSub.key] ?? '0') || 0) + amount)
+          if (typeof row.notes === 'string' && row.notes.trim()) nextNotes[matchedSub.key] = row.notes
+          if (!accountIdForTrip && row.account_id) accountIdForTrip = row.account_id
+          if (ratioForTrip == null && typeof row.personal_share_ratio === 'number') ratioForTrip = row.personal_share_ratio
+        }
+
+        setSubBudgets(nextBudgets)
+        setSubNotes(nextNotes)
+        if (jointAccountId && accountIdForTrip === jointAccountId) {
+          setIsJoint(true)
+          setShareRatio(Math.round((ratioForTrip ?? 0.5) * 100))
+        } else {
+          setIsJoint(false)
+          setShareRatio(100)
+        }
+      } catch {
+        if (cancelled) return
+        setSubBudgets({})
+        setSubNotes({})
+      } finally {
+        if (!cancelled) setIsLoadingPrefill(false)
+      }
+    }
+
+    void loadPlannedOperations()
+    return () => {
+      cancelled = true
+    }
+  }, [editingTrip, isEditMode, isPastTrip, jointAccountId, open, user?.id, voyageSubcategoryById, voyageSubcategoryIds])
+
   const duration = useMemo(() => dateDiffDays(startDate, endDate), [startDate, endDate])
   const totalBudget = useMemo(
     () =>
-      VOYAGE_SUBCATEGORIES.reduce(
-        (sum, s) => sum + (parseFloat(subBudgets[s.id] ?? '0') || 0),
+      voyageSubcategories.reduce(
+        (sum, sub) => sum + (parseFloat(subBudgets[sub.key] ?? '0') || 0),
         0,
       ),
-    [subBudgets],
+    [subBudgets, voyageSubcategories],
   )
+  const realizedTotalsByCategory = useMemo(() => {
+    if (!tripToEdit) return new Map<string, number>()
+    const map = new Map<string, number>()
+    for (const tx of tripToEdit.transactions) {
+      const key = tx.category_id ?? '__unknown__'
+      map.set(key, (map.get(key) ?? 0) + Number(tx.amount ?? 0))
+    }
+    return map
+  }, [tripToEdit])
+  const realizedTotal = useMemo(
+    () => voyageSubcategories.reduce((sum, sub) => sum + (sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0), 0),
+    [realizedTotalsByCategory, voyageSubcategories],
+  )
+  const displayedBudgetTotal = isEditMode && isPastTrip ? realizedTotal : totalBudget
+  const categoryIconKeyById = useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const category of categoriesQuery.data ?? []) {
+      map.set(category.id, category.icon_key ?? null)
+    }
+    return map
+  }, [categoriesQuery.data])
 
   function handleSubBudget(catId: string, val: string) {
     setSubBudgets((prev) => ({ ...prev, [catId]: val }))
@@ -133,32 +345,166 @@ export function PlanVoyageModal({ open, onClose }: Props) {
     setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const year = parseInt(startDate.slice(0, 4))
-      const accountId = isJoint ? ACCOUNT_JOINT_ID : ACCOUNT_PERSO_ID
+      const accountId = isJoint
+        ? (jointAccountId ?? personalAccountId)
+        : (personalAccountId ?? jointAccountId)
+      if (!accountId) {
+        throw new Error('Aucun compte disponible pour enregistrer ce voyage.')
+      }
       const personalShareRatio = isJoint ? shareRatio / 100 : 1
+      const normalizedTripName = tripName.trim()
+      const normalizedDestination = destination.trim() || null
+      const resolvedEndDate = endDate || startDate
+      const nonZeroSubs = voyageSubcategories.filter(
+        (sub): sub is (typeof voyageSubcategories)[number] & { id: string } =>
+          Boolean(sub.id) && (parseFloat(subBudgets[sub.key] ?? '0') || 0) > 0,
+      )
+      const computedPlannedBudget = nonZeroSubs.reduce(
+        (sum, sub) => sum + (parseFloat(subBudgets[sub.key] ?? '0') || 0),
+        0,
+      )
+      const nextPlannedBudget = isEditMode && isPastTrip
+        ? editingTrip?.planned_budget ?? null
+        : (computedPlannedBudget > 0 ? computedPlannedBudget : null)
+
+      if (isEditMode && editingTrip) {
+        const { error: updateTripErr } = await budgetDb
+          .from('trips')
+          .update({
+            name: normalizedTripName,
+            start_date: startDate,
+            end_date: resolvedEndDate,
+            emoji: AMBIANCE_CONFIG[ambiance].emoji,
+            notes: normalizedDestination,
+            planned_budget: nextPlannedBudget,
+          })
+          .eq('id', editingTrip.id)
+          .eq('user_id', user.id)
+        if (updateTripErr) throw updateTripErr
+
+        if (!isPastTrip) {
+          const oldCategoryIds = voyageSubcategoryIds
+          const { data: existingPlannedRows, error: existingPlannedErr } = oldCategoryIds.length > 0
+            ? await budgetDb
+              .from('planned_operations')
+              .select('id, category_id')
+              .eq('user_id', user.id)
+              .eq('label', editingTrip.name)
+              .gte('planned_date', editingTrip.start_date)
+              .lte('planned_date', editingTrip.end_date)
+              .in('category_id', oldCategoryIds)
+            : { data: [], error: null }
+          if (existingPlannedErr) throw existingPlannedErr
+
+          const existingRowsByCategory = new Map<string, string[]>()
+          for (const row of existingPlannedRows ?? []) {
+            const catId = typeof row.category_id === 'string' ? row.category_id : null
+            if (!catId) continue
+            const prev = existingRowsByCategory.get(catId) ?? []
+            prev.push(row.id)
+            existingRowsByCategory.set(catId, prev)
+          }
+
+          for (const row of existingPlannedRows ?? []) {
+            const { error: resetPlannedErr } = await budgetDb
+              .from('planned_operations')
+              .update({
+                account_id: accountId,
+                label: normalizedTripName,
+                planned_date: startDate,
+                planned_amount: 0,
+                personal_share_ratio: personalShareRatio,
+                notes: normalizedDestination,
+                recurrence_day_of_month: null,
+                recurrence_start_date: null,
+                recurrence_end_date: null,
+              })
+              .eq('id', row.id)
+              .eq('user_id', user.id)
+
+            if (resetPlannedErr) throw resetPlannedErr
+          }
+
+          for (const sub of nonZeroSubs) {
+            const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
+            const categoryRowIds = existingRowsByCategory.get(sub.id) ?? []
+            const rowIdToReuse = categoryRowIds.shift()
+            existingRowsByCategory.set(sub.id, categoryRowIds)
+
+            if (rowIdToReuse) {
+              const { error: opUpdateErr } = await budgetDb
+                .from('planned_operations')
+                .update({
+                  account_id: accountId,
+                  category_id: sub.id,
+                  label: normalizedTripName,
+                  planned_date: startDate,
+                  planned_amount: amt,
+                  personal_share_ratio: personalShareRatio,
+                  notes: subNotes[sub.key]?.trim() || normalizedDestination,
+                  recurrence_day_of_month: null,
+                  recurrence_start_date: null,
+                  recurrence_end_date: null,
+                })
+                .eq('id', rowIdToReuse)
+                .eq('user_id', user.id)
+
+              if (opUpdateErr) throw opUpdateErr
+            } else {
+              const { error: opInsertErr } = await budgetDb.from('planned_operations').insert({
+                user_id: user.id,
+                account_id: accountId,
+                category_id: sub.id,
+                merchant_name: null,
+                label: normalizedTripName,
+                planned_date: startDate,
+                planned_amount: amt,
+                currency: 'EUR',
+                flow_type: 'expense',
+                status: 'planned',
+                budget_impact: 'additional_commitment',
+                personal_share_ratio: personalShareRatio,
+                matched_transaction_id: null,
+                notes: subNotes[sub.key]?.trim() || normalizedDestination,
+                is_recurring: false,
+                recurrence_frequency: 'none',
+                recurrence_day_of_month: null,
+                recurrence_start_date: null,
+                recurrence_end_date: null,
+              })
+              if (opInsertErr) throw opInsertErr
+            }
+          }
+        }
+
+        void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
+        void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_TRANSACTIONS] })
+        void queryClient.invalidateQueries({ queryKey: [QK.PLANNED_OPERATIONS] })
+
+        resetForm()
+        onClose()
+        return
+      }
 
       const { error: tripErr } = await budgetDb.from('trips').insert({
         user_id: user.id,
-        name: tripName.trim(),
+        name: normalizedTripName,
         start_date: startDate,
-        end_date: endDate || startDate,
-        year,
+        end_date: resolvedEndDate,
         emoji: AMBIANCE_CONFIG[ambiance].emoji,
-        notes: destination.trim() || null,
+        notes: normalizedDestination,
+        planned_budget: computedPlannedBudget > 0 ? computedPlannedBudget : null,
       })
       if (tripErr) throw tripErr
 
-      const nonZeroSubs = VOYAGE_SUBCATEGORIES.filter(
-        (s) => (parseFloat(subBudgets[s.id] ?? '0') || 0) > 0,
-      )
       for (const sub of nonZeroSubs) {
-        const amt = parseFloat(subBudgets[sub.id] ?? '0') || 0
+        const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
         const { error: opErr } = await budgetDb.from('planned_operations').insert({
           user_id: user.id,
           account_id: accountId,
           category_id: sub.id,
           merchant_name: null,
-          label: tripName.trim(),
+          label: normalizedTripName,
           planned_date: startDate,
           planned_amount: amt,
           currency: 'EUR',
@@ -167,7 +513,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
           budget_impact: 'additional_commitment',
           personal_share_ratio: personalShareRatio,
           matched_transaction_id: null,
-          notes: destination.trim() || null,
+          notes: subNotes[sub.key]?.trim() || normalizedDestination,
           is_recurring: false,
           recurrence_frequency: 'none',
           recurrence_day_of_month: null,
@@ -183,7 +529,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
       resetForm()
       onClose()
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Une erreur est survenue')
+      setSubmitError(getSupabaseErrorMessage(e))
     } finally {
       setIsSubmitting(false)
     }
@@ -201,11 +547,21 @@ export function PlanVoyageModal({ open, onClose }: Props) {
     setIsJoint(false)
     setShareRatio(50)
     setSubmitError(null)
+    setIsLoadingPrefill(false)
+    setRealizedCategoryTxModal({ open: false, title: '', transactions: [] })
+    setSelectedTripTransaction(null)
   }
 
   function handleClose() {
     resetForm()
     onClose()
+  }
+  function closeRealizedCategoryModal() {
+    setRealizedCategoryTxModal((prev) => ({ ...prev, open: false }))
+  }
+
+  function closeTripTransactionModal() {
+    setSelectedTripTransaction(null)
   }
 
   const canSubmit = tripName.trim().length > 0 && startDate.length > 0 && !isSubmitting
@@ -241,7 +597,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
           <motion.section
             role="dialog"
             aria-modal="true"
-            aria-label="Planifier un voyage"
+            aria-label={isEditMode ? 'Modifier un voyage' : 'Planifier un voyage'}
             initial={{ scale: 0.96, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 8 }}
@@ -264,7 +620,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
             <motion.div
               animate={{ background: AMBIANCE_CONFIG[ambiance].background }}
               transition={{ duration: 0.7, ease: 'easeInOut' }}
-              style={{ padding: '18px 18px 20px', position: 'relative', flexShrink: 0 }}
+              style={{ padding: '16px 18px 16px', position: 'relative', flexShrink: 0 }}
             >
               {/* Calque de clip pour les scènes visuelles — isolé pour ne pas clipper le dropdown */}
               <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 'inherit', pointerEvents: 'none' }}>
@@ -412,8 +768,19 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                 <X size={14} />
               </button>
 
-              {/* Nom du voyage + destination */}
-              <div style={{ position: 'relative', zIndex: 1, paddingTop: 2 }}>
+              {/* Nom du voyage + destination + meta */}
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  paddingTop: 2,
+                  minHeight: 112,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: 5,
+                }}
+              >
                 <input
                   value={tripName}
                   onChange={(e) => setTripName(e.target.value)}
@@ -421,13 +788,15 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                   maxLength={80}
                   style={{
                     width: '100%', border: 'none', background: 'transparent', outline: 'none',
-                    fontSize: 24, fontWeight: 800, color: 'rgba(255,255,255,0.97)',
+                    fontSize: 28, fontWeight: 800, color: 'rgba(255,255,255,0.97)',
                     letterSpacing: '-0.02em', caretColor: '#FBBF24',
-                    lineHeight: 1.2, display: 'block', paddingRight: 42,
+                    lineHeight: 1.08, display: 'block', paddingRight: 42,
+                    transform: 'scale(1.08)', transformOrigin: 'left center',
                     textShadow: '0 1px 8px rgba(0,0,0,0.35)',
                   }}
                 />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <MapPin size={12} color="rgba(255,255,255,0.5)" strokeWidth={2} />
                   <input
                     value={destination}
@@ -440,93 +809,106 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                     }}
                   />
                 </div>
-              </div>
 
-              {/* Sélecteur d'ambiance */}
-              <div ref={ambianceMenuRef} style={{ position: 'relative', zIndex: 50, marginTop: 14, display: 'inline-block' }}>
-                <button
-                  type="button"
-                  onClick={() => setAmbianceMenuOpen((v) => !v)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '5px 10px 5px 8px',
-                    background: AMBIANCE_CONFIG[ambiance].pillBg,
-                    backdropFilter: 'blur(8px)',
-                    border: `1px solid ${AMBIANCE_CONFIG[ambiance].accentDot}44`,
-                    borderRadius: 999, cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {/* Dot couleur */}
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: AMBIANCE_CONFIG[ambiance].accentDot, boxShadow: `0 0 6px ${AMBIANCE_CONFIG[ambiance].accentDot}`, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: AMBIANCE_CONFIG[ambiance].pillText, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-                    {AMBIANCE_CONFIG[ambiance].label}
-                  </span>
-                  <ChevronDown
-                    size={10}
-                    color={AMBIANCE_CONFIG[ambiance].pillText}
-                    style={{ transition: 'transform 0.2s', transform: ambianceMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                  />
-                </button>
-
-                {/* Dropdown */}
-                <AnimatePresence>
-                  {ambianceMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                      transition={{ duration: 0.14 }}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 29 }}>
+                  {duration > 0 ? (
+                    <div
                       style={{
-                        position: 'absolute', top: 'calc(100% + 6px)', left: 0,
-                        background: 'rgba(8,12,36,0.92)', backdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 12, overflow: 'hidden',
-                        minWidth: 150, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 10px 5px 8px',
+                        background: 'rgba(255,255,255,0.18)',
+                        border: '1px solid rgba(255,255,255,0.28)',
+                        borderRadius: 999,
                       }}
                     >
-                      {(Object.entries(AMBIANCE_CONFIG) as [Ambiance, typeof AMBIANCE_CONFIG[Ambiance]][]).map(([key, cfg]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => { setAmbiance(key); setAmbianceMenuOpen(false) }}
+                      <Clock size={10} color="rgba(255,255,255,0.92)" strokeWidth={2.2} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.95)', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                        {duration} jour{duration > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <span aria-hidden="true" style={{ width: 1, height: 1 }} />
+                  )}
+
+                  {/* Sélecteur d'ambiance */}
+                  <div ref={ambianceMenuRef} style={{ position: 'relative', zIndex: 50, display: 'inline-block' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAmbianceMenuOpen((v) => !v)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '5px 10px 5px 8px',
+                        background: AMBIANCE_CONFIG[ambiance].pillBg,
+                        backdropFilter: 'blur(8px)',
+                        border: `1px solid ${AMBIANCE_CONFIG[ambiance].accentDot}44`,
+                        borderRadius: 999, cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: AMBIANCE_CONFIG[ambiance].accentDot, boxShadow: `0 0 6px ${AMBIANCE_CONFIG[ambiance].accentDot}`, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: AMBIANCE_CONFIG[ambiance].pillText, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                        {AMBIANCE_CONFIG[ambiance].label}
+                      </span>
+                      <ChevronDown
+                        size={10}
+                        color={AMBIANCE_CONFIG[ambiance].pillText}
+                        style={{ transition: 'transform 0.2s', transform: ambianceMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      />
+                    </button>
+
+                    <AnimatePresence>
+                      {ambianceMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                          transition={{ duration: 0.14 }}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            width: '100%', padding: '9px 14px', border: 'none',
-                            background: ambiance === key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                            cursor: 'pointer', transition: 'background 0.12s', textAlign: 'left',
+                            position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                            background: 'rgba(8,12,36,0.92)', backdropFilter: 'blur(12px)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 12, overflow: 'hidden',
+                            minWidth: 150, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                           }}
                         >
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.accentDot, boxShadow: `0 0 6px ${cfg.accentDot}`, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, fontWeight: 600, color: ambiance === key ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap' }}>
-                            {cfg.label}
-                          </span>
-                          <span style={{ fontSize: 14, marginLeft: 'auto' }}>{cfg.emoji}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                          {(Object.entries(AMBIANCE_CONFIG) as [Ambiance, typeof AMBIANCE_CONFIG[Ambiance]][]).map(([key, cfg]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => { setAmbiance(key); setAmbianceMenuOpen(false) }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                width: '100%', padding: '9px 14px', border: 'none',
+                                background: ambiance === key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                cursor: 'pointer', transition: 'background 0.12s', textAlign: 'left',
+                              }}
+                            >
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.accentDot, boxShadow: `0 0 6px ${cfg.accentDot}`, flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, fontWeight: 600, color: ambiance === key ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap' }}>
+                                {cfg.label}
+                              </span>
+                              <span style={{ fontSize: 14, marginLeft: 'auto' }}>{cfg.emoji}</span>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
               </div>
             </motion.div>
 
             {/* ── Body (scrollable) ── */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 8px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 8px' }}>
 
               {/* Dates */}
               <div style={{ marginBottom: 22 }}>
-                <p
-                  style={{
-                    margin: '0 0 10px', fontSize: 10.5, fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--neutral-400)',
-                  }}
-                >
-                  Dates
-                </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label
-                      style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 5, fontWeight: 600 }}
+                      style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 4, fontWeight: 600 }}
                     >
                       Départ
                     </label>
@@ -536,14 +918,14 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                       onChange={(e) => setStartDate(e.target.value)}
                       style={{
                         width: '100%', border: '1.5px solid var(--neutral-200)', borderRadius: 10,
-                        padding: '9px 10px', fontSize: 13, color: 'var(--neutral-800)',
+                        padding: '7px 10px', fontSize: 12, color: 'var(--neutral-800)',
                         background: 'var(--neutral-50)', outline: 'none', boxSizing: 'border-box',
                       }}
                     />
                   </div>
                   <div>
                     <label
-                      style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 5, fontWeight: 600 }}
+                      style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 4, fontWeight: 600 }}
                     >
                       Retour
                     </label>
@@ -554,32 +936,16 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                       onChange={(e) => setEndDate(e.target.value)}
                       style={{
                         width: '100%', border: '1.5px solid var(--neutral-200)', borderRadius: 10,
-                        padding: '9px 10px', fontSize: 13, color: 'var(--neutral-800)',
+                        padding: '7px 10px', fontSize: 12, color: 'var(--neutral-800)',
                         background: 'var(--neutral-50)', outline: 'none', boxSizing: 'border-box',
                       }}
                     />
                   </div>
                 </div>
-                {duration > 0 && (
-                  <div
-                    style={{
-                      marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5,
-                      background: 'color-mix(in oklab, #7C3AED 7%, white)',
-                      border: '1px solid color-mix(in oklab, #7C3AED 22%, white)',
-                      borderRadius: 20, padding: '4px 11px',
-                    }}
-                  >
-                    <Clock size={11} color="#7C3AED" strokeWidth={2.2} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED' }}>
-                      {duration} jour{duration > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                )}
               </div>
 
-              {/* Budget per subcategory */}
+              {/* Budget / Réalisé par sous-catégorie */}
               <div style={{ marginBottom: 22 }}>
-                {/* Header : titre + total sur la même ligne */}
                 <div
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}
                 >
@@ -589,101 +955,162 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                       textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--neutral-400)',
                     }}
                   >
-                    Budget prévu
+                    {isEditMode && isPastTrip ? 'Dépenses réalisées' : 'Budget prévu'}
                   </p>
                   <span
                     style={{
                       fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                      color: totalBudget > 0 ? '#7C3AED' : 'var(--neutral-300)',
+                      color: displayedBudgetTotal > 0 ? '#7C3AED' : 'var(--neutral-300)',
                       letterSpacing: '-0.02em',
                     }}
                   >
-                    {fmt(totalBudget)}
+                    {fmt(displayedBudgetTotal)}
                   </span>
                 </div>
 
-                {/* Cartes : 2 colonnes */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {VOYAGE_SUBCATEGORIES.map((sub) => {
-                    const amountInputId = `sub-amount-${sub.id}`
-                    const val = subBudgets[sub.id] ?? ''
-                    const note = subNotes[sub.id] ?? ''
-                    const hasVal = (parseFloat(val) || 0) > 0
-                    return (
-                      <div
-                        key={sub.id}
-                        style={{
-                          border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
-                          borderRadius: 10, padding: '5px 9px',
-                          background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
-                          display: 'flex', flexDirection: 'column', gap: 4,
-                          transition: 'border-color 0.15s, background 0.15s',
-                        }}
-                      >
-                        {/* Ligne unique : emoji + label (cliquable → focus montant) + montant + € */}
-                        <label
-                          htmlFor={amountInputId}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'text', margin: 0 }}
+                {isEditMode && isPastTrip ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {voyageSubcategories.map((sub) => {
+                      const amount = sub.id ? (realizedTotalsByCategory.get(sub.id) ?? 0) : 0
+                      const txRows = sub.id
+                        ? (tripToEdit?.transactions ?? []).filter((tx) => tx.category_id === sub.id)
+                        : []
+                      const hasVal = amount > 0
+                      return (
+                        <button
+                          key={sub.key}
+                          type="button"
+                          onClick={() => setRealizedCategoryTxModal({
+                            open: true,
+                            title: sub.label,
+                            transactions: txRows.sort((a, b) => `${a.transaction_date}::${a.id}`.localeCompare(`${b.transaction_date}::${b.id}`)),
+                          })}
+                          style={{
+                            border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
+                            borderRadius: 10, padding: '6px 8px',
+                            background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 6,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
                         >
-                          <span style={{ fontSize: 14, flexShrink: 0 }}>{sub.emoji}</span>
-                          <span
-                            style={{
-                              flex: 1, fontSize: 11, fontWeight: 600, minWidth: 0,
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
-                            }}
-                          >
-                            {sub.name}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                            <CategoryIcon
+                              iconKey={sub.id ? (categoryIconKeyById.get(sub.id) ?? null) : null}
+                              label={sub.label}
+                              size={16}
+                              style={{ flexShrink: 0 }}
+                            />
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {sub.label}
+                            </span>
                           </span>
+                          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: hasVal ? '#7C3AED' : 'var(--neutral-400)' }}>
+                            {fmt(amount)}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {voyageSubcategories.map((sub) => {
+                      const amountInputId = `sub-amount-${sub.key}`
+                      const val = subBudgets[sub.key] ?? ''
+                      const note = subNotes[sub.key] ?? ''
+                      const hasVal = (parseFloat(val) || 0) > 0
+                      return (
+                        <div
+                          key={sub.key}
+                          style={{
+                            border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
+                            borderRadius: 10, padding: '5px 9px',
+                            background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
+                            display: 'flex', flexDirection: 'column', gap: 4,
+                            transition: 'border-color 0.15s, background 0.15s',
+                          }}
+                        >
+                          <label
+                            htmlFor={amountInputId}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'text', margin: 0 }}
+                          >
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>{sub.emoji}</span>
+                            <span
+                              style={{
+                                flex: 1, fontSize: 11, fontWeight: 600, minWidth: 0,
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
+                              }}
+                            >
+                              {sub.label}
+                            </span>
+                            <input
+                              id={amountInputId}
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={val}
+                              onChange={(e) => handleSubBudget(sub.key, e.target.value)}
+                              placeholder="0"
+                              style={{
+                                width: 52, border: 'none', background: 'transparent', outline: 'none',
+                                fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+                                color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
+                                letterSpacing: '-0.02em', textAlign: 'right', flexShrink: 0,
+                                cursor: 'text',
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontSize: 11, fontWeight: 600, flexShrink: 0,
+                                color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
+                              }}
+                            >
+                              €
+                            </span>
+                          </label>
+
                           <input
-                            id={amountInputId}
-                            type="number"
-                            min="0"
-                            step="10"
-                            value={val}
-                            onChange={(e) => handleSubBudget(sub.id, e.target.value)}
-                            placeholder="0"
+                            type="text"
+                            value={note}
+                            onChange={(e) => handleSubNote(sub.key, e.target.value)}
+                            placeholder="note…"
+                            maxLength={120}
                             style={{
-                              width: 52, border: 'none', background: 'transparent', outline: 'none',
-                              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                              color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
-                              letterSpacing: '-0.02em', textAlign: 'right', flexShrink: 0,
-                              cursor: 'text',
+                              width: '100%', border: 'none', outline: 'none',
+                              borderBottom: `1px solid ${note ? 'color-mix(in oklab, #7C3AED 22%, white)' : 'var(--neutral-150)'}`,
+                              background: 'transparent', fontSize: 10.5, fontWeight: 500,
+                              color: note ? '#5B21B6' : 'var(--neutral-400)',
+                              padding: '2px 0', boxSizing: 'border-box',
+                              transition: 'border-color 0.15s, color 0.15s',
                             }}
                           />
-                          <span
-                            style={{
-                              fontSize: 11, fontWeight: 600, flexShrink: 0,
-                              color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
-                            }}
-                          >
-                            €
-                          </span>
-                        </label>
-
-                        {/* Champ notes libre */}
-                        <input
-                          type="text"
-                          value={note}
-                          onChange={(e) => handleSubNote(sub.id, e.target.value)}
-                          placeholder="note…"
-                          maxLength={120}
-                          style={{
-                            width: '100%', border: 'none', outline: 'none',
-                            borderBottom: `1px solid ${note ? 'color-mix(in oklab, #7C3AED 22%, white)' : 'var(--neutral-150)'}`,
-                            background: 'transparent', fontSize: 10.5, fontWeight: 500,
-                            color: note ? '#5B21B6' : 'var(--neutral-400)',
-                            padding: '2px 0', boxSizing: 'border-box',
-                            transition: 'border-color 0.15s, color 0.15s',
-                          }}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {isLoadingPrefill && !(isEditMode && isPastTrip) ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--neutral-500)' }}>
+                    Chargement des données prévues...
+                  </p>
+                ) : null}
               </div>
 
               {/* Account */}
+              {!(isEditMode && isPastTrip) ? (
               <div style={{ marginBottom: 12 }}>
                 <p
                   style={{
@@ -762,6 +1189,7 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                   )}
                 </AnimatePresence>
               </div>
+              ) : null}
 
               {submitError && (
                 <p
@@ -783,31 +1211,169 @@ export function PlanVoyageModal({ open, onClose }: Props) {
                 flexShrink: 0, background: 'var(--neutral-0)',
               }}
             >
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                style={{
-                  width: '100%', border: 'none', borderRadius: 14, padding: '15px',
-                  background: canSubmit
-                    ? 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 55%, #6D28D9 100%)'
-                    : 'var(--neutral-150)',
-                  color: canSubmit ? 'white' : 'var(--neutral-400)',
-                  fontSize: 15, fontWeight: 700,
-                  cursor: canSubmit ? 'pointer' : 'default',
-                  boxShadow: canSubmit ? '0 4px 20px rgba(124,58,237,0.4)' : 'none',
-                  transition: 'all 0.2s',
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {isSubmitting
-                  ? 'En cours…'
-                  : tripName
-                    ? `Planifier · ${AMBIANCE_CONFIG[ambiance].emoji} ${tripName}`
-                    : 'Planifier ce voyage'}
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isSubmitting}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    background: 'linear-gradient(135deg, #F97316 0%, #EF4444 100%)',
+                    color: 'white',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: isSubmitting ? 'default' : 'pointer',
+                    opacity: isSubmitting ? 0.7 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Annuler
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    background: canSubmit
+                      ? 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 55%, #6D28D9 100%)'
+                      : 'var(--neutral-150)',
+                    color: canSubmit ? 'white' : 'var(--neutral-400)',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: canSubmit ? 'pointer' : 'default',
+                    boxShadow: canSubmit ? '0 4px 14px rgba(124,58,237,0.35)' : 'none',
+                    transition: 'all 0.2s',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  Enregistrer
+                </button>
+              </div>
             </div>
           </motion.section>
+
+          <AnimatePresence>
+            {realizedCategoryTxModal.open ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14 }}
+                style={{ position: 'fixed', inset: 0, zIndex: 145, background: 'rgba(12,10,62,0.42)', display: 'grid', placeItems: 'center', padding: '16px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) closeRealizedCategoryModal()
+                }}
+              >
+                <motion.div
+                  initial={{ y: 12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 'min(520px, 100%)', maxHeight: '78vh', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: '0 8px 30px rgba(12,10,62,0.2)', display: 'grid', gridTemplateRows: 'auto 1fr' }}
+                >
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--neutral-150)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--neutral-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {realizedCategoryTxModal.title}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={closeRealizedCategoryModal}
+                      aria-label="Fermer la liste des dépenses"
+                      style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div style={{ overflowY: 'auto', padding: '6px 14px 14px' }}>
+                    {realizedCategoryTxModal.transactions.length === 0 ? (
+                      <p style={{ margin: 'var(--space-4) 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+                        Aucune dépense sur ce poste budgétaire.
+                      </p>
+                    ) : realizedCategoryTxModal.transactions.map((tx) => (
+                      <button
+                        key={tx.id}
+                        type="button"
+                        onClick={() => setSelectedTripTransaction(tx)}
+                        style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--neutral-100)', background: 'transparent', padding: '8px 0', display: 'grid', gridTemplateColumns: '84px minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                          {new Date(`${tx.transaction_date}T00:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </span>
+                        <span style={{ minWidth: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {(tx.normalized_label ?? tx.merchant_name ?? tx.raw_label ?? 'Opération').trim() || 'Opération'}
+                        </span>
+                        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
+                          {fmt(Number(tx.amount)).replace(/\s+€/, '€')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {selectedTripTransaction ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14 }}
+                style={{ position: 'fixed', inset: 0, zIndex: 146, background: 'rgba(12,10,62,0.4)', display: 'grid', placeItems: 'center', padding: '16px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) closeTripTransactionModal()
+                }}
+              >
+                <motion.div
+                  initial={{ y: 12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 'min(460px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-xl)', boxShadow: '0 8px 30px rgba(12,10,62,0.2)', overflow: 'hidden' }}
+                >
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--neutral-150)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                      Détail opération
+                    </p>
+                    <button
+                      type="button"
+                      onClick={closeTripTransactionModal}
+                      aria-label="Fermer le détail opération"
+                      style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-full)', background: 'var(--neutral-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div style={{ padding: '14px', display: 'grid', gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>
+                      {new Date(`${selectedTripTransaction.transaction_date}T00:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                      {(selectedTripTransaction.normalized_label ?? selectedTripTransaction.merchant_name ?? selectedTripTransaction.raw_label ?? 'Opération').trim() || 'Opération'}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-600)' }}>
+                      {selectedTripTransaction.merchant_name ?? selectedTripTransaction.raw_label ?? '—'}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                      {fmt(Number(selectedTripTransaction.amount)).replace(/\s+€/, '€')}
+                    </p>
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
           </div>
         </>
       )}

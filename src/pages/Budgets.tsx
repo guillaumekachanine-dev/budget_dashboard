@@ -799,8 +799,10 @@ export function Budgets() {
   const projectionSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const smoothScrollFrameRef = useRef<number | null>(null)
   const topTravelSnapTimeoutRef = useRef<number | null>(null)
+  const voyagesCategoryIdRef = useRef<string | null>(null)
   const shouldFocusCategoriesSectionRef = useRef(false)
   const shouldFocusBlocksSectionRef = useRef(false)
+  const [preferSoclesReturnAfterVoyages, setPreferSoclesReturnAfterVoyages] = useState(false)
   const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === 'undefined' ? 1024 : window.innerWidth))
 
   useEffect(() => {
@@ -945,6 +947,7 @@ export function Budgets() {
   const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
     setEnveloppesViewMode('categories')
     setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
     setSelectedBlockPage(null)
     setSelectedCat(categoryId)
     scrollViewportToTop()
@@ -953,25 +956,39 @@ export function Budgets() {
   const handleEnveloppesBlockClick = useCallback((blockId: string) => {
     setEnveloppesViewMode('socles')
     setEnveloppesRestoreRequest(null)
+    setSelectedBlockPage(null)
+    if (blockId === 'voyage') {
+      const voyagesCategoryId = voyagesCategoryIdRef.current
+      if (voyagesCategoryId) {
+        setPreferSoclesReturnAfterVoyages(true)
+        setSelectedCat(voyagesCategoryId)
+      } else {
+        setPreferSoclesReturnAfterVoyages(false)
+        setSelectedCat('all')
+      }
+      scrollViewportToTop()
+      return
+    }
+
+    setPreferSoclesReturnAfterVoyages(false)
     setSelectedCat('all')
     if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
       setSelectedBlockPage(blockId)
     }
-    // 'voyage' : pas de block-page dédié dans ce système, VoyagesFeaturePage est accessible
-    // via la vue catégories (cliquer sur la catégorie parent Voyages)
     scrollViewportToTop()
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleEnveloppesRevenueClick = useCallback(() => {
     setEnveloppesViewMode('socles')
     setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
     setSelectedCat('all')
     setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
     scrollViewportToTop()
   }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
 
   const handleReturnToEnveloppes = useCallback(() => {
-    const shouldReturnToSocles = selectedBlockPageId != null || selectedBlockId != null
+    const shouldReturnToSocles = selectedBlockPageId != null || selectedBlockId != null || preferSoclesReturnAfterVoyages
     const nextMode: EnveloppesViewMode = shouldReturnToSocles ? 'socles' : 'categories'
     enveloppesRestoreTokenRef.current += 1
     setEnveloppesViewMode(nextMode)
@@ -985,15 +1002,17 @@ export function Budgets() {
     setActiveSlide(0)
     setSelectedBlockPage(null)
     setSelectedCat('all')
+    setPreferSoclesReturnAfterVoyages(false)
     setBudgetsTabId('enveloppes')
     setShowHeaderPeriodMenu(false)
     setShowSlideThreeScopeSheet(false)
     setShowCatSheet(false)
-  }, [selectedBlockId, selectedBlockPageId, setSelectedBlockPage, setSelectedCat])
+  }, [preferSoclesReturnAfterVoyages, selectedBlockId, selectedBlockPageId, setSelectedBlockPage, setSelectedCat])
 
   useEffect(() => {
     if (budgetsTabId === 'enveloppes') return
     setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
   }, [budgetsTabId])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
@@ -1359,6 +1378,12 @@ export function Budgets() {
     () => categories.find((c) => c.parent_id === null && c.flow_type === 'savings' && normalizeCategoryToken(c.name) === 'epargne') ?? null,
     [categories],
   )
+  useEffect(() => {
+    const voyagesRootCategory = categories.find(
+      (c) => c.parent_id === null && c.flow_type === 'expense' && normalizeCategoryToken(c.name) === 'voyages',
+    ) ?? null
+    voyagesCategoryIdRef.current = voyagesRootCategory?.id ?? null
+  }, [categories])
   const epargneSubCategories = useMemo(() => {
     if (!epargneRootCategory) return []
     return childCategories

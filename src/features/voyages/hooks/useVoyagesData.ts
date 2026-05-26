@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useCategories } from '@/hooks/useCategories'
 import { getTrips, getTripTransactions } from '../api/getVoyagesData'
-import type { TripWithStats, YearlyVoyagesStats, TripCategoryBreakdown } from '../types'
+import type { TripWithStats, YearlyVoyagesStats, TripCategoryBreakdown, TripTransaction } from '../types'
 
 function dateDiffDays(start: string, end: string): number {
   const a = new Date(`${start}T00:00:00`)
@@ -29,7 +29,7 @@ export function useVoyagesData(year: number) {
     staleTime: STALE.ANALYTICS,
   })
 
-  const trips = tripsQuery.data ?? []
+  const trips = useMemo(() => tripsQuery.data ?? [], [tripsQuery.data])
   const tripIds = useMemo(() => trips.map((t) => t.id), [trips])
 
   const txQuery = useQuery({
@@ -39,7 +39,7 @@ export function useVoyagesData(year: number) {
     staleTime: STALE.ANALYTICS,
   })
 
-  const txRows = txQuery.data ?? []
+  const txRows = useMemo(() => txQuery.data ?? [], [txQuery.data])
 
   const tripsWithStats = useMemo<TripWithStats[]>(() => {
     const txByTrip = new Map<string, typeof txRows>()
@@ -50,7 +50,9 @@ export function useVoyagesData(year: number) {
     }
 
     const raw = trips.map((trip) => {
-      const tripTxs = txByTrip.get(trip.id) ?? []
+      const tripTxs = [...(txByTrip.get(trip.id) ?? [])].sort((a, b) =>
+        `${a.transaction_date}::${a.id}`.localeCompare(`${b.transaction_date}::${b.id}`),
+      )
       const total = tripTxs.reduce((sum, tx) => sum + Number(tx.amount), 0)
       const duration = dateDiffDays(trip.start_date, trip.end_date)
       const avgPerDay = duration > 0 ? total / duration : 0
@@ -83,6 +85,7 @@ export function useVoyagesData(year: number) {
         duration,
         avgPerDay,
         txCount: tripTxs.length,
+        transactions: tripTxs as TripTransaction[],
         byCategory,
         rankByAvgPerDay: 0,
         hasData: tripTxs.length > 0,
