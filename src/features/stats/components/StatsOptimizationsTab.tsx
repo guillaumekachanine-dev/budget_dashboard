@@ -2,13 +2,11 @@ import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationC
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import {
   EmptyState,
-  HeroMetricCard,
   SectionHeader,
   SkeletonCard,
   StatsSection,
   StatusBadge,
   SurfaceCard,
-  asFiniteNumber,
   formatEuro,
   formatEuroPerMonth,
 } from '@/features/stats/components/ui'
@@ -48,59 +46,11 @@ export function StatsOptimizationsTab() {
   const { data, isLoading, error } = useOptimizationCapacity(OPTIMIZATION_YEAR)
 
   const annualSummary = data?.annual_summary ?? null
-  const monthlyForecast = data?.monthly_forecast ?? []
   const optimizationLevers = data?.optimization_levers ?? []
   const scenarios = data?.scenarios ?? []
 
   const displayedLevers = optimizationLevers.slice(0, 8)
-
-  const grossSavingsCapacityFromForecast = monthlyForecast.reduce<number | null>((sum, row) => {
-    const income = asFiniteNumber(row.projected_income)
-    const expenses = asFiniteNumber(row.projected_non_savings_expenses)
-    if (income == null || expenses == null) return sum
-    const delta = income - expenses
-    return sum == null ? delta : sum + delta
-  }, null)
-
-  const grossSavingsCapacityTotal = grossSavingsCapacityFromForecast
-    ?? asFiniteNumber(annualSummary?.gross_savings_capacity_total)
-    ?? null
-  const plannedSavingsTotal = asFiniteNumber(annualSummary?.planned_savings_total) ?? null
-  const additionalCapacityTotal = asFiniteNumber(annualSummary?.additional_capacity_after_planned_savings_total) ?? null
-  const finalSavingsObjective = plannedSavingsTotal != null && additionalCapacityTotal != null
-    ? plannedSavingsTotal + additionalCapacityTotal
-    : null
-  const optimizationFocusItems = [
-    {
-      label: "Retraits d'espèces",
-      iconKey: 'achats_divers_retrait_d_especes',
-      match: (name: string) => name.includes('retrait') && name.includes('espece'),
-    },
-    {
-      label: 'Petits achats alimentaires',
-      iconKey: 'alimentation_petits_achats_alimentaires',
-      match: (name: string) => name.includes('petits achats alimentaires'),
-    },
-    {
-      label: 'Café / bars',
-      iconKey: 'sorties_cafe_bars',
-      match: (name: string) => name.includes('cafe') && name.includes('bar'),
-    },
-  ] as const
-
-  const focusRows = optimizationFocusItems.map((item) => {
-    const matched = optimizationLevers.find((lever) => {
-      const normalized = (lever.category_name ?? '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-      return item.match(normalized)
-    })
-    return {
-      ...item,
-      value: formatEuro(matched?.avg_monthly_amount_6m ?? null),
-    }
-  })
+  const hasAnnualSummary = Boolean(annualSummary)
 
   return (
     <>
@@ -127,103 +77,59 @@ export function StatsOptimizationsTab() {
 
       {!isLoading && !error && data ? (
         <StatsSection style={{ gap: 'var(--space-4)' }}>
-          <HeroMetricCard
-            title="Montant des optimisations YTD"
-            value="360€ (+1,3%)"
-            tone="info"
-            metrics={[
-              {
-                label: 'Capacité épargne brute',
-                value: formatEuro(grossSavingsCapacityTotal),
-              },
-              {
-                label: 'Épargne planifiée',
-                value: formatEuro(plannedSavingsTotal),
-              },
-              {
-                label: 'Obj. optimisation 2026',
-                value: '+3450€ (+XX€)',
-              },
-              {
-                label: 'Obj. épargne finale',
-                value: finalSavingsObjective != null ? formatEuro(finalSavingsObjective) : '—',
-                valueTone: 'warning',
-              },
-            ]}
-          />
+          {hasAnnualSummary ? (
+            <SurfaceCard tone="neutral" padding="var(--space-4)">
+              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <SectionHeader title="Scénarios" subtitle="Prudent, réaliste, ambitieux" />
 
-          <SurfaceCard tone="info" padding="var(--space-3)">
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: 'var(--primary-700)', fontWeight: 'var(--font-weight-bold)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Top 3 dépenses à optimiser - Situation mai 2026
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
-                {focusRows.map((row) => (
-                  <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <CategoryIcon iconKey={row.iconKey} label={row.label} size={16} />
-                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-600)' }}>{row.label}</p>
-                    </div>
-                    <p style={{ margin: 0, marginTop: '2px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                      {row.value}
-                    </p>
-                  </div>
-                ))}
+                <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                  {[
+                    { key: 'prudent', label: 'Prudent' },
+                    { key: 'realiste', label: 'Réaliste' },
+                    { key: 'ambitieux', label: 'Ambitieux' },
+                  ].map((expected) => {
+                    const scenario = scenarios.find((item) => resolveScenarioType(item.scenario_label) === expected.key)
+                      ?? (expected.key === 'realiste'
+                        ? scenarios.find((item) => resolveScenarioType(item.scenario_label) === 'other') ?? null
+                        : null)
+
+                    const isHighlighted = expected.key === 'realiste'
+
+                    return (
+                      <article
+                        key={expected.key}
+                        style={{
+                          borderRadius: 'var(--radius-md)',
+                          border: isHighlighted
+                            ? '1px solid color-mix(in oklab, var(--primary-500) 30%, var(--neutral-0) 70%)'
+                            : '1px solid var(--neutral-150)',
+                          background: isHighlighted
+                            ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)'
+                            : 'var(--neutral-0)',
+                          padding: '10px',
+                          display: 'grid',
+                          gap: '2px',
+                          minWidth: 0,
+                        }}
+                      >
+                        <p style={{ margin: 0, fontSize: '10px', color: isHighlighted ? 'var(--primary-700)' : 'var(--neutral-600)', fontWeight: 'var(--font-weight-bold)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {expected.label}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '11px', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                          {formatEuroPerMonth(scenario?.monthly_gain ?? null)}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                          Scope: {formatEuro(scenario?.projected_gain_on_scope ?? null)}
+                        </p>
+                      </article>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          </SurfaceCard>
+            </SurfaceCard>
+          ) : null}
 
           <SurfaceCard tone="neutral" padding="var(--space-4)">
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              <SectionHeader title="Scénarios" subtitle="Prudent, réaliste, ambitieux" />
-
-              <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-                {[
-                  { key: 'prudent', label: 'Prudent' },
-                  { key: 'realiste', label: 'Réaliste' },
-                  { key: 'ambitieux', label: 'Ambitieux' },
-                ].map((expected) => {
-                  const scenario = scenarios.find((item) => resolveScenarioType(item.scenario_label) === expected.key)
-                    ?? (expected.key === 'realiste'
-                      ? scenarios.find((item) => resolveScenarioType(item.scenario_label) === 'other') ?? null
-                      : null)
-
-                  const isHighlighted = expected.key === 'realiste'
-
-                  return (
-                    <article
-                      key={expected.key}
-                      style={{
-                        borderRadius: 'var(--radius-md)',
-                        border: isHighlighted
-                          ? '1px solid color-mix(in oklab, var(--primary-500) 30%, var(--neutral-0) 70%)'
-                          : '1px solid var(--neutral-150)',
-                        background: isHighlighted
-                          ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)'
-                          : 'var(--neutral-0)',
-                        padding: '10px',
-                        display: 'grid',
-                        gap: '2px',
-                        minWidth: 0,
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: '10px', color: isHighlighted ? 'var(--primary-700)' : 'var(--neutral-600)', fontWeight: 'var(--font-weight-bold)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        {expected.label}
-                      </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                        {formatEuroPerMonth(scenario?.monthly_gain ?? null)}
-                      </p>
-                      <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                        Scope: {formatEuro(scenario?.projected_gain_on_scope ?? null)}
-                      </p>
-                    </article>
-                  )
-                })}
-              </div>
-            </div>
-          </SurfaceCard>
-
-          <StatsSection>
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
               <div
                 aria-hidden="true"
@@ -259,11 +165,6 @@ export function StatsOptimizationsTab() {
                   Postes optimisables
                 </h3>
               </div>
-            </div>
-          </StatsSection>
-
-          <SurfaceCard tone="neutral" padding="var(--space-4)">
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
               <SectionHeader title="Priorités de dépenses" subtitle="6 à 8 leviers prioritaires" />
 
               {displayedLevers.length === 0 ? (

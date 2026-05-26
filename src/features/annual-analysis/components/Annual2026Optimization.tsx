@@ -14,9 +14,10 @@ type Props = {
   scenarios: Budget2026OptimizationScenario[]
   totalMonthlyBudget: number
   totalSavings: number
+  hideAnnualHorizon?: boolean
 }
 
-export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSavings }: Props) {
+export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSavings, hideAnnualHorizon = false }: Props) {
   const [showDetailedScenarios, setShowDetailedScenarios] = useState(false)
   if (scenarios.length === 0) return null
 
@@ -52,7 +53,9 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
           >
             <div>
               <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>Détails des leviers</p>
-              <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>Scénarios par bucket · Vision horizon annuel</p>
+              <p style={{ margin: '3px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
+                {hideAnnualHorizon ? 'Scénarios par bucket' : 'Scénarios par bucket · Vision horizon annuel'}
+              </p>
             </div>
             <StatusBadge label={showDetailedScenarios ? 'Masquer' : 'Afficher'} tone="info" />
           </button>
@@ -121,32 +124,34 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
                 </div>
               </SurfaceCard>
 
-              <SurfaceCard tone="neutral" padding="var(--space-4)">
-                <SectionHeader title="Vision horizon annuel" subtitle="Projection avec tous les scénarios" />
-                <p style={{ margin: 'var(--space-2) 0 var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
-                  En appliquant les {scenarios.length} scénarios d’optimisation, l’épargne annuelle pourrait atteindre{' '}
-                  <strong style={{ color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatEuro(projectedAnnualSavings)}</strong>.
-                </p>
-
-                <div style={{ height: 10, borderRadius: 5, overflow: 'hidden', display: 'flex', gap: 2, marginBottom: 'var(--space-2)' }}>
-                  <div style={{ flex: currentShare, background: 'var(--primary-500)', borderRadius: '5px 0 0 5px', minWidth: 0 }} />
-                  <div style={{ flex: potentialShare, background: 'var(--color-positive)', borderRadius: '0 5px 5px 0', minWidth: 0, opacity: 0.72 }} />
-                </div>
-
-                <div style={{ display: 'grid', gap: '6px' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)' }}>
-                    Épargne planifiée: {formatEuro(annualCurrentSavings)}
+              {!hideAnnualHorizon ? (
+                <SurfaceCard tone="neutral" padding="var(--space-4)">
+                  <SectionHeader title="Vision horizon annuel" subtitle="Projection avec tous les scénarios" />
+                  <p style={{ margin: 'var(--space-2) 0 var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>
+                    En appliquant les {scenarios.length} scénarios d’optimisation, l’épargne annuelle pourrait atteindre{' '}
+                    <strong style={{ color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{formatEuro(projectedAnnualSavings)}</strong>.
                   </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)' }}>
-                    Potentiel additionnel: +{formatEuro(totalAnnualPotential)}
-                  </p>
-                </div>
-              </SurfaceCard>
+
+                  <div style={{ height: 10, borderRadius: 5, overflow: 'hidden', display: 'flex', gap: 2, marginBottom: 'var(--space-2)' }}>
+                    <div style={{ flex: currentShare, background: 'var(--primary-500)', borderRadius: '5px 0 0 5px', minWidth: 0 }} />
+                    <div style={{ flex: potentialShare, background: 'var(--color-positive)', borderRadius: '0 5px 5px 0', minWidth: 0, opacity: 0.72 }} />
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)' }}>
+                      Épargne planifiée: {formatEuro(annualCurrentSavings)}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)' }}>
+                      Potentiel additionnel: +{formatEuro(totalAnnualPotential)}
+                    </p>
+                  </div>
+                </SurfaceCard>
+              ) : null}
             </div>
           ) : (
             <DataQualityNotice
               title="Section repliée"
-              detail="Déplie pour voir les scénarios par bucket et la vision horizon annuel."
+              detail={hideAnnualHorizon ? 'Déplie pour voir les scénarios par bucket.' : 'Déplie pour voir les scénarios par bucket et la vision horizon annuel.'}
               tone="neutral"
             />
           )}

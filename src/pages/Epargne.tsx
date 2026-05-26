@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.webp'
 import planning2026Icon from '@/assets/icons/app/epargne_planning_2026.webp'
@@ -17,6 +18,7 @@ import { SavingsPortfoliosListSection } from '@/features/savings/components/Savi
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
+import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
 import { EmptyState, StatsSection } from '@/features/stats/components/ui'
 
 type StatsTabId = 'epargne' | 'planning_2026' | 'performance' | 'optimisation'
@@ -54,6 +56,49 @@ type PlanningProgress = {
   currentAmount: number
   targetAmount: number
   progressionPct: number
+}
+
+type OptimizationPeriodId =
+  | '2026-05'
+  | '2026-06'
+  | '2026-07'
+  | '2026-08'
+  | '2026-09'
+  | '2026-10'
+  | '2026-11'
+  | '2026-12'
+  | '2026-full'
+
+type OptimizationPeriodOption = {
+  id: OptimizationPeriodId
+  label: string
+  shortLabel: string
+  mode: 'month' | 'year'
+}
+
+const PLANNED_SAVINGS_2026 = 9800
+const OPTIMIZATION_OBJECTIVE_2026 = 3000
+const OPTIMIZATION_YEAR = 2026
+const OPTIMIZATION_PERIOD_OPTIONS: OptimizationPeriodOption[] = [
+  { id: '2026-05', label: 'Mai 2026', shortLabel: 'Mai 26', mode: 'month' },
+  { id: '2026-06', label: 'Juin 2026', shortLabel: 'Juin 26', mode: 'month' },
+  { id: '2026-07', label: 'Juillet 2026', shortLabel: 'Juil 26', mode: 'month' },
+  { id: '2026-08', label: 'Août 2026', shortLabel: 'Août 26', mode: 'month' },
+  { id: '2026-09', label: 'Septembre 2026', shortLabel: 'Sep 26', mode: 'month' },
+  { id: '2026-10', label: 'Octobre 2026', shortLabel: 'Oct 26', mode: 'month' },
+  { id: '2026-11', label: 'Novembre 2026', shortLabel: 'Nov 26', mode: 'month' },
+  { id: '2026-12', label: 'Décembre 2026', shortLabel: 'Déc 26', mode: 'month' },
+  { id: '2026-full', label: 'année 2026', shortLabel: '2026', mode: 'year' },
+]
+
+type OptimizationKpiCardItem = {
+  label: string
+  value: string
+  iconKey: string | null
+  backgroundColor: string
+  borderColor: string
+  labelColor: string
+  valueColor: string
 }
 
 function formatKpiCurrency(value: number | null | undefined): string {
@@ -190,6 +235,66 @@ function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
   }
 }
 
+function resolveOptimizationCategoryIconKey(categoryName: string | null | undefined): string | null {
+  const normalized = (categoryName ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  if (!normalized) return null
+  if (normalized.includes('retrait') && normalized.includes('espece')) return 'achats_divers_retrait_d_especes'
+  if (normalized.includes('petits achats alimentaires')) return 'alimentation_petits_achats_alimentaires'
+  if (normalized.includes('cafe') && normalized.includes('bar')) return 'sorties_cafe_bars'
+  if (normalized.includes('restaurant')) return 'sorties_restaurant'
+  if (normalized.includes('courses')) return 'alimentation_courses'
+  if (normalized.includes('e-commerce')) return 'achats_divers_e_commerce'
+  if (normalized.includes('vetement')) return 'achats_divers_vetements'
+  if (normalized.includes('transport')) return 'transport'
+  if (normalized.includes('abonnement')) return 'abonnements'
+  if (normalized.includes('enfant') || normalized.includes('famille')) return 'famille_enfant'
+  return null
+}
+
+function OptimizationKpiCardsRow({ items }: { items: OptimizationKpiCardItem[] }) {
+  return (
+    <div style={{ padding: '0 var(--page-gutter)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+        {items.map((item, index) => (
+          <article
+            key={`${item.label}-${index}`}
+            style={{
+              border: `1.5px solid ${item.borderColor}`,
+              background: item.backgroundColor,
+              borderRadius: 'var(--radius-md)',
+              padding: '10px var(--space-2)',
+              minHeight: 86,
+              display: 'grid',
+              gridTemplateRows: 'auto auto auto',
+              gap: 4,
+              justifyItems: 'center',
+              textAlign: 'center',
+            }}
+          >
+            <CategoryIcon
+              iconKey={item.iconKey}
+              label={item.label}
+              size={18}
+              style={{ width: 18, height: 18, objectFit: 'contain' }}
+            />
+            <p style={{ margin: 0, fontSize: 8, fontWeight: 700, color: item.labelColor, textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.2 }}>
+              {item.label}
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: item.valueColor, lineHeight: 1 }}>
+              {item.value}
+            </p>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function Epargne() {
   const currentYear = new Date().getFullYear()
   const {
@@ -201,10 +306,13 @@ export function Epargne() {
     resetSelectedPeriodToDefault,
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
+  const optimizationCapacity = useOptimizationCapacity(OPTIMIZATION_YEAR)
   const savingsAnalytics = useSavingsAnalytics(currentYear)
   const savingsEvolution = useSavingsEvolutionFiveYears()
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
+  const [optimizationPeriodId, setOptimizationPeriodId] = useState<OptimizationPeriodId>('2026-05')
+  const [showOptimizationPeriodMenu, setShowOptimizationPeriodMenu] = useState(false)
   const [showTabModal, setShowTabModal] = useState(false)
   const [performanceViewMode, setPerformanceViewMode] = useState<PerformanceViewMode>('performance')
   const hasAppliedDefaultPeriodRef = useRef(false)
@@ -212,6 +320,14 @@ export function Epargne() {
   const activeTab = useMemo(
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
     [activeTabId],
+  )
+  const optimizationPeriod = useMemo(
+    () => OPTIMIZATION_PERIOD_OPTIONS.find((option) => option.id === optimizationPeriodId) ?? OPTIMIZATION_PERIOD_OPTIONS[0],
+    [optimizationPeriodId],
+  )
+  const optimizationPeriodIndex = useMemo(
+    () => OPTIMIZATION_PERIOD_OPTIONS.findIndex((option) => option.id === optimizationPeriod.id),
+    [optimizationPeriod.id],
   )
 
   const planningKpis = useMemo<KpiTileItem[]>(() => {
@@ -221,7 +337,6 @@ export function Epargne() {
       .find((row) => row.ytd_saved_amount != null)
     const epargneYtd = latestYtdRow?.ytd_saved_amount
       ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
-    const objectif2026 = 9800
 
     return [
       {
@@ -235,7 +350,7 @@ export function Epargne() {
       },
       {
         label: 'Objectif 2026',
-        value: formatKpiCurrency(objectif2026),
+        value: formatKpiCurrency(PLANNED_SAVINGS_2026),
         tone: 'warning',
         backgroundColor: '#0E7490',
         borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
@@ -245,6 +360,93 @@ export function Epargne() {
     ]
   }, [savingsAnalytics.data?.monthlyMetrics])
 
+  const optimizationTopExpenseTargets = useMemo(() => {
+    const levers = optimizationCapacity.data?.optimization_levers ?? []
+    return [...levers]
+      .filter((lever) => {
+        const avgMonthlyAmount = Number(lever.avg_monthly_amount_6m ?? 0)
+        return Number.isFinite(avgMonthlyAmount) && avgMonthlyAmount > 0
+      })
+      .sort((a, b) => Number(b.avg_monthly_amount_6m ?? 0) - Number(a.avg_monthly_amount_6m ?? 0))
+      .slice(0, 3)
+      .map((lever) => ({
+        label: lever.category_name ?? 'Poste',
+        iconKey: resolveOptimizationCategoryIconKey(lever.category_name),
+        optimizationTarget: Number(lever.realistic_monthly_gain ?? 0),
+      }))
+  }, [optimizationCapacity.data?.optimization_levers])
+
+  const optimizationKpis = useMemo<OptimizationKpiCardItem[]>(() => {
+    if (optimizationPeriod.mode === 'year') {
+      const finalObjective = PLANNED_SAVINGS_2026 + OPTIMIZATION_OBJECTIVE_2026
+      return [
+        {
+          label: 'Épargne planifiée',
+          value: formatKpiCurrency(PLANNED_SAVINGS_2026),
+          iconKey: 'epargne',
+          backgroundColor: 'var(--neutral-0)',
+          borderColor: 'var(--neutral-200)',
+          labelColor: 'var(--neutral-600)',
+          valueColor: 'var(--neutral-900)',
+        },
+        {
+          label: 'Ob.optimisation 2026',
+          value: formatKpiCurrency(OPTIMIZATION_OBJECTIVE_2026),
+          iconKey: 'epargne_placement',
+          backgroundColor: 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)',
+          borderColor: 'color-mix(in oklab, var(--primary-500) 24%, var(--neutral-200) 76%)',
+          labelColor: 'var(--primary-700)',
+          valueColor: 'var(--primary-700)',
+        },
+        {
+          label: 'Obj.épargne finale',
+          value: formatKpiCurrency(finalObjective),
+          iconKey: 'epargne_projet',
+          backgroundColor: '#0E7490',
+          borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
+          labelColor: '#FCD34D',
+          valueColor: '#FCD34D',
+        },
+      ]
+    }
+
+    const fallbackRows = [
+      { label: 'Poste 1', iconKey: null, optimizationTarget: null as number | null },
+      { label: 'Poste 2', iconKey: null, optimizationTarget: null as number | null },
+      { label: 'Poste 3', iconKey: null, optimizationTarget: null as number | null },
+    ]
+    const rows = optimizationTopExpenseTargets.length > 0
+      ? optimizationTopExpenseTargets
+      : fallbackRows
+
+    return rows.map((row) => ({
+      label: row.label,
+      value: formatKpiCurrency(row.optimizationTarget),
+      iconKey: row.iconKey,
+      backgroundColor: 'var(--neutral-0)',
+      borderColor: 'var(--neutral-200)',
+      labelColor: 'var(--neutral-600)',
+      valueColor: 'var(--neutral-900)',
+    }))
+  }, [optimizationPeriod.mode, optimizationTopExpenseTargets])
+
+  const annualHorizon = useMemo(() => {
+    if (!annual2026.summary || annual2026.optimizations.length === 0) return null
+
+    const potentialAnnual = annual2026.optimizations.reduce((sum, scenario) => sum + scenario.annualSaving, 0)
+    const plannedAnnual = annual2026.summary.totalSavingsBudget * 12
+    const projectedAnnual = plannedAnnual + potentialAnnual
+    const plannedShare = projectedAnnual > 0 ? (plannedAnnual / projectedAnnual) * 100 : 0
+    const potentialShare = projectedAnnual > 0 ? (potentialAnnual / projectedAnnual) * 100 : 0
+
+    return {
+      plannedAnnual,
+      potentialAnnual,
+      plannedShare,
+      potentialShare,
+    }
+  }, [annual2026.optimizations, annual2026.summary])
+
   const planningProgress = useMemo<PlanningProgress>(() => {
     const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
     const latestYtdRow = [...monthlyMetrics]
@@ -252,7 +454,7 @@ export function Epargne() {
       .find((row) => row.ytd_saved_amount != null)
     const currentAmount = latestYtdRow?.ytd_saved_amount
       ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
-    const targetAmount = 9800
+    const targetAmount = PLANNED_SAVINGS_2026
     const progressionPct = targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0
     return { currentAmount, targetAmount, progressionPct }
   }, [savingsAnalytics.data?.monthlyMetrics])
@@ -414,9 +616,9 @@ export function Epargne() {
   }, [isHydrated, loading, resetSelectedPeriodToDefault, snapshot, storeUserId])
 
   useEffect(() => {
-    if (!showTabModal) return
+    if (!showTabModal && !showOptimizationPeriodMenu) return
     return lockDocumentScroll()
-  }, [showTabModal])
+  }, [showOptimizationPeriodMenu, showTabModal])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -492,6 +694,228 @@ export function Epargne() {
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
           <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+            <StatsSection style={{ gap: 'var(--space-3)' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-4)' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prevIndex = Math.max(0, optimizationPeriodIndex - 1)
+                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[prevIndex].id)
+                    }}
+                    aria-label="Période précédente"
+                    disabled={optimizationPeriodIndex <= 0}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: optimizationPeriodIndex <= 0 ? 'not-allowed' : 'pointer',
+                      opacity: optimizationPeriodIndex <= 0 ? 0.35 : 1,
+                      width: 20,
+                      height: 20,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    <span style={{ width: 0, height: 0, borderTop: '7px solid transparent', borderBottom: '7px solid transparent', borderRight: '9px solid var(--neutral-500)' }} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowOptimizationPeriodMenu(true)}
+                    aria-haspopup="menu"
+                    aria-expanded={showOptimizationPeriodMenu}
+                    aria-label="Choisir une période d’optimisation"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      margin: 0,
+                      padding: 0,
+                      fontSize: 'var(--font-size-lg)',
+                      lineHeight: 1,
+                      fontWeight: 800,
+                      color: 'var(--neutral-800)',
+                      letterSpacing: '-0.01em',
+                      cursor: 'pointer',
+                      minHeight: 32,
+                    }}
+                  >
+                    {optimizationPeriod.shortLabel}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextIndex = Math.min(OPTIMIZATION_PERIOD_OPTIONS.length - 1, optimizationPeriodIndex + 1)
+                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[nextIndex].id)
+                    }}
+                    aria-label="Période suivante"
+                    disabled={optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1 ? 'not-allowed' : 'pointer',
+                      opacity: optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1 ? 0.35 : 1,
+                      width: 20,
+                      height: 20,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    <span style={{ width: 0, height: 0, borderTop: '7px solid transparent', borderBottom: '7px solid transparent', borderLeft: '9px solid var(--neutral-500)' }} />
+                  </button>
+                </div>
+
+                <OptimizationKpiCardsRow items={optimizationKpis} />
+              </div>
+            </StatsSection>
+
+            {annualHorizon ? (
+              <StatsSection style={{ gap: 'var(--space-2)' }}>
+                <div style={{ height: 14, borderRadius: 'var(--radius-full)', overflow: 'hidden', display: 'flex', gap: 2 }}>
+                  <div style={{ flex: annualHorizon.plannedShare, background: 'var(--primary-500)', minWidth: 0 }} />
+                  <div style={{ flex: annualHorizon.potentialShare, background: 'var(--color-positive)', minWidth: 0, opacity: 0.72 }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', alignItems: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
+                    Épargne planifiée: {formatKpiCurrency(annualHorizon.plannedAnnual)}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                    Objectif optimisation: +{formatKpiCurrency(annualHorizon.potentialAnnual)}
+                  </p>
+                </div>
+              </StatsSection>
+            ) : null}
+
+            {showOptimizationPeriodMenu ? (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 260,
+                  background: 'rgba(10, 12, 22, 0.32)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingLeft: 'var(--page-gutter)',
+                  paddingRight: 'var(--page-gutter)',
+                }}
+                onClick={() => setShowOptimizationPeriodMenu(false)}
+              >
+                <motion.div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Choisir une période optimisation"
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  style={{
+                    width: 'min(500px, calc(100vw - 2 * var(--page-gutter)))',
+                    background: 'var(--neutral-0)',
+                    border: '1px solid var(--neutral-200)',
+                    borderRadius: '28px',
+                    boxShadow: '0 22px 54px rgba(15, 22, 40, 0.26)',
+                    padding: '22px 18px',
+                    display: 'grid',
+                    gap: 'var(--space-3)',
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                    <button
+                      type="button"
+                      disabled
+                      style={{
+                        borderRadius: '16px',
+                        border: '1px solid var(--neutral-200)',
+                        background: 'var(--neutral-100)',
+                        color: 'var(--neutral-700)',
+                        fontSize: 15,
+                        fontWeight: 700,
+                        minHeight: 54,
+                        cursor: 'not-allowed',
+                      }}
+                    >
+                      2025
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOptimizationPeriodId('2026-full')
+                        setShowOptimizationPeriodMenu(false)
+                      }}
+                      style={{
+                        borderRadius: '16px',
+                        border: '3px solid var(--primary-500)',
+                        background: 'var(--neutral-0)',
+                        color: 'var(--primary-500)',
+                        fontSize: 15,
+                        fontWeight: 700,
+                        minHeight: 54,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      2026
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
+                    {[
+                      { label: 'Jan', optionId: null as OptimizationPeriodId | null, disabled: true },
+                      { label: 'Fév', optionId: null as OptimizationPeriodId | null, disabled: true },
+                      { label: 'Mars', optionId: null as OptimizationPeriodId | null, disabled: true },
+                      { label: 'Avr', optionId: null as OptimizationPeriodId | null, disabled: true },
+                      { label: 'Mai', optionId: '2026-05' as OptimizationPeriodId, disabled: false },
+                      { label: 'Juin', optionId: '2026-06' as OptimizationPeriodId, disabled: false },
+                      { label: 'Juil', optionId: '2026-07' as OptimizationPeriodId, disabled: false },
+                      { label: 'Août', optionId: '2026-08' as OptimizationPeriodId, disabled: false },
+                      { label: 'Sept', optionId: '2026-09' as OptimizationPeriodId, disabled: false },
+                      { label: 'Oct', optionId: '2026-10' as OptimizationPeriodId, disabled: false },
+                      { label: 'Nov', optionId: '2026-11' as OptimizationPeriodId, disabled: false },
+                      { label: 'Déc', optionId: '2026-12' as OptimizationPeriodId, disabled: false },
+                    ].map((month) => {
+                      const isActive = month.optionId != null && optimizationPeriod.id === month.optionId
+                      const isDisabled = month.disabled || month.optionId == null
+                      return (
+                        <button
+                          key={month.label}
+                          type="button"
+                          onClick={() => {
+                            if (month.optionId == null) return
+                            setOptimizationPeriodId(month.optionId)
+                            setShowOptimizationPeriodMenu(false)
+                          }}
+                          disabled={isDisabled}
+                          style={{
+                            minHeight: 48,
+                            borderRadius: '14px',
+                            border: isActive
+                              ? '3px solid var(--primary-500)'
+                              : isDisabled
+                                ? '1px solid var(--neutral-200)'
+                                : '2px dashed var(--neutral-300)',
+                            background: isActive ? 'var(--primary-50)' : isDisabled ? 'var(--neutral-100)' : 'var(--neutral-0)',
+                            color: isActive ? 'var(--primary-500)' : 'var(--neutral-600)',
+                            fontSize: 14,
+                            fontWeight: isActive ? 700 : 500,
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isDisabled && !isActive ? 0.78 : 1,
+                          }}
+                        >
+                          {month.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              </div>
+            ) : null}
+
             <StatsOptimizationsTab />
 
             {annual2026.optimizations.length > 0 && annual2026.summary ? (
@@ -499,6 +923,7 @@ export function Epargne() {
                 scenarios={annual2026.optimizations}
                 totalMonthlyBudget={annual2026.summary.totalMonthlyBudget}
                 totalSavings={annual2026.summary.totalSavingsBudget}
+                hideAnnualHorizon
               />
             ) : (
               <StatsSection>

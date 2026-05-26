@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -53,6 +53,25 @@ const SCENARIO2_UNEMPLOYMENT_MONTHLY = 3338
 const SCENARIO2_SALARY_MONTHLY = 6500
 const SCENARIO2_UNEMPLOYMENT_MONTHS = 4
 const SCENARIO2_SALARY_MONTHS = 3
+const INSIGHT_CHART_COLORS = {
+  ref2025: '#B8D4DF',
+  actual2026: '#0097B2',
+  savings: '#7C2130',
+  expenses: '#1A5C74',
+}
+const INSIGHT_DARK = {
+  card: '#1A2332',
+  cardBorder: '#222D3E',
+  cardBorderActive: '#DDE3EC',
+  text: '#DDE3EC',
+  muted: '#8893A0',
+  dim: '#445060',
+  panel: '#141B27',
+  divider: '#1E2A3A',
+  chevronIdleBg: '#1E2A3A',
+  chevronOpenBg: '#DDE3EC',
+  chevronOpenIcon: '#141B27',
+}
 
 const FLUX_INSIGHTS = {
   savings: {
@@ -263,13 +282,13 @@ export function BudgetsAnalyticsTab() {
         <>
           <section
             style={{
-              padding: '0 var(--space-4) 0 var(--space-1)',
+              padding: '0 var(--space-4)',
               width: '100%',
               boxSizing: 'border-box',
               display: 'flex',
             }}
           >
-            <div style={{ maxWidth: 640, margin: '0 auto', width: '100%', display: 'flex' }}>
+            <div style={{ maxWidth: 420, margin: '0 auto', width: '100%', display: 'flex' }}>
               <motion.div
                 ref={cardsGridRef}
                 layout
@@ -278,16 +297,17 @@ export function BudgetsAnalyticsTab() {
                   width: '100%',
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  columnGap: 6,
-                  rowGap: 'var(--space-3)',
+                  columnGap: 10,
+                  rowGap: 10,
                   alignItems: 'stretch',
-                  transform: 'translateX(-8px)',
                 }}
               >
                 <InsightCard
                   cardRef={(node) => { cardRefs.current.savings = node }}
                   titleValue={FLUX_INSIGHTS.savings.titleValue}
                   titleSuffix={FLUX_INSIGHTS.savings.titleSuffix}
+                  badge="Critique"
+                  signal="bordeaux"
                   isExpanded={expandedCardId === 'savings'}
                   onToggle={() => handleCardToggle('savings')}
                 />
@@ -295,6 +315,8 @@ export function BudgetsAnalyticsTab() {
                   cardRef={(node) => { cardRefs.current.income = node }}
                   titleValue={FLUX_INSIGHTS.income.titleValue}
                   titleSuffix={FLUX_INSIGHTS.income.titleSuffix}
+                  badge="Critique"
+                  signal="bordeaux"
                   isExpanded={expandedCardId === 'income'}
                   onToggle={() => handleCardToggle('income')}
                 />
@@ -311,14 +333,18 @@ export function BudgetsAnalyticsTab() {
                 <RepartitionInsightCard
                   cardRef={(node) => { cardRefs.current['achats-divers'] = node }}
                   titleValue={REPARTITION_INSIGHTS.achatsDivers.titleValue}
-                  titleSuffix={REPARTITION_INSIGHTS.achatsDivers.titleSuffix}
+                  titleSuffix="achats div."
+                  badge="Vigilance"
+                  signal="petrol"
                   isExpanded={expandedCardId === REPARTITION_INSIGHTS.achatsDivers.id}
                   onToggle={() => handleCardToggle(REPARTITION_INSIGHTS.achatsDivers.id)}
                 />
                 <RepartitionInsightCard
                   cardRef={(node) => { cardRefs.current.transport = node }}
                   titleValue={REPARTITION_INSIGHTS.transport.titleValue}
-                  titleSuffix={REPARTITION_INSIGHTS.transport.titleSuffix}
+                  titleSuffix="postes dépenses structurels"
+                  badge="Vigilance"
+                  signal="petrol"
                   isExpanded={expandedCardId === REPARTITION_INSIGHTS.transport.id}
                   onToggle={() => handleCardToggle(REPARTITION_INSIGHTS.transport.id)}
                 />
@@ -444,42 +470,47 @@ function InsightCard({
   cardRef,
   titleValue,
   titleSuffix,
+  badge,
+  signal,
   isExpanded,
   onToggle,
 }: {
   cardRef?: (node: HTMLElement | null) => void
   titleValue: string
   titleSuffix: string
+  badge: string
+  signal: 'bordeaux' | 'petrol'
   isExpanded: boolean
   onToggle: () => void
 }) {
+  const signalColor = signal === 'bordeaux' ? '#A84455' : '#2A7A96'
   return (
     <motion.article
       ref={cardRef}
       layout
       transition={{ duration: 0.22, ease: 'easeOut' }}
+      whileHover={{ y: -3, boxShadow: '0 12px 36px rgba(0,0,0,0.09)' }}
       style={{
-        border: 'none',
-        borderRadius: 0,
-        background: 'transparent',
-        padding: 'var(--space-2) var(--space-1)',
+        position: 'relative',
+        border: `1px solid ${isExpanded ? INSIGHT_DARK.cardBorderActive : INSIGHT_DARK.cardBorder}`,
+        borderRadius: 'var(--radius-xl)',
+        background: INSIGHT_DARK.card,
+        padding: '18px 16px 14px',
         textAlign: 'left',
-        display: 'grid',
-        gap: 'var(--space-1)',
-        minHeight: 114,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 152,
         height: '100%',
-        boxShadow: 'none',
+        boxShadow: isExpanded ? '0 8px 28px rgba(0,0,0,0.32)' : '0 3px 14px rgba(0,0,0,0.24)',
+        overflow: 'hidden',
+        cursor: 'pointer',
       }}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <div style={{ minWidth: 0, display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
-          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
-            {titleValue}
-          </p>
-          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1, whiteSpace: 'pre-line' }}>
-            {titleSuffix}
-          </p>
-        </div>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: isExpanded ? INSIGHT_DARK.cardBorderActive : signalColor }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 12 }}>
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: isExpanded ? INSIGHT_DARK.dim : signalColor }}>
+          {badge}
+        </span>
         <button
           type="button"
           onClick={onToggle}
@@ -488,27 +519,57 @@ function InsightCard({
           style={{
             width: 28,
             height: 28,
-            borderRadius: 0,
-            background: 'transparent',
+            borderRadius: '50%',
+            background: isExpanded ? INSIGHT_DARK.chevronOpenBg : INSIGHT_DARK.chevronIdleBg,
             border: 'none',
             padding: 0,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--neutral-900)',
             flexShrink: 0,
             cursor: 'pointer',
           }}
         >
-          {isExpanded ? (
-            <ChevronDown size={20} strokeWidth={2.6} color="var(--neutral-900)" />
-          ) : (
-            <ChevronRight size={20} strokeWidth={2.6} color="var(--neutral-900)" />
-          )}
+          {isExpanded ? <ChevronDown size={16} strokeWidth={2.4} color={INSIGHT_DARK.chevronOpenIcon} /> : <ChevronDown size={16} strokeWidth={2.4} color={INSIGHT_DARK.muted} />}
         </button>
       </div>
-
+      <p style={{ margin: 0, marginBottom: 8, lineHeight: 0.95, fontSize: 'clamp(36px, 10vw, 44px)', fontWeight: 600, color: INSIGHT_DARK.text, fontFamily: 'var(--font-mono)', letterSpacing: '-0.03em' }}>
+        {titleValue}
+      </p>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: INSIGHT_DARK.muted, lineHeight: 1.32 }}>
+        {titleSuffix}
+      </p>
     </motion.article>
+  )
+}
+
+function RepartitionInsightCard({
+  cardRef,
+  titleValue,
+  titleSuffix,
+  badge,
+  signal,
+  isExpanded,
+  onToggle,
+}: {
+  cardRef?: (node: HTMLElement | null) => void
+  titleValue: string
+  titleSuffix: string
+  badge: string
+  signal: 'bordeaux' | 'petrol'
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <InsightCard
+      cardRef={cardRef}
+      titleValue={titleValue}
+      titleSuffix={titleSuffix}
+      badge={badge}
+      signal={signal}
+      isExpanded={isExpanded}
+      onToggle={onToggle}
+    />
   )
 }
 
@@ -645,17 +706,17 @@ function ExpandedInsightPanel({
     <motion.section
       key={insightId}
       layout
-      initial={{ opacity: 0, y: -8, scaleY: 0.96 }}
-      animate={{ opacity: 1, y: 0, scaleY: 1 }}
-      exit={{ opacity: 0, y: -8, scaleY: 0.96 }}
-      transition={{ duration: 0.24, ease: 'easeOut' }}
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
       style={{
         gridColumn: '1 / -1',
-        transformOrigin: 'top center',
-        border: '1px solid var(--neutral-700)',
+        overflow: 'hidden',
         borderRadius: 'var(--radius-xl)',
-        background: 'var(--neutral-100)',
-        padding: 'var(--space-4)',
+        background: INSIGHT_DARK.panel,
+        padding: '28px 22px 24px',
+        boxShadow: '0 12px 34px rgba(0,0,0,0.35)',
         display: 'grid',
         gap: 'var(--space-3)',
       }}
@@ -682,7 +743,7 @@ function ExpandedInsightPanel({
             animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
           }} />
         ) : error ? (
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-900)' }}>Erreur de chargement.</p>
+          <p style={{ margin: 0, fontSize: 11, color: INSIGHT_DARK.text }}>Erreur de chargement.</p>
         ) : (
           <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
             <IncomeProjectionCards
@@ -792,10 +853,10 @@ function IncomeFullYearProjectedChart({
   return (
     <div
       style={{
-        background: 'var(--neutral-0)',
-        border: '1px solid var(--neutral-200)',
-        borderRadius: 'var(--radius-xl)',
-        padding: 'var(--space-3)',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 0,
+        padding: 0,
       }}
     >
       <div style={{ display: 'grid', gap: 3, marginBottom: 'var(--space-2)' }}>
@@ -821,7 +882,7 @@ function IncomeFullYearProjectedChart({
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--neutral-100)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#F0F2F5" vertical={false} />
           {cutoffLabel ? (
             <ReferenceLine
               x={cutoffLabel}
@@ -837,7 +898,6 @@ function IncomeFullYearProjectedChart({
             tickLine={false}
             tick={(props) => {
               const { x, y, payload } = props as { x: number; y: number; payload: { value: string; payload?: { period?: 'past' | 'future' } } }
-              const isFuture = payload.payload?.period === 'future'
               return (
                 <text
                   x={x}
@@ -845,7 +905,7 @@ function IncomeFullYearProjectedChart({
                   textAnchor="middle"
                   fontSize={10}
                   fontFamily="var(--font-mono)"
-                  fill={isFuture ? 'var(--neutral-300)' : 'var(--neutral-500)'}
+                  fill="#ADB5C0"
                 >
                   {payload.value}
                 </text>
@@ -858,18 +918,18 @@ function IncomeFullYearProjectedChart({
             width={34}
             domain={[chartMinY, chartMaxY]}
             tickCount={5}
-            tick={{ fontSize: 10, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+            tick={{ fontSize: 9, fill: '#ADB5C0', fontFamily: 'var(--font-mono)' }}
             tickFormatter={(value: number) => formatKTick(value)}
           />
           <Tooltip content={<IncomeInsightTooltip />} cursor={{ stroke: 'var(--neutral-200)', strokeWidth: 1 }} />
 
-          <Area type="monotone" dataKey="incomePast" stroke="#2ED47A" strokeWidth={2} fill="url(#income-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
-          <Area type="monotone" dataKey="expensePast" stroke="#FC5A5A" strokeWidth={2} fill="url(#expense-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
-          <Area type="monotone" dataKey="savingsPast" stroke="#FFAB2E" strokeWidth={2} fill="url(#savings-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="incomePast" stroke={INSIGHT_CHART_COLORS.actual2026} strokeWidth={2} fill="url(#income-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="expensePast" stroke={INSIGHT_CHART_COLORS.expenses} strokeWidth={2} fill="url(#expense-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="savingsPast" stroke={INSIGHT_CHART_COLORS.savings} strokeWidth={2} fill="url(#savings-past)" dot={false} activeDot={{ r: 4 }} connectNulls />
 
-          <Area type="monotone" dataKey="incomeFuture" stroke="#2ED47A" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
-          <Area type="monotone" dataKey="expenseFuture" stroke="#FC5A5A" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
-          <Area type="monotone" dataKey="savingsFuture" stroke="#FFAB2E" strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="incomeFuture" stroke={INSIGHT_CHART_COLORS.actual2026} strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="expenseFuture" stroke={INSIGHT_CHART_COLORS.expenses} strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
+          <Area type="monotone" dataKey="savingsFuture" stroke={INSIGHT_CHART_COLORS.savings} strokeWidth={2} strokeDasharray="5 3" strokeOpacity={0.8} fill="none" dot={false} activeDot={{ r: 4 }} connectNulls />
         </AreaChart>
       </ResponsiveContainer>
 
@@ -957,78 +1017,6 @@ function TooltipLine({ label, value, color }: { label: string; value: number | n
   )
 }
 
-function RepartitionInsightCard({
-  cardRef,
-  titleValue,
-  titleSuffix,
-  isExpanded,
-  onToggle,
-}: {
-  cardRef?: (node: HTMLElement | null) => void
-  titleValue: string
-  titleSuffix: string
-  isExpanded: boolean
-  onToggle: () => void
-}) {
-  return (
-    <motion.article
-      ref={cardRef}
-      layout
-      transition={{ duration: 0.22, ease: 'easeOut' }}
-      style={{
-        border: 'none',
-        borderRadius: 0,
-        background: 'transparent',
-        padding: 'var(--space-2) var(--space-1)',
-        textAlign: 'left',
-        display: 'grid',
-        gap: 'var(--space-1)',
-        minHeight: 114,
-        height: '100%',
-        boxShadow: 'none',
-      }}
-    >
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <div style={{ minWidth: 0, display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
-          <p style={{ margin: 0, lineHeight: 1, fontSize: 'clamp(22px, 5.2vw, 30px)', fontWeight: 'var(--font-weight-extrabold)', color: isExpanded ? '#FC5A5A' : DEEP_YELLOW, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
-            {titleValue}
-          </p>
-          <p style={{ margin: 0, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', letterSpacing: '-0.01em', lineHeight: 1.1, whiteSpace: 'pre-line' }}>
-            {titleSuffix}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={isExpanded ? 'Réduire le détail' : 'Déplier le détail'}
-          aria-expanded={isExpanded}
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 0,
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--neutral-900)',
-            flexShrink: 0,
-            cursor: 'pointer',
-          }}
-        >
-          {isExpanded ? (
-            <ChevronDown size={20} strokeWidth={2.6} color="var(--neutral-900)" />
-          ) : (
-            <ChevronRight size={20} strokeWidth={2.6} color="var(--neutral-900)" />
-          )}
-        </button>
-      </div>
-
-    </motion.article>
-  )
-}
-
 function ExpandedRepartitionInsightPanel({
   insightId,
   detailBody,
@@ -1039,17 +1027,17 @@ function ExpandedRepartitionInsightPanel({
   return (
     <motion.section
       layout
-      initial={{ opacity: 0, y: -8, scaleY: 0.96 }}
-      animate={{ opacity: 1, y: 0, scaleY: 1 }}
-      exit={{ opacity: 0, y: -8, scaleY: 0.96 }}
-      transition={{ duration: 0.24, ease: 'easeOut' }}
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
       style={{
         gridColumn: '1 / -1',
-        transformOrigin: 'top center',
-        border: '1px solid var(--neutral-700)',
+        overflow: 'hidden',
         borderRadius: 'var(--radius-xl)',
-        background: 'var(--neutral-100)',
-        padding: 'var(--space-4)',
+        background: INSIGHT_DARK.panel,
+        padding: '28px 22px 24px',
+        boxShadow: '0 12px 34px rgba(0,0,0,0.35)',
         display: 'grid',
         gap: 'var(--space-3)',
       }}
@@ -1060,7 +1048,7 @@ function ExpandedRepartitionInsightPanel({
             margin: 0,
             fontSize: 11,
             lineHeight: 1.5,
-            color: 'var(--neutral-900)',
+            color: INSIGHT_DARK.muted,
           }}
         >
           {detailBody}
@@ -1090,32 +1078,29 @@ type InsightKpiItem = {
 
 function InsightKpiRow({ items }: { items: InsightKpiItem[] }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0, borderTop: `1px solid ${INSIGHT_DARK.divider}`, borderBottom: `1px solid ${INSIGHT_DARK.divider}`, padding: '22px 0' }}>
       {items.map((item) => (
         <div
           key={`${item.label}-${item.value}`}
           style={{
-            border: '1px solid var(--neutral-300)',
-            borderTop: `2px solid ${item.accent}`,
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--neutral-0)',
-            padding: '8px var(--space-3)',
+            borderRight: item !== items[items.length - 1] ? `1px solid ${INSIGHT_DARK.divider}` : 'none',
+            padding: '0 var(--space-2)',
             textAlign: 'center',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 2,
-            minHeight: 58,
+            gap: 4,
+            minHeight: 64,
           }}
         >
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: item.accent, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          <p style={{ margin: 0, fontSize: 8.5, fontWeight: 700, color: INSIGHT_DARK.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {item.label}
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1, whiteSpace: 'nowrap' }}>
+          <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 600, fontFamily: 'var(--font-mono)', color: item.accent, lineHeight: 1, whiteSpace: 'nowrap' }}>
             {item.value}
           </p>
-          {item.note ? <p style={{ margin: '1px 0 0', fontSize: 9, color: 'var(--neutral-500)', lineHeight: 1 }}>{item.note}</p> : null}
+          {item.note ? <p style={{ margin: '1px 0 0', fontSize: 9, color: INSIGHT_DARK.dim, lineHeight: 1 }}>{item.note}</p> : null}
         </div>
       ))}
     </div>

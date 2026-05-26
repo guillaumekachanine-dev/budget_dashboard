@@ -22,6 +22,10 @@
   --color-error:    #FC5A5A;
   --color-negative: #FC5A5A;
   --color-info:     #5B57F5;
+  --color-bordeaux: #7C2130;
+  --color-petrol: #1A5C74;
+  --color-cyan-insight: #0097B2;
+  --color-teal-insight: #1D7A6D;
 
   /* NEUTRALS (grayscale) — source de vérité : tailwind.config.js */
   --neutral-0:   #FFFFFF;
