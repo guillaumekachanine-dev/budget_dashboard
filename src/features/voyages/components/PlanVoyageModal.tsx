@@ -21,7 +21,7 @@ const VOYAGE_SUBCATEGORY_BLUEPRINTS = [
   { key: 'extras', name: 'Extras', emoji: '🛍️', aliases: ['extras', 'extra', 'froustilles', 'froustilles voyage'] },
 ] as const
 
-type Ambiance = 'city_lights' | 'sunset' | 'natural'
+type Ambiance = 'city_lights' | 'sunset' | 'natural' | 'city_trip'
 
 const AMBIANCE_CONFIG: Record<Ambiance, {
   label: string
@@ -54,6 +54,14 @@ const AMBIANCE_CONFIG: Record<Ambiance, {
     pillText: '#86EFAC',
     accentDot: '#4ADE80',
     background: 'linear-gradient(180deg, #071A03 0%, #0F3308 18%, #1A5210 38%, #226B14 56%, #2F8A1C 72%, #64C832 87%, #A3E635 100%)',
+  },
+  city_trip: {
+    label: 'City Trip',
+    emoji: '🏙️',
+    pillBg: 'rgba(194,24,91,0.22)',
+    pillText: '#F48FB1',
+    accentDot: '#E91E63',
+    background: 'linear-gradient(185deg, #0A0118 0%, #160834 18%, #2B1060 36%, #6A1F8A 52%, #C0185A 68%, #E64A19 84%, #FF6E00 100%)',
   },
 }
 
@@ -98,6 +106,7 @@ type SubJointFlags = Record<string, boolean>
 function resolveAmbianceFromEmoji(emoji: string | null | undefined): Ambiance {
   if (emoji === AMBIANCE_CONFIG.sunset.emoji) return 'sunset'
   if (emoji === AMBIANCE_CONFIG.natural.emoji) return 'natural'
+  if (emoji === AMBIANCE_CONFIG.city_trip.emoji) return 'city_trip'
   return 'city_lights'
 }
 
@@ -401,26 +410,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
             existingRowsByCategory.set(catId, prev)
           }
 
-          for (const row of existingPlannedRows ?? []) {
-            const { error: resetPlannedErr } = await budgetDb
-              .from('planned_operations')
-              .update({
-                account_id: accountId,
-                label: normalizedTripName,
-                planned_date: startDate,
-                planned_amount: 0,
-                personal_share_ratio: 1,
-                notes: normalizedTripNotes,
-                is_joint_expense: false,
-                recurrence_day_of_month: null,
-                recurrence_start_date: null,
-                recurrence_end_date: null,
-              })
-              .eq('id', row.id)
-              .eq('user_id', user.id)
-
-            if (resetPlannedErr) throw resetPlannedErr
-          }
+          const reusedRowIds = new Set<string>()
 
           for (const sub of nonZeroSubs) {
             const amt = parseFloat(subBudgets[sub.key] ?? '0') || 0
@@ -431,6 +421,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
             existingRowsByCategory.set(sub.id, categoryRowIds)
 
             if (rowIdToReuse) {
+              reusedRowIds.add(rowIdToReuse)
               const { error: opUpdateErr } = await budgetDb
                 .from('planned_operations')
                 .update({
@@ -475,6 +466,19 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
               })
               if (opInsertErr) throw opInsertErr
             }
+          }
+
+          const rowIdsToDelete = (existingPlannedRows ?? [])
+            .map((row) => row.id)
+            .filter((id) => !reusedRowIds.has(id))
+
+          if (rowIdsToDelete.length > 0) {
+            const { error: deleteErr } = await budgetDb
+              .from('planned_operations')
+              .delete()
+              .in('id', rowIdsToDelete)
+              .eq('user_id', user.id)
+            if (deleteErr) throw deleteErr
           }
         }
 
@@ -750,6 +754,146 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   </svg>
                   {/* Deep green atmosphere bottom */}
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 36, background: 'linear-gradient(0deg, rgba(10,40,18,0.55) 0%, transparent 100%)', pointerEvents: 'none' }} />
+                </>
+              )}
+
+              {/* ── City Trip scene ── */}
+              {ambiance === 'city_trip' && (
+                <>
+                  <style>{`
+                    @keyframes ct-sign-a { 0%,100%{opacity:.88} 44%,53%{opacity:.22} }
+                    @keyframes ct-sign-b { 0%,100%{opacity:.8} 20%,30%{opacity:.18} 68%,75%{opacity:.48} }
+                    @keyframes ct-sign-c { 0%,100%{opacity:.74} 54%,64%{opacity:.16} }
+                    @keyframes ct-car-r  { from{transform:translateX(-110px)} to{transform:translateX(620px)} }
+                    @keyframes ct-car-l  { from{transform:translateX(620px)}  to{transform:translateX(-110px)} }
+                    @keyframes ct-ped-l  { from{transform:translateX(130px)}  to{transform:translateX(-80px)} }
+                    @keyframes ct-ped-r  { from{transform:translateX(-80px)}  to{transform:translateX(130px)} }
+                  `}</style>
+
+                  {/* Atmosphere blobs */}
+                  <div style={{ position:'absolute', top:-30, left:-20, width:160, height:160, borderRadius:'50%', background:'rgba(107,31,138,0.4)', filter:'blur(50px)', pointerEvents:'none' }} />
+                  <div style={{ position:'absolute', top:-20, right:0, width:130, height:130, borderRadius:'50%', background:'rgba(194,24,91,0.3)', filter:'blur(42px)', pointerEvents:'none' }} />
+                  <div style={{ position:'absolute', bottom:-30, right:-20, width:150, height:150, borderRadius:'50%', background:'rgba(230,74,25,0.2)', filter:'blur(48px)', pointerEvents:'none' }} />
+                  <div style={{ position:'absolute', top:0, left:'44%', width:55, height:55, borderRadius:'50%', background:'rgba(194,24,91,0.28)', filter:'blur(18px)', pointerEvents:'none' }} />
+
+                  {/* Street scene SVG */}
+                  <svg viewBox="0 0 500 120" preserveAspectRatio="none" style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+                    <defs>
+                      <linearGradient id="ct-road" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#100528" stopOpacity="1"/>
+                        <stop offset="100%" stopColor="#0A0320" stopOpacity="1"/>
+                      </linearGradient>
+                      <radialGradient id="ct-vp" cx="50%" cy="20%" r="28%">
+                        <stop offset="0%" stopColor="#C2185B" stopOpacity="0.45"/>
+                        <stop offset="100%" stopColor="#C2185B" stopOpacity="0"/>
+                      </radialGradient>
+                      <radialGradient id="ct-lamp-l" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#FDE047" stopOpacity="0.65"/>
+                        <stop offset="100%" stopColor="#FDE047" stopOpacity="0"/>
+                      </radialGradient>
+                      <radialGradient id="ct-lamp-r" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#FDE047" stopOpacity="0.65"/>
+                        <stop offset="100%" stopColor="#FDE047" stopOpacity="0"/>
+                      </radialGradient>
+                    </defs>
+
+                    {/* Building facades */}
+                    <rect x="0" y="0" width="178" height="120" fill="#130828"/>
+                    <rect x="0" y="0" width="10" height="120" fill="#0D0420"/>
+                    <rect x="155" y="0" width="23" height="88" fill="#180A35"/>
+                    <rect x="322" y="0" width="178" height="120" fill="#130828"/>
+                    <rect x="490" y="0" width="10" height="120" fill="#0D0420"/>
+                    <rect x="322" y="0" width="23" height="88" fill="#180A35"/>
+
+                    {/* Street */}
+                    <polygon points="178,120 322,120 275,0 225,0" fill="url(#ct-road)"/>
+                    <polygon points="178,120 322,120 275,0 225,0" fill="rgba(194,24,91,0.11)"/>
+                    <rect x="0" y="0" width="500" height="120" fill="url(#ct-vp)"/>
+
+                    {/* Road center dashes */}
+                    <rect x="249" y="96" width="2.2" height="9" fill="rgba(255,140,180,0.35)"/>
+                    <rect x="249.5" y="77" width="1.8" height="7" fill="rgba(255,140,180,0.25)"/>
+                    <rect x="249.8" y="60" width="1.5" height="6" fill="rgba(255,140,180,0.17)"/>
+                    <rect x="250" y="46" width="1.2" height="5" fill="rgba(255,140,180,0.11)"/>
+                    <rect x="250" y="35" width="1" height="4" fill="rgba(255,140,180,0.07)"/>
+
+                    {/* Sidewalks */}
+                    <polygon points="0,88 178,120 0,120" fill="#160434" opacity="0.88"/>
+                    <polygon points="500,88 322,120 500,120" fill="#160434" opacity="0.88"/>
+
+                    {/* Left windows */}
+                    {([
+                      [8,5],[22,5],[36,5],[50,5],[64,5],[78,5],[92,5],[106,5],[120,5],[134,5],[148,5],[162,5],
+                      [8,17],[36,17],[64,17],[78,17],[106,17],[134,17],[148,17],
+                      [8,29],[22,29],[50,29],[78,29],[92,29],[120,29],[148,29],
+                      [8,41],[36,41],[64,41],[92,41],[120,41],[148,41],
+                      [22,53],[50,53],[78,53],[106,53],[134,53],
+                      [8,65],[36,65],[64,65],[92,65],[120,65],
+                      [22,77],[64,77],[106,77],[148,77],
+                      [8,89],[50,89],[92,89],[134,89],
+                    ] as [number,number][]).map(([x,y],i) => (
+                      <rect key={i} x={x} y={y} width="9" height="6"
+                        fill={['#E91E63','#7C3AED','#22D3EE','#F59E0B','#C2185B','#06B6D4'][i%6]}
+                        opacity={0.18+((i*17)%12)*0.04}/>
+                    ))}
+
+                    {/* Right windows */}
+                    {([
+                      [330,5],[344,5],[358,5],[372,5],[386,5],[400,5],[414,5],[428,5],[442,5],[456,5],[470,5],[484,5],
+                      [330,17],[358,17],[386,17],[414,17],[442,17],[470,17],
+                      [344,29],[372,29],[400,29],[428,29],[456,29],[484,29],
+                      [330,41],[358,41],[400,41],[428,41],[456,41],
+                      [344,53],[386,53],[428,53],[470,53],
+                      [330,65],[372,65],[414,65],[456,65],
+                      [344,77],[400,77],[456,77],[484,77],
+                      [330,89],[386,89],[442,89],[484,89],
+                    ] as [number,number][]).map(([x,y],i) => (
+                      <rect key={i} x={x} y={y} width="9" height="6"
+                        fill={['#C2185B','#6D28D9','#06B6D4','#EA580C','#E91E63','#7C3AED'][i%6]}
+                        opacity={0.18+((i*19)%12)*0.04}/>
+                    ))}
+
+                    {/* Neon signs — left */}
+                    <rect x="6" y="96" width="64" height="13" rx="3" fill="#E91E63" opacity="0.88" style={{animation:'ct-sign-a 3.2s ease-in-out infinite'}}/>
+                    <rect x="7" y="97" width="62" height="11" rx="2" fill="none" stroke="rgba(255,192,210,0.55)" strokeWidth="0.8"/>
+                    <rect x="12" y="100" width="18" height="2" rx="1" fill="rgba(255,255,255,0.38)"/>
+                    <rect x="12" y="104" width="11" height="1.5" rx="0.75" fill="rgba(255,255,255,0.22)"/>
+                    <rect x="82" y="91" width="48" height="10" rx="2" fill="#7C3AED" opacity="0.82" style={{animation:'ct-sign-b 4.3s ease-in-out infinite 0.8s'}}/>
+                    <rect x="83" y="92" width="46" height="8" rx="1.5" fill="none" stroke="rgba(192,160,255,0.4)" strokeWidth="0.7"/>
+                    <rect x="138" y="94" width="34" height="10" rx="2" fill="#FF6F00" opacity="0.75" style={{animation:'ct-sign-c 5.1s ease-in-out infinite 1.6s'}}/>
+
+                    {/* Neon signs — right */}
+                    <rect x="430" y="96" width="64" height="13" rx="3" fill="#C2185B" opacity="0.88" style={{animation:'ct-sign-b 3.8s ease-in-out infinite 0.4s'}}/>
+                    <rect x="431" y="97" width="62" height="11" rx="2" fill="none" stroke="rgba(255,160,200,0.55)" strokeWidth="0.8"/>
+                    <rect x="470" y="100" width="18" height="2" rx="1" fill="rgba(255,255,255,0.32)"/>
+                    <rect x="370" y="91" width="48" height="10" rx="2" fill="#6D28D9" opacity="0.82" style={{animation:'ct-sign-a 4.7s ease-in-out infinite 1.2s'}}/>
+                    <rect x="328" y="94" width="34" height="10" rx="2" fill="#EA580C" opacity="0.75" style={{animation:'ct-sign-c 5.7s ease-in-out infinite 0.7s'}}/>
+
+                    {/* Street lamp — left */}
+                    <rect x="169" y="56" width="3" height="64" fill="#251060" opacity="0.92"/>
+                    <rect x="162" y="56" width="10" height="3" fill="#251060" opacity="0.85"/>
+                    <ellipse cx="162" cy="57" rx="17" ry="13" fill="url(#ct-lamp-l)" opacity="0.78"/>
+                    <circle cx="162" cy="57" r="5" fill="rgba(253,224,71,0.88)"/>
+                    <circle cx="162" cy="57" r="2.2" fill="#FFFDE7"/>
+
+                    {/* Street lamp — right */}
+                    <rect x="328" y="56" width="3" height="64" fill="#251060" opacity="0.92"/>
+                    <rect x="328" y="56" width="10" height="3" fill="#251060" opacity="0.85"/>
+                    <ellipse cx="338" cy="57" rx="17" ry="13" fill="url(#ct-lamp-r)" opacity="0.78"/>
+                    <circle cx="338" cy="57" r="5" fill="rgba(253,224,71,0.88)"/>
+                    <circle cx="338" cy="57" r="2.2" fill="#FFFDE7"/>
+                  </svg>
+
+                  {/* Car headlights going right */}
+                  <div style={{ position:'absolute', bottom:28, left:0, pointerEvents:'none', animation:'ct-car-r 5.5s linear infinite 0.5s', width:72, height:2.5, borderRadius:4, background:'linear-gradient(90deg,transparent,rgba(255,230,100,0.9),rgba(255,255,220,0.7),transparent)' }} />
+                  {/* Car taillights going left */}
+                  <div style={{ position:'absolute', bottom:20, right:0, pointerEvents:'none', animation:'ct-car-l 7s linear infinite 3s', width:56, height:2, borderRadius:4, background:'linear-gradient(90deg,transparent,rgba(239,68,68,0.8),rgba(239,68,68,0.55),transparent)' }} />
+
+                  {/* Pedestrians left sidewalk */}
+                  <div style={{ position:'absolute', bottom:6, left:85, pointerEvents:'none', animation:'ct-ped-l 8s linear infinite', width:5, height:20, borderRadius:'3px 3px 0 0', background:'rgba(0,0,0,0.72)' }} />
+                  <div style={{ position:'absolute', bottom:6, left:50, pointerEvents:'none', animation:'ct-ped-l 10s linear infinite 3.5s', width:4, height:17, borderRadius:'3px 3px 0 0', background:'rgba(0,0,0,0.62)' }} />
+                  {/* Pedestrian right sidewalk */}
+                  <div style={{ position:'absolute', bottom:6, right:85, pointerEvents:'none', animation:'ct-ped-r 9s linear infinite 1.5s', width:5, height:20, borderRadius:'3px 3px 0 0', background:'rgba(0,0,0,0.72)' }} />
                 </>
               )}
 
