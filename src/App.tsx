@@ -82,7 +82,7 @@ export default function App() {
   const handleOpenUpdateModal = useCallback(() => {
     setQuickAddMenuOpen(false)
     setAddTransactionModalOpen(false)
-    setUpdateModalOpen(true)
+    setTimeout(() => setUpdateModalOpen(true), 160)
   }, [])
 
   if (loading) {

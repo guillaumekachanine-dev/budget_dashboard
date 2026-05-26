@@ -123,8 +123,8 @@ export function QuickAddMenuModal({ open, onClose, onAddTransaction, onOpenUpdat
               aria-label="Choisir une action"
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 14, scale: 0.98 }}
-              transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, y: 40, scale: 0.97 }}
+              transition={{ duration: 0.17, ease: [0.4, 0, 1, 1] }}
               style={{
                 width: 'min(370px, calc(100vw - 22px))',
                 minHeight: 162,

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Plus, Upload, X } from 'lucide-react'
+import transactionsUpdateIcon from '@/assets/icons/app/transactions_update.png'
+import soldeUpdateIcon from '@/assets/icons/app/solde_update.png'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
 import compteJointIcon from '@/assets/icons/accounts/banque_postale_compte_joint.webp'
 import amundiIcon from '@/assets/icons/accounts/amundi_epargne.webp'
@@ -63,7 +65,17 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-function ModalHeader({ title, right }: { title: string; right?: React.ReactNode }) {
+function ModalHeader({ title, right, centered }: { title: string; right?: React.ReactNode; centered?: boolean }) {
+  if (centered) {
+    return (
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--space-5)' }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
+          {title}
+        </h2>
+        {right && <div style={{ position: 'absolute', right: 0 }}>{right}</div>}
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)' }}>
       <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
@@ -144,11 +156,10 @@ function ModalFooter({ onCancel, onSubmit, submitLabel = 'Valider' }: {
 // ─── Mode picker ──────────────────────────────────────────────────────────────
 
 function ModeCard({
-  emoji, label, description, onClick,
+  imageSrc, label, onClick,
 }: {
-  emoji: string
+  imageSrc: string
   label: string
-  description: string
   onClick: () => void
 }) {
   return (
@@ -161,7 +172,11 @@ function ModeCard({
         borderRadius: 'var(--radius-xl)',
         padding: 'var(--space-4)',
         cursor: 'pointer',
-        textAlign: 'left',
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
         transition: 'border-color 130ms ease, background 130ms ease',
       }}
       onMouseEnter={(e) => {
@@ -173,12 +188,9 @@ function ModeCard({
         e.currentTarget.style.background = 'var(--neutral-50)'
       }}
     >
-      <span style={{ fontSize: 26, display: 'block', marginBottom: 'var(--space-2)' }}>{emoji}</span>
-      <span style={{ display: 'block', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', marginBottom: 4 }}>
+      <img src={imageSrc} alt="" aria-hidden style={{ width: 64, height: 64, objectFit: 'contain' }} />
+      <span style={{ display: 'block', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)' }}>
         {label}
-      </span>
-      <span style={{ display: 'block', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', lineHeight: 1.5 }}>
-        {description}
       </span>
     </button>
   )
@@ -190,18 +202,16 @@ function ModePicker({ onSelect, onClose }: {
 }) {
   return (
     <div>
-      <ModalHeader title="Mettre à jour" right={<CloseButton onClick={onClose} />} />
+      <ModalHeader title="Mettre à jour" right={<CloseButton onClick={onClose} />} centered />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
         <ModeCard
-          emoji="📤"
+          imageSrc={transactionsUpdateIcon}
           label="Transactions"
-          description="Importer des captures d'écran bancaires"
           onClick={() => onSelect('transactions')}
         />
         <ModeCard
-          emoji="💰"
+          imageSrc={soldeUpdateIcon}
           label="Soldes"
-          description="Mettre à jour les soldes de vos comptes"
           onClick={() => onSelect('balances')}
         />
       </div>
@@ -758,21 +768,25 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 width: 'min(480px, 100%)',
+                maxHeight: 'calc(100dvh - 2 * var(--space-4))',
                 borderRadius: 'var(--radius-xl)',
                 background: 'var(--neutral-0)',
                 boxShadow: 'var(--shadow-lg)',
                 border: '1px solid var(--neutral-200)',
-                padding: 'var(--space-5)',
                 position: 'relative',
                 pointerEvents: 'auto',
                 willChange: 'transform, opacity',
                 overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
               onClick={(event) => event.stopPropagation()}
             >
-              {mode === 'picker'       && <ModePicker onSelect={setMode} onClose={onClose} />}
-              {mode === 'transactions' && <TransactionsContent onClose={onClose} onBack={() => setMode('picker')} />}
-              {mode === 'balances'     && <BalancesContent onClose={onClose} onBack={() => setMode('picker')} />}
+              <div style={{ overflowY: 'auto', padding: 'var(--space-5)', flex: 1 }}>
+                {mode === 'picker'       && <ModePicker onSelect={setMode} onClose={onClose} />}
+                {mode === 'transactions' && <TransactionsContent onClose={onClose} onBack={() => setMode('picker')} />}
+                {mode === 'balances'     && <BalancesContent onClose={onClose} onBack={() => setMode('picker')} />}
+              </div>
             </motion.section>
           </div>
         </>
