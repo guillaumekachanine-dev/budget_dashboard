@@ -9,6 +9,7 @@ import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsM
 import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } from '@/lib/utils'
 import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { useTripsForMonth } from '@/features/budget/hooks/useTripsForMonth'
 import type { Category, Transaction } from '@/lib/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow, BudgetPageCategoryRow } from '../types'
 import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
@@ -1014,6 +1015,13 @@ export function EnveloppesTab({
     () => payloadByParentCategory.filter((row) => normalizeCategoryLabel(row.parent_category_name) !== 'epargne'),
     [payloadByParentCategory],
   )
+
+  const { data: tripsForMonth = [] } = useTripsForMonth(year, month)
+  const voyageTripsBudget = useMemo(
+    () => tripsForMonth.reduce((sum, t) => sum + (t.planned_budget ?? 0), 0),
+    [tripsForMonth],
+  )
+
   const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
 
   const now = new Date()
@@ -1121,10 +1129,13 @@ export function EnveloppesTab({
   const catBudgetPieData = useMemo<PieDatum[]>(
     () =>
       parentCategoryRowsWithoutSavings
-        .map((row) => ({ id: row.parent_category_id, name: row.parent_category_name, value: Number(row.budget_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }))
+        .map((row) => {
+          const isVoyage = normalizeCategoryLabel(row.parent_category_name) === 'voyages'
+          return { id: row.parent_category_id, name: row.parent_category_name, value: isVoyage ? voyageTripsBudget : Number(row.budget_amount ?? 0), color: categoryColorFromName(row.parent_category_name) }
+        })
         .filter((d) => d.value > 0)
         .sort(sortPieByCategoryOrder),
-    [parentCategoryRowsWithoutSavings],
+    [parentCategoryRowsWithoutSavings, voyageTripsBudget],
   )
 
   const bucketRealPieData = useMemo<PieDatum[]>(
@@ -1144,11 +1155,12 @@ export function EnveloppesTab({
       PILOTAGE_BUCKETS
         .flatMap((bucket) => {
           const row = payloadByBucket[bucket]
-          if (!row || Number(row.budget_amount) <= 0) return []
-          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: Number(row.budget_amount), color: getBudgetBucketColor(bucket) }]
+          const budgetAmt = bucket === 'voyage' ? voyageTripsBudget : Number(row?.budget_amount ?? 0)
+          if (!row || budgetAmt <= 0) return []
+          return [{ id: bucket, name: BUCKET_LABELS[bucket] ?? bucket, value: budgetAmt, color: getBudgetBucketColor(bucket) }]
         })
         .sort(sortPieByBucketOrder),
-    [payloadByBucket],
+    [payloadByBucket, voyageTripsBudget],
   )
 
   const realPieData = viewMode === 'categories' ? catRealPieData : bucketRealPieData
@@ -1163,7 +1175,7 @@ export function EnveloppesTab({
       PILOTAGE_BUCKETS.flatMap((bucket) => {
         const row = payloadByBucket[bucket]
         if (!row) return []
-        const budgetAmount = Number(row.budget_amount ?? 0)
+        const budgetAmount = bucket === 'voyage' ? voyageTripsBudget : Number(row.budget_amount ?? 0)
         const actualAmount = Number(row.actual_amount ?? 0)
         if (budgetAmount <= 0 && actualAmount <= 0) return []
         return [{
@@ -1175,7 +1187,7 @@ export function EnveloppesTab({
           iconSrc: SOCLE_LIST_ICON_SRC[bucket] ?? blockFixeIcon,
         }]
       }),
-    [payloadByBucket],
+    [payloadByBucket, voyageTripsBudget],
   )
   const monthlyCommitmentsTarget = useMemo(
     () => socleListRows.reduce((sum, row) => sum + row.budgetAmount, 0),
@@ -1225,6 +1237,23 @@ export function EnveloppesTab({
 
   const subCategoryBudgets = useMemo<SubCategoryBudgetLine[]>(() => {
     if (!modalTarget || modalTarget.clickedFrom !== 'budget') return []
+
+    // Voyage (categories or socles view) → show one line per trip instead of sub-categories
+    const isVoyageModal =
+      (modalTarget.scopeKind === 'bucket' && modalTarget.id === 'voyage') ||
+      (modalTarget.scopeKind === 'category' && normalizeCategoryLabel(modalTarget.name) === 'voyages')
+    if (isVoyageModal) {
+      if (tripsForMonth.length === 0) {
+        return [{ id: '_no_voyage', name: 'Aucun voyage ce mois-ci', iconKey: null, budgetAmount: 0 }]
+      }
+      return tripsForMonth.map((trip) => ({
+        id: trip.id,
+        name: `${trip.emoji ? `${trip.emoji} ` : ''}${trip.name}`,
+        iconKey: null,
+        budgetAmount: trip.planned_budget ?? 0,
+      }))
+    }
+
     const scopedRows = modalTarget.scopeKind === 'category'
       ? payloadByCategory.filter((row) => row.parent_category_id === modalTarget.id)
       : payloadByCategory.filter((row) => row.budget_bucket === modalTarget.id)
@@ -1237,7 +1266,7 @@ export function EnveloppesTab({
         budgetAmount: Number(row.budget_amount),
       }))
       .sort((a, b) => b.budgetAmount - a.budgetAmount)
-  }, [modalTarget, payloadByCategory, categoryById])
+  }, [modalTarget, payloadByCategory, categoryById, tripsForMonth])
 
   const subCategoryReals = useMemo<SubCategoryRealLine[]>(() => {
     if (!modalTarget || modalTarget.clickedFrom !== 'real') return []

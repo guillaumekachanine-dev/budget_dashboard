@@ -35,6 +35,7 @@ export const QK = {
   STATS: 'stats',
   STATS_REFERENCE: 'stats-reference',
   TRANSACTIONS: 'transactions',
+  TRIPS_FOR_MONTH: 'trips-for-month',
   VOYAGES: 'voyages',
   VOYAGES_TRANSACTIONS: 'voyages-transactions',
 } as const
