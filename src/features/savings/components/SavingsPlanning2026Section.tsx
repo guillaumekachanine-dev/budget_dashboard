@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, X } from 'lucide-react'
+import { Check, Pencil, X } from 'lucide-react'
 import { StatsSection } from '@/features/stats/components/ui'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useMonthlyBudgetForecast } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { MonthlyBudgetForecastRow } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { SavingsMonthlyMetric } from '@/features/savings/types'
+import { useAccounts } from '@/hooks/useAccounts'
+import { useAuth } from '@/hooks/useAuth'
+import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +32,23 @@ type MonthPlanningData = {
     pctObjectif: number
   }
   facteursDeTerminants: string
+}
+
+type EditablePlanningDraft = {
+  objectif: string
+  epargneMontant: string
+  virementDateIso: string
+  virementMontant: string
+  compteSource: string
+  destination: string
+  remarques: string
+}
+
+type ForwardCommitmentDisplay = {
+  id: string
+  label: string
+  amount: number
+  isVoyage: boolean
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -181,6 +201,102 @@ function formatYtd(n: number): string {
   return rounded.toLocaleString('fr-FR') + ' €'
 }
 
+const FRENCH_MONTH_MAP: Record<string, number> = {
+  janv: 1,
+  janvier: 1,
+  fevr: 2,
+  fevrier: 2,
+  févr: 2,
+  février: 2,
+  mars: 3,
+  avr: 4,
+  avril: 4,
+  mai: 5,
+  juin: 6,
+  juil: 7,
+  juillet: 7,
+  aout: 8,
+  août: 8,
+  sept: 9,
+  septembre: 9,
+  oct: 10,
+  octobre: 10,
+  nov: 11,
+  novembre: 11,
+  dec: 12,
+  déc: 12,
+  decembre: 12,
+  décembre: 12,
+}
+
+function normalizeWholeAmountInput(value: string): string {
+  const cleaned = value.replace(',', '.').trim()
+  if (cleaned.length === 0) return ''
+  const parsed = Number(cleaned)
+  if (!Number.isFinite(parsed)) return ''
+  return String(Math.max(0, Math.round(parsed)))
+}
+
+function toIsoDate(value: string): string {
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const normalized = trimmed
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const parts = normalized.split(' ')
+  if (parts.length < 3) return ''
+  const day = Number(parts[0])
+  const month = FRENCH_MONTH_MAP[parts[1]] ?? 0
+  const year = Number(parts[2])
+  if (!Number.isFinite(day) || !Number.isFinite(year) || month < 1 || month > 12) return ''
+  if (day < 1 || day > 31 || year < 1900) return ''
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function formatDateDisplay(value: string): string {
+  const iso = toIsoDate(value)
+  if (!iso) return value
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return value
+  const dt = new Date(y, m - 1, d)
+  return dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function isVoyageCommitment(row: { parent_category_name?: string | null; budget_bucket?: string | null }): boolean {
+  const bucket = (row.budget_bucket ?? '').trim().toLowerCase()
+  const parentName = (row.parent_category_name ?? '').trim()
+  const parentNormalized = parentName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return bucket === 'voyage' || parentNormalized.includes('voyage')
+}
+
+function toCommitmentDisplayLabel(row: { label?: string | null; category_name?: string | null; parent_category_name?: string | null; budget_bucket?: string | null }): string {
+  const label = (row.label ?? '').trim()
+  const categoryName = (row.category_name ?? '').trim()
+  const parentName = (row.parent_category_name ?? '').trim()
+  const isVoyage = isVoyageCommitment(row)
+  if (isVoyage) return label || categoryName || 'Voyage'
+  return label || categoryName || parentName || 'Engagement'
+}
+
+function createPlanningDraft(data: MonthPlanningData): EditablePlanningDraft {
+  return {
+    objectif: String(Math.round(data.objectif)),
+    epargneMontant: String(Math.round(data.epargneMontant)),
+    virementDateIso: toIsoDate(data.virement.date),
+    virementMontant: String(Math.round(data.virement.montant)),
+    compteSource: data.virement.compteSource,
+    destination: data.virement.destination,
+    remarques: data.facteursDeTerminants ?? '',
+  }
+}
+
 // ─── UI atoms ────────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -270,16 +386,31 @@ function PlanningModal({
   onClose,
   metric,
   forecast,
+  monthData,
+  accountNames,
+  annualGlobalObjective,
+  onSave,
+  forwardCommitments,
 }: {
   milestone: SavingsMonthMilestone
   onClose: () => void
   metric: SavingsMonthlyMetric | undefined
   forecast: MonthlyBudgetForecastRow | undefined
+  monthData: MonthPlanningData
+  accountNames: string[]
+  annualGlobalObjective: number
+  onSave: (nextData: MonthPlanningData) => void
+  forwardCommitments: ForwardCommitmentDisplay[]
 }) {
-  const data = PLANNING_DATA[milestone.id]
+  const data = monthData
   const past = isPastMonth(milestone.id)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState<EditablePlanningDraft>(() => createPlanningDraft(data))
 
-  if (!data) return null
+  useEffect(() => {
+    setIsEditing(false)
+    setDraft(createPlanningDraft(data))
+  }, [milestone.id, data])
 
   // Revenus : réels si mois passé et donnée disponible, sinon budget prévisionnel
   const revenus = metric?.income_total ?? forecast?.projected_income ?? data.revenus
@@ -291,16 +422,54 @@ function PlanningModal({
   const forwardAmount = forecast?.forward_commitments_amount ?? 0
 
   // Épargne et objectif
-  const realSaved   = metric?.saved_amount         ?? null
-  const realObjectif = metric?.savings_budget_total ?? forecast?.planned_savings_budget ?? null
-  const epargneMontant = realSaved ?? data.epargneMontant
-  const objectif       = realObjectif ?? data.objectif
-  const pctObjectif    = objectif > 0
-    ? Math.round((epargneMontant / objectif) * 100)
-    : data.virement.pctObjectif
+  const epargneMontant = data.epargneMontant
+  const objectif = data.objectif
+  const pctObjectif = annualGlobalObjective > 0
+    ? Math.round((data.virement.montant / annualGlobalObjective) * 100)
+    : 0
 
-  // Insight capacité mensuelle
-  const capacityInsight = forecast?.monthly_capacity_insight
+  const annualObjectiveLabel = annualGlobalObjective > 0 ? formatMoney(annualGlobalObjective) : '—'
+  const sourceOptions = useMemo(() => {
+    const unique = new Set<string>(accountNames.filter((name) => name.trim().length > 0))
+    if (data.virement.compteSource.trim().length > 0) unique.add(data.virement.compteSource)
+    return [...unique]
+  }, [accountNames, data.virement.compteSource])
+  const destinationOptions = useMemo(() => {
+    const unique = new Set<string>(accountNames.filter((name) => name.trim().length > 0))
+    if (data.virement.destination.trim().length > 0) unique.add(data.virement.destination)
+    return [...unique]
+  }, [accountNames, data.virement.destination])
+
+  function applyDraftValue(field: keyof EditablePlanningDraft, value: string) {
+    setDraft((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function handleCancelEdit() {
+    setDraft(createPlanningDraft(data))
+    setIsEditing(false)
+  }
+
+  function handleValidateEdit() {
+    const nextObjectif = Number(normalizeWholeAmountInput(draft.objectif)) || 0
+    const nextEpargne = Number(normalizeWholeAmountInput(draft.epargneMontant)) || 0
+    const nextVirementMontant = Number(normalizeWholeAmountInput(draft.virementMontant)) || 0
+    const nextDateIso = draft.virementDateIso || toIsoDate(data.virement.date)
+
+    onSave({
+      ...data,
+      objectif: nextObjectif,
+      epargneMontant: nextEpargne,
+      virement: {
+        ...data.virement,
+        date: nextDateIso || data.virement.date,
+        montant: nextVirementMontant,
+        compteSource: draft.compteSource || data.virement.compteSource,
+        destination: draft.destination || data.virement.destination,
+      },
+      facteursDeTerminants: draft.remarques.trim(),
+    })
+    setIsEditing(false)
+  }
 
   return (
     <motion.div
@@ -389,25 +558,73 @@ function PlanningModal({
         }}
       >
         {/* Objectif mensuel */}
-        <p
-          style={{
-            margin: 0,
-            fontSize: 15,
-            fontWeight: 700,
-            color: '#0E7490',           /* bleu canard */
-          }}
-        >
-          Objectif :{' '}
-          <span
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <p
             style={{
-              color: '#D97706',         /* jaune doré */
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 800,
+              margin: 0,
+              fontSize: 15,
+              fontWeight: 700,
+              color: '#0E7490',
             }}
           >
-            {formatMoney(objectif)}
-          </span>
-        </p>
+            Objectif :{' '}
+            <span
+              style={{
+                color: '#D97706',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 800,
+              }}
+            >
+              {isEditing ? (
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={draft.objectif}
+                  onChange={(e) => applyDraftValue('objectif', normalizeWholeAmountInput(e.target.value))}
+                  style={{
+                    width: 110,
+                    marginLeft: 4,
+                    padding: '2px 6px',
+                    borderRadius: 8,
+                    border: '1px solid var(--primary-300)',
+                    background: '#fff',
+                    color: '#D97706',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 14,
+                    fontWeight: 800,
+                  }}
+                />
+              ) : (
+                formatMoney(objectif)
+              )}
+            </span>
+          </p>
+
+          {!isEditing ? (
+            <button
+              type="button"
+              aria-label="Éditer la modale"
+              onClick={() => setIsEditing(true)}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--neutral-200)',
+                background: 'var(--neutral-0)',
+                color: 'var(--primary-600)',
+                cursor: 'pointer',
+              }}
+            >
+              <Pencil size={14} />
+            </button>
+          ) : null}
+        </div>
 
         {/* ── Section Flux mensuels ── */}
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
@@ -417,11 +634,22 @@ function PlanningModal({
           )}
           <FluxRow label="Budget dépenses" value={formatMoney(budgetDepenses)} valueColor="var(--neutral-600)" />
           {forwardAmount > 0 && (
-            <FluxRow
-              label="Engagements futurs"
-              value={`+ ${formatMoney(forwardAmount)}`}
-              valueColor="var(--color-warning)"
-            />
+            forwardCommitments.length > 0 ? (
+              forwardCommitments.map((commitment) => (
+                <FluxRow
+                  key={commitment.id}
+                  label={commitment.label}
+                  value={`+ ${formatMoney(commitment.amount)}`}
+                  valueColor="var(--color-warning)"
+                />
+              ))
+            ) : (
+              <FluxRow
+                label="Engagement"
+                value={`+ ${formatMoney(forwardAmount)}`}
+                valueColor="var(--color-warning)"
+              />
+            )
           )}
           {past && data.depensesReelles !== undefined && (
             <FluxRow
@@ -436,25 +664,33 @@ function PlanningModal({
           )}
           <FluxRow
             label={past ? 'Épargne versée' : 'Épargne prévue'}
-            value={formatMoney(epargneMontant)}
-            valueColor={
-              past && realSaved !== null
-                ? (epargneMontant >= objectif ? 'var(--color-positive)' : 'var(--color-negative)')
-                : 'var(--primary-600)'
-            }
+            value={isEditing ? '' : formatMoney(epargneMontant)}
+            valueColor={'var(--primary-600)'}
           />
-          {capacityInsight && (
-            <p style={{
-              margin: 0,
-              marginTop: 2,
-              fontSize: 11,
-              color: 'var(--neutral-500)',
-              lineHeight: 1.5,
-              fontStyle: 'italic',
-            }}>
-              {capacityInsight}
-            </p>
-          )}
+          {isEditing ? (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={draft.epargneMontant}
+                onChange={(e) => applyDraftValue('epargneMontant', normalizeWholeAmountInput(e.target.value))}
+                style={{
+                  width: 132,
+                  padding: '6px 8px',
+                  borderRadius: 8,
+                  border: '1px solid var(--primary-300)',
+                  background: '#fff',
+                  fontSize: 13,
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  color: 'var(--primary-700)',
+                  textAlign: 'right',
+                }}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* ── Section Virement ── */}
@@ -469,31 +705,178 @@ function PlanningModal({
           }}
         >
           <SectionLabel>{past ? 'Virement effectué' : 'Virement prévu'}</SectionLabel>
-          <VirementRow label="Date" value={data.virement.date} />
-          <VirementRow label="Montant" value={formatMoney(realSaved ?? data.virement.montant)} />
-          <VirementRow label="Compte source" value={data.virement.compteSource} />
-          <VirementRow label="Destination" value={data.virement.destination} />
+          {isEditing ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Date</span>
+                <input
+                  type="date"
+                  value={draft.virementDateIso}
+                  onChange={(e) => applyDraftValue('virementDateIso', e.target.value)}
+                  style={{
+                    width: 154,
+                    padding: '5px 8px',
+                    borderRadius: 8,
+                    border: '1px solid var(--neutral-250)',
+                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Montant</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={draft.virementMontant}
+                  onChange={(e) => applyDraftValue('virementMontant', normalizeWholeAmountInput(e.target.value))}
+                  style={{
+                    width: 120,
+                    padding: '5px 8px',
+                    borderRadius: 8,
+                    border: '1px solid var(--neutral-250)',
+                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)',
+                    textAlign: 'right',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Compte source</span>
+                <select
+                  value={draft.compteSource}
+                  onChange={(e) => applyDraftValue('compteSource', e.target.value)}
+                  style={{
+                    width: 170,
+                    padding: '5px 8px',
+                    borderRadius: 8,
+                    border: '1px solid var(--neutral-250)',
+                    fontSize: 12,
+                    color: 'var(--neutral-700)',
+                    background: '#fff',
+                  }}
+                >
+                  {sourceOptions.map((name) => (
+                    <option key={`source-${name}`} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Destination</span>
+                <select
+                  value={draft.destination}
+                  onChange={(e) => applyDraftValue('destination', e.target.value)}
+                  style={{
+                    width: 170,
+                    padding: '5px 8px',
+                    borderRadius: 8,
+                    border: '1px solid var(--neutral-250)',
+                    fontSize: 12,
+                    color: 'var(--neutral-700)',
+                    background: '#fff',
+                  }}
+                >
+                  {destinationOptions.map((name) => (
+                    <option key={`dest-${name}`} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value="Autre">Autre</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <VirementRow label="Date" value={formatDateDisplay(data.virement.date)} />
+              <VirementRow label="Montant" value={formatMoney(data.virement.montant)} />
+              <VirementRow label="Compte source" value={data.virement.compteSource} />
+              <VirementRow label="Destination" value={data.virement.destination} />
+            </>
+          )}
           <VirementRow
             label="% de l'objectif"
-            value={`${pctObjectif} %`}
+            value={`${pctObjectif} % (${annualObjectiveLabel})`}
           />
         </div>
 
-        {/* ── Section Facteurs déterminants ── */}
+        {/* ── Section Remarques ── */}
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-          <SectionLabel>Facteurs déterminants</SectionLabel>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: 'var(--neutral-600)',
-              lineHeight: 1.6,
-              fontStyle: data.facteursDeTerminants ? 'normal' : 'italic',
-            }}
-          >
-            {data.facteursDeTerminants || 'Aucun facteur renseigné pour ce mois.'}
-          </p>
+          <SectionLabel>Remarques</SectionLabel>
+          {isEditing ? (
+            <textarea
+              value={draft.remarques}
+              onChange={(e) => applyDraftValue('remarques', e.target.value)}
+              rows={4}
+              placeholder="Ajouter des remarques…"
+              style={{
+                width: '100%',
+                resize: 'vertical',
+                border: '1px solid var(--neutral-250)',
+                borderRadius: 'var(--radius-md)',
+                padding: '8px 10px',
+                fontSize: 12,
+                color: 'var(--neutral-700)',
+                lineHeight: 1.5,
+                boxSizing: 'border-box',
+              }}
+            />
+          ) : (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                color: 'var(--neutral-600)',
+                lineHeight: 1.6,
+                fontStyle: data.facteursDeTerminants ? 'normal' : 'italic',
+              }}
+            >
+              {data.facteursDeTerminants || 'Aucune remarque renseignée pour ce mois.'}
+            </p>
+          )}
         </div>
+
+        {isEditing ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', paddingTop: 'var(--space-2)' }}>
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              style={{
+                minWidth: 110,
+                border: '1px solid var(--neutral-250)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--neutral-0)',
+                color: 'var(--neutral-700)',
+                fontSize: 13,
+                fontWeight: 700,
+                padding: '8px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleValidateEdit}
+              style={{
+                minWidth: 110,
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--primary-600)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                padding: '8px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              Valider
+            </button>
+          </div>
+        ) : null}
       </div>
     </motion.div>
   )
@@ -503,9 +886,33 @@ function PlanningModal({
 
 export function SavingsPlanning2026Section() {
   const [activeMilestone, setActiveMilestone] = useState<SavingsMonthMilestone | null>(null)
+  const [planningDataByMonth, setPlanningDataByMonth] = useState<Record<string, MonthPlanningData>>(
+    () => Object.fromEntries(
+      Object.entries(PLANNING_DATA).map(([key, value]) => [
+        key,
+        {
+          ...value,
+          virement: { ...value.virement },
+        },
+      ]),
+    ),
+  )
 
   const { data: analyticsData } = useSavingsAnalytics(2026)
   const { data: forecastRows } = useMonthlyBudgetForecast(2026)
+  const { data: accounts = [] } = useAccounts()
+  const { user } = useAuth()
+  const { data: upcomingPlannedOperations = [] } = usePlannedOperationsForFlow({
+    userId: user?.id,
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+    includePast: false,
+    includeFuture: true,
+    flowType: 'expense',
+    mode: 'general',
+    enabled: Boolean(user?.id),
+    ascending: true,
+  })
 
   /** Map period_month (1-12) → SavingsMonthlyMetric */
   const metricsMap = useMemo(() => {
@@ -524,6 +931,65 @@ export function SavingsPlanning2026Section() {
     }
     return map
   }, [forecastRows])
+
+  const accountNames = useMemo(() => {
+    const set = new Set<string>()
+    for (const account of accounts) {
+      if (account.name?.trim()) set.add(account.name.trim())
+    }
+    return [...set]
+  }, [accounts])
+
+  const annualGlobalObjective = useMemo(
+    () => Object.values(planningDataByMonth).reduce((sum, row) => sum + Number(row.objectif ?? 0), 0),
+    [planningDataByMonth],
+  )
+  const forwardCommitmentsByMonth = useMemo(() => {
+    const map = new Map<string, ForwardCommitmentDisplay[]>()
+    const grouped = new Map<string, { monthKey: string; label: string; amount: number; isVoyage: boolean }>()
+
+    for (const row of upcomingPlannedOperations) {
+      if (row.budget_impact !== 'additional_commitment') continue
+      const monthKey = (row.month_start ?? '').slice(0, 7)
+      if (!monthKey) continue
+      const nextLabel = toCommitmentDisplayLabel(row)
+      const isVoyage = isVoyageCommitment(row)
+      const amount = Number(row.planned_personal_amount ?? row.planned_amount ?? 0)
+      const groupKey = `${monthKey}::${isVoyage ? 'voyage' : 'other'}::${nextLabel.toLowerCase()}`
+      const prev = grouped.get(groupKey)
+      if (prev) {
+        prev.amount += amount
+      } else {
+        grouped.set(groupKey, {
+          monthKey,
+          label: nextLabel,
+          amount,
+          isVoyage,
+        })
+      }
+    }
+
+    for (const [groupKey, entry] of grouped.entries()) {
+      const rowId = `commitment-${groupKey}`
+      const next: ForwardCommitmentDisplay = {
+        id: rowId,
+        label: entry.label,
+        amount: entry.amount,
+        isVoyage: entry.isVoyage,
+      }
+      const existing = map.get(entry.monthKey) ?? []
+      map.set(entry.monthKey, [...existing, next])
+    }
+
+    for (const [monthKey, rows] of map.entries()) {
+      const sorted = [...rows].sort((a, b) => {
+        if (a.isVoyage !== b.isVoyage) return a.isVoyage ? -1 : 1
+        return a.label.localeCompare(b.label, 'fr')
+      })
+      map.set(monthKey, sorted)
+    }
+    return map
+  }, [upcomingPlannedOperations])
 
   return (
     <>
@@ -566,7 +1032,7 @@ export function SavingsPlanning2026Section() {
               // ── Indicateur de réussite (mois révolus avec données réelles)
               const hasRealData = past && metric !== undefined
               const savedAmount = metric?.saved_amount ?? null
-              const targetAmount = metric?.savings_budget_total ?? PLANNING_DATA[month.id]?.objectif ?? 0
+              const targetAmount = metric?.savings_budget_total ?? planningDataByMonth[month.id]?.objectif ?? 0
               const achieved    = hasRealData && savedAmount !== null && targetAmount > 0 && savedAmount >= targetAmount
 
               // ── Cumul YTD (uniquement si donnée disponible)
@@ -807,10 +1273,24 @@ export function SavingsPlanning2026Section() {
               }}
             >
               <PlanningModal
+                key={activeMilestone.id}
                 milestone={activeMilestone}
                 onClose={() => setActiveMilestone(null)}
                 metric={metricsMap.get(monthNumFromId(activeMilestone.id))}
                 forecast={forecastMap.get(monthNumFromId(activeMilestone.id))}
+                monthData={planningDataByMonth[activeMilestone.id]}
+                accountNames={accountNames}
+                annualGlobalObjective={annualGlobalObjective}
+                forwardCommitments={forwardCommitmentsByMonth.get(activeMilestone.id) ?? []}
+                onSave={(nextData) => {
+                  setPlanningDataByMonth((prev) => ({
+                    ...prev,
+                    [activeMilestone.id]: {
+                      ...nextData,
+                      virement: { ...nextData.virement },
+                    },
+                  }))
+                }}
               />
             </div>
           </>
