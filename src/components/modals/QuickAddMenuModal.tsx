@@ -141,8 +141,8 @@ export function QuickAddMenuModal({ open, onClose, onAddTransaction, onOpenUpdat
               }}
               onClick={(event) => event.stopPropagation()}
             >
-              <ActionItem label="Ajouter transaction" icon="plus" onClick={onAddTransaction} />
               <ActionItem label="Mettre à jour" icon="upload" onClick={onOpenUpdate} />
+              <ActionItem label="Ajouter transaction" icon="plus" onClick={onAddTransaction} />
             </motion.section>
           </div>
         </>

@@ -969,16 +969,16 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 112,
+        minHeight: 132,
         border: 'none',
         background: 'rgba(255,255,255,0.72)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
         cursor: 'pointer',
         overflow: 'hidden',
-        padding: 'var(--space-2) var(--space-3)',
+        padding: 'var(--space-3) var(--space-3)',
         display: 'grid',
-        gap: 'var(--space-1)',
+        gap: 'var(--space-2)',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
@@ -1004,7 +1004,7 @@ function OptimizationsTile({
         Optimisations
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
         {rows.map((row) => (
           <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 3, flex: 1 }}>
             <CategoryIcon iconKey={row.iconKey} label={row.label} size={18} />
@@ -1026,7 +1026,13 @@ function OptimizationsTile({
 // Module libre : notes ponctuelles + rappels automatiques.
 // showSnapshotReminder = true les 2 derniers jours du mois courant ;
 // disparaît automatiquement au 1er du mois suivant.
-function InfosTile({ showSnapshotReminder }: { showSnapshotReminder: boolean }) {
+function InfosTile({
+  showSnapshotReminder,
+  onClose,
+}: {
+  showSnapshotReminder: boolean
+  onClose: () => void
+}) {
   const hasContent = showSnapshotReminder
 
   return (
@@ -1053,6 +1059,28 @@ function InfosTile({ showSnapshotReminder }: { showSnapshotReminder: boolean }) 
       }}
     >
       <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer le module d'information"
+          style={{
+            border: 'none',
+            background: 'rgba(255,255,255,0.16)',
+            color: 'rgba(255,255,255,0.9)',
+            width: 24,
+            height: 24,
+            minWidth: 24,
+            minHeight: 24,
+            borderRadius: 'var(--radius-full)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <X size={13} strokeWidth={2.4} />
+        </button>
         <Bell size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.94)', lineHeight: 1.35 }}>
           {hasContent
@@ -1207,6 +1235,7 @@ export function Home() {
   const [showSavingsModal, setShowSavingsModal] = useState(false)
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
+  const [showInfosTile, setShowInfosTile] = useState(true)
   const [animatedResteUtile, setAnimatedResteUtile] = useState(0)
 
   useEffect(() => {
@@ -2185,22 +2214,36 @@ export function Home() {
                 style={{
                   maxWidth: 600,
                   margin: '0 auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--space-4)',
-                  paddingLeft: 'var(--space-3)',
-                  borderLeft: '2px solid #E2E8F0',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1.08fr) minmax(0, 0.92fr)',
+                  gap: 'var(--space-3)',
+                  alignItems: 'stretch',
                 }}
               >
-                <PlannedWindowTile
-                  label="J+3"
-                  operationsCount={upcomingOpsWindows.j3.count}
-                  totalAmount={upcomingOpsWindows.j3.amount}
-                />
-                <PlannedWindowTile
-                  label="J+7"
-                  operationsCount={upcomingOpsWindows.j7.count}
-                  totalAmount={upcomingOpsWindows.j7.amount}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)',
+                    paddingLeft: 'var(--space-3)',
+                    borderLeft: '2px solid #E2E8F0',
+                  }}
+                >
+                  <PlannedWindowTile
+                    label="J+3"
+                    operationsCount={upcomingOpsWindows.j3.count}
+                    totalAmount={upcomingOpsWindows.j3.amount}
+                  />
+                  <PlannedWindowTile
+                    label="J+7"
+                    operationsCount={upcomingOpsWindows.j7.count}
+                    totalAmount={upcomingOpsWindows.j7.amount}
+                  />
+                </div>
+                <SavingsTile
+                  status={savingsTileStatus}
+                  monthAmountLabel={savingsTileMonthAmountLabel}
+                  onClick={() => setShowSavingsModal(true)}
                 />
               </div>
             </motion.section>
@@ -2220,16 +2263,9 @@ export function Home() {
                     borderRadius: 'var(--radius-2xl)',
                     padding: 'var(--space-4)',
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 0.78fr) minmax(0, 1.22fr)',
-                    gap: 'var(--space-3)',
-                    alignItems: 'stretch',
+                    gridTemplateColumns: '1fr',
                   }}
                 >
-                  <SavingsTile
-                    status={savingsTileStatus}
-                    monthAmountLabel={savingsTileMonthAmountLabel}
-                    onClick={() => setShowSavingsModal(true)}
-                  />
                   <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
                 </div>
               </div>
@@ -2277,7 +2313,12 @@ export function Home() {
           )}
 
           {/* ── Module libre Infos ── */}
-          <InfosTile showSnapshotReminder={showSnapshotReminder} />
+          {showInfosTile ? (
+            <InfosTile
+              showSnapshotReminder={showSnapshotReminder}
+              onClose={() => setShowInfosTile(false)}
+            />
+          ) : null}
         </>
       ) : null}
 

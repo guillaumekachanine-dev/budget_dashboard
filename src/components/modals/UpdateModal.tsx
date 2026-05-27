@@ -102,15 +102,17 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ModalFooter({ onCancel, onSubmit, submitLabel = 'Valider' }: {
+function ModalFooter({ onCancel, onSubmit, submitLabel = 'Valider', compactThirds = false }: {
   onCancel: () => void
   onSubmit: () => void
   submitLabel?: string
+  compactThirds?: boolean
 }) {
   return (
     <div style={{
       display: 'flex',
-      gap: 'var(--space-3)',
+      gap: compactThirds ? 'var(--space-2)' : 'var(--space-3)',
+      justifyContent: compactThirds ? 'space-between' : 'flex-start',
       marginTop: 'var(--space-5)',
       paddingTop: 'var(--space-4)',
       borderTop: '1px solid var(--neutral-150)',
@@ -119,7 +121,7 @@ function ModalFooter({ onCancel, onSubmit, submitLabel = 'Valider' }: {
         type="button"
         onClick={onCancel}
         style={{
-          flex: 1,
+          flex: compactThirds ? '0 0 33.333%' : 1,
           padding: '10px 16px',
           borderRadius: 'var(--radius-lg)',
           border: '1.5px solid var(--neutral-200)',
@@ -136,7 +138,7 @@ function ModalFooter({ onCancel, onSubmit, submitLabel = 'Valider' }: {
         type="button"
         onClick={onSubmit}
         style={{
-          flex: 2,
+          flex: compactThirds ? '0 0 33.333%' : 2,
           padding: '10px 16px',
           borderRadius: 'var(--radius-lg)',
           border: 'none',
@@ -250,6 +252,9 @@ function AccountSelectorButton({ selectedId, onSelect }: {
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neutral-200)' }}
       >
         <img src={account.icon} alt={account.shortLabel} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }} />
+        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+          {account.label}
+        </span>
         <ChevronDown size={14} color="var(--neutral-500)" style={{ transition: 'transform 160ms', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }} />
       </button>
 
@@ -313,6 +318,7 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
   const [files, setFiles] = useState<File[]>([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
+  const [singleDay, setSingleDay] = useState(false)
   const [directives, setDirectives] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -333,12 +339,7 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
     <div>
       <ModalHeader
         title="Mettre à jour les transactions"
-        right={
-          <AccountSelectorButton
-            selectedId={selectedAccount}
-            onSelect={setSelectedAccount}
-          />
-        }
+        right={<CloseButton onClick={onBack} />}
       />
 
       {/* Upload zone */}
@@ -361,7 +362,7 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
         onClick={() => fileInputRef.current?.click()}
         style={{
           width: '100%',
-          padding: 'var(--space-5)',
+          padding: 'var(--space-4)',
           borderRadius: 'var(--radius-xl)',
           border: `2px dashed ${files.length > 0 ? 'var(--primary-400)' : 'var(--neutral-200)'}`,
           background: files.length > 0
@@ -372,13 +373,13 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
           flexDirection: 'column',
           alignItems: 'center',
           gap: 'var(--space-2)',
-          marginBottom: 'var(--space-4)',
+          marginBottom: 'var(--space-3)',
           transition: 'border-color 140ms, background 140ms',
         }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--primary-400)' }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = files.length > 0 ? 'var(--primary-400)' : 'var(--neutral-200)' }}
       >
-        <Upload size={28} color={files.length > 0 ? 'var(--primary-500)' : 'var(--neutral-400)'} strokeWidth={1.8} />
+        <Upload size={24} color={files.length > 0 ? 'var(--primary-500)' : 'var(--neutral-400)'} strokeWidth={1.8} />
         {files.length === 0 ? (
           <>
             <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)' }}>
@@ -395,16 +396,62 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
         )}
       </button>
 
+      {/* Account */}
+      <div style={{ marginBottom: 'var(--space-3)' }}>
+        <FieldLabel>Compte</FieldLabel>
+        <AccountSelectorButton
+          selectedId={selectedAccount}
+          onSelect={setSelectedAccount}
+        />
+      </div>
+
       {/* Period */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-        <label>
-          <FieldLabel>Du</FieldLabel>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={dateInputStyle} />
-        </label>
-        <label>
-          <FieldLabel>Au</FieldLabel>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={dateInputStyle} />
-        </label>
+      <div style={{ marginBottom: 'var(--space-3)' }}>
+        <FieldLabel>Période</FieldLabel>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+            <label style={{ display: 'block', minWidth: 0 }}>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setDateFrom(next)
+                  if (singleDay) setDateTo(next)
+                }}
+                style={{ ...dateInputStyle, width: 118 }}
+              />
+            </label>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)', fontWeight: 600, lineHeight: 1 }}>
+              au
+            </span>
+            <label style={{ display: 'block', minWidth: 0 }}>
+              <input
+                type="date"
+                value={singleDay ? dateFrom : dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                disabled={singleDay}
+                style={{ ...dateInputStyle, width: 118, opacity: singleDay ? 0.55 : 1 }}
+              />
+            </label>
+          </div>
+
+          <label style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2, minWidth: 34, paddingBottom: 2, marginLeft: 'auto' }}>
+            <input
+              type="checkbox"
+              checked={singleDay}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setSingleDay(checked)
+                if (checked) setDateTo(dateFrom)
+              }}
+              style={{ accentColor: 'var(--primary-500)' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 600, lineHeight: 1 }}>
+              jour
+            </span>
+          </label>
+        </div>
       </div>
 
       {/* Directives */}
@@ -414,7 +461,7 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
           value={directives}
           onChange={(e) => setDirectives(e.target.value)}
           placeholder="Consignes pour l'analyse et la classification des transactions…"
-          rows={3}
+          rows={2}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -436,6 +483,8 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
         onSubmit={() => {
           // TODO: trigger upload + LLM analysis workflow
         }}
+        submitLabel="Envoyer"
+        compactThirds
       />
     </div>
   )
@@ -518,6 +567,8 @@ function AccountPickerSheet({ available, onSelect, onClose }: {
 function BalancesContent({ onClose, onBack }: { onClose: () => void; onBack: () => void }) {
   const [principalBalance, setPrincipalBalance] = useState('')
   const [jointBalance, setJointBalance]         = useState('')
+  const [showPrincipal, setShowPrincipal]       = useState(true)
+  const [showJoint, setShowJoint]               = useState(true)
   const [savingsEntries, setSavingsEntries]      = useState<BalanceEntry[]>([])
   const [pickerOpen, setPickerOpen]             = useState(false)
 
@@ -538,61 +589,143 @@ function BalancesContent({ onClose, onBack }: { onClose: () => void; onBack: () 
   }
 
   const amountInputStyle: React.CSSProperties = {
-    flex: 1,
+    width: 108,
     minWidth: 0,
     border: 'none',
+    borderBottom: '1.5px solid var(--neutral-200)',
     background: 'transparent',
-    fontSize: 'var(--font-size-base)',
+    fontSize: 'var(--font-size-sm)',
     fontWeight: 700,
     fontFamily: 'var(--font-mono)',
     color: 'var(--neutral-900)',
     outline: 'none',
     textAlign: 'right',
+    padding: '2px 0',
   }
 
-  const checkingRowStyle: React.CSSProperties = {
+  const accountRowStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     padding: '10px 12px',
     borderRadius: 'var(--radius-lg)',
     border: '1.5px solid var(--neutral-150)',
     background: 'var(--neutral-0)',
+    minWidth: 0,
   }
 
   return (
     <div style={{ position: 'relative' }}>
       <ModalHeader title="Mettre à jour les soldes" right={<CloseButton onClick={onClose} />} />
 
-      {/* Checking accounts — 2 per row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
-        <div style={checkingRowStyle}>
-          <img src={CHECKING_ACCOUNTS[0].icon} alt="" aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="0,00"
-            value={principalBalance}
-            onChange={(e) => setPrincipalBalance(e.target.value)}
-            aria-label="Solde compte principal"
-            style={amountInputStyle}
-          />
-          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
-        </div>
+      {/* Accounts — one row per account to avoid overflow */}
+      <div style={{ display: 'grid', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+        {showPrincipal ? (
+          <div style={accountRowStyle}>
+            <img src={CHECKING_ACCOUNTS[0].icon} alt="" aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)', minWidth: 0 }}>
+              {CHECKING_ACCOUNTS[0].label}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={principalBalance}
+                onChange={(e) => setPrincipalBalance(e.target.value)}
+                aria-label="Solde compte principal"
+                style={amountInputStyle}
+              />
+              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
+              <button
+                type="button"
+                onClick={() => setShowPrincipal(false)}
+                aria-label="Retirer compte principal"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--neutral-400)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ) : null}
 
-        <div style={checkingRowStyle}>
-          <img src={CHECKING_ACCOUNTS[1].icon} alt="" aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="0,00"
-            value={jointBalance}
-            onChange={(e) => setJointBalance(e.target.value)}
-            aria-label="Solde compte joint"
-            style={amountInputStyle}
-          />
-          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
-        </div>
+        {showJoint ? (
+          <div style={accountRowStyle}>
+            <img src={CHECKING_ACCOUNTS[1].icon} alt="" aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)', minWidth: 0 }}>
+              {CHECKING_ACCOUNTS[1].label}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={jointBalance}
+                onChange={(e) => setJointBalance(e.target.value)}
+                aria-label="Solde compte joint"
+                style={amountInputStyle}
+              />
+              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
+              <button
+                type="button"
+                onClick={() => setShowJoint(false)}
+                aria-label="Retirer compte joint"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--neutral-400)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!showPrincipal || !showJoint ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+            {!showPrincipal ? (
+              <button
+                type="button"
+                onClick={() => setShowPrincipal(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  border: '1.5px dashed var(--neutral-200)',
+                  background: 'transparent',
+                  color: 'var(--neutral-500)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={12} strokeWidth={2.5} />
+                Compte principal
+              </button>
+            ) : null}
+            {!showJoint ? (
+              <button
+                type="button"
+                onClick={() => setShowJoint(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  border: '1.5px dashed var(--neutral-200)',
+                  background: 'transparent',
+                  color: 'var(--neutral-500)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={12} strokeWidth={2.5} />
+                Compte joint
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Added savings account rows */}
@@ -609,37 +742,26 @@ function BalancesContent({ onClose, onBack }: { onClose: () => void; onBack: () 
                 <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-700)', flex: '0 0 auto' }}>
                   {acc.label}
                 </span>
-                <div style={{ flex: 1 }} />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={entry.value}
-                  onChange={(e) => handleValueChange(entry.accountId, e.target.value)}
-                  aria-label={`Solde ${acc.label}`}
-                  style={{
-                    width: 90,
-                    border: 'none',
-                    borderBottom: '1.5px solid var(--neutral-200)',
-                    background: 'transparent',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-mono)',
-                    color: 'var(--neutral-900)',
-                    outline: 'none',
-                    textAlign: 'right',
-                    padding: '2px 0',
-                  }}
-                />
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemove(entry.accountId)}
-                  aria-label={`Retirer ${acc.label}`}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--neutral-400)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                >
-                  <X size={14} />
-                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={entry.value}
+                    onChange={(e) => handleValueChange(entry.accountId, e.target.value)}
+                    aria-label={`Solde ${acc.label}`}
+                    style={amountInputStyle}
+                  />
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 600, flexShrink: 0 }}>€</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(entry.accountId)}
+                    aria-label={`Retirer ${acc.label}`}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--neutral-400)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -678,6 +800,8 @@ function BalancesContent({ onClose, onBack }: { onClose: () => void; onBack: () 
         onSubmit={() => {
           // TODO: validate + trigger n8n balance-update workflow
         }}
+        submitLabel="Envoyer"
+        compactThirds
       />
 
       {/* Savings account picker — overlays the modal content */}
@@ -703,6 +827,7 @@ export interface UpdateModalProps {
 
 export function UpdateModal({ open, onClose }: UpdateModalProps) {
   const [mode, setMode] = useState<UpdateMode>('picker')
+  const isPickerMode = mode === 'picker'
 
   // Reset to picker each time modal opens
   useEffect(() => {
@@ -749,26 +874,38 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
           <div
             style={{
               position: 'fixed',
-              inset: 0,
               zIndex: 105,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 'var(--space-4)',
               pointerEvents: 'none',
+              ...(isPickerMode
+                ? {
+                    left: 0,
+                    right: 0,
+                    bottom: 'calc(var(--nav-height) + var(--space-2))',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    paddingLeft: 'var(--space-3)',
+                    paddingRight: 'var(--space-3)',
+                  }
+                : {
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 'var(--space-4)',
+                  }),
             }}
           >
             <motion.section
               role="dialog"
               aria-modal="true"
               aria-label="Mettre à jour"
-              initial={{ opacity: 0, scale: 0.97, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 12 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={isPickerMode ? { opacity: 0, y: 20, scale: 0.98 } : { opacity: 0, scale: 0.97, y: 12 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={isPickerMode ? { opacity: 0, y: 40, scale: 0.97 } : { opacity: 0, scale: 0.97, y: 12 }}
+              transition={isPickerMode ? { duration: 0.17, ease: [0.4, 0, 1, 1] } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               style={{
-                width: 'min(480px, 100%)',
-                maxHeight: 'calc(100dvh - 2 * var(--space-4))',
+                width: isPickerMode ? 'min(480px, calc(100vw - 22px))' : 'min(480px, 100%)',
+                maxHeight: isPickerMode ? 'min(74dvh, calc(100dvh - var(--nav-height) - var(--space-4)))' : 'calc(100dvh - 2 * var(--space-4))',
                 borderRadius: 'var(--radius-xl)',
                 background: 'var(--neutral-0)',
                 boxShadow: 'var(--shadow-lg)',
@@ -782,7 +919,7 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
               }}
               onClick={(event) => event.stopPropagation()}
             >
-              <div style={{ overflowY: 'auto', padding: 'var(--space-5)', flex: 1 }}>
+              <div style={{ overflowY: 'auto', padding: mode === 'transactions' ? 'var(--space-4)' : 'var(--space-5)', flex: 1 }}>
                 {mode === 'picker'       && <ModePicker onSelect={setMode} onClose={onClose} />}
                 {mode === 'transactions' && <TransactionsContent onClose={onClose} onBack={() => setMode('picker')} />}
                 {mode === 'balances'     && <BalancesContent onClose={onClose} onBack={() => setMode('picker')} />}
