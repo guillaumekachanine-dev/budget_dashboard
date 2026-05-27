@@ -6,6 +6,7 @@ import { budgetDb } from '@/lib/supabaseBudget'
 import { useAuth } from '@/hooks/useAuth'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { QK } from '@/lib/queryKeys'
 import type { TripTransaction, TripWithStats } from '../types'
 
@@ -64,6 +65,15 @@ const AMBIANCE_CONFIG: Record<Ambiance, {
   },
 }
 
+const VOYAGE_SUBCATEGORY_ICON_FALLBACKS: Record<string, string> = {
+  trajet: 'voyages_trajet',
+  logement: 'voyages_logement',
+  repas: 'voyages_repas',
+  activites: 'voyages_activites',
+  sorties: 'sorties_activites',
+  extras: 'voyages_froustilles',
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function dateDiffDays(start: string, end: string): number {
@@ -88,6 +98,21 @@ function normalizeToken(value: string | null | undefined): string {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function compactVoyageBudgetLabel(label: string): string {
+  const normalized = normalizeToken(label)
+  if (normalized.includes('trajet voyage')) return 'Trajet'
+  if (normalized.includes('froustilles voyage')) return 'Froustilles'
+  return label
+}
+
+function normalizeWholeEuroInput(value: string): string {
+  const cleaned = value.replace(',', '.').trim()
+  if (cleaned === '') return ''
+  const parsed = Number(cleaned)
+  if (!Number.isFinite(parsed)) return ''
+  return String(Math.max(0, Math.round(parsed)))
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -203,6 +228,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
         ...blueprint,
         id: matched?.id ?? null,
         label: matched?.name ?? blueprint.name,
+        iconKey: matched?.icon_key ?? VOYAGE_SUBCATEGORY_ICON_FALLBACKS[blueprint.key] ?? null,
       }
     })
   }, [categoriesQuery.data])
@@ -275,7 +301,9 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
           const matchedSub = voyageSubcategoryById.get(catId)
           if (!matchedSub) continue
           const amount = Number(row.planned_amount ?? 0)
-          nextBudgets[matchedSub.key] = String((Number(nextBudgets[matchedSub.key] ?? '0') || 0) + amount)
+          nextBudgets[matchedSub.key] = normalizeWholeEuroInput(
+            String((Number(nextBudgets[matchedSub.key] ?? '0') || 0) + amount),
+          )
           if (Boolean(row.is_joint_expense) || Number(row.personal_share_ratio ?? 1) < 1) {
             nextJointFlags[matchedSub.key] = true
           }
@@ -311,9 +339,16 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     [subBudgets, subJointFlags, voyageSubcategories],
   )
   const displayedBudgetTotal = personalImputedBudget
+  const voyageSubcategoryRows = useMemo(() => {
+    const rows: Array<Array<(typeof voyageSubcategories)[number] | null>> = []
+    for (let i = 0; i < voyageSubcategories.length; i += 2) {
+      rows.push([voyageSubcategories[i] ?? null, voyageSubcategories[i + 1] ?? null])
+    }
+    return rows
+  }, [voyageSubcategories])
 
   function handleSubBudget(catId: string, val: string) {
-    setSubBudgets((prev) => ({ ...prev, [catId]: val }))
+    setSubBudgets((prev) => ({ ...prev, [catId]: normalizeWholeEuroInput(val) }))
   }
 
   function handleSubJointFlag(catId: string, next: boolean) {
@@ -586,8 +621,8 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
             transition={{ type: 'spring', damping: 28, stiffness: 340 }}
             style={{
               zIndex: 141,
-              width: 'min(500px, 100%)',
-              maxHeight: 'calc(100dvh - 40px)',
+              width: 'min(480px, calc(100vw - 20px))',
+              maxHeight: 'calc(100dvh - 24px)',
               display: 'flex',
               flexDirection: 'column',
               background: 'var(--neutral-0)',
@@ -1023,12 +1058,12 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
             </motion.div>
 
             {/* ── Body (scrollable) ── */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 8px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 8px' }}>
 
               {/* Dates */}
-              <div style={{ marginBottom: 22 }}>
+              <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <label
                       style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 4, fontWeight: 600 }}
                     >
@@ -1045,7 +1080,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                       }}
                     />
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <label
                       style={{ fontSize: 11, color: 'var(--neutral-500)', display: 'block', marginBottom: 4, fontWeight: 600 }}
                     >
@@ -1067,7 +1102,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
               </div>
 
               {/* Budget / Réalisé par sous-catégorie */}
-              <div style={{ marginBottom: 22 }}>
+              <div style={{ marginBottom: 18 }}>
                 <div
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}
                 >
@@ -1090,97 +1125,152 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {voyageSubcategories.map((sub) => {
-                    const amountInputId = `sub-amount-${sub.key}`
-                    const jointInputId = `sub-joint-${sub.key}`
-                    const val = subBudgets[sub.key] ?? ''
-                    const isSubJoint = Boolean(subJointFlags[sub.key])
-                    const hasVal = (parseFloat(val) || 0) > 0
-                    return (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {voyageSubcategoryRows.map(([leftSub, rightSub], rowIndex) => (
+                    <div
+                      key={`budget-row-${rowIndex}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0,1fr) 44px minmax(0,1fr)',
+                        gap: 8,
+                        alignItems: 'center',
+                      }}
+                    >
+                      {[leftSub, rightSub].map((sub, sideIndex) => {
+                        const targetGridColumn = sideIndex === 0 ? 1 : 3
+                        if (!sub) {
+                          return sideIndex === 0
+                            ? <div key={`empty-left-${rowIndex}`} style={{ gridColumn: targetGridColumn }} />
+                            : <div key={`empty-right-${rowIndex}`} style={{ gridColumn: targetGridColumn }} />
+                        }
+                        const amountInputId = `sub-amount-${sub.key}`
+                        const val = subBudgets[sub.key] ?? ''
+                        const hasVal = (parseFloat(val) || 0) > 0
+                        return (
+                          <div
+                            key={sub.key}
+                            style={{
+                              gridColumn: targetGridColumn,
+                              border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
+                              borderRadius: 10,
+                              padding: '5px 7px',
+                              background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              transition: 'border-color 0.15s, background 0.15s',
+                              minWidth: 0,
+                            }}
+                          >
+                            <CategoryIcon
+                              iconKey={sub.iconKey}
+                              label={sub.label}
+                              size={16}
+                              style={{ flexShrink: 0, width: 16, height: 16, objectFit: 'contain' }}
+                            />
+                            <label
+                              htmlFor={amountInputId}
+                              style={{
+                                flex: 1,
+                                fontSize: 10.5,
+                                fontWeight: 650,
+                                minWidth: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
+                                cursor: 'text',
+                              }}
+                            >
+                              {compactVoyageBudgetLabel(sub.label)}
+                            </label>
+                            <input
+                              id={amountInputId}
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={val}
+                              onChange={(e) => handleSubBudget(sub.key, e.target.value)}
+                              inputMode="numeric"
+                              placeholder="0"
+                              style={{
+                                width: 40,
+                                border: 'none',
+                                background: 'transparent',
+                                outline: 'none',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                fontFamily: 'var(--font-mono)',
+                                color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
+                                letterSpacing: '-0.02em',
+                                textAlign: 'right',
+                                flexShrink: 0,
+                                cursor: 'text',
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                flexShrink: 0,
+                                color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
+                              }}
+                            >
+                              €
+                            </span>
+                          </div>
+                        )
+                      })}
+
                       <div
-                        key={sub.key}
                         style={{
-                          border: `1.5px solid ${hasVal ? 'color-mix(in oklab, #7C3AED 32%, white)' : 'var(--neutral-200)'}`,
-                          borderRadius: 10, padding: '5px 9px',
-                          background: hasVal ? 'color-mix(in oklab, #7C3AED 5%, white)' : 'var(--neutral-0)',
-                          display: 'flex', flexDirection: 'column', gap: 4,
-                          transition: 'border-color 0.15s, background 0.15s',
+                          gridColumn: 2,
+                          gridRow: 1,
+                          position: 'relative',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
                         }}
                       >
-                        <label
-                          htmlFor={amountInputId}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'text', margin: 0 }}
-                        >
-                          <span style={{ fontSize: 14, flexShrink: 0 }}>{sub.emoji}</span>
+                        {rowIndex === 0 ? (
                           <span
                             style={{
-                              flex: 1, fontSize: 11, fontWeight: 600, minWidth: 0,
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              color: hasVal ? '#5B21B6' : 'var(--neutral-500)',
-                            }}
-                          >
-                            {sub.label}
-                          </span>
-                          <input
-                            id={amountInputId}
-                            type="number"
-                            min="0"
-                            step="10"
-                            value={val}
-                            onChange={(e) => handleSubBudget(sub.key, e.target.value)}
-                            placeholder="0"
-                            style={{
-                              width: 52, border: 'none', background: 'transparent', outline: 'none',
-                              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                              color: hasVal ? '#7C3AED' : 'var(--neutral-300)',
-                              letterSpacing: '-0.02em', textAlign: 'right', flexShrink: 0,
-                              cursor: 'text',
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: 11, fontWeight: 600, flexShrink: 0,
-                              color: hasVal ? '#9D77C4' : 'var(--neutral-300)',
-                            }}
-                          >
-                            €
-                          </span>
-                        </label>
-
-                        <label
-                          htmlFor={jointInputId}
-                          style={{
-                            marginTop: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            gap: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 10.5,
+                              position: 'absolute',
+                              top: 0,
+                              fontSize: 10,
                               fontWeight: 700,
                               textTransform: 'lowercase',
-                              color: isSubJoint ? '#6D28D9' : 'var(--neutral-400)',
+                              color: 'var(--neutral-400)',
+                              lineHeight: 1,
                             }}
                           >
                             joint
                           </span>
-                          <input
-                            id={jointInputId}
-                            type="checkbox"
-                            checked={isSubJoint}
-                            onChange={(e) => handleSubJointFlag(sub.key, e.target.checked)}
-                            style={{ width: 13, height: 13, accentColor: '#6D28D9', cursor: 'pointer' }}
-                            aria-label={`Dépense jointe pour ${sub.label}`}
-                          />
-                        </label>
+                        ) : (
+                          <span style={{ display: 'none' }} />
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                          {[leftSub, rightSub].map((sub, checkboxIndex) => {
+                            if (!sub) return <span key={`joint-spacer-${rowIndex}-${checkboxIndex}`} style={{ width: 13, height: 13 }} />
+                            const jointInputId = `sub-joint-${sub.key}`
+                            return (
+                              <input
+                                key={jointInputId}
+                                id={jointInputId}
+                                type="checkbox"
+                                checked={Boolean(subJointFlags[sub.key])}
+                                onChange={(e) => handleSubJointFlag(sub.key, e.target.checked)}
+                                style={{ width: 13, height: 13, accentColor: '#6D28D9', cursor: 'pointer' }}
+                                aria-label={`Dépense jointe pour ${sub.label}`}
+                              />
+                            )
+                          })}
+                        </div>
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
                 {isLoadingPrefill && !(isEditMode && isPastTrip) ? (
                   <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--neutral-500)' }}>
@@ -1242,7 +1332,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
             {/* ── Footer ── */}
             <div
               style={{
-                padding: '14px 20px 16px', borderTop: '1px solid var(--neutral-100)',
+                padding: '12px 14px 14px', borderTop: '1px solid var(--neutral-100)',
                 flexShrink: 0, background: 'var(--neutral-0)',
               }}
             >
