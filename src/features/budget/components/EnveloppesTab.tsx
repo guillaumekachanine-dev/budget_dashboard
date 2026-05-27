@@ -10,6 +10,9 @@ import { formatCurrencyFloored, getTxLabel, categoryColorFromName, todayIso } fr
 import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useTripsForMonth } from '@/features/budget/hooks/useTripsForMonth'
+import { useBudgetEnvelopeForecast, type ForecastSummary } from '@/hooks/useBudgetEnvelopeForecast'
+import { useAuth } from '@/hooks/useAuth'
+import { BudgetEnvelopeForecastModal, type BudgetEnvelopeForecastModalData } from '@/features/budget/components/BudgetEnvelopeForecastModal'
 import type { Category, Transaction } from '@/lib/types'
 import type { Trip } from '@/features/voyages/types'
 import type { BudgetPageParentCategoryRow, BudgetPageBucketRow, BudgetPageCategoryRow } from '../types'
@@ -36,6 +39,16 @@ function getPeriodRange(year: number, month: number): { startDate: string; endDa
   if (isCurrentMonth) return { startDate, endDate: today }
   const monthEndDate = new Date(year, month, 0)
   return { startDate, endDate: `${monthEndDate.getFullYear()}-${pad2(monthEndDate.getMonth() + 1)}-${pad2(monthEndDate.getDate())}` }
+}
+
+function getFullMonthRange(year: number, month: number): { startDate: string; endDate: string } {
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const startDate = `${year}-${pad2(month)}-01`
+  const monthEndDate = new Date(year, month, 0)
+  return {
+    startDate,
+    endDate: `${monthEndDate.getFullYear()}-${pad2(monthEndDate.getMonth() + 1)}-${pad2(monthEndDate.getDate())}`,
+  }
 }
 
 interface PieDatum {
@@ -141,9 +154,11 @@ interface MiniDonutProps {
   selectedId: string | null
   onSliceClick: (id: string, name: string, value: number, color: string) => void
   centerLabel?: string
+  onCenterClick?: () => void
+  centerActionLabel?: string
 }
 
-function MiniDonut({ data, total, selectedId, onSliceClick, centerLabel }: MiniDonutProps) {
+function MiniDonut({ data, total, selectedId, onSliceClick, centerLabel, onCenterClick, centerActionLabel }: MiniDonutProps) {
   return (
     <div style={{ position: 'relative', height: 190 }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -200,6 +215,26 @@ function MiniDonut({ data, total, selectedId, onSliceClick, centerLabel }: MiniD
           </Pie>
         </PieChart>
       </ResponsiveContainer>
+      {onCenterClick ? (
+        <button
+          type="button"
+          onClick={onCenterClick}
+          aria-label={centerActionLabel ?? 'Voir le réalisé avec fixes planifiées'}
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 108,
+            height: 108,
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            zIndex: 1,
+          }}
+        />
+      ) : null}
       <div
         style={{
           position: 'absolute',
@@ -1053,6 +1088,12 @@ interface SocleListRow {
   iconSrc: string
 }
 
+interface EnvelopeForecastSummary {
+  realizedAmount: number
+  futureFixedAmount: number
+  realizedPlusFutureFixedAmount: number
+}
+
 export interface EnveloppesTabProps {
   onCategoryClick?: (categoryId: string) => void
   onBlockClick?: (blockId: string) => void
@@ -1076,6 +1117,7 @@ export function EnveloppesTab({
   onViewModeChange,
   restoreRequest = null,
 }: EnveloppesTabProps) {
+  const { user } = useAuth()
   const { data: categories = [] } = useCategories()
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
@@ -1121,6 +1163,12 @@ export function EnveloppesTab({
   )
 
   const { startDate, endDate } = useMemo(() => getPeriodRange(year, month), [year, month])
+  const forecastRange = useMemo(() => getFullMonthRange(year, month), [year, month])
+  const { data: envelopeForecastData } = useBudgetEnvelopeForecast({
+    userId: user?.id,
+    startDate: forecastRange.startDate,
+    endDate: forecastRange.endDate,
+  })
 
   const now = new Date()
   const currentYear = now.getFullYear()
@@ -1142,6 +1190,7 @@ export function EnveloppesTab({
   const [showAllEnvelopes, setShowAllEnvelopes] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry | null>(null)
   const [modalTarget, setModalTarget] = useState<ModalTarget | null>(null)
+  const [forecastModalEnvelope, setForecastModalEnvelope] = useState<BudgetEnvelopeForecastModalData | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [subCategoryTransactionSequence, setSubCategoryTransactionSequence] = useState<Transaction[]>([])
   const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
@@ -1266,6 +1315,24 @@ export function EnveloppesTab({
 
   const realTotal = useMemo(() => realPieData.reduce((s, d) => s + d.value, 0), [realPieData])
   const budgetTotal = useMemo(() => budgetPieData.reduce((s, d) => s + d.value, 0), [budgetPieData])
+  const parentForecastById = useMemo<Record<string, EnvelopeForecastSummary>>(() => {
+    const acc: Record<string, EnvelopeForecastSummary> = {}
+    const byCategoryId = envelopeForecastData?.byCategoryId ?? {}
+    for (const [categoryId, summary] of Object.entries(byCategoryId)) {
+      const parentId = categoryById.get(categoryId)?.parent_id ?? categoryId
+      if (!acc[parentId]) {
+        acc[parentId] = {
+          realizedAmount: 0,
+          futureFixedAmount: 0,
+          realizedPlusFutureFixedAmount: 0,
+        }
+      }
+      acc[parentId].realizedAmount += summary.realizedAmount
+      acc[parentId].futureFixedAmount += summary.futureFixedAmount
+      acc[parentId].realizedPlusFutureFixedAmount += summary.realizedPlusFutureFixedAmount
+    }
+    return acc
+  }, [categoryById, envelopeForecastData?.byCategoryId])
 
   const top5 = useMemo(() => realPieData.slice(0, 5), [realPieData])
   const socleListRows = useMemo<SocleListRow[]>(
@@ -1297,6 +1364,33 @@ export function EnveloppesTab({
   const revenueProgressPct = Math.min(100, Math.max(0, Math.round(revenueCoveragePct)))
   const isRevenueAboveTarget = selectedMonthRevenueAmount > monthlyCommitmentsTarget
   const revenueSurplusPct = monthlyCommitmentsTarget > 0 ? ((selectedMonthRevenueAmount - monthlyCommitmentsTarget) / monthlyCommitmentsTarget) * 100 : null
+
+  const emptyForecastSummary = useMemo<ForecastSummary>(
+    () => ({ realizedAmount: 0, futureFixedAmount: 0, realizedPlusFutureFixedAmount: 0 }),
+    [],
+  )
+
+  const openForecastModal = useCallback(() => {
+    const selectedName = selectedEntry?.name ?? (viewMode === 'categories' ? 'Toutes les enveloppes' : 'Tous les socles')
+    const selectedBudgetAmount = selectedEntry?.budgetAmount ?? budgetTotal
+
+    let summary: EnvelopeForecastSummary
+    if (selectedEntry) {
+      summary = viewMode === 'categories'
+        ? (parentForecastById[selectedEntry.id] ?? emptyForecastSummary)
+        : (envelopeForecastData?.byBucket[selectedEntry.id] ?? emptyForecastSummary)
+    } else {
+      summary = envelopeForecastData?.total ?? emptyForecastSummary
+    }
+
+    setForecastModalEnvelope({
+      name: selectedName,
+      realizedAmount: summary.realizedAmount,
+      futureFixedAmount: summary.futureFixedAmount,
+      realizedPlusFutureFixedAmount: summary.realizedPlusFutureFixedAmount,
+      budgetAmount: Number.isFinite(selectedBudgetAmount) ? selectedBudgetAmount : null,
+    })
+  }, [budgetTotal, emptyForecastSummary, envelopeForecastData?.byBucket, envelopeForecastData?.total, parentForecastById, selectedEntry, viewMode])
 
   // ── transactions for modal ────────────────────────────────────────────────
 
@@ -1831,6 +1925,8 @@ export function EnveloppesTab({
             total={realTotal}
             selectedId={selectedEntry?.id ?? null}
             centerLabel="consommé"
+            onCenterClick={openForecastModal}
+            centerActionLabel={`Voir le réalisé avec fixes planifiées pour ${selectedEntry?.name ?? (viewMode === 'categories' ? 'toutes les enveloppes' : 'tous les socles')}`}
             onSliceClick={(id, name, value, color) => {
               const budgetEntry = budgetPieData.find((d) => d.id === id)
               handleDonutClick(id, name, value, budgetEntry?.value ?? 0, color, 'real')
@@ -1848,6 +1944,8 @@ export function EnveloppesTab({
             total={budgetTotal}
             selectedId={selectedEntry?.id ?? null}
             centerLabel="budgétisés"
+            onCenterClick={openForecastModal}
+            centerActionLabel={`Voir le réalisé avec fixes planifiées pour ${selectedEntry?.name ?? (viewMode === 'categories' ? 'toutes les enveloppes' : 'tous les socles')}`}
             onSliceClick={(id, name, value, color) => {
               const realEntry = realPieData.find((d) => d.id === id)
               handleDonutClick(id, name, realEntry?.value ?? 0, value, color, 'budget')
@@ -2238,6 +2336,11 @@ export function EnveloppesTab({
         onBack={handleBackToList}
         onClose={handleCloseTransaction}
         showReturnListButton={modalToReopen?.clickedFrom === 'real'}
+      />
+
+      <BudgetEnvelopeForecastModal
+        forecast={forecastModalEnvelope}
+        onClose={() => setForecastModalEnvelope(null)}
       />
     </div>
   )

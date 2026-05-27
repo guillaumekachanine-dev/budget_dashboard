@@ -493,6 +493,51 @@ export interface BudgetTransactionsEnrichedRow {
   mapped_budget_bucket: string | null
 }
 
+export interface FluxOperationsUnifiedViewRow {
+  id: string | null
+  operation_kind: string | null
+  source_planned_operation_id: string | null
+  source_transaction_id: string | null
+  user_id: string | null
+  account_id: string | null
+  account_name: string | null
+  category_id: string | null
+  category_name: string | null
+  parent_category_name: string | null
+  category_icon_key: string | null
+  budget_behavior: string | null
+  budget_bucket: string | null
+  operation_date: string | null
+  label: string | null
+  merchant_name: string | null
+  amount: number | null
+  currency: string | null
+  direction: string | null
+  flow_type: FlowType | null
+  personal_share_ratio: number | null
+  personal_amount: number | null
+  is_recurring: boolean | null
+  recurrence_frequency: string | null
+  recurrence_day_of_month: number | null
+  recurrence_start_date: string | null
+  recurrence_end_date: string | null
+  budget_impact: string | null
+  planned_status: string | null
+  matched_transaction_id: string | null
+  matched_planned_operation_id: string | null
+  is_matched: boolean | null
+  match_type: string | null
+  is_hidden: boolean | null
+  is_planned_occurrence: boolean | null
+  is_actual_transaction: boolean | null
+  notes: string | null
+  created_at: string | null
+  updated_at: string | null
+  budget_accounting_amount: number | null
+  banking_amount: number | null
+  display_amount: number | null
+}
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>
   Insert: Insert & Record<string, unknown>
@@ -544,6 +589,7 @@ export type Database = {
       v_category_annual_cost_projection_2026: { Row: CategoryAnnualCostProjection2026Row & Record<string, unknown>; Relationships: [] }
       v_annual_projection_overview_2026: { Row: AnnualProjectionOverview2026Row & Record<string, unknown>; Relationships: [] }
       v_budget_transactions_enriched: { Row: BudgetTransactionsEnrichedRow & Record<string, unknown>; Relationships: [] }
+      v_flux_operations_unified: { Row: FluxOperationsUnifiedViewRow & Record<string, unknown>; Relationships: [] }
       v_planned_operations_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }

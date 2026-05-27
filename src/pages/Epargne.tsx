@@ -13,13 +13,16 @@ import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAll
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
+import { useSavingsActualsByMonth } from '@/features/savings/hooks/useSavingsActualsByMonth'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
+import { useSavingsPlanningMonthDetails } from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
 import { StatsSection } from '@/features/stats/components/ui'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { useAuth } from '@/hooks/useAuth'
 
 type StatsTabId = 'epargne' | 'planning_2026' | 'performance' | 'optimisation'
 type StatsTabConfig = {
@@ -77,6 +80,21 @@ type OptimizationPeriodOption = {
 }
 
 const PLANNED_SAVINGS_2026 = 9800
+const PLANNING_MONTHS_2026 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+const DEFAULT_MONTHLY_OBJECTIVES_2026: Record<number, number> = {
+  1: 1200,
+  2: 1000,
+  3: 1000,
+  4: 1000,
+  5: 1000,
+  6: 800,
+  7: 500,
+  8: 600,
+  9: 1000,
+  10: 1200,
+  11: 1000,
+  12: 700,
+}
 const OPTIMIZATION_YEAR = 2026
 const OPTIMIZATION_ANNUAL_GAIN_MONTHS = 6
 const PLANNED_SAVINGS_PCT_2026 = 17.8
@@ -238,6 +256,7 @@ function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
 
 export function Epargne() {
   const currentYear = new Date().getFullYear()
+  const { user } = useAuth()
   const {
     snapshot,
     loading,
@@ -250,6 +269,8 @@ export function Epargne() {
   const optimizationCapacity = useOptimizationCapacity(OPTIMIZATION_YEAR)
   const savingsAnalytics = useSavingsAnalytics(currentYear)
   const savingsEvolution = useSavingsEvolutionFiveYears()
+  const { byMonth: savingsActualsByMonth } = useSavingsActualsByMonth(user?.id, 2026)
+  const { data: planningMonthDetails = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [optimizationPeriodId, setOptimizationPeriodId] = useState<OptimizationPeriodId>('2026-05')
@@ -326,6 +347,30 @@ export function Epargne() {
     return byCategory
   }, [optimizationBudgetPayloadQuery.data?.by_category])
 
+  const objective2026Actualized = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYearNow = now.getFullYear()
+    const isPastPlanningMonth = (periodMonth: number) => {
+      if (currentYearNow > 2026) return true
+      if (currentYearNow < 2026) return false
+      return periodMonth < currentMonth
+    }
+
+    const objectiveByMonth: Record<number, number> = { ...DEFAULT_MONTHLY_OBJECTIVES_2026 }
+    for (const row of planningMonthDetails) {
+      objectiveByMonth[row.period_month] = Number(row.monthly_objective_amount ?? 0)
+    }
+
+    // Objectif 2026 actualisé = réel des mois clôturés + objectifs des mois non clôturés.
+    return PLANNING_MONTHS_2026.reduce((sum, month) => {
+      if (isPastPlanningMonth(month)) {
+        return sum + Number(savingsActualsByMonth[month]?.actual_savings_amount_eur ?? 0)
+      }
+      return sum + Number(objectiveByMonth[month] ?? 0)
+    }, 0)
+  }, [planningMonthDetails, savingsActualsByMonth])
+
   const planningKpis = useMemo<KpiTileItem[]>(() => {
     const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
     const latestYtdRow = [...monthlyMetrics]
@@ -346,7 +391,7 @@ export function Epargne() {
       },
       {
         label: 'Objectif 2026',
-        value: formatKpiCurrency(PLANNED_SAVINGS_2026),
+        value: formatKpiCurrency(objective2026Actualized),
         tone: 'warning',
         backgroundColor: '#0E7490',
         borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
@@ -354,7 +399,7 @@ export function Epargne() {
         valueColor: '#FCD34D',
       },
     ]
-  }, [savingsAnalytics.data?.monthlyMetrics])
+  }, [objective2026Actualized, savingsAnalytics.data?.monthlyMetrics])
 
   const epargneHomeKpis = useMemo<KpiTileItem[]>(() => {
     const currentSummary = savingsAnalytics.data?.currentSummary

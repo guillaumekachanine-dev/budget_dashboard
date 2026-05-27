@@ -6,6 +6,11 @@ import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytic
 import { useMonthlyBudgetForecast } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { MonthlyBudgetForecastRow } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { SavingsMonthlyMetric } from '@/features/savings/types'
+import { useSavingsActualsByMonth } from '@/features/savings/hooks/useSavingsActualsByMonth'
+import {
+  useSavingsPlanningMonthDetails,
+  useUpsertSavingsPlanningMonthDetails,
+} from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
@@ -297,6 +302,21 @@ function createPlanningDraft(data: MonthPlanningData): EditablePlanningDraft {
   }
 }
 
+function computeMonthlyBalance({
+  revenus,
+  depenses,
+  epargne,
+}: {
+  revenus: number
+  depenses: number
+  epargne: number
+}): number {
+  const normalizedRevenus = Number.isFinite(revenus) ? revenus : 0
+  const normalizedDepenses = Math.abs(Number.isFinite(depenses) ? depenses : 0)
+  const normalizedEpargne = Math.abs(Number.isFinite(epargne) ? epargne : 0)
+  return normalizedRevenus - normalizedDepenses - normalizedEpargne
+}
+
 // ─── UI atoms ────────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -387,6 +407,7 @@ function PlanningModal({
   metric,
   forecast,
   monthData,
+  actualSavingsAmount,
   accountNames,
   annualGlobalObjective,
   onSave,
@@ -397,6 +418,7 @@ function PlanningModal({
   metric: SavingsMonthlyMetric | undefined
   forecast: MonthlyBudgetForecastRow | undefined
   monthData: MonthPlanningData
+  actualSavingsAmount: number | null
   accountNames: string[]
   annualGlobalObjective: number
   onSave: (nextData: MonthPlanningData) => void
@@ -405,10 +427,12 @@ function PlanningModal({
   const data = monthData
   const past = isPastMonth(milestone.id)
   const [isEditing, setIsEditing] = useState(false)
+  const [isPlannedTransferConfirmed, setIsPlannedTransferConfirmed] = useState(false)
   const [draft, setDraft] = useState<EditablePlanningDraft>(() => createPlanningDraft(data))
 
   useEffect(() => {
     setIsEditing(false)
+    setIsPlannedTransferConfirmed(false)
     setDraft(createPlanningDraft(data))
   }, [milestone.id, data])
 
@@ -422,8 +446,18 @@ function PlanningModal({
   const forwardAmount = forecast?.forward_commitments_amount ?? 0
 
   // Épargne et objectif
-  const epargneMontant = data.epargneMontant
+  // For closed months, missing actual savings means 0.
+  // Never fallback to planned values, otherwise realized savings is overstated.
+  const epargneMontant = past ? (actualSavingsAmount ?? 0) : data.epargneMontant
   const objectif = data.objectif
+  const effectiveDepenses = past && data.depensesReelles !== undefined
+    ? data.depensesReelles
+    : budgetDepenses + forwardAmount
+  const monthlyBalance = computeMonthlyBalance({
+    revenus,
+    depenses: effectiveDepenses,
+    epargne: epargneMontant,
+  })
   const pctObjectif = annualGlobalObjective > 0
     ? Math.round((data.virement.montant / annualGlobalObjective) * 100)
     : 0
@@ -451,7 +485,9 @@ function PlanningModal({
 
   function handleValidateEdit() {
     const nextObjectif = Number(normalizeWholeAmountInput(draft.objectif)) || 0
-    const nextEpargne = Number(normalizeWholeAmountInput(draft.epargneMontant)) || 0
+    const nextEpargne = past
+      ? (actualSavingsAmount ?? 0)
+      : (Number(normalizeWholeAmountInput(draft.epargneMontant)) || 0)
     const nextVirementMontant = Number(normalizeWholeAmountInput(draft.virementMontant)) || 0
     const nextDateIso = draft.virementDateIso || toIsoDate(data.virement.date)
 
@@ -519,46 +555,75 @@ function PlanningModal({
           {milestone.fullLabel}
         </h3>
 
-        <button
-          type="button"
-          aria-label="Fermer"
-          onClick={onClose}
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 28,
-            height: 28,
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            background: 'rgba(255,255,255,0.18)',
-            color: '#fff',
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.32)'
-          }}
-          onMouseLeave={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.18)'
-          }}
-        >
-          <X size={15} strokeWidth={2.5} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+          {!isEditing ? (
+            <button
+              type="button"
+              aria-label="Éditer la modale"
+              onClick={() => setIsEditing(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                background: 'rgba(255,255,255,0.18)',
+                color: '#fff',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.32)'
+              }}
+              onMouseLeave={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.18)'
+              }}
+            >
+              <Pencil size={14} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label="Fermer"
+            onClick={onClose}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'rgba(255,255,255,0.18)',
+              color: '#fff',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => {
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.32)'
+            }}
+            onMouseLeave={e => {
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.18)'
+            }}
+          >
+            <X size={15} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
 
       {/* ── Corps ── */}
       <div
         style={{
-          padding: 'var(--space-4)',
+          padding: isEditing ? 'var(--space-3)' : 'var(--space-4)',
           display: 'grid',
-          gap: 'var(--space-4)',
+          gap: isEditing ? 'var(--space-3)' : 'var(--space-4)',
           overflowY: 'auto',
         }}
       >
         {/* Objectif mensuel */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
           <p
             style={{
               margin: 0,
@@ -586,13 +651,14 @@ function PlanningModal({
                   style={{
                     width: 110,
                     marginLeft: 4,
-                    padding: '2px 6px',
+                    height: 32,
+                    padding: '4px 8px',
                     borderRadius: 8,
                     border: '1px solid var(--primary-300)',
                     background: '#fff',
                     color: '#D97706',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: 800,
                   }}
                 />
@@ -602,28 +668,6 @@ function PlanningModal({
             </span>
           </p>
 
-          {!isEditing ? (
-            <button
-              type="button"
-              aria-label="Éditer la modale"
-              onClick={() => setIsEditing(true)}
-              style={{
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 30,
-                height: 30,
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--neutral-200)',
-                background: 'var(--neutral-0)',
-                color: 'var(--primary-600)',
-                cursor: 'pointer',
-              }}
-            >
-              <Pencil size={14} />
-            </button>
-          ) : null}
         </div>
 
         {/* ── Section Flux mensuels ── */}
@@ -667,7 +711,7 @@ function PlanningModal({
             value={isEditing ? '' : formatMoney(epargneMontant)}
             valueColor={'var(--primary-600)'}
           />
-          {isEditing ? (
+          {isEditing && !past ? (
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <input
                 type="number"
@@ -678,11 +722,12 @@ function PlanningModal({
                 onChange={(e) => applyDraftValue('epargneMontant', normalizeWholeAmountInput(e.target.value))}
                 style={{
                   width: 132,
-                  padding: '6px 8px',
+                  height: 32,
+                  padding: '4px 8px',
                   borderRadius: 8,
                   border: '1px solid var(--primary-300)',
                   background: '#fff',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 700,
                   color: 'var(--primary-700)',
@@ -691,116 +736,170 @@ function PlanningModal({
               />
             </div>
           ) : null}
+          <div
+            style={{
+              marginTop: 'var(--space-1)',
+              paddingTop: 'var(--space-2)',
+              borderTop: '1px solid var(--neutral-200)',
+            }}
+          >
+            <FluxRow
+              label="Balance"
+              value={formatMoney(monthlyBalance)}
+              valueColor={monthlyBalance >= 0 ? 'var(--primary-700)' : 'var(--color-negative)'}
+            />
+          </div>
         </div>
 
         {/* ── Section Virement ── */}
         <div
           style={{
             display: 'grid',
-            gap: 'var(--space-2)',
+            gap: isEditing ? 'var(--space-1)' : 'var(--space-2)',
             background: 'var(--neutral-50)',
             borderRadius: 'var(--radius-md)',
             padding: 'var(--space-3)',
             border: '1px solid var(--neutral-150)',
           }}
         >
-          <SectionLabel>{past ? 'Virement effectué' : 'Virement prévu'}</SectionLabel>
-          {isEditing ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--neutral-700)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {past ? 'Virement effectué' : 'Virement prévu'}
+            </p>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                color: 'var(--neutral-600)',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span>Prévu</span>
+              <input
+                type="checkbox"
+                checked={isPlannedTransferConfirmed}
+                aria-label={`Confirmer qu'un virement d'épargne est prévu pour ${milestone.fullLabel}`}
+                onChange={(e) => setIsPlannedTransferConfirmed(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </label>
+          </div>
+          {isPlannedTransferConfirmed ? (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Date</span>
-                <input
-                  type="date"
-                  value={draft.virementDateIso}
-                  onChange={(e) => applyDraftValue('virementDateIso', e.target.value)}
-                  style={{
-                    width: 154,
-                    padding: '5px 8px',
-                    borderRadius: 8,
-                    border: '1px solid var(--neutral-250)',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Montant</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
-                  value={draft.virementMontant}
-                  onChange={(e) => applyDraftValue('virementMontant', normalizeWholeAmountInput(e.target.value))}
-                  style={{
-                    width: 120,
-                    padding: '5px 8px',
-                    borderRadius: 8,
-                    border: '1px solid var(--neutral-250)',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                    textAlign: 'right',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Compte source</span>
-                <select
-                  value={draft.compteSource}
-                  onChange={(e) => applyDraftValue('compteSource', e.target.value)}
-                  style={{
-                    width: 170,
-                    padding: '5px 8px',
-                    borderRadius: 8,
-                    border: '1px solid var(--neutral-250)',
-                    fontSize: 12,
-                    color: 'var(--neutral-700)',
-                    background: '#fff',
-                  }}
-                >
-                  {sourceOptions.map((name) => (
-                    <option key={`source-${name}`} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Destination</span>
-                <select
-                  value={draft.destination}
-                  onChange={(e) => applyDraftValue('destination', e.target.value)}
-                  style={{
-                    width: 170,
-                    padding: '5px 8px',
-                    borderRadius: 8,
-                    border: '1px solid var(--neutral-250)',
-                    fontSize: 12,
-                    color: 'var(--neutral-700)',
-                    background: '#fff',
-                  }}
-                >
-                  {destinationOptions.map((name) => (
-                    <option key={`dest-${name}`} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                  <option value="Autre">Autre</option>
-                </select>
-              </div>
+              {isEditing ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Date</span>
+                    <input
+                      type="date"
+                      value={draft.virementDateIso}
+                      onChange={(e) => applyDraftValue('virementDateIso', e.target.value)}
+                      style={{
+                        width: 154,
+                        height: 32,
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: '1px solid var(--neutral-250)',
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Montant</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      value={draft.virementMontant}
+                      onChange={(e) => applyDraftValue('virementMontant', normalizeWholeAmountInput(e.target.value))}
+                      style={{
+                        width: 120,
+                        height: 32,
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: '1px solid var(--neutral-250)',
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono)',
+                        textAlign: 'right',
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Compte source</span>
+                    <select
+                      value={draft.compteSource}
+                      onChange={(e) => applyDraftValue('compteSource', e.target.value)}
+                      style={{
+                        width: 170,
+                        height: 32,
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: '1px solid var(--neutral-250)',
+                        fontSize: 12,
+                        color: 'var(--neutral-700)',
+                        background: '#fff',
+                      }}
+                    >
+                      {sourceOptions.map((name) => (
+                        <option key={`source-${name}`} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Destination</span>
+                    <select
+                      value={draft.destination}
+                      onChange={(e) => applyDraftValue('destination', e.target.value)}
+                      style={{
+                        width: 170,
+                        height: 32,
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: '1px solid var(--neutral-250)',
+                        fontSize: 12,
+                        color: 'var(--neutral-700)',
+                        background: '#fff',
+                      }}
+                    >
+                      {destinationOptions.map((name) => (
+                        <option key={`dest-${name}`} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      <option value="Autre">Autre</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <VirementRow label="Date" value={formatDateDisplay(data.virement.date)} />
+                  <VirementRow label="Montant" value={formatMoney(data.virement.montant)} />
+                  <VirementRow label="Compte source" value={data.virement.compteSource} />
+                  <VirementRow label="Destination" value={data.virement.destination} />
+                </>
+              )}
+              <VirementRow
+                label="% de l'objectif"
+                value={`${pctObjectif} % (${annualObjectiveLabel})`}
+              />
             </>
-          ) : (
-            <>
-              <VirementRow label="Date" value={formatDateDisplay(data.virement.date)} />
-              <VirementRow label="Montant" value={formatMoney(data.virement.montant)} />
-              <VirementRow label="Compte source" value={data.virement.compteSource} />
-              <VirementRow label="Destination" value={data.virement.destination} />
-            </>
-          )}
-          <VirementRow
-            label="% de l'objectif"
-            value={`${pctObjectif} % (${annualObjectiveLabel})`}
-          />
+          ) : null}
         </div>
 
         {/* ── Section Remarques ── */}
@@ -810,17 +909,17 @@ function PlanningModal({
             <textarea
               value={draft.remarques}
               onChange={(e) => applyDraftValue('remarques', e.target.value)}
-              rows={4}
+              rows={3}
               placeholder="Ajouter des remarques…"
               style={{
                 width: '100%',
                 resize: 'vertical',
                 border: '1px solid var(--neutral-250)',
                 borderRadius: 'var(--radius-md)',
-                padding: '8px 10px',
+                padding: '6px 8px',
                 fontSize: 12,
                 color: 'var(--neutral-700)',
-                lineHeight: 1.5,
+                lineHeight: 1.35,
                 boxSizing: 'border-box',
               }}
             />
@@ -900,8 +999,11 @@ export function SavingsPlanning2026Section() {
 
   const { data: analyticsData } = useSavingsAnalytics(2026)
   const { data: forecastRows } = useMonthlyBudgetForecast(2026)
-  const { data: accounts = [] } = useAccounts()
   const { user } = useAuth()
+  const { data: accounts = [] } = useAccounts()
+  const { byMonth: savingsActualsByMonth } = useSavingsActualsByMonth(user?.id, 2026)
+  const { data: persistedPlanningRows = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
+  const upsertPlanningMonthDetails = useUpsertSavingsPlanningMonthDetails()
   const { data: upcomingPlannedOperations = [] } = usePlannedOperationsForFlow({
     userId: user?.id,
     startDate: '2026-01-01',
@@ -932,6 +1034,25 @@ export function SavingsPlanning2026Section() {
     return map
   }, [forecastRows])
 
+  const accountNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const account of accounts) {
+      if (!account.id || !account.name?.trim()) continue
+      map.set(account.id, account.name.trim())
+    }
+    return map
+  }, [accounts])
+
+  const accountIdByName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const account of accounts) {
+      const name = account.name?.trim()
+      if (!name || !account.id) continue
+      map.set(name.toLowerCase(), account.id)
+    }
+    return map
+  }, [accounts])
+
   const accountNames = useMemo(() => {
     const set = new Set<string>()
     for (const account of accounts) {
@@ -939,6 +1060,41 @@ export function SavingsPlanning2026Section() {
     }
     return [...set]
   }, [accounts])
+
+  useEffect(() => {
+    if (persistedPlanningRows.length === 0) return
+    setPlanningDataByMonth((prev) => {
+      const next = { ...prev }
+      for (const row of persistedPlanningRows) {
+        const monthId = `${row.period_year}-${String(row.period_month).padStart(2, '0')}`
+        const existing = next[monthId]
+        if (!existing) continue
+        const sourceLabel =
+          (row.source_account_id ? accountNameById.get(row.source_account_id) : null)
+          ?? row.source_account_label
+          ?? existing.virement.compteSource
+        const destinationLabel =
+          (row.destination_account_id ? accountNameById.get(row.destination_account_id) : null)
+          ?? row.destination_label
+          ?? existing.virement.destination
+
+        next[monthId] = {
+          ...existing,
+          objectif: Math.round(Number(row.monthly_objective_amount ?? existing.objectif)),
+          epargneMontant: Math.round(Number(row.planned_savings_amount ?? existing.epargneMontant)),
+          virement: {
+            ...existing.virement,
+            date: row.transfer_date ?? existing.virement.date,
+            montant: Math.round(Number(row.transfer_amount ?? existing.virement.montant)),
+            compteSource: sourceLabel,
+            destination: destinationLabel,
+          },
+          facteursDeTerminants: row.notes ?? existing.facteursDeTerminants,
+        }
+      }
+      return next
+    })
+  }, [persistedPlanningRows, accountNameById])
 
   const annualGlobalObjective = useMemo(
     () => Object.values(planningDataByMonth).reduce((sum, row) => sum + Number(row.objectif ?? 0), 0),
@@ -1279,17 +1435,42 @@ export function SavingsPlanning2026Section() {
                 metric={metricsMap.get(monthNumFromId(activeMilestone.id))}
                 forecast={forecastMap.get(monthNumFromId(activeMilestone.id))}
                 monthData={planningDataByMonth[activeMilestone.id]}
+                actualSavingsAmount={savingsActualsByMonth[monthNumFromId(activeMilestone.id)]?.actual_savings_amount_eur ?? null}
                 accountNames={accountNames}
                 annualGlobalObjective={annualGlobalObjective}
                 forwardCommitments={forwardCommitmentsByMonth.get(activeMilestone.id) ?? []}
                 onSave={(nextData) => {
+                  const monthId = activeMilestone.id
                   setPlanningDataByMonth((prev) => ({
                     ...prev,
-                    [activeMilestone.id]: {
+                    [monthId]: {
                       ...nextData,
                       virement: { ...nextData.virement },
                     },
                   }))
+
+                  if (!user?.id) return
+                  const sourceAccountId = accountIdByName.get((nextData.virement.compteSource ?? '').trim().toLowerCase()) ?? null
+                  const destinationAccountId = accountIdByName.get((nextData.virement.destination ?? '').trim().toLowerCase()) ?? null
+                  const [periodYearRaw, periodMonthRaw] = monthId.split('-')
+                  const periodYear = Number(periodYearRaw)
+                  const periodMonth = Number(periodMonthRaw)
+                  if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) return
+
+                  upsertPlanningMonthDetails.mutate({
+                    user_id: user.id,
+                    period_year: periodYear,
+                    period_month: periodMonth,
+                    monthly_objective_amount: Math.round(nextData.objectif),
+                    planned_savings_amount: Math.round(nextData.epargneMontant),
+                    transfer_date: toIsoDate(nextData.virement.date) || null,
+                    transfer_amount: Math.round(nextData.virement.montant),
+                    source_account_id: sourceAccountId,
+                    source_account_label: nextData.virement.compteSource || null,
+                    destination_account_id: destinationAccountId,
+                    destination_label: nextData.virement.destination || null,
+                    notes: nextData.facteursDeTerminants || null,
+                  })
                 }}
               />
             </div>

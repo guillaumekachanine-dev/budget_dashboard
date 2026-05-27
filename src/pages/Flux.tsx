@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState, useDeferredValue, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Search, ArrowUp, Settings2, X, RotateCcw } from 'lucide-react'
-import { useTransactions } from '@/hooks/useTransactions'
+import { useFluxOperations, type FluxOperation } from '@/hooks/useFluxOperations'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
-import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
-import { formatCurrencyRounded, getTxLabel, todayIso } from '@/lib/utils'
+import { formatCurrency, formatCurrencyRounded } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
+import { PlannedOperationDetailsModal } from '@/components/modals/PlannedOperationDetailsModal'
 import fluxActuelIcon from '@/assets/icons/app/flux_actuel.webp'
 import type {
   FlowType,
-  PlannedOperationFlowItem,
   Transaction,
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
@@ -100,7 +99,6 @@ const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string; hasSeparator?: boo
   { value: 'income', label: 'Revenus' },
   { value: 'savings', label: 'Epargne' },
   { value: 'transfer', label: 'Transferts' },
-  { value: 'planned', label: 'Récurrentes' },
 ]
 
 const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
@@ -126,17 +124,50 @@ const PLANNED_PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
 ]
 
 function startOfIsoDay(d: Date): string {
+  // Important: do not use toISOString() for business calendar filters.
+  // UTC conversion can shift local midnight to the previous day.
+  return toLocalIsoDate(d)
+}
+
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function todayIso(): string {
+  return toLocalIsoDate(new Date())
+}
+
+function startOfIsoYear(d: Date): string {
+  return toLocalIsoDate(new Date(d.getFullYear(), 0, 1))
+}
+
+function endOfIsoYear(d: Date): string {
+  return toLocalIsoDate(new Date(d.getFullYear(), 11, 31))
+}
+
+function startOfIsoWeek(d: Date): string {
   const dt = new Date(d)
-  dt.setHours(0, 0, 0, 0)
-  return dt.toISOString().slice(0, 10)
+  const day = dt.getDay() === 0 ? 6 : dt.getDay() - 1
+  dt.setDate(dt.getDate() - day)
+  return toLocalIsoDate(dt)
+}
+
+function endOfIsoWeek(d: Date): string {
+  const dt = new Date(d)
+  const day = dt.getDay() === 0 ? 6 : dt.getDay() - 1
+  dt.setDate(dt.getDate() + (6 - day))
+  return toLocalIsoDate(dt)
 }
 
 function startOfIsoMonth(d: Date): string {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  return toLocalIsoDate(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 
 function endOfIsoMonth(d: Date): string {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+  return toLocalIsoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0))
 }
 
 function periodToRange(period: PeriodFilter): { startDate?: string; endDate?: string } {
@@ -148,18 +179,21 @@ function periodToRange(period: PeriodFilter): { startDate?: string; endDate?: st
       return { startDate: start, endDate: todayIso() }
     }
     case 'week': {
-      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - day)
-      return { startDate: startOfIsoDay(monday), endDate: todayIso() }
+      return { startDate: startOfIsoWeek(now), endDate: endOfIsoWeek(now) }
     }
     case 'month': {
-      return { startDate: startOfIsoMonth(now), endDate: todayIso() }
+      return { startDate: startOfIsoMonth(now), endDate: endOfIsoMonth(now) }
     }
     case 'year_2026':
-      return { startDate: '2026-01-01', endDate: '2026-12-31' }
+      return {
+        startDate: startOfIsoYear(new Date(2026, 0, 1)),
+        endDate: endOfIsoYear(new Date(2026, 0, 1)),
+      }
     case 'year_2025':
-      return { startDate: '2025-01-01', endDate: '2025-12-31' }
+      return {
+        startDate: startOfIsoYear(new Date(2025, 0, 1)),
+        endDate: endOfIsoYear(new Date(2025, 0, 1)),
+      }
     case 'all':
       return {}
     default: {
@@ -168,15 +202,35 @@ function periodToRange(period: PeriodFilter): { startDate?: string; endDate?: st
   }
 }
 
-function displayTxnCategoryName(t: Transaction): string {
-  return t.category?.name ?? 'Sans categorie'
-}
+function periodToFullRange(period: PeriodFilter): { startDate?: string; endDate?: string } {
+  const now = new Date()
 
-function signedAmount(t: Transaction): number {
-  const amount = Number(t.amount) || 0
-  if (t.flow_type === 'expense') return -amount
-  if (t.flow_type === 'income') return amount
-  return 0
+  switch (period) {
+    case 'day': {
+      const today = startOfIsoDay(now)
+      return { startDate: today, endDate: today }
+    }
+    case 'week': {
+      return { startDate: startOfIsoWeek(now), endDate: endOfIsoWeek(now) }
+    }
+    case 'month': {
+      return { startDate: startOfIsoMonth(now), endDate: endOfIsoMonth(now) }
+    }
+    case 'year_2026':
+      return {
+        startDate: startOfIsoYear(new Date(2026, 0, 1)),
+        endDate: endOfIsoYear(new Date(2026, 0, 1)),
+      }
+    case 'year_2025':
+      return {
+        startDate: startOfIsoYear(new Date(2025, 0, 1)),
+        endDate: endOfIsoYear(new Date(2025, 0, 1)),
+      }
+    case 'all':
+      return {}
+    default:
+      return {}
+  }
 }
 
 function formatDateLabel(iso: string): string {
@@ -209,41 +263,37 @@ function resultNoun(flow: FlowFilter): string {
   return 'opérations'
 }
 
-function formatRowAmount(amount: number, flowType: string | null, rawAmount: number): string {
-  if (flowType === 'transfer' || flowType === 'savings') {
-    return `(${formatCurrencyRounded(Math.abs(rawAmount))})`
-  }
-  if (amount > 0) {
-    return `+${formatCurrencyRounded(amount)}`
-  }
-  return formatCurrencyRounded(amount)
-}
-
-function getTodayDateKey(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
 function toDateKey(value?: string | null): string {
   if (!value) return ''
   return value.slice(0, 10)
 }
 
-function signedPlannedAmount(item: PlannedOperationFlowItem): number {
-  const raw = Number(item.planned_personal_amount) || 0
-  const absolute = Math.abs(raw)
-  const flow = item.flow_type
+function isPastOrToday(isoDate: string, today: string): boolean {
+  return isoDate <= today
+}
 
-  if (flow === 'income') return absolute
-  if (flow === 'transfer' || flow === 'savings') return 0
-  if (flow === 'expense') {
-    return -absolute
+function isRealizedFluxOperation(operation: FluxOperation, today: string): boolean {
+  const isPast = isPastOrToday(operation.operation_date, today)
+  if (!isPast) return false
+
+  if (operation.operation_kind === 'actual') {
+    return operation.is_matched === false
   }
 
-  return raw
+  if (operation.operation_kind === 'planned_occurrence') {
+    return operation.is_matched === true
+  }
+
+  return false
+}
+
+function isFutureFixedPlannedOperation(operation: FluxOperation, today: string): boolean {
+  return (
+    operation.operation_kind === 'planned_occurrence'
+    && operation.is_matched === false
+    && operation.operation_date > today
+    && operation.budget_behavior === 'fixed'
+  )
 }
 
 // ─── Module-level style constants ────────────────────────────────────────────
@@ -291,11 +341,10 @@ const TX_ROW_DATE_BASE: React.CSSProperties = {
 export function Flux() {
   const { user } = useAuth()
   const [search, setSearch] = useState('')
-  // useDeferredValue defers the expensive filteredTransactions recomputation until
-  // the browser is idle — keeps the input responsive on every keystroke
+  // useDeferredValue keeps typing responsive while server-state query params update.
   const deferredSearch = useDeferredValue(search)
   const [showSearchInput, setShowSearchInput] = useState(false)
-  const [flow, setFlow] = useState<FlowFilter>('all')
+  const [flow, setFlow] = useState<FlowFilter>('expense')
   const [period, setPeriod] = useState<PeriodFilter>('month')
 
   const [showHeaderCategorySheet, setShowHeaderCategorySheet] = useState(false)
@@ -306,12 +355,14 @@ export function Flux() {
 
   const [excludeRecurring] = useState(false)
   const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
-  const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
+  const [includeFutureFixed, setIncludeFutureFixed] = useState(false)
+  const [detailsOperation, setDetailsOperation] = useState<FluxOperation | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
 
-  const [draftFlow, setDraftFlow] = useState<FlowFilter>('all')
+  const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
   const [draftAccountFilter, setDraftAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
+  const [draftIncludeFutureFixed, setDraftIncludeFutureFixed] = useState(false)
   const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)
   const [draftSelectedCategoryId, setDraftSelectedCategoryId] = useState<string | null>(null)
   const [showParametersCategoryModal, setShowParametersCategoryModal] = useState(false)
@@ -347,9 +398,11 @@ export function Flux() {
   }, [rootCategories])
 
   const isPlannedMode = activeTabId === 'planifie'
-  const isSavingsMode = flow === 'savings'
-  const todayDateKey = getTodayDateKey()
-  const range = useMemo(() => periodToRange(period), [period])
+  const realizedRange = useMemo(() => periodToRange(period), [period])
+  const queryRange = useMemo(
+    () => (includeFutureFixed ? periodToFullRange(period) : realizedRange),
+    [includeFutureFixed, period, realizedRange],
+  )
   const flowTypeFilter: FlowType | undefined = flow === 'all' || flow === 'planned' ? undefined : (flow as FlowType)
 
   const categoryIdsFilter = useMemo(() => {
@@ -358,160 +411,58 @@ export function Flux() {
     const children = subCategories.filter((c) => c.parent_id === selectedParentCategoryId).map((c) => c.id)
     return selectedParentCategoryId ? [selectedParentCategoryId, ...children] : undefined
   }, [selectedCategoryId, selectedParentCategoryId, subCategories])
+  const budgetFilter = 'all' as const
 
-  const { data: txns, isLoading: isTransactionsLoading } = useTransactions({
-    ...range,
+  const { data: operations = [], isLoading } = useFluxOperations({
+    userId: user?.id,
+    ...queryRange,
     flowType: flowTypeFilter,
     categoryIds: categoryIdsFilter,
-  }, {
-    enabled: !isPlannedMode,
+    budgetFilter,
+    accountKind: accountFilter,
+    search: deferredSearch,
+    includeShadowedActuals: false,
   })
 
-  const plannedModeStartDate = useMemo(() => {
-    if (period === 'year_2025') return '2025-01-01'
-    if (period === 'year_2026') return '2026-01-01'
-    if (period === 'all') return undefined
-    if (period === 'week') {
-      const now = new Date()
-      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - day)
-      return startOfIsoDay(monday)
-    }
-    return startOfIsoMonth(new Date())
-  }, [period])
-  const plannedModeEndDate = useMemo(() => {
-    if (period === 'year_2025') return '2025-12-31'
-    if (period === 'year_2026') return '2026-12-31'
-    if (period === 'all') return undefined
-    if (period === 'week') {
-      const now = new Date()
-      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const sunday = new Date(now)
-      sunday.setDate(now.getDate() + (6 - day))
-      return startOfIsoDay(sunday)
-    }
-    return endOfIsoMonth(new Date())
-  }, [period])
+  const today = todayIso()
 
-  const generalModePlannedStartDate = useMemo(() => startOfIsoMonth(new Date()), [])
-  const generalModePlannedEndDate = useMemo(() => {
-    const now = new Date()
-    const monthEnd = endOfIsoMonth(now)
-    if (isSavingsMode) return monthEnd
-    return monthEnd < todayDateKey ? monthEnd : todayDateKey
-  }, [isSavingsMode, todayDateKey])
+  const visibleOperations = useMemo(
+    () => operations.filter((operation) => {
+      if (isRealizedFluxOperation(operation, today)) return true
+      if (includeFutureFixed && isFutureFixedPlannedOperation(operation, today)) return true
+      return false
+    }),
+    [includeFutureFixed, operations, today],
+  )
 
-  const isGeneralMonthView = !isPlannedMode && period === 'month'
+  const filtered = useMemo(() => {
+    let list = visibleOperations
 
-  const {
-    data: plannedGeneralDoneOperations = [],
-    isLoading: isGeneralPlannedLoading,
-    error: generalPlannedError,
-  } = usePlannedOperationsForFlow({
-    userId: user?.id,
-    startDate: generalModePlannedStartDate,
-    endDate: generalModePlannedEndDate,
-    includePast: true,
-    includeFuture: isSavingsMode,
-    flowType: isSavingsMode ? 'savings' : 'all',
-    categoryIds: categoryIdsFilter,
-    enabled: isGeneralMonthView,
-    mode: 'general',
-    ascending: false,
-  })
+    if (excludeRecurring) list = list.filter((operation) => !operation.is_recurring)
+    if (flow === 'planned') list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
 
-  const {
-    data: plannedModeOperations = [],
-    isLoading: isPlannedModeLoading,
-    error: plannedModeError,
-  } = usePlannedOperationsForFlow({
-    userId: user?.id,
-    startDate: plannedModeStartDate,
-    endDate: plannedModeEndDate,
-    includePast: true,
-    includeFuture: true,
-    flowType: 'all',
-    categoryIds: categoryIdsFilter,
-    enabled: isPlannedMode,
-    mode: 'planned',
-    ascending: true,
-  })
-
-  const filteredTransactions = useMemo(() => {
-    let list = (txns ?? []) as Transaction[]
-
-    if (excludeRecurring) list = list.filter((t) => !t.is_recurring)
-    if (flow === 'planned') list = list.filter((t) => t.is_recurring)
-    if (accountFilter === 'joint') list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
-    if (accountFilter === 'perso') list = list.filter((t) => !(t.account?.name?.toLowerCase().includes('joint') ?? false))
-
-    if (deferredSearch.trim()) {
-      const q = deferredSearch.trim().toLowerCase()
-      list = list.filter((t) => getTxLabel(t).toLowerCase().includes(q))
+    if (isPlannedMode) {
+      list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
+      if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
+      if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
+      if (plannedTypeFilter === 'recurring') list = list.filter((operation) => Boolean(operation.is_recurring))
+      if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_recurring)
     }
 
     return list
-  }, [txns, excludeRecurring, flow, accountFilter, deferredSearch])
-
-  const generalPlannedRows = useMemo(() => {
-    const q = deferredSearch.trim().toLowerCase()
-    return plannedGeneralDoneOperations.filter((operation) => {
-      if (!q) return true
-      const text = (operation.label ?? operation.category_name ?? '').toLowerCase()
-      return text.includes(q)
-    })
-  }, [plannedGeneralDoneOperations, deferredSearch])
-
-  const plannedOperationsForList = useMemo(() => {
-    let list = plannedModeOperations
-
-    if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
-    if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
-
-    if (plannedTypeFilter === 'recurring') list = list.filter((operation) => operation.is_generated_occurrence)
-    if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_generated_occurrence)
-
-    if (deferredSearch.trim()) {
-      const q = deferredSearch.trim().toLowerCase()
-      list = list.filter((operation) => {
-        const text = `${operation.label ?? ''} ${operation.category_name ?? ''}`.toLowerCase()
-        return text.includes(q)
-      })
-    }
-
-    return [...list].sort((a, b) => toDateKey(a.planned_date).localeCompare(toDateKey(b.planned_date)))
-  }, [plannedModeOperations, plannedModalityFilter, plannedTypeFilter, deferredSearch])
-
-  const plannedDoneSection = useMemo(
-    () => plannedOperationsForList.filter((operation) => operation.planned_status === 'done'),
-    [plannedOperationsForList],
-  )
-  const plannedUpcomingSection = useMemo(
-    () => plannedOperationsForList.filter((operation) => operation.planned_status === 'upcoming'),
-    [plannedOperationsForList],
-  )
-
-  const plannedDoneTotal = useMemo(
-    () => plannedModeOperations.filter((operation) => operation.planned_status === 'done').reduce((sum, operation) => sum + signedPlannedAmount(operation), 0),
-    [plannedModeOperations],
-  )
-  const plannedUpcomingTotal = useMemo(
-    () => plannedModeOperations.filter((operation) => operation.planned_status === 'upcoming').reduce((sum, operation) => sum + signedPlannedAmount(operation), 0),
-    [plannedModeOperations],
-  )
-  const plannedTotal = plannedDoneTotal + plannedUpcomingTotal
+  }, [visibleOperations, excludeRecurring, flow, isPlannedMode, plannedModalityFilter, plannedTypeFilter])
 
   // Planned mode: unique parent category names present in the loaded planned operations
   const plannedParentCategoryNames = useMemo((): Set<string> | null => {
     if (!isPlannedMode) return null
     const names = new Set<string>()
-    for (const op of plannedModeOperations) {
+    for (const op of filtered) {
+      if (op.operation_kind !== 'planned_occurrence') continue
       const name = op.parent_category_name ?? op.category_name
       if (name) names.add(name.toLowerCase())
     }
     return names
-  }, [isPlannedMode, plannedModeOperations])
+  }, [filtered, isPlannedMode])
 
   // Root categories restricted to those with planned operations (all flow types)
   const plannedModalRootCategories = useMemo(() => {
@@ -521,86 +472,29 @@ export function Flux() {
     )
   }, [allCategoriesData, plannedParentCategoryNames])
 
-  const generalMergedRows = useMemo(() => {
-    type TimelineRow =
-      | { source: 'transaction'; id: string; dateKey: string; transaction: Transaction }
-      | { source: 'planned_operation'; id: string; dateKey: string; planned: PlannedOperationFlowItem }
-
-    const transactionRows: TimelineRow[] = filteredTransactions.map((transaction) => ({
-      source: 'transaction',
-      id: transaction.id,
-      dateKey: toDateKey(transaction.transaction_date),
-      transaction,
-    }))
-
-    const plannedRows: TimelineRow[] = generalPlannedRows.map((planned) => ({
-      source: 'planned_operation',
-      id: `planned-${planned.id}`,
-      dateKey: toDateKey(planned.planned_date),
-      planned,
-    }))
-
-    return [...transactionRows, ...plannedRows].sort((a, b) => b.dateKey.localeCompare(a.dateKey))
-  }, [filteredTransactions, generalPlannedRows])
-
-  const generalTotalAmount = useMemo(() => {
-    // Option A : seules les transactions réelles entrent dans le total.
-    // Les planifiées sont un overlay informatif, pas des montants comptabilisés.
-    return filteredTransactions.reduce((sum, transaction) => sum + signedAmount(transaction), 0)
-  }, [filteredTransactions])
-
-  const heroMainAmount = isPlannedMode ? plannedDoneTotal : generalTotalAmount
-  const listHeaderAmount = isPlannedMode ? plannedTotal : generalTotalAmount
-  const operationsSummaryCount = isPlannedMode ? plannedOperationsForList.length : generalMergedRows.length
-  const isListLoading = isPlannedMode ? isPlannedModeLoading : isTransactionsLoading
-  const plannedLoadError = isPlannedMode ? plannedModeError : generalPlannedError
-  const renderPlannedDate = (date: string, tone: 'default' | 'done' | 'upcoming' = 'default') => (
-    <span
-      style={{
-        position: 'relative',
-        fontSize: 12,
-        fontWeight: 700,
-        color:
-          tone === 'done'
-            ? 'var(--color-success)'
-            : tone === 'upcoming'
-              ? 'var(--primary-700)'
-              : 'var(--neutral-600)',
-        whiteSpace: 'nowrap',
-        display: 'inline-flex',
-        alignItems: 'center',
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: -2,
-          bottom: -2,
-          left: -6,
-          right: -3,
-          border:
-            tone === 'done'
-              ? '1px solid color-mix(in oklab, var(--color-success) 44%, var(--neutral-200) 56%)'
-              : tone === 'upcoming'
-                ? '1px solid color-mix(in oklab, var(--primary-500) 34%, var(--neutral-200) 66%)'
-                : '1px solid color-mix(in oklab, var(--primary-400) 28%, var(--neutral-300) 72%)',
-          borderRadius: 'var(--radius-pill)',
-          pointerEvents: 'none',
-        }}
-      />
-      <span style={{ position: 'relative', zIndex: 1 }}>{formatDateLabel(date)}</span>
-    </span>
+  const generalMergedRows = useMemo(
+    () => filtered.map((operation) => ({ id: operation.id, dateKey: toDateKey(operation.operation_date), operation })),
+    [filtered],
   )
 
+  const totalAmount = useMemo(
+    () => filtered.reduce((sum, operation) => sum + Number(operation.budget_accounting_amount || 0), 0),
+    [filtered],
+  )
+
+  const heroMainAmount = totalAmount
+  const listHeaderAmount = totalAmount
+  const operationsSummaryCount = filtered.length
+  const isListLoading = isLoading
+
   useEffect(() => {
-    if (detailsTxn) {
-      const updated = filteredTransactions.find((t) => t.id === detailsTxn.id)
-      if (updated && updated !== detailsTxn) {
-        setDetailsTxn(updated)
+    if (detailsOperation) {
+      const updated = filtered.find((operation) => operation.id === detailsOperation.id)
+      if (updated && updated !== detailsOperation) {
+        setDetailsOperation(updated)
       }
     }
-  }, [filteredTransactions, detailsTxn])
+  }, [filtered, detailsOperation])
 
   useEffect(() => {
     setSelectedParentCategoryId(null)
@@ -675,29 +569,16 @@ export function Flux() {
     [operationsSummaryCount, flow],
   )
   const selectedPeriodHeader = useMemo(() => {
-    if (isPlannedMode) {
-      const hasRange = Boolean(plannedModeStartDate && plannedModeEndDate)
-      const startLabel = hasRange ? formatDateLabel(plannedModeStartDate as string) : 'Toutes périodes'
-      const endLabel = hasRange ? formatDateLabel(plannedModeEndDate as string) : 'Toutes périodes'
-      return {
-        startLabel,
-        endLabel,
-        text: hasRange
-          ? `Du ${startLabel} au ${endLabel}`
-          : 'Toutes périodes',
-      }
-    }
-
-    const endIso = range.endDate ?? (filteredTransactions.length ? filteredTransactions[0].transaction_date : todayIso())
-    const inferredStart = filteredTransactions.length ? filteredTransactions[filteredTransactions.length - 1].transaction_date : endIso
-    const startIso = range.startDate ?? inferredStart
+    const endIso = queryRange.endDate ?? (filtered.length ? filtered[0].operation_date : todayIso())
+    const inferredStart = filtered.length ? filtered[filtered.length - 1].operation_date : endIso
+    const startIso = queryRange.startDate ?? inferredStart
 
     return {
       startLabel: formatDateLabel(startIso),
       endLabel: formatDateLabel(endIso),
       text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)}`,
     }
-  }, [isPlannedMode, plannedModeEndDate, plannedModeStartDate, range.endDate, range.startDate, filteredTransactions])
+  }, [filtered, queryRange.endDate, queryRange.startDate])
   const listResultsLabel = useMemo(
     () => `Du ${selectedPeriodHeader.startLabel} au ${selectedPeriodHeader.endLabel} - ${operationsSummaryLabel}`,
     [operationsSummaryLabel, selectedPeriodHeader.endLabel, selectedPeriodHeader.startLabel],
@@ -707,6 +588,7 @@ export function Flux() {
     setFlow(draftFlow)
     setPeriod(draftPeriod)
     setAccountFilter(draftAccountFilter)
+    setIncludeFutureFixed(draftIncludeFutureFixed)
     setSelectedParentCategoryId(draftSelectedParentCategoryId)
     setSelectedCategoryId(draftSelectedCategoryId)
     setPlannedTypeFilter(draftPlannedTypeFilter)
@@ -718,6 +600,7 @@ export function Flux() {
     setDraftFlow(flow)
     setDraftPeriod(period)
     setDraftAccountFilter(accountFilter)
+    setDraftIncludeFutureFixed(includeFutureFixed)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
     setDraftPlannedTypeFilter(plannedTypeFilter)
@@ -729,6 +612,7 @@ export function Flux() {
     setDraftFlow(flow)
     setDraftPeriod(period)
     setDraftAccountFilter(accountFilter)
+    setDraftIncludeFutureFixed(includeFutureFixed)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
     setDraftPlannedTypeFilter(plannedTypeFilter)
@@ -737,18 +621,75 @@ export function Flux() {
   }
 
   const resetDraftParametersToDefaults = () => {
-    setDraftFlow('all')
+    setDraftFlow('expense')
     setDraftPeriod('month')
     setDraftAccountFilter('all')
+    setDraftIncludeFutureFixed(false)
     setDraftSelectedParentCategoryId(null)
     setDraftSelectedCategoryId(null)
     setDraftPlannedTypeFilter('all')
   }
 
-  // ─── Stable callback for opening transaction detail ──────────────────────
-  const handleOpenDetailsTxn = useCallback((transaction: Transaction) => {
-    setDetailsTxn(transaction)
+  const handleOpenDetailsOperation = useCallback((operation: FluxOperation) => {
+    setDetailsOperation(operation)
   }, [])
+
+  const transactionsForDetails = useMemo(() => {
+    return filtered
+      .filter((operation) => operation.operation_kind !== 'planned_occurrence')
+      .map<Transaction>((operation) => {
+        const flowType = operation.flow_type ?? 'expense'
+        const rawAmount = Math.abs(Number(operation.display_amount ?? operation.budget_accounting_amount ?? operation.amount ?? 0))
+        return {
+          id: operation.id,
+          user_id: operation.user_id,
+          account_id: operation.account_id ?? '00000000-0000-0000-0000-000000000000',
+          category_id: operation.category_id,
+          income_source_id: null,
+          import_batch_id: null,
+          staging_row_id: null,
+          transaction_date: operation.operation_date,
+          amount: rawAmount,
+          currency: operation.currency ?? 'EUR',
+          personal_share_ratio: operation.personal_share_ratio,
+          direction:
+            flowType === 'income'
+              ? 'income'
+              : flowType === 'transfer'
+                ? 'transfer_out'
+                : flowType === 'savings'
+                  ? 'savings'
+                  : 'expense',
+          flow_type: flowType,
+          budget_behavior: (operation.budget_behavior as Transaction['budget_behavior']) ?? 'variable',
+          raw_label: operation.label,
+          normalized_label: operation.label,
+          merchant_name: operation.merchant_name,
+          external_id: null,
+          is_recurring: Boolean(operation.is_recurring),
+          is_verified: true,
+          is_hidden: Boolean(operation.is_hidden),
+          notes: operation.notes,
+          meta: null,
+          personal_scope: null,
+          created_at: operation.created_at ?? new Date().toISOString(),
+          updated_at: operation.updated_at ?? new Date().toISOString(),
+          category: operation.category_id ? categoryById.get(operation.category_id) : undefined,
+        }
+      })
+  }, [categoryById, filtered])
+
+  const detailsTxn = useMemo(() => {
+    if (!detailsOperation || detailsOperation.operation_kind === 'planned_occurrence') return null
+    return transactionsForDetails.find((transaction) => transaction.id === detailsOperation.id) ?? null
+  }, [detailsOperation, transactionsForDetails])
+
+  const handleNavigateTransaction = useCallback((transaction: Transaction) => {
+    const next = filtered.find(
+      (operation) => operation.id === transaction.id && operation.operation_kind !== 'planned_occurrence',
+    )
+    if (next) setDetailsOperation(next)
+  }, [filtered])
 
   // ─── Memoized list JSX ───────────────────────────────────────────────────
   // Prevents re-diffing all rows when unrelated state (modal open, filter
@@ -766,7 +707,7 @@ export function Flux() {
       let j = index
       while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
         const r = generalMergedRows[j]
-        const amt = r.source === 'transaction' ? signedAmount(r.transaction) : signedPlannedAmount(r.planned)
+        const amt = Number(r.operation.budget_accounting_amount ?? 0)
         monthRowsSum += amt
         j++
       }
@@ -784,77 +725,50 @@ export function Flux() {
       </div>
     )
 
-    if (row.source === 'transaction') {
-      const transaction = row.transaction
-      const label = getTxLabel(transaction)
-      const category = displayTxnCategoryName(transaction)
-      const amount = signedAmount(transaction)
-      const isJoint = transaction.account?.name?.toLowerCase().includes('joint') ?? false
-      const amountColor = (transaction.flow_type === 'transfer' || transaction.flow_type === 'savings')
-        ? 'var(--neutral-700)'
-        : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
-
-      return (
-        <Fragment key={row.id}>
-          {separators}
-          <button
-            type="button"
-            onClick={() => handleOpenDetailsTxn(transaction)}
-            style={{
-              width: '100%', border: 'none', background: 'transparent',
-              display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
-              alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer',
-              transition: 'background-color var(--transition-fast)',
-              padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            <span style={{ ...TX_ROW_DATE_BASE, color: isJoint ? '#C9A26A' : 'var(--neutral-600)' }}>
-              {formatDateLabel(transaction.transaction_date)}
-            </span>
-            <span style={TX_ROW_ICON_STYLE}>
-              <CategoryIcon iconKey={transaction.category?.icon_key ?? null} label={category} size={24} />
-            </span>
-            <span style={TX_ROW_LABEL_STYLE}>{label}</span>
-            <span style={{ ...TX_ROW_AMOUNT_BASE, color: amountColor }}>
-              {formatRowAmount(amount, transaction.flow_type, Number(transaction.amount) || 0)}
-            </span>
-          </button>
-        </Fragment>
-      )
-    }
-
-    const planned = row.planned
-    const amount = signedPlannedAmount(planned)
-    const categoryName = planned.category_name ?? planned.parent_category_name ?? 'Planifiée'
-    const amountColor = (planned.flow_type === 'transfer' || planned.flow_type === 'savings')
+    const operation = row.operation
+    const label = operation.label ?? 'Opération'
+    const category = operation.category_name ?? 'Sans catégorie'
+    const amount = Number(operation.display_amount ?? operation.budget_accounting_amount ?? 0)
+    const isJoint = operation.account_name?.toLowerCase().includes('joint') ?? false
+    const amountColor = (operation.flow_type === 'transfer' || operation.flow_type === 'savings')
       ? 'var(--neutral-700)'
       : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
+    const formattedAmount = operation.operation_kind === 'planned_occurrence'
+      ? formatCurrency(Math.abs(amount))
+      : formatCurrency(amount)
 
     return (
       <Fragment key={row.id}>
         {separators}
-        <div style={{
-          width: '100%', background: 'transparent',
-          display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
-          alignItems: 'center', gap: 8,
-          padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
-        }}>
-          <span style={{ ...TX_ROW_DATE_BASE, color: 'var(--neutral-600)' }}>
-            {formatDateLabel(planned.planned_date)}
+        <button
+          type="button"
+          onClick={() => handleOpenDetailsOperation(operation)}
+          style={{
+            width: '100%', border: 'none', background: 'transparent',
+            display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
+            alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer',
+            transition: 'background-color var(--transition-fast)',
+            padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <span style={{ ...TX_ROW_DATE_BASE, color: isJoint ? '#C9A26A' : 'var(--neutral-600)' }}>
+            {formatDateLabel(operation.operation_date)}
           </span>
           <span style={TX_ROW_ICON_STYLE}>
-            <img src={planifierOperationIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', transform: 'scale(2)' }} />
+            <CategoryIcon iconKey={operation.category_icon_key} label={category} size={24} />
           </span>
-          <span style={TX_ROW_LABEL_STYLE}>{planned.label ?? categoryName}</span>
+          <span style={TX_ROW_LABEL_STYLE}>{label}</span>
           <span style={{ ...TX_ROW_AMOUNT_BASE, color: amountColor }}>
-            {formatRowAmount(amount, planned.flow_type, Number(planned.planned_personal_amount) || 0)}
+            {operation.operation_kind === 'planned_occurrence'
+              ? <span style={{ fontStyle: 'italic' }}>{formattedAmount}</span>
+              : formattedAmount}
           </span>
-        </div>
+        </button>
       </Fragment>
     )
-  }), [generalMergedRows, handleOpenDetailsTxn])
+  }), [generalMergedRows, handleOpenDetailsOperation])
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -1018,17 +932,22 @@ export function Flux() {
                 <Search size={12} />
               </button>
             </div>
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                fontFamily: 'var(--font-mono)',
-                color: listHeaderAmount > 0 ? 'var(--color-success)' : listHeaderAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {formatCurrencyRounded(listHeaderAmount)}
-            </span>
+            <div style={{ display: 'grid', justifyItems: 'end', gap: 1 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)' }}>
+                {includeFutureFixed ? 'Réalisé + fixes à venir' : 'Réalisé'}
+              </span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-mono)',
+                  color: listHeaderAmount > 0 ? 'var(--color-success)' : listHeaderAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {formatCurrencyRounded(listHeaderAmount)}
+              </span>
+            </div>
           </div>
 
         {showSearchInput ? (
@@ -1047,132 +966,6 @@ export function Flux() {
 
         {isListLoading ? (
           <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>Chargement…</div>
-        ) : isPlannedMode && plannedLoadError ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-500)', textAlign: 'center', padding: 'var(--space-12)' }}>
-            Impossible de charger les opérations planifiées.
-          </motion.div>
-        ) : isPlannedMode ? (
-          plannedOperationsForList.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>
-              Aucune opération planifiée sur cette période.
-            </motion.div>
-          ) : (
-            <div style={{ display: 'grid' }}>
-              {plannedDoneSection.length > 0 ? (
-                <div style={{ borderBottom: plannedUpcomingSection.length > 0 ? '1px solid var(--neutral-150)' : 'none' }}>
-                  <div style={{ padding: 'var(--space-3) var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-success)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Effectuées
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
-                      {plannedDoneSection.length}
-                    </span>
-                  </div>
-                  {plannedDoneSection.map((operation) => {
-                    const amount = signedPlannedAmount(operation)
-                    return (
-                      <div
-                        key={`planned-done-${operation.id}`}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '42px 1fr auto',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '7px var(--space-6)',
-                        }}
-                      >
-                        {renderPlannedDate(operation.planned_date, 'done')}
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: 'var(--neutral-700)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {operation.label ?? operation.category_name ?? 'Opération planifiée'}
-                        </span>
-                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          <span
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 500,
-                              fontFamily: 'var(--font-mono)',
-                              textAlign: 'right',
-                              whiteSpace: 'nowrap',
-                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                            }}
-                          >
-                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : null}
-
-              {plannedUpcomingSection.length > 0 ? (
-                <div>
-                  <div style={{ padding: 'var(--space-3) var(--space-6) var(--space-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      À venir
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-600)' }}>
-                      {plannedUpcomingSection.length}
-                    </span>
-                  </div>
-                  {plannedUpcomingSection.map((operation) => {
-                    const amount = signedPlannedAmount(operation)
-                    return (
-                      <div
-                        key={`planned-upcoming-${operation.id}`}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '42px 1fr auto',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '7px var(--space-6)',
-                          opacity: 0.84,
-                          background: 'color-mix(in oklab, var(--primary-50) 28%, var(--neutral-0) 72%)',
-                        }}
-                      >
-                        {renderPlannedDate(operation.planned_date, 'upcoming')}
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: 'var(--neutral-700)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {operation.label ?? operation.category_name ?? 'Opération planifiée'}
-                        </span>
-                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          <span
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 500,
-                              fontFamily: 'var(--font-mono)',
-                              textAlign: 'right',
-                              whiteSpace: 'nowrap',
-                              color: (operation.flow_type === 'transfer' || operation.flow_type === 'savings') ? 'var(--neutral-700)' : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                            }}
-                          >
-                            {formatRowAmount(amount, operation.flow_type, Number(operation.planned_personal_amount) || 0)}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : null}
-            </div>
-          )
         ) : generalMergedRows.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>
             Aucune operation
@@ -1180,20 +973,6 @@ export function Flux() {
         ) : (
           <div>
             {generalRowItems}
-            {!isPlannedMode && isGeneralPlannedLoading ? (
-              <div
-                style={{
-                  padding: 'var(--space-3) var(--space-6)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--neutral-500)',
-                  borderBottom: '1px solid var(--neutral-200)',
-                  background: 'var(--neutral-50)',
-                }}
-              >
-                Chargement des opérations planifiées…
-              </div>
-            ) : null}
           </div>
         )}
       </section>
@@ -1451,6 +1230,38 @@ export function Flux() {
                         </button>
                       )
                     })}
+                    <button
+                      type="button"
+                      onClick={() => setDraftIncludeFutureFixed((current) => !current)}
+                      style={{
+                        padding: '7px 4px',
+                        border: draftIncludeFutureFixed ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: draftIncludeFutureFixed
+                          ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
+                          : 'var(--neutral-50)',
+                        color: draftIncludeFutureFixed ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        fontSize: 11,
+                        fontWeight: draftIncludeFutureFixed ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-base)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Fixes à venir
+                    </button>
+                    <p
+                      style={{
+                        gridColumn: '1 / -1',
+                        margin: 0,
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: 'var(--neutral-500)',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      Ajoute les opérations fixes planifiées non encore réalisées sur la période sélectionnée.
+                    </p>
                   </div>
                 )}
 
@@ -1682,10 +1493,15 @@ export function Flux() {
       <TransactionDetailsModal
         transaction={detailsTxn}
         categories={flowCategories ?? []}
-        transactionList={filteredTransactions}
-        onNavigate={setDetailsTxn}
-        onClose={() => setDetailsTxn(null)}
-        showEditControls={true}
+        transactionList={transactionsForDetails}
+        onNavigate={handleNavigateTransaction}
+        onClose={() => setDetailsOperation(null)}
+        showEditControls={false}
+      />
+
+      <PlannedOperationDetailsModal
+        operation={detailsOperation?.operation_kind === 'planned_occurrence' ? detailsOperation : null}
+        onClose={() => setDetailsOperation(null)}
       />
 
       <AddPlannedOperationModal

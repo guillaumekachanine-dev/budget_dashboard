@@ -1072,7 +1072,7 @@ export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overview
               display: 'grid',
               gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: 'var(--space-2)',
-              marginTop: 'calc(var(--space-2) * -1)',
+              marginTop: 'var(--space-2)',
             }}
           >
             {overviewKpis.map((item) => (
