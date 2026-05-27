@@ -310,15 +310,6 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     }, 0),
     [subBudgets, subJointFlags, voyageSubcategories],
   )
-  const realizedTotalsByCategory = useMemo(() => {
-    if (!tripToEdit) return new Map<string, number>()
-    const map = new Map<string, number>()
-    for (const tx of tripToEdit.transactions) {
-      const key = tx.category_id ?? '__unknown__'
-      map.set(key, (map.get(key) ?? 0) + Number(tx.amount ?? 0))
-    }
-    return map
-  }, [tripToEdit])
   const displayedBudgetTotal = personalImputedBudget
 
   function handleSubBudget(catId: string, val: string) {
