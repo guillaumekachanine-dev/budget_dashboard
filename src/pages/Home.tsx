@@ -490,7 +490,7 @@ function DriftsTile({
         alignItems: 'center',
         justifyContent: 'space-between',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-        padding: '0 var(--space-3)',
+        padding: 'var(--space-2) var(--space-4)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
@@ -869,7 +869,7 @@ function SavingsTile({
       style={{
         position: 'relative',
         width: '100%',
-        minHeight: 60,
+        minHeight: 64,
         border: 'none',
         background: 'rgba(255,255,255,0.82)',
         borderRadius: 'var(--radius-xl)',
@@ -880,7 +880,7 @@ function SavingsTile({
         alignItems: 'center',
         justifyContent: 'space-between',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-        padding: '0 var(--space-3)',
+        padding: 'var(--space-2) var(--space-4)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
@@ -939,20 +939,29 @@ function SavingsTile({
 }
 
 function OptimizationGauge({ tone }: { tone: OptimizationGaugeTone }) {
-  const angle = tone === 'success' ? -42 : tone === 'warning' ? 0 : 42
-  const needleColor = tone === 'success' ? '#4ADE80' : tone === 'warning' ? '#FACC15' : '#F87171'
+  const pct = tone === 'success' ? 38 : tone === 'warning' ? 68 : 96
+  const color =
+    tone === 'success' ? 'var(--color-success)'
+    : tone === 'warning' ? 'var(--color-warning)'
+    : 'var(--color-negative)'
 
   return (
-    <svg width="66" height="40" viewBox="0 0 66 40" aria-hidden="true" style={{ display: 'block' }}>
-      <path d="M7 32 A26 26 0 0 1 23 9" fill="none" stroke="#5CCF42" strokeWidth="8" strokeLinecap="round" />
-      <path d="M25 8 A26 26 0 0 1 41 8" fill="none" stroke="#F0D84A" strokeWidth="8" strokeLinecap="round" />
-      <path d="M43 9 A26 26 0 0 1 59 32" fill="none" stroke="#FF3636" strokeWidth="8" strokeLinecap="round" />
-      <g transform={`rotate(${angle} 33 32)`}>
-        <line x1="33" y1="32" x2="33" y2="16" stroke={needleColor} strokeWidth="2.2" strokeLinecap="round" />
-      </g>
-      <circle cx="33" cy="32" r="3.4" fill="#0f172a" />
-      <circle cx="33" cy="32" r="1.5" fill="#fff" opacity="0.78" />
-    </svg>
+    <div style={{ width: '100%', display: 'grid', gap: 3 }} aria-hidden="true">
+      <div style={{ width: '100%', height: 6, background: 'var(--neutral-200)', borderRadius: 3, overflow: 'hidden' }}>
+        <div
+          style={{
+            width: `${pct}%`,
+            height: '100%',
+            background: color,
+            borderRadius: 3,
+            transition: 'width 600ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
+        {`${pct}%`}
+      </span>
+    </div>
   )
 }
 
@@ -970,16 +979,16 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 132,
+        minHeight: 120,
         border: 'none',
         background: 'rgba(255,255,255,0.72)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
         cursor: 'pointer',
         overflow: 'hidden',
-        padding: 'var(--space-3) var(--space-3)',
+        padding: 'var(--space-4)',
         display: 'grid',
-        gap: 'var(--space-2)',
+        gap: 'var(--space-3)',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
@@ -1041,37 +1050,54 @@ function InfosTile({
       role="region"
       aria-label="Informations et rappels"
       style={{
-        position: 'fixed',
-        left: 'var(--space-4)',
-        right: 'var(--space-4)',
-        bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
-        zIndex: 50,
         background: 'var(--neutral-900)',
-        color: 'var(--neutral-0)',
-        border: 'none',
-        borderRadius: 'var(--radius-2xl)',
-        boxShadow: '0 20px 36px rgba(2, 6, 23, 0.45)',
+        borderRadius: 'var(--radius-xl)',
         padding: 'var(--space-3) var(--space-4)',
-        minHeight: 64,
+        minHeight: 52,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 'var(--space-3)',
       }}
     >
-      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1 }}>
+        <Bell size={15} color="rgba(255,255,255,0.65)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.88)', lineHeight: 1.35 }}>
+          {hasContent
+            ? 'Snapshot fin de mois prêt : valide tes catégories.'
+            : 'Aucune info pour le moment.'}
+        </p>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+        <button
+          type="button"
+          style={{
+            border: 'none',
+            background: 'rgba(255,255,255,0.14)',
+            borderRadius: 'var(--radius-md)',
+            minHeight: 30,
+            padding: '0 var(--space-3)',
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--neutral-0)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Vérifier
+        </button>
         <button
           type="button"
           onClick={onClose}
           aria-label="Fermer le module d'information"
           style={{
             border: 'none',
-            background: 'rgba(255,255,255,0.16)',
-            color: 'rgba(255,255,255,0.9)',
-            width: 44,
-            height: 44,
-            minWidth: 44,
-            minHeight: 44,
+            background: 'rgba(255,255,255,0.10)',
+            color: 'rgba(255,255,255,0.65)',
+            width: 30,
+            height: 30,
+            minWidth: 30,
+            minHeight: 30,
             borderRadius: 'var(--radius-full)',
             display: 'inline-flex',
             alignItems: 'center',
@@ -1080,32 +1106,9 @@ function InfosTile({
             flexShrink: 0,
           }}
         >
-          <X size={16} strokeWidth={2.4} />
+          <X size={13} strokeWidth={2.5} />
         </button>
-        <Bell size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.94)', lineHeight: 1.35 }}>
-          {hasContent
-            ? 'Snapshot fin de mois prêt : valide tes catégories.'
-            : 'Aucune info pour le moment.'}
-        </p>
       </div>
-      <button
-        type="button"
-        style={{
-          border: 'none',
-          background: 'rgba(255,255,255,0.16)',
-          borderRadius: 'var(--radius-lg)',
-          minHeight: 36,
-          padding: '0 var(--space-3)',
-          fontSize: 13,
-          fontWeight: 700,
-          color: 'var(--neutral-0)',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        Vérifier
-      </button>
     </div>
   )
 }
@@ -1366,7 +1369,7 @@ export function Home() {
     const consumed = Number(dailyPayload?.totals.consumed_pct ?? 0)
     return Math.max(0, Math.min(100, consumed))
   }, [dailyPayload])
-  const heroRingSize = 332
+  const heroRingSize = 252
   const heroRingStroke = 2
   const heroRingRadius = (heroRingSize - heroRingStroke) / 2
   const heroRingCircumference = 2 * Math.PI * heroRingRadius
@@ -1826,7 +1829,6 @@ export function Home() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      minWidth: 146,
                       transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
                     }}
                   >
@@ -1910,7 +1912,7 @@ export function Home() {
                   />
 
                   <div style={{ position: 'relative', width: '100%', display: 'grid', justifyItems: 'center', gap: 'var(--space-4)', zIndex: 1 }}>
-                    <div style={{ position: 'relative', minHeight: 248, width: '100%', maxWidth: 460, display: 'grid', placeItems: 'center' }}>
+                    <div style={{ position: 'relative', minHeight: 200, width: '100%', maxWidth: 360, display: 'grid', placeItems: 'center' }}>
                       <svg
                         width={heroRingSize}
                         height={heroRingSize}
@@ -2323,10 +2325,20 @@ export function Home() {
 
           {/* ── Module libre Infos ── */}
           {showInfosTile ? (
-            <InfosTile
-              showSnapshotReminder={showSnapshotReminder}
-              onClose={() => setShowInfosTile(false)}
-            />
+            <motion.section
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.22 }}
+              style={{ padding: sectionHorizontalPadding }}
+            >
+              <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                <InfosTile
+                  showSnapshotReminder={showSnapshotReminder}
+                  onClose={() => setShowInfosTile(false)}
+                />
+              </div>
+            </motion.section>
           ) : null}
         </>
       ) : null}
