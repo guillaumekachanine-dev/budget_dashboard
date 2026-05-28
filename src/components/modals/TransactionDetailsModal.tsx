@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Pencil, AlertCircle } from 'lucide-react'
-import { formatCurrency, getCategoryColor } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import type { Category, Transaction, FlowType, BudgetBehavior } from '@/lib/types'
 import { useUpdateTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -218,7 +218,6 @@ export function TransactionDetailsModal({
     const categoryName = parentCategory ? parentCategory.name : ownCategory?.name ?? '—'
     const subCategoryName = parentCategory ? ownCategory?.name ?? '—' : '—'
     const colorSourceCategory = parentCategory ?? ownCategory ?? null
-    const colorIndex = colorSourceCategory ? Math.max(categories.findIndex((c) => c.id === colorSourceCategory.id), 0) : 0
     const headerIconKey = parentCategory ? ownCategory?.icon_key ?? parentCategory?.icon_key ?? null : ownCategory?.icon_key ?? null
 
     return {
