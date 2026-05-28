@@ -443,8 +443,8 @@ export function Flux() {
 
     if (isPlannedMode) {
       list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
-      if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
-      if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
+      if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'paid' || operation.planned_status === 'matched')
+      if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'planned')
       if (plannedTypeFilter === 'recurring') list = list.filter((operation) => Boolean(operation.is_recurring))
       if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_recurring)
     }

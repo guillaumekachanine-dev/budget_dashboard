@@ -73,7 +73,7 @@ const MAX_ROWS = 5000
 async function fetchFluxOperations(filters: FluxOperationFilters): Promise<FluxOperation[]> {
   if (!filters.userId) return []
 
-  let query = budgetDb()
+  let query = budgetDb
     .from('v_flux_operations_unified')
     .select('*')
     .eq('user_id', filters.userId)
