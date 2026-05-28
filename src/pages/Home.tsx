@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
-import { AnimatePresence, animate, motion } from 'framer-motion'
+import { animate, motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -16,6 +16,7 @@ import type { AccountWithBalance } from '@/lib/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { BottomSheet } from '@/components/ui/BottomSheet'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
 import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
 // Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
@@ -186,96 +187,67 @@ function DriftCategoryTransactionsModal({
   loading: boolean
 }) {
   return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(13,13,31,0.56)' }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 221,
-              display: 'grid',
-              placeItems: 'center',
-              padding: 'var(--space-4)',
-              pointerEvents: 'none',
-            }}
-          >
-            <motion.div
-              initial={{ y: 24, opacity: 0, scale: 0.98 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 24, opacity: 0, scale: 0.98 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-              style={{
-                width: 'min(560px, 100%)',
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-2xl)',
-                maxHeight: 'min(82dvh, calc(100dvh - var(--space-8)))',
-                overflow: 'hidden',
-                boxShadow: 'var(--shadow-lg)',
-                pointerEvents: 'auto',
-              }}
-            >
-              <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{categoryName ?? 'Catégorie'}</p>
-                <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 44, height: 44, minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
-                  <X size={20} />
-                </button>
-              </div>
-              <div style={{ maxHeight: 'calc(min(82dvh, 100dvh - var(--space-8)) - 66px)', overflowY: 'auto' }}>
-                {loading ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
-                ) : (categoryTransactions?.length ?? 0) === 0 ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
-                ) : (
-                  categoryTransactions?.map((tx) => {
-                    const d = new Date(`${tx.transaction_date}T00:00:00`)
-                    const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-                    const label = getTxLabel(tx)
-                    return (
-                      <button
-                        key={tx.id}
-                        type="button"
-                        style={{
-                          width: '100%',
-                          border: 'none',
-                          borderBottom: '1px solid var(--neutral-200)',
-                          padding: 'var(--space-3) var(--space-5)',
-                          display: 'grid',
-                          gridTemplateColumns: '52px minmax(0,1fr) auto',
-                          alignItems: 'center',
-                          gap: 'var(--space-3)',
-                          background: 'transparent',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          transition: 'background-color var(--transition-fast)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent'
-                        }}
-                      >
-                        <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
-                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
-                        <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            </motion.div>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      zIndex={220}
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: categoryColor, flexShrink: 0 }} />
+            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {categoryName ?? 'Catégorie'}
+            </p>
           </div>
-        </>
-      ) : null}
-    </AnimatePresence>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      }
+    >
+      {loading ? (
+        <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Chargement…</p>
+      ) : (categoryTransactions?.length ?? 0) === 0 ? (
+        <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
+      ) : (
+        categoryTransactions?.map((tx) => {
+          const d = new Date(`${tx.transaction_date}T00:00:00`)
+          const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+          const label = getTxLabel(tx)
+          return (
+            <button
+              key={tx.id}
+              type="button"
+              style={{
+                width: '100%',
+                border: 'none',
+                borderBottom: '1px solid var(--neutral-200)',
+                padding: 'var(--space-3) var(--space-5)',
+                display: 'grid',
+                gridTemplateColumns: '52px minmax(0,1fr) auto',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                background: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'background-color var(--transition-fast)',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
+              <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
+            </button>
+          )
+        })
+      )}
+    </BottomSheet>
   )
 }
 
@@ -300,165 +272,106 @@ function DriftsModal({
   const [showTop5, setShowTop5] = useState(false)
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      zIndex={200}
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <TriangleAlert size={17} color="var(--color-warning)" />
+            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+              Catégories en dérive
+            </p>
+          </div>
+          <button
+            type="button"
             onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(13,13,31,0.52)' }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 201,
-              display: 'grid',
-              placeItems: 'center',
-              padding: 'var(--space-4)',
-              pointerEvents: 'none',
-            }}
+            aria-label="Fermer"
+            style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           >
-            <motion.div
-              initial={{ y: 20, opacity: 0, scale: 0.97 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 20, opacity: 0, scale: 0.97 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              style={{
-                width: 'min(520px, 100%)',
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-2xl)',
-                maxHeight: 'min(80dvh, calc(100dvh - var(--space-8)))',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: 'var(--shadow-lg)',
-                pointerEvents: 'auto',
-              }}
-            >
-              <div
+            <X size={16} />
+          </button>
+        </div>
+      }
+    >
+      {loadingSummaries ? (
+        <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
+          Chargement…
+        </p>
+      ) : driftRows.length === 0 ? (
+        <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+            Budget sous contrôle. Rien à signaler pour le moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowTop5((c) => !c)}
+            style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', minHeight: 30, padding: '0 12px', background: 'var(--neutral-0)', color: 'var(--neutral-700)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+          >
+            {showTop5 ? 'masquer' : 'voir le top 5 catégories (dépenses)'}
+          </button>
+          {showTop5 ? (
+            <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
+              {top5ExpenseRows.map((row, idx) => {
+                const drift = Number(row.driftPct ?? 0)
+                const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
+                return (
+                  <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                    {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
+                    <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                    </span>
+                  </p>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div style={{ padding: '0 var(--space-5)' }}>
+          {driftRows.map((row) => {
+            const drift = Number(row.driftPct ?? 0)
+            return (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => onCategoryClick(row.id)}
                 style={{
-                  padding: 'var(--space-4) var(--space-5)',
-                  borderBottom: '1px solid var(--neutral-150)',
+                  border: 'none',
+                  borderBottom: '1px solid var(--neutral-100)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-3)',
-                  flexShrink: 0,
+                  gap: 'var(--space-2)',
+                  minHeight: 44,
+                  padding: '8px 0',
+                  width: '100%',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background-color var(--transition-fast)',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <TriangleAlert size={17} color="var(--color-warning)" />
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                    Catégories en dérive
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Fermer"
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    minWidth: 44,
-                    minHeight: 44,
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                {loadingSummaries ? (
-                  <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
-                    Chargement…
-                  </p>
-                ) : driftRows.length === 0 ? (
-                  <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
-                    <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
-                      Budget sous contrôle. Rien à signaler pour le moment.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowTop5((c) => !c)}
-                      style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', minHeight: 30, padding: '0 12px', background: 'var(--neutral-0)', color: 'var(--neutral-700)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      {showTop5 ? 'masquer' : 'voir le top 5 catégories (dépenses)'}
-                    </button>
-                    {showTop5 ? (
-                      <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
-                        {top5ExpenseRows.map((row, idx) => {
-                          const drift = Number(row.driftPct ?? 0)
-                          const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
-                          return (
-                            <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                              {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
-                              <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                                {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                              </span>
-                            </p>
-                          )
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div style={{ padding: '0 var(--space-5)' }}>
-                    {driftRows.map((row) => {
-                      const drift = Number(row.driftPct ?? 0)
-                      return (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => onCategoryClick(row.id)}
-                          style={{
-                            border: 'none',
-                            borderBottom: '1px solid var(--neutral-100)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-2)',
-                            minHeight: 44,
-                            padding: '8px 0',
-                            width: '100%',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            transition: 'background-color var(--transition-fast)',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                        >
-                          <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
-                            {row.exceedDate ?? '--/--'}
-                          </span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
-                          </span>
-                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
-                            {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
-                          </span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {`+${drift.toFixed(0)}%`}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        </>
-      ) : null}
-    </AnimatePresence>
+                <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
+                  {row.exceedDate ?? '--/--'}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
+                  {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {`+${drift.toFixed(0)}%`}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </BottomSheet>
   )
 }
 
@@ -771,82 +684,62 @@ function BudgetProgressModal({
   }
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(13,13,31,0.52)' }}
-          />
-          <div style={{ position: 'fixed', inset: 0, zIndex: 201, display: 'grid', placeItems: 'center', padding: 'var(--space-4)', pointerEvents: 'none' }}>
-            <motion.div
-              initial={{ y: 20, opacity: 0, scale: 0.97 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 20, opacity: 0, scale: 0.97 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              style={{ width: 'min(400px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)', pointerEvents: 'auto' }}
-            >
-              <div style={{ padding: 'var(--space-3) var(--space-4) 0', display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <X size={16} />
-                </button>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Progression des budgets"
+      zIndex={200}
+    >
+      <div style={{ padding: 'var(--space-3) var(--space-5) var(--space-5)', display: 'grid', gap: 'var(--space-2)' }}>
+        {modalBlockRings.map((block) => (
+          <button
+            key={block.id}
+            type="button"
+            onClick={() => onBlockClick(block.id)}
+            aria-label={`Ouvrir Budgets en mode socle ${blockRingLabel[block.id] ?? block.label}, ${Math.round(block.pct)}% consommé`}
+            style={{
+              border: 'none',
+              borderBottom: '1px solid var(--neutral-100)',
+              background: 'transparent',
+              width: '100%',
+              padding: 'var(--space-3) 0',
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              alignItems: 'center',
+              gap: 'var(--space-4)',
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'grid', placeItems: 'center', position: 'relative' }}>
+              <ProgressRing pct={block.pct} size={76} arcColor={getBudgetBucketColor(block.id)} />
+              <span style={{ position: 'absolute', fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
+                {`${Math.round(block.pct)}%`}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gap: 3 }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '0.01em' }}>
+                {blockRingLabel[block.id] ?? block.label}
+              </p>
+              <div style={{ display: 'grid', gap: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Consommé</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                    {formatCurrencyFloored(block.actual)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Budget</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                    {formatCurrencyFloored(block.budget)}
+                  </span>
+                </div>
               </div>
-              <div style={{ padding: 'var(--space-3) var(--space-4) var(--space-4)', display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-2)' }}>
-                {modalBlockRings.map((block) => (
-                  <button
-                    key={block.id}
-                    type="button"
-                    onClick={() => onBlockClick(block.id)}
-                    aria-label={`Ouvrir Budgets en mode socle ${blockRingLabel[block.id] ?? block.label}, ${Math.round(block.pct)}% consommé`}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      width: '100%',
-                      padding: 'var(--space-2) 0',
-                      display: 'grid',
-                      gridTemplateColumns: 'auto 1fr',
-                      alignItems: 'center',
-                      gap: 'var(--space-3)',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'grid', placeItems: 'center', position: 'relative' }}>
-                      <ProgressRing pct={block.pct} size={76} arcColor={getBudgetBucketColor(block.id)} />
-                      <span style={{ position: 'absolute', fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', lineHeight: 1 }}>
-                        {`${Math.round(block.pct)}%`}
-                      </span>
-                    </div>
-                    <div style={{ display: 'grid', gap: 3 }}>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '0.01em' }}>
-                        {blockRingLabel[block.id] ?? block.label}
-                      </p>
-                      <div style={{ display: 'grid', gap: 2 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                          <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Consommé</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                            {formatCurrencyFloored(block.actual)}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                          <span style={{ fontSize: 12, color: 'var(--neutral-600)' }}>Budget</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
-                            {formatCurrencyFloored(block.budget)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </>
-      ) : null}
-    </AnimatePresence>
+            </div>
+          </button>
+        ))}
+      </div>
+    </BottomSheet>
   )
 }
 
@@ -2343,373 +2236,218 @@ export function Home() {
         </>
       ) : null}
 
-      <AnimatePresence>
-        {showOptimizationsModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowOptimizationsModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 67, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détails des optimisations"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--space-4)',
-                right: 'var(--space-4)',
-                top: '13%',
-                zIndex: 68,
-                maxWidth: 480,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-300)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-3)',
-                maxHeight: '78dvh',
-                overflowY: 'auto',
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Détails des optimisations
+      <BottomSheet
+        open={showOptimizationsModal}
+        onClose={() => setShowOptimizationsModal(false)}
+        title="Détails des optimisations"
+        zIndex={67}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
+          {OPTIMIZATION_PRIORITIES_MOCK.map((row) => (
+            <article key={`optim-${row.label}`} style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <CategoryIcon iconKey={row.iconKey} label={row.label} size={24} />
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>
+                  {row.label}
+                </p>
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Optimisation YTD</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: row.optimizationYtdAmount != null ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 800 }}>
+                    {row.optimizationYtdAmount != null ? `+${formatCurrencyFloored(row.optimizationYtdAmount)}` : '✕'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant précis attendu (année)</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+                    {formatCurrencyFloored(row.expectedAnnualAmount)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant N-1</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+                    {formatCurrencyFloored(row.previousYearAmount)}
+                  </span>
+                </div>
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
+                <span style={{ fontWeight: 700, color: 'var(--neutral-900)' }}>Méthode:</span>{' '}
+                {row.determinationMethod}
               </p>
+            </article>
+          ))}
+        </div>
+      </BottomSheet>
 
-              {OPTIMIZATION_PRIORITIES_MOCK.map((row) => (
-                <article key={`optim-${row.label}`} style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <CategoryIcon iconKey={row.iconKey} label={row.label} size={24} />
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>
-                      {row.label}
-                    </p>
-                  </div>
+      <BottomSheet
+        open={showSavingsModal}
+        onClose={() => setShowSavingsModal(false)}
+        title="Épargne"
+        zIndex={68}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Objectif mensuel
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Progression
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {`${savingsProgressPct.toFixed(0)}%`}
+              </p>
+            </div>
+          </div>
+          <div style={{ height: 1, background: 'var(--neutral-200)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Épargné 2026 YTD
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {formatCurrencyFloored(savingsYtdDisplay)}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Objectif annuel
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {formatCurrencyFloored(savingsAnnualGoalDisplay)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
 
-                  <div style={{ display: 'grid', gap: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Optimisation YTD</span>
-                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: row.optimizationYtdAmount != null ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 800 }}>
-                        {row.optimizationYtdAmount != null ? `+${formatCurrencyFloored(row.optimizationYtdAmount)}` : '✕'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant précis attendu (année)</span>
-                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-                        {formatCurrencyFloored(row.expectedAnnualAmount)}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                      <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant N-1</span>
-                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-                        {formatCurrencyFloored(row.previousYearAmount)}
-                      </span>
-                    </div>
-                  </div>
+      <BottomSheet
+        open={showHeroBalanceModal}
+        onClose={() => setShowHeroBalanceModal(false)}
+        title="Flux du mois"
+        zIndex={69}
+      >
+        <div style={{ padding: 'var(--space-5)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Revenus du mois
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--color-positive)', fontFamily: 'var(--font-mono)' }}>
+              {formatCurrencyFloored(revenueAmountDisplay)}
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Dépenses du mois
+            </p>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--color-negative)', fontFamily: 'var(--font-mono)' }}>
+              {formatCurrencyFloored(expenseMonthAmountDisplay)}
+            </p>
+          </div>
+        </div>
+      </BottomSheet>
 
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                    <span style={{ fontWeight: 700, color: 'var(--neutral-900)' }}>Méthode:</span>{' '}
-                    {row.determinationMethod}
-                  </p>
-                </article>
-              ))}
-            </motion.div>
-          </>
-        ) : null}
-
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showSavingsModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowSavingsModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 68, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détails de l'épargne"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
+      <BottomSheet
+        open={showResteUtileModal}
+        onClose={() => setShowResteUtileModal(false)}
+        title="Détails du calcul"
+        zIndex={70}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
+          <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
+                Revenus encaissés
+              </span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(revenueAmountDisplay)}</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
+              Montants protégés
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(fixedBudgetAmountDisplay)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(provisionBudgetAmountDisplay)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(savingsBudgetAmountDisplay)}</span>
+            </div>
+            <div
               style={{
-                position: 'fixed',
-                left: 'var(--space-4)',
-                right: 'var(--space-4)',
-                top: '20%',
-                zIndex: 69,
-                maxWidth: 420,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-300)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-4)',
-                display: 'grid',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: 'var(--space-3)',
+                borderTop: '1px solid var(--neutral-200)',
+                paddingTop: 'var(--space-2)',
+                marginTop: '2px',
+                background: 'color-mix(in oklab, var(--neutral-100) 52%, transparent 48%)',
+                borderRadius: 'var(--radius-sm)',
+                paddingLeft: 'var(--space-1)',
+                paddingRight: 'var(--space-1)',
+                minHeight: 28,
               }}
             >
-              <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Objectif mensuel d'épargne
-                </p>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
-                </p>
-              </div>
+              <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total protégé</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+                {formatCurrencyFloored(protectedAmountsTotalDisplay)}
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
+              Déjà consommé
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(variableEssentialConsumedDisplay)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
+            </div>
+          </div>
 
-              <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Taux de progression actuel
-                </p>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {`${savingsProgressPct.toFixed(0)}%`}
-                </p>
-              </div>
-
-              <div style={{ height: 1, background: 'var(--neutral-200)' }} />
-
-              <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Épargné 2026 YTD
-                </p>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(savingsYtdDisplay)}
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Objectif annuel global
-                </p>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(savingsAnnualGoalDisplay)}
-                </p>
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showHeroBalanceModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowHeroBalanceModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 69, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détail revenus du mois et dépenses du mois"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--space-4)',
-                right: 'var(--space-4)',
-                top: '22%',
-                zIndex: 70,
-                maxWidth: 420,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-300)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div style={{ display: 'grid', gap: 4, justifyItems: 'start' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    Revenus du mois
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                    {formatCurrencyFloored(revenueAmountDisplay)}
-                  </p>
-                </div>
-                <div style={{ display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    Dépenses du mois
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                    {formatCurrencyFloored(expenseMonthAmountDisplay)}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showResteUtileModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowResteUtileModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détail du calcul du reste utile"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--space-4)',
-                right: 'var(--space-4)',
-                top: '17%',
-                zIndex: 71,
-                maxWidth: 376,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                border: '1px solid var(--neutral-200)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: 'var(--space-3)',
-                display: 'grid',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-extrabold)', color: 'var(--neutral-900)' }}>
-                  Détails du calcul
-                </p>
-                <button
-                  type="button"
-                  aria-label="Fermer"
-                  onClick={() => setShowResteUtileModal(false)}
-                  style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-                    Revenus encaissés
-                  </span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(revenueAmountDisplay)}</span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-                  Montants protégés
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(fixedBudgetAmountDisplay)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(provisionBudgetAmountDisplay)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(savingsBudgetAmountDisplay)}</span>
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 'var(--space-3)',
-                    borderTop: '1px solid var(--neutral-200)',
-                    paddingTop: 'var(--space-2)',
-                    marginTop: '2px',
-                    background: 'color-mix(in oklab, var(--neutral-100) 52%, transparent 48%)',
-                    borderRadius: 'var(--radius-sm)',
-                    paddingLeft: 'var(--space-1)',
-                    paddingRight: 'var(--space-1)',
-                    minHeight: 28,
-                  }}
-                >
-                  <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total protégé</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-                    {formatCurrencyFloored(protectedAmountsTotalDisplay)}
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-                  Déjà consommé
-                </p>
-                <div style={{ display: 'grid', gap: 2, width: '100%', justifyItems: 'center', alignItems: 'center', textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                    <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
-                    <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(variableEssentialConsumedDisplay)}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                    <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
-                    <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: 'var(--radius-lg)',
-                  padding: 'var(--space-3)',
-                  background: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-500) 88%, #000 12%) 0%, color-mix(in oklab, var(--primary-700) 78%, #000 22%) 100%)',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 'var(--space-3)',
-                }}
-              >
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    Reste utile
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
-                    {formatCurrencyFloored(resteUtileDisplay)}
-                  </p>
-                </div>
-                <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    Budget jour
-                  </p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFF6DC', lineHeight: 1.1 }}>
-                    {formatCurrencyFloored(budgetPerDayDisplay)}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-
-      </AnimatePresence>
+          <div
+            style={{
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-4)',
+              background: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-500) 88%, #000 12%) 0%, color-mix(in oklab, var(--primary-700) 78%, #000 22%) 100%)',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 'var(--space-3)',
+            }}
+          >
+            <div style={{ display: 'grid', gap: 2 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Reste utile
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
+                {formatCurrencyFloored(resteUtileDisplay)}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gap: 2 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Budget jour
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFF6DC', lineHeight: 1.1 }}>
+                {formatCurrencyFloored(budgetPerDayDisplay)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
 
       <BudgetProgressModal
         open={showProgressModal}
