@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Tag, Zap, Landmark, UserCheck, AlignLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -55,6 +55,7 @@ type AmountInputProps = {
   onFocus: () => void
   onBlur: () => void
   onChange: (next: string) => void
+  cockpit?: boolean
 }
 
 export type CategoryPickerModalProps = {
@@ -80,6 +81,7 @@ type SettingsListProps = {
   canUseJoint: boolean
   imputability: string
   compactMobile?: boolean
+  accentColor?: string
   onCategoryClick: () => void
   onBehaviorToggle: () => void
   onAccountModeToggle: () => void
@@ -223,11 +225,11 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
-function AmountInput({ value, focused, error, inputRef, onSubmitEditing, onFocus, onBlur, onChange }: AmountInputProps) {
+function AmountInput({ value, focused, error, inputRef, onSubmitEditing, onFocus, onBlur, onChange, cockpit }: AmountInputProps) {
   return (
     <section
-      className="relative px-[var(--space-6)]"
-      style={{ marginTop: '-4px', zIndex: 999, isolation: 'isolate' }}
+      className="relative px-[var(--space-5)]"
+      style={{ zIndex: 999, isolation: 'isolate' }}
       aria-labelledby="amount-input-label"
     >
       <p id="amount-input-label" className="sr-only">
@@ -253,59 +255,112 @@ function AmountInput({ value, focused, error, inputRef, onSubmitEditing, onFocus
           onBlur={onBlur}
           onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ''))}
           placeholder="0 €"
-          className="w-full border-none bg-transparent px-0 py-[var(--space-2)] text-center text-[var(--font-size-kpi)] font-[var(--font-weight-extrabold)] text-[var(--primary-700)] outline-none placeholder:text-[var(--neutral-300)]"
+          className={`w-full border-none bg-transparent px-0 py-[var(--space-2)] text-center text-[var(--font-size-kpi)] font-[var(--font-weight-extrabold)] outline-none ${cockpit ? 'text-white placeholder:text-[rgba(255,255,255,0.65)]' : 'text-[var(--primary-700)] placeholder:text-[var(--neutral-300)]'}`}
           style={{
             lineHeight: 'var(--line-height-tight)',
             transform: focused ? 'scale(1.015)' : 'scale(1)',
             transition: 'transform var(--transition-fast)',
+            textShadow: cockpit ? '0 1px 8px rgba(0,0,0,0.18)' : undefined,
           }}
           aria-invalid={Boolean(error)}
         />
       </div>
 
-      <FieldError message={error} />
+      {!cockpit && <FieldError message={error} />}
     </section>
   )
 }
 
 function SettingsRow({
+  icon,
   label,
   value,
+  accentColor,
   onClick,
-  compactMobile = false,
   disabled = false,
 }: {
+  icon: React.ReactNode
   label: string
   value: string
+  accentColor?: string
   onClick?: () => void
-  compactMobile?: boolean
   disabled?: boolean
 }) {
   const interactive = Boolean(onClick) && !disabled
+  const isEmpty = value === 'Choisir'
+  const accent = accentColor ?? 'var(--primary-600)'
   return (
     <button
       type="button"
       onClick={interactive ? onClick : undefined}
       disabled={!interactive}
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left"
       style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        width: '100%',
+        border: '1.5px solid var(--neutral-200)',
+        borderRadius: 'var(--radius-md)',
+        background: 'var(--neutral-0)',
+        padding: '10px 14px',
         cursor: interactive ? 'pointer' : 'default',
-        opacity: disabled ? 0.6 : 1,
+        textAlign: 'left',
+        opacity: disabled ? 0.45 : 1,
+        minHeight: 52,
+        boxShadow: '0 1px 4px rgba(28,28,58,0.05)',
+        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
       }}
     >
       <span
-        className="font-[var(--font-weight-medium)] text-[var(--neutral-700)]"
-        style={{ lineHeight: 'var(--line-height-tight)', fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
+          border: `1.5px solid color-mix(in srgb, ${accent} 22%, transparent)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          color: accent,
+        }}
+      >
+        {icon}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontSize: 'var(--font-size-sm)',
+          fontWeight: 600,
+          color: 'var(--neutral-500)',
+          lineHeight: 'var(--line-height-tight)',
+        }}
       >
         {label}
       </span>
       <span
-        className="font-[var(--font-weight-bold)] text-[var(--neutral-900)]"
-        style={{ lineHeight: 'var(--line-height-tight)' }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 'var(--font-size-sm)',
+          fontWeight: 800,
+          color: isEmpty ? 'var(--neutral-400)' : 'var(--neutral-900)',
+          background: isEmpty ? 'var(--neutral-100)' : 'var(--neutral-50)',
+          border: '1.5px solid var(--neutral-200)',
+          borderRadius: 8,
+          padding: '4px 10px',
+          maxWidth: '56%',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+          lineHeight: 'var(--line-height-tight)',
+        }}
       >
-        <span style={{ fontSize: compactMobile ? 'var(--font-size-sm)' : 'var(--font-size-base)' }}>
         {value}
-        </span>
+        {interactive && (
+          <span style={{ opacity: 0.35, fontSize: 15, lineHeight: 1, marginLeft: 1 }}>›</span>
+        )}
       </span>
     </button>
   )
@@ -317,26 +372,43 @@ function SettingsList({
   accountMode,
   canUseJoint,
   imputability,
-  compactMobile = false,
+  accentColor,
   onCategoryClick,
   onBehaviorToggle,
   onAccountModeToggle,
   onImputabilityToggle,
 }: SettingsListProps) {
   return (
-    <section className="mx-[var(--space-6)]">
-      <div className="divide-y divide-[var(--neutral-200)] border-0">
-        <SettingsRow label="Catégorie" value={categoryLabel} compactMobile={compactMobile} onClick={onCategoryClick} />
-        <SettingsRow label="Fixe/variable" value={budgetBehaviorLabel(behavior)} compactMobile={compactMobile} onClick={onBehaviorToggle} />
-        <SettingsRow
-          label="Compte"
-          value={accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
-          compactMobile={compactMobile}
-          onClick={onAccountModeToggle}
-          disabled={!canUseJoint}
-        />
-        <SettingsRow label="Imputabilité" value={imputability} compactMobile={compactMobile} onClick={onImputabilityToggle} />
-      </div>
+    <section style={{ margin: '0 var(--space-5)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <SettingsRow
+        icon={<Tag size={15} strokeWidth={2.2} />}
+        label="Catégorie"
+        value={categoryLabel}
+        accentColor={accentColor}
+        onClick={onCategoryClick}
+      />
+      <SettingsRow
+        icon={<Zap size={15} strokeWidth={2.2} />}
+        label="Fixe / Variable"
+        value={budgetBehaviorLabel(behavior)}
+        accentColor={accentColor}
+        onClick={onBehaviorToggle}
+      />
+      <SettingsRow
+        icon={<Landmark size={15} strokeWidth={2.2} />}
+        label="Compte"
+        value={accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
+        accentColor={accentColor}
+        onClick={onAccountModeToggle}
+        disabled={!canUseJoint}
+      />
+      <SettingsRow
+        icon={<UserCheck size={15} strokeWidth={2.2} />}
+        label="Imputabilité"
+        value={imputability}
+        accentColor={accentColor}
+        onClick={onImputabilityToggle}
+      />
     </section>
   )
 }
@@ -675,31 +747,19 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
   const selectedSubCategory = values.subCategoryId ? categoryById.get(values.subCategoryId) ?? null : null
 
   const categoryLabel = selectedSubCategory?.name ?? selectedCategory?.name ?? 'Choisir'
-  const headerColorSource = useMemo(() => {
-    if (values.subCategoryId) {
-      return subCategories.find((category) => category.id === values.subCategoryId)
-        ?? categoryById.get(values.subCategoryId)
-        ?? null
-    }
-    if (!values.categoryId) return null
-    return categoryById.get(values.categoryId) ?? null
-  }, [categoryById, subCategories, values.categoryId, values.subCategoryId])
-
-  const headerColorIndex = useMemo(() => {
-    if (!headerColorSource) return 0
-    const index = (categories ?? []).findIndex((category) => category.id === headerColorSource.id)
-    return index >= 0 ? index : 0
-  }, [categories, headerColorSource])
-
-  const headerBackgroundColor = headerColorSource
-    ? getCategoryColor(headerColorSource.color_token, headerColorIndex, headerColorSource.name)
-    : 'var(--primary-500)'
-  const transactionPillBorderColor = useMemo(() => {
-    if (values.transactionType === 'expense') return 'color-mix(in oklab, var(--color-error) 52%, white 48%)'
-    if (values.transactionType === 'income') return 'color-mix(in oklab, var(--color-success) 52%, white 48%)'
-    if (values.transactionType === 'savings') return '#FFD700'
-    return 'color-mix(in oklab, var(--color-warning) 62%, var(--neutral-900) 38%)'
+  const headerBackgroundColor = useMemo(() => {
+    if (values.transactionType === 'expense') return 'linear-gradient(135deg, #FC5A5A 0%, #FF8065 100%)'
+    if (values.transactionType === 'income') return 'linear-gradient(135deg, #2ED47A 0%, #17A855 100%)'
+    if (values.transactionType === 'savings') return 'linear-gradient(135deg, #5B57F5 0%, #9C6BFF 100%)'
+    return 'linear-gradient(135deg, #FFAB2E 0%, #FF8C30 100%)'
   }, [values.transactionType])
+  const typeAccentColor = useMemo(() => {
+    if (values.transactionType === 'expense') return '#FC5A5A'
+    if (values.transactionType === 'income') return '#2ED47A'
+    if (values.transactionType === 'savings') return '#5B57F5'
+    return '#FFAB2E'
+  }, [values.transactionType])
+  const transactionPillBorderColor = 'rgba(255,255,255,0.38)'
 
   const amountDisplay = useMemo(() => readFormattedAmount(values.amount, amountFocused), [amountFocused, values.amount])
 
@@ -1041,19 +1101,23 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               <input type="hidden" {...register('personalShareRatio', { valueAsNumber: true })} />
 
               <header
-                className="relative overflow-hidden px-[var(--space-6)]"
+                className="relative overflow-hidden"
                 style={{
-                  minHeight: keyboardVisible ? (isMobileViewport ? 136 : 150) : (isMobileViewport ? 162 : 176),
-                  paddingTop: 'var(--space-5)',
+                  minHeight: keyboardVisible ? (isMobileViewport ? 168 : 182) : (isMobileViewport ? 200 : 216),
+                  paddingTop: 'var(--space-4)',
+                  paddingBottom: 'var(--space-2)',
                   background: headerBackgroundColor,
                   borderBottom: 'none',
                   boxShadow: 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 <h2 id="add-transaction-modal-title" className="sr-only">
                   Nouvelle opération
                 </h2>
 
+                {/* Close button */}
                 <button
                   type="button"
                   aria-label="Fermer"
@@ -1067,135 +1131,167 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   <X size={isMobileViewport ? 18 : 20} />
                 </button>
 
+                {/* Type pill + date secondaire — centrés */}
                 <div
-                  className="absolute left-1/2 -translate-x-1/2 text-[var(--neutral-0)]"
-                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40 }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingTop: 2,
+                  }}
                 >
-                  <span
-                    className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
-                    style={{ lineHeight: 'var(--line-height-tight)', textTransform: 'capitalize' }}
-                  >
-                    {formatLongDate(values.date)}
-                  </span>
-                  <input
-                    id="transaction-date"
-                    type="date"
-                    {...dateRegister}
-                    ref={(node) => {
-                      dateRef.current = node
-                      dateRegister.ref(node)
-                    }}
-                    value={values.date}
-                    onChange={(event) => {
-                      setValue('date', event.target.value)
-                      clearErrors('date')
-                    }}
-                    aria-label="Date de l'opération"
+                  <button
+                    type="button"
+                    onClick={handleTransactionTypeCycle}
+                    className="border-none text-[var(--neutral-0)]"
                     style={{
-                      position: 'absolute',
-                      inset: 0,
-                      opacity: 0.001,
-                      width: '100%',
-                      height: '100%',
+                      border: `2px solid ${transactionPillBorderColor}`,
+                      borderRadius: 'var(--radius-full)',
+                      background: 'rgba(255,255,255,0.18)',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 800,
+                      padding: '8px 18px',
                       cursor: 'pointer',
-                      zIndex: 41,
-                      WebkitAppearance: 'none',
-                      appearance: 'none',
+                      letterSpacing: '0.01em',
+                      lineHeight: 'var(--line-height-tight)',
+                      whiteSpace: 'nowrap',
+                    }}
+                    aria-label={`Type d'opération: ${TRANSACTION_LABEL[values.transactionType]}. Cliquer pour changer.`}
+                  >
+                    {TRANSACTION_LABEL[values.transactionType]}
+                  </button>
+
+                  {/* Date — clickable via input overlay invisible */}
+                  <div className="relative text-[var(--neutral-0)]" style={{ zIndex: 40 }}>
+                    <span
+                      className="block text-center"
+                      style={{
+                        fontSize: 'var(--font-size-sm)',
+                        fontWeight: 600,
+                        opacity: 0.78,
+                        lineHeight: 'var(--line-height-tight)',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {formatLongDate(values.date)}
+                    </span>
+                    <input
+                      id="transaction-date"
+                      type="date"
+                      {...dateRegister}
+                      ref={(node) => {
+                        dateRef.current = node
+                        dateRegister.ref(node)
+                      }}
+                      value={values.date}
+                      onChange={(event) => {
+                        setValue('date', event.target.value)
+                        clearErrors('date')
+                      }}
+                      aria-label="Date de l'opération"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: 0.001,
+                        width: '100%',
+                        height: '100%',
+                        cursor: 'pointer',
+                        zIndex: 41,
+                        WebkitAppearance: 'none',
+                        appearance: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Montant — ancré en bas du header, texte blanc */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
+                  <AmountInput
+                    cockpit
+                    value={amountDisplay}
+                    focused={amountFocused}
+                    error={errors.amount?.message}
+                    inputRef={amountRef}
+                    onSubmitEditing={focusDescriptionInput}
+                    onFocus={() => {
+                      setAmountFocused(true)
+                      setValue('amount', toAmountInputValue(values.amount))
+                    }}
+                    onBlur={() => {
+                      setAmountFocused(false)
+                      const parsed = parseMoney(values.amount)
+                      setValue('amount', parsed == null ? '' : String(parsed))
+                    }}
+                    onChange={(next) => {
+                      setValue('amount', next)
+                      clearErrors('amount')
                     }}
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleTransactionTypeCycle}
-                  className="absolute left-1/2 -translate-x-1/2 border-none text-[var(--neutral-0)]"
-                  style={{
-                    top: isMobileViewport ? 60 : 74,
-                    border: `2px solid ${transactionPillBorderColor}`,
-                    borderRadius: 'var(--radius-full)',
-                    background: 'rgba(255,255,255,0.16)',
-                    fontSize: 'var(--font-size-sm)',
-                    fontWeight: 800,
-                    padding: '10px 18px',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    letterSpacing: '0.01em',
-                    lineHeight: 'var(--line-height-tight)',
-                    whiteSpace: 'nowrap',
-                  }}
-                  aria-label={`Type d'opération: ${TRANSACTION_LABEL[values.transactionType]}. Cliquer pour changer.`}
-                >
-                  {TRANSACTION_LABEL[values.transactionType]}
-                </button>
-
-                <div
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    bottom: -178,
-                    width: '190%',
-                    height: 224,
-                    transform: 'translateX(-50%)',
-                    borderRadius: '50%',
-                    background: 'var(--neutral-0)',
-                    zIndex: 0,
-                    border: 'none',
-                    boxShadow: 'none',
-                  }}
-                />
-
-                
               </header>
-
-              <div style={{ position: 'relative', zIndex: 1000, marginTop: isMobileViewport ? -14 : -4 }}>
-                <AmountInput
-                  value={amountDisplay}
-                  focused={amountFocused}
-                  error={errors.amount?.message}
-                  inputRef={amountRef}
-                  onSubmitEditing={focusDescriptionInput}
-                  onFocus={() => {
-                    setAmountFocused(true)
-                    setValue('amount', toAmountInputValue(values.amount))
-                  }}
-                  onBlur={() => {
-                    setAmountFocused(false)
-                    const parsed = parseMoney(values.amount)
-                    setValue('amount', parsed == null ? '' : String(parsed))
-                  }}
-                  onChange={(next) => {
-                    setValue('amount', next)
-                    clearErrors('amount')
-                  }}
-                />
-              </div>
 
               <div
                 className={`modal-main-scroll overflow-y-auto pt-0 ${mobileWithoutKeyboard ? 'pb-0' : 'flex-1 pb-[var(--space-4)]'}`}
                 style={{ position: 'relative', zIndex: 20 }}
               >
 
-                <div className="px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-10px' : 'var(--space-1)' }}>
-                  <Input
-                    ref={descriptionRef}
-                    id="transaction-description"
-                    type="text"
-                    enterKeyHint="done"
-                    value={values.description}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Enter') return
-                      event.preventDefault()
-                      closeDescriptionInput()
-                    }}
-                    onChange={(event) => setValue('description', event.target.value)}
-                    placeholder="libellé de l'opération"
-                    aria-label="Libellé de l'opération"
-                    className="rounded-[var(--radius-md)] border-transparent px-[var(--space-4)] py-[var(--space-3)] text-center text-[var(--font-size-lg)] font-[var(--font-weight-semibold)] placeholder:text-[var(--neutral-500)] placeholder:opacity-100 focus:border-transparent"
+                <div style={{ padding: '12px var(--space-5) 0' }}>
+                  <div
                     style={{
-                      minHeight: isMobileViewport ? 36 : 58,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      border: '1.5px solid var(--neutral-200)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--neutral-0)',
+                      padding: '10px 14px',
+                      boxShadow: '0 1px 4px rgba(28,28,58,0.05)',
                     }}
-                  />
+                  >
+                    <span
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: `color-mix(in srgb, ${typeAccentColor} 12%, transparent)`,
+                        border: `1.5px solid color-mix(in srgb, ${typeAccentColor} 22%, transparent)`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: typeAccentColor,
+                      }}
+                    >
+                      <AlignLeft size={15} strokeWidth={2.2} />
+                    </span>
+                    <input
+                      ref={descriptionRef}
+                      id="transaction-description"
+                      type="text"
+                      enterKeyHint="done"
+                      value={values.description}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        closeDescriptionInput()
+                      }}
+                      onChange={(event) => setValue('description', event.target.value)}
+                      placeholder="Libellé de l'opération"
+                      aria-label="Libellé de l'opération"
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        fontSize: 'var(--font-size-sm)',
+                        fontWeight: 600,
+                        color: 'var(--neutral-900)',
+                        lineHeight: 'var(--line-height-tight)',
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-[var(--space-3)]">
@@ -1206,6 +1302,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     canUseJoint={canUseJoint}
                     imputability={imputabilityLabel(values.personalShareRatio)}
                     compactMobile={isMobileViewport}
+                    accentColor={typeAccentColor}
                     onCategoryClick={() => {
                       if (values.transactionType === 'transfer') {
                         setPickerMode('subcategory')
@@ -1241,6 +1338,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     onImputabilityToggle={handleImputabilityToggle}
                   />
                   <div className="px-[var(--space-6)]">
+                    <FieldError message={errors.amount?.message} />
                     <FieldError message={errors.categoryId?.message} />
                     <FieldError message={errors.accountId?.message} />
                     <FieldError message={errors.date?.message} />
@@ -1249,10 +1347,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               </div>
 
               <footer className="sticky bottom-0 z-30 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
-                <div
-                  className="flex items-center justify-between gap-[var(--space-3)]"
-                  style={{ '--add-cta-bg': headerBackgroundColor } as CSSProperties}
-                >
+                <div className="flex items-center justify-between gap-[var(--space-3)]">
                   <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
                     Annuler
                   </Button>
@@ -1260,8 +1355,8 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                     type="submit"
                     variant="primary"
                     size="sm"
-                    className="rounded-[var(--radius-md)] bg-[var(--add-cta-bg)] border-[var(--add-cta-bg)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
-                    style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }}
+                    className="rounded-[var(--radius-md)] text-[var(--neutral-0)] hover:brightness-95 active:brightness-90"
+                    style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38, background: typeAccentColor, borderColor: typeAccentColor }}
                     disabled={!canSubmit}
                     loading={isPending}
                   >

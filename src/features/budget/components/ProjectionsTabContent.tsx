@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowDownToLine, CircleHelp, X } from 'lucide-react'
+import { ArrowDownToLine, X } from 'lucide-react'
 import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine, ReferenceDot } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
@@ -71,6 +71,8 @@ const SCENARIO_2_COLOR = '#15A9A1'
 const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const MONTHLY_PROJECTION_MONTHS_2026 = [6, 7, 8, 9, 10, 11, 12] as const
 const PROJECTIONS_GRAPH_SECTION_HEIGHT = 354
+// Total height of the chart card (padding×2=24 + chart=354 + toggle-margin=8 + toggle=38)
+const PROJECTIONS_GRAPH_CARD_HEIGHT = 424
 const MIN_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[0]
 const MAX_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[MONTHLY_PROJECTION_MONTHS_2026.length - 1]
 
@@ -1267,8 +1269,8 @@ function ExpenseSection2026({
         </button>
       </div>
 
-      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-        <div style={{ height: PROJECTIONS_GRAPH_SECTION_HEIGHT, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', height: PROJECTIONS_GRAPH_CARD_HEIGHT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, height: PROJECTIONS_GRAPH_SECTION_HEIGHT, overflow: 'hidden' }}>
           <AnimatePresence mode="wait" initial={false}>
             {expenseSlide === 0 ? (
               <motion.div
@@ -1304,6 +1306,7 @@ function ExpenseSection2026({
           role="tablist"
           aria-label="Sélection du graphique de projection dépenses"
           style={{
+            flexShrink: 0,
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: 4,
@@ -2167,15 +2170,16 @@ export function ProjectionsTabContent() {
                   padding: 'var(--space-2) var(--space-3)',
                   display: 'grid',
                   gridTemplateRows: 'auto auto',
-                  justifyItems: 'start',
+                  justifyItems: 'center',
+                  alignContent: 'center',
                   gap: 4,
                   cursor: 'pointer',
+                  textAlign: 'center',
                   transition: 'border-color var(--transition-base), box-shadow var(--transition-base)',
                 }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Montant réservé
-                  <CircleHelp size={12} />
                 </span>
                 <span style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
                   {fmt(monthlyReservedAmount)}
@@ -2185,7 +2189,7 @@ export function ProjectionsTabContent() {
                 type="button"
                 onClick={() => setShowLiquidityDetailModal(true)}
                 aria-label="Voir le détail de la liquidité disponible"
-                style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 78, padding: 'var(--space-2) var(--space-3)', display: 'grid', gridTemplateRows: 'auto auto', justifyItems: 'start', gap: 4, cursor: 'pointer' }}
+                style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 78, padding: 'var(--space-2) var(--space-3)', display: 'grid', gridTemplateRows: 'auto auto', justifyItems: 'center', alignContent: 'center', gap: 4, cursor: 'pointer', textAlign: 'center' }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Liquidité disponible
@@ -2195,23 +2199,23 @@ export function ProjectionsTabContent() {
                 </span>
               </button>
             </div>
-            <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-                <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', height: PROJECTIONS_GRAPH_CARD_HEIGHT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 'var(--space-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
                   <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--neutral-600)' }}>
                     Trajectoire mensuelle
                   </p>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
-                    {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 2026` : '—'}
-                  </p>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
+                    <ArrowDownToLine size={13} />
+                    <span>{fmt(monthlyScenario2ProjectedIncomeAmount)}</span>
+                  </div>
                 </div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-                  <ArrowDownToLine size={13} />
-                  <span>{fmt(monthlyScenario2ProjectedIncomeAmount)}</span>
-                </div>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
+                  {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 2026` : '—'}
+                </p>
               </div>
 
-              <div style={{ height: PROJECTIONS_GRAPH_SECTION_HEIGHT, overflow: 'hidden' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {monthlyChartView === 'curves' ? (
                   isMonthlyTrajectoryLoading ? (
                     <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
@@ -2380,20 +2384,6 @@ export function ProjectionsTabContent() {
                         </ResponsiveContainer>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 14 }}>
-                        {showMonthlyExpenses ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ width: 14, height: 2, borderRadius: 2, background: '#FFAB2E' }} />
-                            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--neutral-600)' }}>Dépenses cumulées</span>
-                          </div>
-                        ) : null}
-                        {showMonthlyCashflow ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ width: 14, height: 2, borderRadius: 2, background: '#5B57F5' }} />
-                            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--neutral-600)' }}>Cashflow cumulé</span>
-                          </div>
-                        ) : null}
-                      </div>
                     </div>
                   )
                 ) : (
@@ -2455,6 +2445,7 @@ export function ProjectionsTabContent() {
                 role="tablist"
                 aria-label="Affichage trajectoire mensuelle"
                 style={{
+                  flexShrink: 0,
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   gap: 4,
@@ -2462,7 +2453,7 @@ export function ProjectionsTabContent() {
                   borderRadius: 'var(--radius-full)',
                   background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
                   border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)',
-                  marginTop: 8,
+                  marginTop: 4,
                 }}
               >
                 <button

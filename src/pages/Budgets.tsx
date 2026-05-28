@@ -4996,6 +4996,8 @@ export function Budgets() {
                       type="button"
                       onClick={() => handleBudgetsTabSelect(tab.id)}
                       style={{
+                        position: 'relative',
+                        overflow: 'hidden',
                         border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
                         background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
                         borderRadius: 'var(--radius-md)',
@@ -5008,7 +5010,29 @@ export function Budgets() {
                         transition: 'background 150ms ease, border-color 150ms ease',
                       }}
                     >
-                      <span style={{ fontSize: 11, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <img
+                        src={tab.iconSrc}
+                        alt=""
+                        aria-hidden="true"
+                        width={46}
+                        height={46}
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          width: 46,
+                          height: 46,
+                          objectFit: 'contain',
+                          opacity: isActive ? 0.20 : 0.09,
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                          transition: 'opacity 150ms ease',
+                        }}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span style={{ position: 'relative', fontSize: 11, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {tab.label}
                       </span>
                     </button>

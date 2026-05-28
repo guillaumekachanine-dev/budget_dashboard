@@ -229,7 +229,12 @@ export function TransactionDetailsModal({
       categoryName,
       subCategoryName,
       headerIconKey,
-      heroColor: getCategoryColor(colorSourceCategory?.color_token ?? null, colorIndex, colorSourceCategory?.name),
+      heroColor: (
+        transaction.flow_type === 'expense' ? 'linear-gradient(135deg, #FC5A5A 0%, #FF8065 100%)' :
+        transaction.flow_type === 'income'  ? 'linear-gradient(135deg, #2ED47A 0%, #17A855 100%)' :
+        transaction.flow_type === 'transfer' ? 'linear-gradient(135deg, #FFAB2E 0%, #FF8C30 100%)' :
+        'linear-gradient(135deg, #5B57F5 0%, #9C6BFF 100%)'
+      ),
       rows: [
         { key: 'Catégorie', value: categoryName },
         { key: 'Sous-catégorie', value: subCategoryName },
