@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { TrendingUp, X } from 'lucide-react'
-import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine } from 'recharts'
+import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine, ReferenceDot } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
@@ -1584,8 +1584,10 @@ export function ProjectionsTabContent() {
   const [showMonthlyCashflow, setShowMonthlyCashflow] = useState(true)
   const [monthlyChartView, setMonthlyChartView] = useState<MonthlyChartView>('curves')
   const [selectedTrajectoryDay, setSelectedTrajectoryDay] = useState<number | null>(null)
+  const [selectedTrajectoryChartDay, setSelectedTrajectoryChartDay] = useState<number | null>(null)
   const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>('year-2026')
   const [showPeriodModal, setShowPeriodModal] = useState(false)
+  const trajectoryChartContainerRef = useRef<HTMLDivElement | null>(null)
 
   const { summary } = useAnnual2026Analysis()
   const { data: revenueData } = useBudgetRevenueAnalytics()
@@ -1713,6 +1715,25 @@ export function ProjectionsTabContent() {
     expenses: row.cumulative_expenses,
     cashflow: row.cumulative_cashflow,
   }))
+  const selectedTrajectoryChartPoint = selectedTrajectoryChartDay != null
+    ? (monthlyTrajectoryChartData.find((entry) => entry.day === selectedTrajectoryChartDay) ?? null)
+    : null
+  const selectedTrajectoryChartRow = selectedTrajectoryChartDay != null
+    ? (monthlyTrajectoryRows.find((entry) => entry.day_of_month === selectedTrajectoryChartDay) ?? null)
+    : null
+  const selectedTrajectoryChartOperationsCount = selectedTrajectoryChartDay != null
+    ? Number(monthlyTrajectoryOperationsCountByDay[selectedTrajectoryChartDay] ?? 0)
+    : 0
+  const selectedTrajectoryChartDateLabel = useMemo(() => {
+    if (!selectedTrajectoryChartRow) return '—'
+    const monthLabel = selectedProjectionMonth != null
+      ? MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]
+      : selectedTrajectoryChartRow.forecast_date.slice(5, 7)
+    return `Jour ${selectedTrajectoryChartRow.day_of_month} — ${monthLabel} 2026`
+  }, [selectedProjectionMonth, selectedTrajectoryChartRow])
+  const selectedTrajectoryChartHasProjectedIncome = selectedTrajectoryChartDay != null
+    && monthlyScenario2ProjectedIncomeAmount > 0
+    && selectedTrajectoryChartDay === monthlyTrajectoryIncomeDay
   const selectedTrajectoryOperations = selectedTrajectoryDay != null
     ? (monthlyTrajectoryOperationsByDay[selectedTrajectoryDay] ?? [])
     : []
@@ -1734,10 +1755,43 @@ export function ProjectionsTabContent() {
       return !active
     })
   }
+  const handleTrajectoryChartClick = (event: any) => {
+    const payload = event?.activePayload?.[0]?.payload
+    const day = Number(payload?.day)
+    if (!Number.isFinite(day) || day <= 0) return
+    setSelectedTrajectoryChartDay(day)
+  }
 
   useEffect(() => {
     setSelectedTrajectoryDay(null)
+    setSelectedTrajectoryChartDay(null)
   }, [selectedPeriod])
+
+  useEffect(() => {
+    if (monthlyChartView === 'table') setSelectedTrajectoryChartDay(null)
+  }, [monthlyChartView])
+
+  useEffect(() => {
+    if (selectedTrajectoryChartDay == null) return
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const root = trajectoryChartContainerRef.current
+      if (!root) return
+      const target = event.target as Node | null
+      if (target && root.contains(target)) return
+      setSelectedTrajectoryChartDay(null)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedTrajectoryChartDay(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [selectedTrajectoryChartDay])
 
   function toggleBtnStyle(active: boolean): React.CSSProperties {
     return {
@@ -1940,67 +1994,162 @@ export function ProjectionsTabContent() {
                     </div>
                   ) : (
                     <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 4 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={monthlyTrajectoryChartData} margin={{ top: 8, right: 10, bottom: 6, left: -20 }}>
-                          <CartesianGrid vertical={false} stroke="var(--neutral-200)" strokeDasharray="3 3" />
-                          <XAxis
-                            dataKey="day"
-                            tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
-                            axisLine={false}
-                            tickLine={false}
-                            interval={4}
-                          />
-                          <YAxis
-                            tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={(v: number) => {
-                              const abs = Math.abs(Number(v))
-                              if (abs >= 1000) return `${Math.round(v / 1000)}k`
-                              return `${Math.round(v)}`
+                      <div ref={trajectoryChartContainerRef} style={{ position: 'relative', minHeight: 0 }}>
+                        {selectedTrajectoryChartDay != null ? (
+                          <div
+                            role="dialog"
+                            aria-label="Détail du jour sélectionné"
+                            style={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              zIndex: 5,
+                              width: 'min(248px, calc(100% - 8px))',
+                              background: 'var(--neutral-0)',
+                              border: '1px solid var(--neutral-200)',
+                              borderRadius: 'var(--radius-md)',
+                              boxShadow: '0 8px 26px rgba(15,23,42,0.18)',
+                              padding: '8px 10px',
+                              display: 'grid',
+                              gap: 4,
                             }}
-                            width={38}
-                          />
-                          <ReferenceLine y={0} stroke="var(--neutral-300)" strokeDasharray="4 3" />
-                          {monthlyTrajectoryIncomeAmount > 0 ? (
-                            <ReferenceLine
-                              x={monthlyTrajectoryIncomeDay}
-                              stroke="var(--color-success)"
-                              strokeDasharray="4 3"
-                              strokeWidth={1}
-                              label={{
-                                value: `R${monthlyTrajectoryIncomeDay}`,
-                                position: 'insideTopRight',
-                                fontSize: 8,
-                                fill: 'var(--color-success)',
-                                fontWeight: 700,
+                          >
+                            <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 8 }}>
+                              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.25 }}>
+                                {selectedTrajectoryChartDateLabel}
+                              </p>
+                              <button
+                                type="button"
+                                aria-label="Fermer le détail"
+                                onClick={() => setSelectedTrajectoryChartDay(null)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: 'var(--neutral-500)',
+                                  cursor: 'pointer',
+                                  width: 20,
+                                  height: 20,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: 'var(--radius-full)',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gap: 2 }}>
+                              <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                Dépenses : <strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_expenses) : '—'}</strong>
+                              </p>
+                              <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                Cashflow : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.daily_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_cashflow) : '—'}</strong>
+                              </p>
+                              <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                Dép. cumulées : <strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_expenses) : '—'}</strong>
+                              </p>
+                              <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                Cashflow cumulé : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_cashflow) : '—'}</strong>
+                              </p>
+                              {(selectedTrajectoryChartRow?.daily_savings ?? 0) > 0 ? (
+                                <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                  Épargne : <strong style={{ color: 'var(--primary-700)', fontFamily: 'var(--font-mono)' }}>{fmt(selectedTrajectoryChartRow?.daily_savings ?? 0)}</strong>
+                                </p>
+                              ) : null}
+                              <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
+                                Opérations : <strong style={{ color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartOperationsCount}</strong>
+                              </p>
+                              {selectedTrajectoryChartHasProjectedIncome ? (
+                                <p style={{ margin: 0, fontSize: 10, color: 'var(--color-success)', fontWeight: 700 }}>
+                                  Revenu projeté
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={monthlyTrajectoryChartData} margin={{ top: 8, right: 10, bottom: 6, left: -20 }} onClick={handleTrajectoryChartClick}>
+                            <CartesianGrid vertical={false} stroke="var(--neutral-200)" strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="day"
+                              tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+                              axisLine={false}
+                              tickLine={false}
+                              interval={4}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+                              axisLine={false}
+                              tickLine={false}
+                              tickFormatter={(v: number) => {
+                                const abs = Math.abs(Number(v))
+                                if (abs >= 1000) return `${Math.round(v / 1000)}k`
+                                return `${Math.round(v)}`
                               }}
+                              width={38}
                             />
-                          ) : null}
-                          {showMonthlyExpenses ? (
-                            <Line
-                              type="monotone"
-                              dataKey="expenses"
-                              name="expenses"
-                              stroke="#FFAB2E"
-                              strokeWidth={2.6}
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          ) : null}
-                          {showMonthlyCashflow ? (
-                            <Line
-                              type="monotone"
-                              dataKey="cashflow"
-                              name="cashflow"
-                              stroke="#5B57F5"
-                              strokeWidth={2.6}
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          ) : null}
-                        </ComposedChart>
-                      </ResponsiveContainer>
+                            <ReferenceLine y={0} stroke="var(--neutral-300)" strokeDasharray="4 3" />
+                            {monthlyTrajectoryIncomeAmount > 0 ? (
+                              <ReferenceLine
+                                x={monthlyTrajectoryIncomeDay}
+                                stroke="var(--color-success)"
+                                strokeDasharray="4 3"
+                                strokeWidth={1}
+                                label={{
+                                  value: `R${monthlyTrajectoryIncomeDay}`,
+                                  position: 'insideTopRight',
+                                  fontSize: 8,
+                                  fill: 'var(--color-success)',
+                                  fontWeight: 700,
+                                }}
+                              />
+                            ) : null}
+                            {showMonthlyExpenses ? (
+                              <Line
+                                type="monotone"
+                                dataKey="expenses"
+                                name="expenses"
+                                stroke="#FFAB2E"
+                                strokeWidth={2.6}
+                                dot={false}
+                                isAnimationActive={false}
+                              />
+                            ) : null}
+                            {showMonthlyCashflow ? (
+                              <Line
+                                type="monotone"
+                                dataKey="cashflow"
+                                name="cashflow"
+                                stroke="#5B57F5"
+                                strokeWidth={2.6}
+                                dot={false}
+                                isAnimationActive={false}
+                              />
+                            ) : null}
+                            {selectedTrajectoryChartPoint && showMonthlyExpenses ? (
+                              <ReferenceDot
+                                x={selectedTrajectoryChartPoint.day}
+                                y={selectedTrajectoryChartPoint.expenses}
+                                r={4}
+                                fill="#FFAB2E"
+                                stroke="#fff"
+                                strokeWidth={1.5}
+                              />
+                            ) : null}
+                            {selectedTrajectoryChartPoint && showMonthlyCashflow ? (
+                              <ReferenceDot
+                                x={selectedTrajectoryChartPoint.day}
+                                y={selectedTrajectoryChartPoint.cashflow}
+                                r={4}
+                                fill="#5B57F5"
+                                stroke="#fff"
+                                strokeWidth={1.5}
+                              />
+                            ) : null}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 14 }}>
                         {showMonthlyExpenses ? (

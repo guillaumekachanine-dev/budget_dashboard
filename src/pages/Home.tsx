@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -21,11 +21,6 @@ import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBud
 import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
 import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
-// Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
-// the Home initial bundle free of the chart library until the chart section renders.
-const TrajectoireChart = lazy(() =>
-  import('@/features/home/components/TrajectoireChart').then(m => ({ default: m.TrajectoireChart }))
-)
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -2120,19 +2115,6 @@ export function Home() {
               transition={{ duration: 0.35, delay: 0.16 }}
               style={{ padding: sectionHorizontalPadding }}
             >
-              <Suspense fallback={<div style={{ height: 220 }} />}>
-                <TrajectoireChart />
-              </Suspense>
-            </motion.section>
-          ) : null}
-
-          {isMainCheckingAccount ? (
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.18 }}
-              style={{ padding: sectionHorizontalPadding }}
-            >
               <div
                 style={{
                   maxWidth: 600,
@@ -2176,7 +2158,7 @@ export function Home() {
             <motion.section
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.2 }}
+              transition={{ duration: 0.35, delay: 0.18 }}
               style={{ padding: sectionHorizontalPadding }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto' }}>
@@ -2198,7 +2180,7 @@ export function Home() {
               <motion.section
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.2 }}
+                transition={{ duration: 0.35, delay: 0.18 }}
                 style={{ padding: sectionHorizontalPadding }}
               >
                 <div
@@ -2225,7 +2207,7 @@ export function Home() {
               <motion.section
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.24 }}
+                transition={{ duration: 0.35, delay: 0.22 }}
                 style={{ padding: sectionHorizontalPadding }}
               >
                 <div style={{ maxWidth: 600, margin: '0 auto' }}>
