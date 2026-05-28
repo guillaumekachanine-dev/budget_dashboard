@@ -19,7 +19,6 @@ import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSaving
 import { useSavingsPlanningMonthDetails } from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
-import { StatsSection } from '@/features/stats/components/ui'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useAuth } from '@/hooks/useAuth'
@@ -129,12 +128,6 @@ function formatKpiPercent(value: number | null | undefined, options?: { signed?:
   }).format(value)}%`
 }
 
-function formatFixedPercent(value: number): string {
-  return `${new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(value)}%`
-}
 
 function resolveKpiTileStyle(tone: KpiTone): React.CSSProperties {
   if (tone === 'warning') {
@@ -274,7 +267,6 @@ export function Epargne() {
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [optimizationPeriodId, setOptimizationPeriodId] = useState<OptimizationPeriodId>('2026-05')
-  const [showOptimizationPeriodMenu, setShowOptimizationPeriodMenu] = useState(false)
   const [showTabModal, setShowTabModal] = useState(false)
   const [performanceViewMode, setPerformanceViewMode] = useState<PerformanceViewMode>('performance')
   const hasAppliedDefaultPeriodRef = useRef(false)
@@ -286,10 +278,6 @@ export function Epargne() {
   const optimizationPeriod = useMemo(
     () => OPTIMIZATION_PERIOD_OPTIONS.find((option) => option.id === optimizationPeriodId) ?? OPTIMIZATION_PERIOD_OPTIONS[0],
     [optimizationPeriodId],
-  )
-  const optimizationPeriodIndex = useMemo(
-    () => OPTIMIZATION_PERIOD_OPTIONS.findIndex((option) => option.id === optimizationPeriod.id),
-    [optimizationPeriod.id],
   )
   const optimizationSelectedMonth = useMemo<number | null>(() => {
     if (optimizationPeriod.mode !== 'month') return null
@@ -629,9 +617,9 @@ export function Epargne() {
   }, [isHydrated, loading, resetSelectedPeriodToDefault, snapshot, storeUserId])
 
   useEffect(() => {
-    if (!showTabModal && !showOptimizationPeriodMenu) return
+    if (!showTabModal) return
     return lockDocumentScroll()
-  }, [showOptimizationPeriodMenu, showTabModal])
+  }, [showTabModal])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -706,231 +694,67 @@ export function Epargne() {
 
       {activeTab.id === 'optimisation' ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
-            <StatsSection style={{ gap: 'var(--space-3)' }}>
-              <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+            {/* Period chip strip */}
+            <div
+              style={{
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none',
+                paddingLeft: 'var(--page-gutter)',
+                paddingRight: 'var(--page-gutter)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {OPTIMIZATION_PERIOD_OPTIONS.flatMap((option) => {
+                const isActive = option.id === optimizationPeriodId
+                const elements = []
+                if (option.mode === 'year') {
+                  elements.push(
+                    <div
+                      key={`sep-${option.id}`}
+                      aria-hidden="true"
+                      style={{ width: 1, height: 20, background: 'var(--neutral-200)', flexShrink: 0 }}
+                    />
+                  )
+                }
+                elements.push(
                   <button
+                    key={option.id}
                     type="button"
-                    onClick={() => {
-                      const prevIndex = Math.max(0, optimizationPeriodIndex - 1)
-                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[prevIndex].id)
-                    }}
-                    aria-label="Période précédente"
-                    disabled={optimizationPeriodIndex <= 0}
+                    onClick={() => setOptimizationPeriodId(option.id)}
+                    aria-pressed={isActive}
                     style={{
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: optimizationPeriodIndex <= 0 ? 'not-allowed' : 'pointer',
-                      opacity: optimizationPeriodIndex <= 0 ? 0.35 : 1,
-                      width: 20,
-                      height: 20,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: 0,
-                    }}
-                  >
-                    <span style={{ width: 0, height: 0, borderTop: '7px solid transparent', borderBottom: '7px solid transparent', borderRight: '9px solid var(--neutral-500)' }} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowOptimizationPeriodMenu(true)}
-                    aria-haspopup="menu"
-                    aria-expanded={showOptimizationPeriodMenu}
-                    aria-label="Choisir une période d’optimisation"
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      margin: 0,
-                      padding: 0,
-                      fontSize: 'var(--font-size-lg)',
-                      lineHeight: 1,
-                      fontWeight: 800,
-                      color: 'var(--neutral-800)',
-                      letterSpacing: '-0.01em',
+                      flexShrink: 0,
+                      border: isActive ? '2px solid var(--primary-500)' : '1.5px solid var(--neutral-200)',
+                      background: isActive ? 'var(--primary-500)' : 'var(--neutral-0)',
+                      color: isActive ? '#fff' : 'var(--neutral-700)',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '0 14px',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 700,
                       cursor: 'pointer',
-                      minHeight: 32,
+                      minHeight: 36,
+                      transition: 'all var(--transition-base)',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    {optimizationPeriod.shortLabel}
+                    {option.shortLabel}
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextIndex = Math.min(OPTIMIZATION_PERIOD_OPTIONS.length - 1, optimizationPeriodIndex + 1)
-                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[nextIndex].id)
-                    }}
-                    aria-label="Période suivante"
-                    disabled={optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1 ? 'not-allowed' : 'pointer',
-                      opacity: optimizationPeriodIndex >= OPTIMIZATION_PERIOD_OPTIONS.length - 1 ? 0.35 : 1,
-                      width: 20,
-                      height: 20,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: 0,
-                    }}
-                  >
-                    <span style={{ width: 0, height: 0, borderTop: '7px solid transparent', borderBottom: '7px solid transparent', borderLeft: '9px solid var(--neutral-500)' }} />
-                  </button>
-                </div>
-
-              </div>
-            </StatsSection>
-
-            {annualHorizon ? (
-              <StatsSection style={{ gap: 'var(--space-2)' }}>
-                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', textAlign: 'center' }}>
-                  objectif épargne 2026 : +{formatKpiCurrency(annualHorizon.projectedAnnual)} ({formatFixedPercent(annualHorizon.finalObjectivePct)} revenus)
-                </p>
-                <div style={{ height: 14, borderRadius: 'var(--radius-full)', overflow: 'hidden', display: 'flex', gap: 2 }}>
-                  <div style={{ flex: annualHorizon.plannedShare, background: 'var(--primary-500)', minWidth: 0 }} />
-                  <div style={{ flex: annualHorizon.potentialShare, background: 'var(--color-positive)', minWidth: 0, opacity: 0.72 }} />
-                </div>
-
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                  Épargne planifiée: {formatKpiCurrency(annualHorizon.plannedAnnual)} ({formatFixedPercent(PLANNED_SAVINGS_PCT_2026)} revenus) · optimisations: +{formatKpiCurrency(annualHorizon.potentialAnnual)}
-                </p>
-              </StatsSection>
-            ) : null}
-
-            {showOptimizationPeriodMenu ? (
-              <div
-                style={{
-                  position: 'fixed',
-                  inset: 0,
-                  zIndex: 260,
-                  background: 'rgba(10, 12, 22, 0.32)',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingLeft: 'var(--page-gutter)',
-                  paddingRight: 'var(--page-gutter)',
-                }}
-                onClick={() => setShowOptimizationPeriodMenu(false)}
-              >
-                <motion.div
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Choisir une période optimisation"
-                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                  style={{
-                    width: 'min(500px, calc(100vw - 2 * var(--page-gutter)))',
-                    background: 'var(--neutral-0)',
-                    border: '1px solid var(--neutral-200)',
-                    borderRadius: '28px',
-                    boxShadow: '0 22px 54px rgba(15, 22, 40, 0.26)',
-                    padding: '22px 18px',
-                    display: 'grid',
-                    gap: 'var(--space-3)',
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                    <button
-                      type="button"
-                      disabled
-                      style={{
-                        borderRadius: '16px',
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-100)',
-                        color: 'var(--neutral-700)',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        minHeight: 54,
-                        cursor: 'not-allowed',
-                      }}
-                    >
-                      2025
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOptimizationPeriodId('2026-full')
-                        setShowOptimizationPeriodMenu(false)
-                      }}
-                      style={{
-                        borderRadius: '16px',
-                        border: '3px solid var(--primary-500)',
-                        background: 'var(--neutral-0)',
-                        color: 'var(--primary-500)',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        minHeight: 54,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      2026
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
-                    {[
-                      { label: 'Jan', optionId: null as OptimizationPeriodId | null, disabled: true },
-                      { label: 'Fév', optionId: null as OptimizationPeriodId | null, disabled: true },
-                      { label: 'Mars', optionId: null as OptimizationPeriodId | null, disabled: true },
-                      { label: 'Avr', optionId: null as OptimizationPeriodId | null, disabled: true },
-                      { label: 'Mai', optionId: '2026-05' as OptimizationPeriodId, disabled: false },
-                      { label: 'Juin', optionId: '2026-06' as OptimizationPeriodId, disabled: false },
-                      { label: 'Juil', optionId: '2026-07' as OptimizationPeriodId, disabled: false },
-                      { label: 'Août', optionId: '2026-08' as OptimizationPeriodId, disabled: false },
-                      { label: 'Sept', optionId: '2026-09' as OptimizationPeriodId, disabled: false },
-                      { label: 'Oct', optionId: '2026-10' as OptimizationPeriodId, disabled: false },
-                      { label: 'Nov', optionId: '2026-11' as OptimizationPeriodId, disabled: false },
-                      { label: 'Déc', optionId: '2026-12' as OptimizationPeriodId, disabled: false },
-                    ].map((month) => {
-                      const isActive = month.optionId != null && optimizationPeriod.id === month.optionId
-                      const isDisabled = month.disabled || month.optionId == null
-                      return (
-                        <button
-                          key={month.label}
-                          type="button"
-                          onClick={() => {
-                            if (month.optionId == null) return
-                            setOptimizationPeriodId(month.optionId)
-                            setShowOptimizationPeriodMenu(false)
-                          }}
-                          disabled={isDisabled}
-                          style={{
-                            minHeight: 48,
-                            borderRadius: '14px',
-                            border: isActive
-                              ? '3px solid var(--primary-500)'
-                              : isDisabled
-                                ? '1px solid var(--neutral-200)'
-                                : '2px dashed var(--neutral-300)',
-                            background: isActive ? 'var(--primary-50)' : isDisabled ? 'var(--neutral-100)' : 'var(--neutral-0)',
-                            color: isActive ? 'var(--primary-500)' : 'var(--neutral-600)',
-                            fontSize: 14,
-                            fontWeight: isActive ? 700 : 500,
-                            cursor: isDisabled ? 'not-allowed' : 'pointer',
-                            opacity: isDisabled && !isActive ? 0.78 : 1,
-                          }}
-                        >
-                          {month.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              </div>
-            ) : null}
+                )
+                return elements
+              })}
+            </div>
 
             <StatsOptimizationsTab
               monthlyBudgetByCategory={optimizationMonthlyBudgetByCategory}
               monthlyActualByCategory={optimizationMonthlyActualByCategory}
               selectedMonth={optimizationSelectedMonth}
               selectedYear={OPTIMIZATION_YEAR}
+              annualHorizon={annualHorizon}
             />
           </div>
         </motion.div>
