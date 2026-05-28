@@ -17,6 +17,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
+import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
 // Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
 // the Home initial bundle free of the chart library until the chart section renders.
 const TrajectoireChart = lazy(() =>
@@ -1328,14 +1329,25 @@ export function Home() {
     () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
     [now],
   )
-  const resteUtileDisplay = Number(dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
-  const budgetPerDayDisplay = Number(dailyPayload?.daily_pilotage.budget_per_remaining_day ?? 0)
+  const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
+  const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
+  const savingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
+  const { data: usefulRemainingData } = useHomeUsefulRemaining({
+    year,
+    month,
+    fixedBudgetAmount: fixedBudgetAmountDisplay,
+    provisionBudgetAmount: provisionBudgetAmountDisplay,
+    savingsBudgetAmount: savingsBudgetAmountDisplay,
+    daysRemaining,
+  })
+  const resteUtileDisplay = Number(usefulRemainingData?.usefulRemainingAmount ?? dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
+  const budgetPerDayDisplay = Number(usefulRemainingData?.budgetPerDayAmount ?? dailyPayload?.daily_pilotage.budget_per_remaining_day ?? 0)
   const plannedFutureDisplay = Number(dailyPayload?.planned_operations_impact.additional_commitment_amount ?? 0)
   const previsionFinDeMoisDisplay = Number(dailyPayload?.totals.projected_end_of_month_expense_amount ?? 0)
   const variableBudgetMonthlyDisplay = Number(dailyPayload?.totals.variable_budget_amount ?? 0)
   const variableSpentToDateDisplay = Number(dailyPayload?.totals.variable_actual_amount ?? 0)
-  const mainAccountResteUtileDisplay = Number(dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
-  const mainAccountDailyAvailableDisplay = Number(dailyPayload?.daily_pilotage.budget_per_remaining_day ?? 0)
+  const mainAccountResteUtileDisplay = resteUtileDisplay
+  const mainAccountDailyAvailableDisplay = budgetPerDayDisplay
   const mainAccountBalanceDisplay = Number(dailyPayload?.account.main_account_balance ?? 0)
 
   useEffect(() => {
@@ -1396,9 +1408,6 @@ export function Home() {
     () => `${savingsMonthLabel} ${formatCurrencyFloored(savingsMonthlySavedDisplay)}`,
     [savingsMonthLabel, savingsMonthlySavedDisplay],
   )
-  const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
-  const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
-  const savingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
   const variableEssentialConsumedDisplay = Number(
     dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'variable_essentielle')?.actual_amount ?? 0,
   )
