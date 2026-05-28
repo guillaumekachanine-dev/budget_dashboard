@@ -1064,7 +1064,7 @@ export function Epargne() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
+                padding: 'calc(var(--header-height) + var(--space-4)) var(--space-4) var(--space-3)',
                 boxShadow: 'var(--shadow-lg)',
               }}
             >

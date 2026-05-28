@@ -42,15 +42,15 @@ export function PageHeader({
     <>
       <header
         style={{
-          paddingTop: 'calc(var(--safe-top) + var(--space-2))',
+          paddingTop: 'calc(var(--safe-top) + 10px)',
           paddingRight: 'var(--page-gutter)',
           paddingBottom: 'var(--space-4)',
           paddingLeft: 'var(--page-gutter)',
-          minHeight: 'calc(64px + var(--safe-top))',
           boxSizing: 'border-box',
           background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
           borderBottom: '1px solid color-mix(in oklab, var(--primary-800) 35%, var(--primary-500) 65%)',
-          position: 'relative',
+          position: 'sticky',
+          top: 0,
           zIndex: 120,
           isolation: 'isolate',
           overflow: 'visible',

@@ -891,7 +891,7 @@ export function Flux() {
           <div
             style={{
               position: 'sticky',
-              top: 'var(--safe-top, 0px)',
+              top: 'var(--header-height)',
               zIndex: 10,
               background: 'var(--neutral-0)',
               borderBottom: '1px solid var(--neutral-200)',

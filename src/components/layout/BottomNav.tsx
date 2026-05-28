@@ -94,14 +94,12 @@ const rootStyle: CSSProperties = {
 const navStyle: CSSProperties = {
   position: 'relative',
   boxSizing: 'border-box',
-  minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom))',
-  paddingBottom: 'var(--safe-bottom)',
+  minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 10px)',
+  paddingBottom: 'calc(var(--safe-bottom) + 10px)',
   paddingLeft: 'var(--safe-left)',
   paddingRight: 'var(--safe-right)',
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
   borderTop: 'none',
-  borderTopLeftRadius: 'var(--radius-md)',
-  borderTopRightRadius: 'var(--radius-md)',
   boxShadow: 'var(--shadow-lg)',
 }
 
