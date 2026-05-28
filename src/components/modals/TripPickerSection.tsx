@@ -160,11 +160,11 @@ export function TripPickerSection({ transaction }: TripPickerSectionProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   // État local optimiste : mis à jour immédiatement après mutation,
   // en avance sur la re-prop du parent (qui arrive après invalidation + refetch).
-  const [localTripId, setLocalTripId] = useState<string | null>(transaction.trip_id)
+  const [localTripId, setLocalTripId] = useState<string | null>(transaction.trip_id ?? null)
 
   // Sync quand la prop change (navigation vers une autre transaction)
   useEffect(() => {
-    setLocalTripId(transaction.trip_id)
+    setLocalTripId(transaction.trip_id ?? null)
   }, [transaction.id, transaction.trip_id])
 
   // Ne proposer l'affectation que sur les dépenses
