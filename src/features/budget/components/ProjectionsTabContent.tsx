@@ -1831,7 +1831,7 @@ export function ProjectionsTabContent() {
     const monthLabel = selectedProjectionMonth != null
       ? MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]
       : selectedTrajectoryChartRow.forecast_date.slice(5, 7)
-    return `Jour ${selectedTrajectoryChartRow.day_of_month} — ${monthLabel} 2026`
+    return `${selectedTrajectoryChartRow.day_of_month} ${monthLabel.toLowerCase()} 2026`
   }, [selectedProjectionMonth, selectedTrajectoryChartRow])
   const selectedTrajectoryChartHasProjectedIncome = selectedTrajectoryChartDay != null
     && monthlyScenario2ProjectedIncomeAmount > 0
@@ -2237,7 +2237,7 @@ export function ProjectionsTabContent() {
                               top: 4,
                               right: 4,
                               zIndex: 5,
-                              width: 'min(248px, calc(100% - 8px))',
+                              width: 'min(124px, calc(100% - 8px))',
                               background: 'var(--neutral-0)',
                               border: '1px solid var(--neutral-200)',
                               borderRadius: 'var(--radius-md)',
@@ -2280,10 +2280,10 @@ export function ProjectionsTabContent() {
                                 Cashflow : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.daily_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_cashflow) : '—'}</strong>
                               </p>
                               <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
-                                Dép. cumulées : <strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_expenses) : '—'}</strong>
+                                Dép.cum :<strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_expenses) : '—'}</strong>
                               </p>
                               <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
-                                Cashflow cumulé : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_cashflow) : '—'}</strong>
+                                Cash.cum :<strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_cashflow) : '—'}</strong>
                               </p>
                               {(selectedTrajectoryChartRow?.daily_savings ?? 0) > 0 ? (
                                 <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>

@@ -5024,7 +5024,7 @@ export function Budgets() {
                           width: 46,
                           height: 46,
                           objectFit: 'contain',
-                          opacity: isActive ? 0.20 : 0.09,
+                          opacity: isActive ? 0.38 : 0.18,
                           pointerEvents: 'none',
                           userSelect: 'none',
                           transition: 'opacity 150ms ease',
