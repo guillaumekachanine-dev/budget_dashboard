@@ -217,7 +217,6 @@ export function TransactionDetailsModal({
 
     const categoryName = parentCategory ? parentCategory.name : ownCategory?.name ?? '—'
     const subCategoryName = parentCategory ? ownCategory?.name ?? '—' : '—'
-    const colorSourceCategory = parentCategory ?? ownCategory ?? null
     const headerIconKey = parentCategory ? ownCategory?.icon_key ?? parentCategory?.icon_key ?? null : ownCategory?.icon_key ?? null
 
     return {
