@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { TrendingUp, X } from 'lucide-react'
+import { ArrowDownToLine, CircleHelp, X } from 'lucide-react'
 import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine, ReferenceDot } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
 import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hooks/useAnnualProjectionOverview2026'
 import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
+import { useSavingsPlanningMonthDetails } from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
+import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { EXPENSE_BUCKETS, getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
@@ -36,6 +38,11 @@ type ExpenseSlide = 0 | 1
 type ExpenseKpiModalKey = 'ytd' | 'gap' | 'projection' | null
 type ExpenseMonthlyMetric = { period_month: number; expense_total: number }
 type MonthlyExpenseBudgetRow = { period_month: number | null; budget_bucket: string | null; budget_amount: number | null }
+type AdditionalCommitmentOperationRow = {
+  budget_accounting_amount: number | null
+  budget_bucket: string | null
+  is_matched: boolean | null
+}
 
 interface ExpenseProjectionDetailRow {
   month: number
@@ -63,6 +70,15 @@ const SCENARIO_1_COLOR = '#D58A83'
 const SCENARIO_2_COLOR = '#15A9A1'
 const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const MONTHLY_PROJECTION_MONTHS_2026 = [6, 7, 8, 9, 10, 11, 12] as const
+const PROJECTIONS_GRAPH_SECTION_HEIGHT = 354
+const MIN_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[0]
+const MAX_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[MONTHLY_PROJECTION_MONTHS_2026.length - 1]
+
+function getDefaultProjectionPeriodValue(): ProjectionPeriodValue {
+  const currentMonth = new Date().getMonth() + 1
+  const clampedMonth = Math.max(MIN_PROJECTION_MONTH_2026, Math.min(MAX_PROJECTION_MONTH_2026, currentMonth))
+  return `2026-${String(clampedMonth).padStart(2, '0')}` as ProjectionPeriodValue
+}
 
 /** Map known revenue-source names to semantic colours. Falls back to the green palette. */
 function resolveSourceColor(name: string, fallbackIndex: number): string {
@@ -825,7 +841,7 @@ function RevenueSection2026({
           </div>
         </div>
 
-        <div style={{ height: 290, display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
+        <div style={{ height: PROJECTIONS_GRAPH_SECTION_HEIGHT, display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 'var(--space-2)' }}>
           <div style={{ height: 188, flexShrink: 0, position: 'relative', display: 'grid', placeItems: 'center' }}>
             {selectedSource ? (
               <div style={{
@@ -1252,7 +1268,7 @@ function ExpenseSection2026({
       </div>
 
       <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
-        <div style={{ height: 354, overflow: 'hidden' }}>
+        <div style={{ height: PROJECTIONS_GRAPH_SECTION_HEIGHT, overflow: 'hidden' }}>
           <AnimatePresence mode="wait" initial={false}>
             {expenseSlide === 0 ? (
               <motion.div
@@ -1585,13 +1601,17 @@ export function ProjectionsTabContent() {
   const [monthlyChartView, setMonthlyChartView] = useState<MonthlyChartView>('curves')
   const [selectedTrajectoryDay, setSelectedTrajectoryDay] = useState<number | null>(null)
   const [selectedTrajectoryChartDay, setSelectedTrajectoryChartDay] = useState<number | null>(null)
-  const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>('year-2026')
+  const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>(() => getDefaultProjectionPeriodValue())
   const [showPeriodModal, setShowPeriodModal] = useState(false)
+  const [showReservedAmountDetailModal, setShowReservedAmountDetailModal] = useState(false)
+  const [showLiquidityDetailModal, setShowLiquidityDetailModal] = useState(false)
   const trajectoryChartContainerRef = useRef<HTMLDivElement | null>(null)
 
+  const { user } = useAuth()
   const { summary } = useAnnual2026Analysis()
   const { data: revenueData } = useBudgetRevenueAnalytics()
   const { data: projection } = useAnnualProjectionOverview2026(2026)
+  const { data: savingsPlanningMonthDetails = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
   const { data: monthlyMetrics = [] } = useQuery({
     queryKey: [QK.BUDGET_METRICS_YEAR_DATASET, 2026],
     queryFn: () => getMonthlyMetrics(2026),
@@ -1612,7 +1632,6 @@ export function ProjectionsTabContent() {
       return (data ?? []) as MonthlyExpenseBudgetRow[]
     },
   })
-
   const periodOptions = useMemo<Array<{ value: ProjectionPeriodValue; label: string; mode: ProjectionPeriodMode; month: number | null }>>(
     () => [
       { value: 'year-2026', label: 'Année 2026', mode: 'annual', month: null },
@@ -1631,6 +1650,39 @@ export function ProjectionsTabContent() {
   )
   const projectionPeriodMode = selectedPeriodOption.mode
   const selectedProjectionMonth = selectedPeriodOption.month
+  const selectedProjectionMonthDateRange = useMemo(() => {
+    if (selectedProjectionMonth == null) return null
+    const month = String(selectedProjectionMonth).padStart(2, '0')
+    const monthEndDate = new Date(2026, selectedProjectionMonth, 0).getDate()
+    return {
+      startDate: `2026-${month}-01`,
+      endDate: `2026-${month}-${String(monthEndDate).padStart(2, '0')}`,
+    }
+  }, [selectedProjectionMonth])
+  const { data: monthlyAdditionalCommitmentOps = [] } = useQuery({
+    queryKey: ['projection-month-additional-commitments', user?.id ?? 'anon', selectedProjectionMonth ?? 0],
+    enabled: Boolean(user?.id) && projectionPeriodMode === 'month' && selectedProjectionMonthDateRange != null,
+    staleTime: STALE.ANALYTICS,
+    queryFn: async (): Promise<AdditionalCommitmentOperationRow[]> => {
+      if (!selectedProjectionMonthDateRange) return []
+      const { data, error } = await budgetDb
+        .from('v_flux_operations_unified' as never)
+        .select('budget_accounting_amount,budget_bucket,is_matched')
+        .eq('user_id', user?.id as string)
+        .eq('operation_kind', 'planned_occurrence')
+        .eq('flow_type', 'expense')
+        .eq('budget_impact', 'additional_commitment')
+        .eq('is_hidden', false)
+        .lt('budget_accounting_amount', 0)
+        .gte('operation_date', selectedProjectionMonthDateRange.startDate)
+        .lte('operation_date', selectedProjectionMonthDateRange.endDate)
+        .or('budget_bucket.is.null,budget_bucket.not.in.(socle_fixe,provision,voyage)')
+        .not('is_matched', 'eq', true)
+
+      if (error) throw new Error(`projection-month-additional-commitments failed: ${error.message}`)
+      return (data ?? []) as AdditionalCommitmentOperationRow[]
+    },
+  })
 
   const now = new Date()
   const currentMonth = now.getMonth() + 1
@@ -1668,6 +1720,17 @@ export function ProjectionsTabContent() {
     [completedMonths, monthlyMetrics],
   )
   const ytdBudgetClosedMonths = (summary?.totalMonthlyBudget ?? 0) * completedMonths
+  const monthlyExpenseBudgetByMonthAndBucket = useMemo(() => {
+    return monthlyExpenseBudgets2026.reduce<Map<number, Map<string, number>>>((acc, row) => {
+      const month = Number(row.period_month ?? 0)
+      const bucket = String(row.budget_bucket ?? '')
+      if (!Number.isFinite(month) || month < 1 || month > 12 || bucket.length === 0) return acc
+      const byBucket = acc.get(month) ?? new Map<string, number>()
+      byBucket.set(bucket, (byBucket.get(bucket) ?? 0) + Number(row.budget_amount ?? 0))
+      acc.set(month, byBucket)
+      return acc
+    }, new Map<number, Map<string, number>>())
+  }, [monthlyExpenseBudgets2026])
   const monthlyExpenseBudgetByMonth = useMemo(() => {
     return monthlyExpenseBudgets2026.reduce<Map<number, number>>((acc, row) => {
       const month = Number(row.period_month ?? 0)
@@ -1704,6 +1767,42 @@ export function ProjectionsTabContent() {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const periodLabel = selectedPeriodOption.label
+  const periodMonthShortLabel = selectedProjectionMonth != null
+    ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 26`
+    : periodLabel
+  const fixedBudgetAmount = useMemo(() => {
+    if (selectedProjectionMonth == null) return 0
+    return Number(monthlyExpenseBudgetByMonthAndBucket.get(selectedProjectionMonth)?.get('socle_fixe') ?? 0)
+  }, [monthlyExpenseBudgetByMonthAndBucket, selectedProjectionMonth])
+  const provisionBudgetAmount = useMemo(() => {
+    if (selectedProjectionMonth == null) return 0
+    return Number(monthlyExpenseBudgetByMonthAndBucket.get(selectedProjectionMonth)?.get('provision') ?? 0)
+  }, [monthlyExpenseBudgetByMonthAndBucket, selectedProjectionMonth])
+  const voyageBudgetAmount = useMemo(() => {
+    if (selectedProjectionMonth == null) return 0
+    return Number(monthlyExpenseBudgetByMonthAndBucket.get(selectedProjectionMonth)?.get('voyage') ?? 0)
+  }, [monthlyExpenseBudgetByMonthAndBucket, selectedProjectionMonth])
+  const additionalPlannedAmount = useMemo(
+    () => monthlyAdditionalCommitmentOps.reduce((sum, row) => {
+      const amount = Number(row.budget_accounting_amount ?? 0)
+      if (!(amount < 0)) return sum
+      return sum + Math.abs(amount)
+    }, 0),
+    [monthlyAdditionalCommitmentOps],
+  )
+  const plannedSavingsObjectiveAmount = useMemo(() => {
+    if (selectedProjectionMonth == null) return 0
+    const match = savingsPlanningMonthDetails.find((row) => Number(row.period_month) === selectedProjectionMonth)
+    return Number(match?.monthly_objective_amount ?? 0)
+  }, [savingsPlanningMonthDetails, selectedProjectionMonth])
+  const protectedBucketAmount = fixedBudgetAmount + provisionBudgetAmount + voyageBudgetAmount
+  const monthlyReservedAmount = protectedBucketAmount + additionalPlannedAmount + plannedSavingsObjectiveAmount
+  // Monthly liquidity is a theoretical starting capacity:
+  // projected income minus protected allocations.
+  // It does not subtract actual variable spending.
+  const monthlyAvailableLiquidityAmount = monthlyScenario2ProjectedIncomeAmount - monthlyReservedAmount
+  const canGoToPreviousProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth > MIN_PROJECTION_MONTH_2026
+  const canGoToNextProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth < MAX_PROJECTION_MONTH_2026
   const monthlyTrajectoryRows = monthlyTrajectoryData?.tableRows ?? []
   const monthlyTrajectoryIncomeAmount = Number(monthlyTrajectoryData?.monthlyProjectedIncomeAmount ?? 0)
   const monthlyTrajectoryIncomeDay = monthlyTrajectoryData?.incomeDay ?? REVENUE_SCENARIO_DEFAULT_INCOME_DAY
@@ -1761,6 +1860,12 @@ export function ProjectionsTabContent() {
     if (!Number.isFinite(day) || day <= 0) return
     setSelectedTrajectoryChartDay(day)
   }
+  const navigateProjectionMonth = (delta: -1 | 1) => {
+    if (selectedProjectionMonth == null) return
+    const targetMonth = selectedProjectionMonth + delta
+    if (targetMonth < MIN_PROJECTION_MONTH_2026 || targetMonth > MAX_PROJECTION_MONTH_2026) return
+    setSelectedPeriod(`2026-${String(targetMonth).padStart(2, '0')}` as ProjectionPeriodValue)
+  }
 
   useEffect(() => {
     setSelectedTrajectoryDay(null)
@@ -1792,6 +1897,13 @@ export function ProjectionsTabContent() {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [selectedTrajectoryChartDay])
+
+  useEffect(() => {
+    if (projectionPeriodMode === 'annual') {
+      setShowReservedAmountDetailModal(false)
+      setShowLiquidityDetailModal(false)
+    }
+  }, [projectionPeriodMode])
 
   function toggleBtnStyle(active: boolean): React.CSSProperties {
     return {
@@ -1904,28 +2016,112 @@ export function ProjectionsTabContent() {
 
         {/* ── period + mode controls (mirrors EnveloppesTab layout) ── */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
-          <button
-            type="button"
-            onClick={() => setShowPeriodModal(true)}
-            aria-label="Choisir une période"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              textAlign: 'center',
-              fontSize: 'var(--font-size-sm)',
-              fontWeight: 700,
-              color: 'var(--neutral-700)',
-              letterSpacing: '0.01em',
-            }}
-          >
-            {periodLabel}
-            <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
-          </button>
+          {projectionPeriodMode === 'month' ? (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+              <button
+                type="button"
+                onClick={() => navigateProjectionMonth(-1)}
+                disabled={!canGoToPreviousProjectionMonth}
+                aria-label="Mois précédent"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  width: 24,
+                  height: 24,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: canGoToPreviousProjectionMonth ? 'pointer' : 'not-allowed',
+                  opacity: canGoToPreviousProjectionMonth ? 1 : 0.5,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderTop: '5px solid transparent',
+                    borderBottom: '5px solid transparent',
+                    borderRight: '7px solid var(--neutral-600)',
+                    marginLeft: -1,
+                  }}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPeriodModal(true)}
+                aria-label="Choisir une période"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 700,
+                  color: 'var(--neutral-700)',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {periodMonthShortLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateProjectionMonth(1)}
+                disabled={!canGoToNextProjectionMonth}
+                aria-label="Mois suivant"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  width: 24,
+                  height: 24,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: canGoToNextProjectionMonth ? 'pointer' : 'not-allowed',
+                  opacity: canGoToNextProjectionMonth ? 1 : 0.5,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderTop: '5px solid transparent',
+                    borderBottom: '5px solid transparent',
+                    borderLeft: '7px solid var(--neutral-600)',
+                    marginRight: -1,
+                  }}
+                />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPeriodModal(true)}
+              aria-label="Choisir une période"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                textAlign: 'center',
+                fontSize: 'var(--font-size-sm)',
+                fontWeight: 700,
+                color: 'var(--neutral-700)',
+                letterSpacing: '0.01em',
+              }}
+            >
+              {periodLabel}
+              <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
+            </button>
+          )}
           {projectionPeriodMode === 'annual' ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
               <button type="button" onClick={() => setAnnualMode('depenses')} style={{ ...toggleBtnStyle(annualMode === 'depenses'), textAlign: 'center' }}>Dépenses</button>
@@ -1959,12 +2155,45 @@ export function ProjectionsTabContent() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-              <div style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 58, display: 'grid', placeItems: 'center' }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>—</p>
-              </div>
-              <div style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 58, display: 'grid', placeItems: 'center' }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>—</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowReservedAmountDetailModal(true)}
+                aria-label="Voir le détail du montant réservé"
+                style={{
+                  background: 'var(--neutral-0)',
+                  border: '1.5px solid var(--neutral-200)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: 78,
+                  padding: 'var(--space-2) var(--space-3)',
+                  display: 'grid',
+                  gridTemplateRows: 'auto auto',
+                  justifyItems: 'start',
+                  gap: 4,
+                  cursor: 'pointer',
+                  transition: 'border-color var(--transition-base), box-shadow var(--transition-base)',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Montant réservé
+                  <CircleHelp size={12} />
+                </span>
+                <span style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                  {fmt(monthlyReservedAmount)}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLiquidityDetailModal(true)}
+                aria-label="Voir le détail de la liquidité disponible"
+                style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 78, padding: 'var(--space-2) var(--space-3)', display: 'grid', gridTemplateRows: 'auto auto', justifyItems: 'start', gap: 4, cursor: 'pointer' }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Liquidité disponible
+                </span>
+                <span style={{ margin: 0, fontSize: 18, fontWeight: 800, color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                  {fmt(monthlyAvailableLiquidityAmount)}
+                </span>
+              </button>
             </div>
             <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
@@ -1976,13 +2205,13 @@ export function ProjectionsTabContent() {
                     {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 2026` : '—'}
                   </p>
                 </div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 16 }}>
-                  <TrendingUp size={14} />
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
+                  <ArrowDownToLine size={13} />
                   <span>{fmt(monthlyScenario2ProjectedIncomeAmount)}</span>
                 </div>
               </div>
 
-              <div style={{ height: 354, overflow: 'hidden' }}>
+              <div style={{ height: PROJECTIONS_GRAPH_SECTION_HEIGHT, overflow: 'hidden' }}>
                 {monthlyChartView === 'curves' ? (
                   isMonthlyTrajectoryLoading ? (
                     <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
@@ -2298,6 +2527,202 @@ export function ProjectionsTabContent() {
         ) : null}
 
       </div>
+      <AnimatePresence>
+        {projectionPeriodMode === 'month' && showReservedAmountDetailModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowReservedAmountDetailModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Détail du montant réservé"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--page-gutter)',
+                right: 'var(--page-gutter)',
+                top: '28vh',
+                zIndex: 91,
+                maxWidth: 360,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--neutral-200)',
+                boxShadow: '0 12px 36px rgba(13,13,31,0.2)',
+                padding: 'var(--space-4)',
+                display: 'grid',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
+                  Détail du montant réservé
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowReservedAmountDetailModal(false)}
+                  aria-label="Fermer"
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                {[
+                  { label: 'Socle fixe prévu', value: fixedBudgetAmount },
+                  { label: 'Provisions prévues', value: provisionBudgetAmount },
+                  { label: 'Voyages prévus', value: voyageBudgetAmount },
+                  { label: 'Autres dépenses additionnelles prévues', value: additionalPlannedAmount },
+                  { label: 'Objectif épargne', value: plannedSavingsObjectiveAmount },
+                ].map((row) => (
+                  <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '9px var(--space-3)', borderTop: '1px solid var(--neutral-200)' }}>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>{row.label}</span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.value)}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '10px var(--space-3)', borderTop: '1px solid var(--neutral-200)', background: 'var(--neutral-100)' }}>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>Total réservé</span>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{fmt(monthlyReservedAmount)}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReservedAmountDetailModal(false)}
+                style={{
+                  border: '1px solid var(--neutral-300)',
+                  background: 'var(--neutral-0)',
+                  color: 'var(--neutral-800)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: 36,
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Fermer
+              </button>
+            </motion.div>
+          </>
+        ) : null}
+        {projectionPeriodMode === 'month' && showLiquidityDetailModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLiquidityDetailModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Détail liquidité disponible"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--page-gutter)',
+                right: 'var(--page-gutter)',
+                top: '30vh',
+                zIndex: 93,
+                maxWidth: 360,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--neutral-200)',
+                boxShadow: '0 12px 36px rgba(13,13,31,0.2)',
+                padding: 'var(--space-4)',
+                display: 'grid',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
+                  Détail liquidité disponible
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowLiquidityDetailModal(false)}
+                  aria-label="Fermer"
+                  style={{
+                    border: 'none',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-600)',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                {[
+                  { label: 'Revenus projetés', value: monthlyScenario2ProjectedIncomeAmount },
+                  { label: 'Montant réservé', value: monthlyReservedAmount },
+                ].map((row) => (
+                  <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '9px var(--space-3)', borderTop: '1px solid var(--neutral-200)' }}>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>{row.label}</span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.value)}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '10px var(--space-3)', borderTop: '1px solid var(--neutral-200)', background: 'var(--neutral-100)' }}>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>Liquidité disponible</span>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{fmt(monthlyAvailableLiquidityAmount)}</span>
+                </div>
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.35 }}>
+                Montant théorique avant dépenses variables réellement effectuées.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowLiquidityDetailModal(false)}
+                style={{
+                  border: '1px solid var(--neutral-300)',
+                  background: 'var(--neutral-0)',
+                  color: 'var(--neutral-800)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: 36,
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Fermer
+              </button>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
     </>
   )
 }

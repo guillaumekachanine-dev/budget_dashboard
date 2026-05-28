@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
+import { X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.webp'
@@ -14,10 +15,12 @@ import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAll
 import { SavingsEvolutionFiveYearsChart } from '@/features/savings/components/SavingsEvolutionFiveYearsChart'
 import { SavingsPlanning2026Section } from '@/features/savings/components/SavingsPlanning2026Section'
 import { SavingsPortfoliosListSection } from '@/features/savings/components/SavingsPortfoliosListSection'
-import { useSavingsActualsByMonth } from '@/features/savings/hooks/useSavingsActualsByMonth'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
+import type { SavingsObjectiveMonthRow } from '@/features/savings/hooks/useSavingsObjective2026Details'
 import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
-import { useSavingsPlanningMonthDetails } from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
+import { useSavingsObjective2026Details } from '@/features/savings/hooks/useSavingsObjective2026Details'
+import type { SavingsTransferYtdRow } from '@/features/savings/hooks/useSavingsTransfersYtd'
+import { useSavingsTransfersYtd } from '@/features/savings/hooks/useSavingsTransfersYtd'
 import { StatsOptimizationsTab } from '@/features/stats/components/StatsOptimizationsTab'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
@@ -44,6 +47,8 @@ type KpiTileItem = {
   label: string
   value: string
   tone: KpiTone
+  onClick?: () => void
+  ariaLabel?: string
   detail?: string
   detailTone?: 'neutral' | 'positive' | 'negative'
   backgroundColor?: string
@@ -80,21 +85,6 @@ type OptimizationPeriodOption = {
 }
 
 const PLANNED_SAVINGS_2026 = 9800
-const PLANNING_MONTHS_2026 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
-const DEFAULT_MONTHLY_OBJECTIVES_2026: Record<number, number> = {
-  1: 1200,
-  2: 1000,
-  3: 1000,
-  4: 1000,
-  5: 1000,
-  6: 800,
-  7: 500,
-  8: 600,
-  9: 1000,
-  10: 1200,
-  11: 1000,
-  12: 700,
-}
 const OPTIMIZATION_YEAR = 2026
 const OPTIMIZATION_ANNUAL_GAIN_MONTHS = 6
 const PLANNED_SAVINGS_PCT_2026 = 17.8
@@ -156,8 +146,11 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
     <div style={{ padding: '0 var(--page-gutter)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, items.length)}, minmax(0, 1fr))`, gap: 'var(--space-2)' }}>
         {items.map((item) => (
-          <div
+          <button
             key={item.label}
+            type="button"
+            onClick={item.onClick}
+            aria-label={item.ariaLabel ?? item.label}
             style={{
               ...resolveKpiTileStyle(item.tone),
               ...(item.backgroundColor ? { background: item.backgroundColor } : null),
@@ -171,6 +164,9 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
               alignItems: 'center',
               justifyContent: 'center',
               textAlign: 'center',
+              cursor: item.onClick ? 'pointer' : 'default',
+              transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
+              boxShadow: item.onClick ? '0 1px 0 rgba(13,13,31,0.06)' : 'none',
             }}
           >
             <p style={{ margin: 0, fontSize: item.labelFontSize ?? 9, fontWeight: 700, color: item.labelColor ?? 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: item.labelLetterSpacing ?? '0.06em', lineHeight: 1.2, whiteSpace: item.labelNoWrap ? 'nowrap' : 'normal' }}>
@@ -196,7 +192,7 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
                 {item.detail}
               </p>
             ) : null}
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -287,6 +283,198 @@ function SavingsBreakdownBar({ currentSummary }: { currentSummary: SavingsCurren
   )
 }
 
+function SavingsYtdDetailModal({
+  transfers,
+  totalAmount,
+  count,
+  onClose,
+}: {
+  transfers: SavingsTransferYtdRow[]
+  totalAmount: number
+  count: number
+  onClose: () => void
+}) {
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.52)' }}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Détail épargne YTD"
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          position: 'fixed',
+          left: 'var(--page-gutter)',
+          right: 'var(--page-gutter)',
+          top: '12vh',
+          bottom: '10vh',
+          zIndex: 91,
+          maxWidth: 780,
+          margin: '0 auto',
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--neutral-200)',
+          boxShadow: '0 16px 48px rgba(13,13,31,0.24)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gap: 2 }}>
+            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+              Détail épargne YTD
+            </h3>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
+              {count} virement{count > 1 ? 's' : ''} • Total {formatKpiCurrency(totalAmount)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+        {transfers.length === 0 ? (
+          <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 'var(--space-5)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>Aucun virement d’épargne réalisé.</p>
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '86px minmax(0,1.2fr) 120px minmax(0,1fr) minmax(0,1fr)', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-100)', borderBottom: '1px solid var(--neutral-200)' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Date</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Libellé</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', textAlign: 'right' }}>Montant</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Compte d’origine</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Destination</span>
+            </div>
+            {transfers.map((row) => (
+              <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '86px minmax(0,1.2fr) 120px minmax(0,1fr) minmax(0,1fr)', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--neutral-150)', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>{row.transactionDate}</span>
+                <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</span>
+                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 800, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatKpiCurrency(row.personalAmount)}</span>
+                <span style={{ fontSize: 11, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.sourceAccount}</span>
+                <span style={{ fontSize: 11, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.destination}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    </>
+  )
+}
+
+function SavingsObjective2026DetailModal({
+  pastRows,
+  futureRows,
+  totalUpdatedObjective,
+  onClose,
+}: {
+  pastRows: SavingsObjectiveMonthRow[]
+  futureRows: SavingsObjectiveMonthRow[]
+  totalUpdatedObjective: number
+  onClose: () => void
+}) {
+  const renderSection = (title: string, rows: SavingsObjectiveMonthRow[]) => (
+    <div style={{ display: 'grid', gap: 4 }}>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-700)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {title}
+      </p>
+      <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+        {rows.map((row) => (
+          <div key={row.monthId} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'center', padding: '9px var(--space-3)', borderTop: '1px solid var(--neutral-200)' }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600 }}>{row.monthLabel}</span>
+            <span style={{ fontSize: 10, color: row.isPast ? 'var(--primary-600)' : 'var(--neutral-600)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              {row.typeLabel}
+            </span>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+              {formatKpiCurrency(row.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.52)' }}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Détail objectif 2026"
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          position: 'fixed',
+          left: 'var(--page-gutter)',
+          right: 'var(--page-gutter)',
+          top: '12vh',
+          bottom: '10vh',
+          zIndex: 91,
+          maxWidth: 520,
+          margin: '0 auto',
+          background: 'var(--neutral-0)',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--neutral-200)',
+          boxShadow: '0 16px 48px rgba(13,13,31,0.24)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800 }}>
+            Détail objectif 2026
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+          {renderSection('Mois passés', pastRows)}
+          {renderSection('À venir', futureRows)}
+          <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', background: 'var(--neutral-100)', padding: '10px var(--space-3)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              Total objectif 2026 actualisé
+            </span>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
+              {formatKpiCurrency(totalUpdatedObjective)}
+            </span>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  )
+}
+
 function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
   return {
     border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
@@ -317,10 +505,11 @@ export function Epargne() {
   const optimizationCapacity = useOptimizationCapacity(OPTIMIZATION_YEAR)
   const savingsAnalytics = useSavingsAnalytics(currentYear)
   const savingsEvolution = useSavingsEvolutionFiveYears()
-  const { byMonth: savingsActualsByMonth } = useSavingsActualsByMonth(user?.id, 2026)
-  const { data: planningMonthDetails = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
+  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, 2026)
+  const objective2026Details = useSavingsObjective2026Details(user?.id)
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
+  const [planningKpiModal, setPlanningKpiModal] = useState<'ytd' | 'objective' | null>(null)
   const [optimizationPeriodId, setOptimizationPeriodId] = useState<OptimizationPeriodId>('2026-05')
   const [showTabModal, setShowTabModal] = useState(false)
   const [performanceViewMode, setPerformanceViewMode] = useState<PerformanceViewMode>('performance')
@@ -390,42 +579,17 @@ export function Epargne() {
     return byCategory
   }, [optimizationBudgetPayloadQuery.data?.by_category])
 
-  const objective2026Actualized = useMemo(() => {
-    const now = new Date()
-    const currentMonth = now.getMonth() + 1
-    const currentYearNow = now.getFullYear()
-    const isPastPlanningMonth = (periodMonth: number) => {
-      if (currentYearNow > 2026) return true
-      if (currentYearNow < 2026) return false
-      return periodMonth < currentMonth
-    }
-
-    const objectiveByMonth: Record<number, number> = { ...DEFAULT_MONTHLY_OBJECTIVES_2026 }
-    for (const row of planningMonthDetails) {
-      objectiveByMonth[row.period_month] = Number(row.monthly_objective_amount ?? 0)
-    }
-
-    // Objectif 2026 actualisé = réel des mois clôturés + objectifs des mois non clôturés.
-    return PLANNING_MONTHS_2026.reduce((sum, month) => {
-      if (isPastPlanningMonth(month)) {
-        return sum + Number(savingsActualsByMonth[month]?.actual_savings_amount_eur ?? 0)
-      }
-      return sum + Number(objectiveByMonth[month] ?? 0)
-    }, 0)
-  }, [planningMonthDetails, savingsActualsByMonth])
+  const objective2026Actualized = objective2026Details.totalUpdatedObjective
 
   const planningKpis = useMemo<KpiTileItem[]>(() => {
-    const monthlyMetrics = savingsAnalytics.data?.monthlyMetrics ?? []
-    const latestYtdRow = [...monthlyMetrics]
-      .reverse()
-      .find((row) => row.ytd_saved_amount != null)
-    const epargneYtd = latestYtdRow?.ytd_saved_amount
-      ?? monthlyMetrics.reduce((sum, row) => sum + Number(row.saved_amount ?? 0), 0)
+    const epargneYtd = Number(savingsTransfersYtd?.totalAmount ?? 0)
 
     return [
       {
         label: 'Épargne YTD',
         value: formatKpiCurrency(epargneYtd),
+        onClick: () => setPlanningKpiModal('ytd'),
+        ariaLabel: 'Afficher le détail épargne YTD',
         tone: 'neutral',
         backgroundColor: 'var(--color-warning)',
         borderColor: 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-300) 22%)',
@@ -435,6 +599,8 @@ export function Epargne() {
       {
         label: 'Objectif 2026',
         value: formatKpiCurrency(objective2026Actualized),
+        onClick: () => setPlanningKpiModal('objective'),
+        ariaLabel: 'Afficher le détail objectif 2026',
         tone: 'warning',
         backgroundColor: '#0E7490',
         borderColor: 'color-mix(in oklab, #0E7490 72%, var(--neutral-300) 28%)',
@@ -442,7 +608,7 @@ export function Epargne() {
         valueColor: '#FCD34D',
       },
     ]
-  }, [objective2026Actualized, savingsAnalytics.data?.monthlyMetrics])
+  }, [objective2026Actualized, savingsTransfersYtd?.totalAmount])
 
   const optimizationAnnualObjective = useMemo(() => {
     const listedLevers = (optimizationCapacity.data?.optimization_levers ?? []).slice(0, 8)
@@ -652,6 +818,19 @@ export function Epargne() {
     return lockDocumentScroll()
   }, [showTabModal])
 
+  useEffect(() => {
+    if (!planningKpiModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPlanningKpiModal(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [planningKpiModal])
+
+  useEffect(() => {
+    if (activeTabId !== 'planning_2026') setPlanningKpiModal(null)
+  }, [activeTabId])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <PageHeader
@@ -835,6 +1014,25 @@ export function Epargne() {
           </div>
         </motion.section>
       ) : null}
+
+      <AnimatePresence>
+        {activeTab.id === 'planning_2026' && planningKpiModal === 'ytd' ? (
+          <SavingsYtdDetailModal
+            transfers={savingsTransfersYtd?.transfers ?? []}
+            totalAmount={Number(savingsTransfersYtd?.totalAmount ?? 0)}
+            count={Number(savingsTransfersYtd?.count ?? 0)}
+            onClose={() => setPlanningKpiModal(null)}
+          />
+        ) : null}
+        {activeTab.id === 'planning_2026' && planningKpiModal === 'objective' ? (
+          <SavingsObjective2026DetailModal
+            pastRows={objective2026Details.pastRows}
+            futureRows={objective2026Details.futureRows}
+            totalUpdatedObjective={objective2026Details.totalUpdatedObjective}
+            onClose={() => setPlanningKpiModal(null)}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showTabModal ? (
