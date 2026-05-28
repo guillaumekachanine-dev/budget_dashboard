@@ -1,0 +1,57 @@
+[
+  {
+    "viewport": "320",
+    "authenticated": false,
+    "overallOverflow": {
+      "docScrollWidth": 320,
+      "innerWidth": 320,
+      "overflowPx": 0,
+      "path": "/"
+    },
+    "tabs": []
+  },
+  {
+    "viewport": "360",
+    "authenticated": false,
+    "overallOverflow": {
+      "docScrollWidth": 360,
+      "innerWidth": 360,
+      "overflowPx": 0,
+      "path": "/"
+    },
+    "tabs": []
+  },
+  {
+    "viewport": "390",
+    "authenticated": false,
+    "overallOverflow": {
+      "docScrollWidth": 390,
+      "innerWidth": 390,
+      "overflowPx": 0,
+      "path": "/"
+    },
+    "tabs": []
+  },
+  {
+    "viewport": "430",
+    "authenticated": false,
+    "overallOverflow": {
+      "docScrollWidth": 430,
+      "innerWidth": 430,
+      "overflowPx": 0,
+      "path": "/"
+    },
+    "tabs": []
+  },
+  {
+    "viewport": "768",
+    "authenticated": false,
+    "overallOverflow": {
+      "docScrollWidth": 768,
+      "innerWidth": 768,
+      "overflowPx": 0,
+      "path": "/"
+    },
+    "tabs": []
+  }
+]

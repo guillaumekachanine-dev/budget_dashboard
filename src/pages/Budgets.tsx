@@ -2533,7 +2533,7 @@ export function Budgets() {
         } as const
         const TAB_TITLES: Record<string, string> = {
           enveloppes: 'Enveloppes budgétaires',
-          projections: 'Projections annuelles',
+          projections: 'Projections',
           analytics: 'Analyse comparée',
         }
         return (

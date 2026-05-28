@@ -9,7 +9,6 @@ import {
   getDaysRemainingInMonth,
   getCategoryColor,
   formatCurrencyFloored,
-  getTxLabel,
 } from '@/lib/utils'
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
 import type { AccountWithBalance } from '@/lib/types'
@@ -20,6 +19,8 @@ import { BottomSheet } from '@/components/ui/BottomSheet'
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
 import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
+import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
+import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
 // Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
 // the Home initial bundle free of the chart library until the chart section renders.
 const TrajectoireChart = lazy(() =>
@@ -184,7 +185,7 @@ function DriftCategoryTransactionsModal({
   onClose: () => void
   categoryName: string | null
   categoryColor: string
-  categoryTransactions: Array<{ id: string; transaction_date: string; merchant_name: string | null; normalized_label: string | null; raw_label: string | null; amount: number }> | null
+  categoryTransactions: Array<{ id: string; operation_date: string; label: string; amount: number; iconKey: string | null }> | null
   loading: boolean
 }) {
   return (
@@ -217,9 +218,8 @@ function DriftCategoryTransactionsModal({
         <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', color: 'var(--neutral-400)' }}>Aucune opération</p>
       ) : (
         categoryTransactions?.map((tx) => {
-          const d = new Date(`${tx.transaction_date}T00:00:00`)
+          const d = new Date(`${tx.operation_date}T00:00:00`)
           const dateStr = Number.isNaN(d.getTime()) ? '--/--' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-          const label = getTxLabel(tx)
           return (
             <button
               key={tx.id}
@@ -229,8 +229,7 @@ function DriftCategoryTransactionsModal({
                 border: 'none',
                 borderBottom: '1px solid var(--neutral-200)',
                 padding: 'var(--space-3) var(--space-5)',
-                display: 'grid',
-                gridTemplateColumns: '52px minmax(0,1fr) auto',
+                display: 'flex',
                 alignItems: 'center',
                 gap: 'var(--space-3)',
                 background: 'transparent',
@@ -242,8 +241,11 @@ function DriftCategoryTransactionsModal({
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
               <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
-              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{label}</span>
-              <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CategoryIcon iconKey={tx.iconKey} size={18} label={tx.label} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{tx.label}</span>
+              <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Math.abs(Number(tx.amount ?? 0)))}</span>
             </button>
           )
         })
@@ -259,6 +261,7 @@ function DriftsModal({
   open,
   onClose,
   driftRows,
+  totalOverrunAmount,
   top5ExpenseRows,
   loadingSummaries,
   onCategoryClick,
@@ -266,6 +269,7 @@ function DriftsModal({
   open: boolean
   onClose: () => void
   driftRows: DriftRowShape[]
+  totalOverrunAmount: number
   top5ExpenseRows: Top5RowShape[]
   loadingSummaries: boolean
   onCategoryClick: (id: string) => void
@@ -281,9 +285,14 @@ function DriftsModal({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <TriangleAlert size={17} color="var(--color-warning)" />
-            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Catégories en dérive
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                Catégories en dérive
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                {`+${formatCurrencyFloored(totalOverrunAmount)}`}
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -332,7 +341,7 @@ function DriftsModal({
       ) : (
         <div style={{ padding: '0 var(--space-5)' }}>
           {driftRows.map((row) => {
-            const drift = Number(row.driftPct ?? 0)
+            const overrunAmount = Math.max(0, Number(row.overrunAmount ?? 0))
             return (
               <button
                 key={row.id}
@@ -364,8 +373,8 @@ function DriftsModal({
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
                   {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {`+${drift.toFixed(0)}%`}
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {`+${formatCurrencyFloored(overrunAmount)}`}
                 </span>
               </button>
             )
@@ -1014,22 +1023,16 @@ export function Home() {
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
+  const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
+  const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
 
   const todayDate = now.toISOString().slice(0, 10)
-  const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10)
-  const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
   const daysInMonth = new Date(year, month, 0).getDate()
   const daysElapsed = now.getDate()
   const daysRemaining = getDaysRemainingInMonth()
   // Rappel snapshot : visible les 2 derniers jours du mois, disparaît le 1er du mois suivant
   const showSnapshotReminder = daysElapsed >= daysInMonth - 1
   const sectionHorizontalPadding = '0 calc(var(--space-6) + 6px)'
-
-  const { data: monthExpenseTxns } = useTransactions({
-    startDate: monthStart,
-    endDate: monthEnd,
-    flowType: 'expense',
-  })
 
   const upcomingOpsWindows = useMemo(() => {
     const items = dailyPayload?.planned_operations?.items ?? []
@@ -1069,44 +1072,52 @@ export function Home() {
 
   const driftCategories = useMemo(() => {
     const rows = summaries ?? []
-    const txns = monthExpenseTxns ?? []
+    const operations = driftOperations ?? []
+    const operationsByCategory = new Map<string, typeof operations>()
+
+    for (const operation of operations) {
+      if (!operation.categoryId) continue
+      const current = operationsByCategory.get(operation.categoryId) ?? []
+      current.push(operation)
+      operationsByCategory.set(operation.categoryId, current)
+    }
+
     return rows
-      .filter((r) => r.budget_amount > 0)
-      .map((r) => {
-        const budget = Number(r.budget_amount)
-        const spent = Number(r.spent_amount)
-        const driftPct = (spent / budget) * 100 - 100
+      .filter((row) => Number(row.budget_amount ?? 0) > 0)
+      .map((row) => {
+        const budget = Number(row.budget_amount ?? 0)
+        const categoryOperations = [...(operationsByCategory.get(row.category.id) ?? [])]
+          .sort((a, b) => a.operationDate.localeCompare(b.operationDate))
+        const spent = categoryOperations.reduce((sum, operation) => sum + Math.abs(Number(operation.budgetAccountingAmount ?? 0)), 0)
         const overrunAmount = Math.max(0, spent - budget)
-        let exceedDateStr = null
-        if (driftPct >= 0) {
-          const categoryTxns = txns
-            .filter(t => t.category_id === r.category.id && t.transaction_date <= todayDate)
-            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-          let cumul = 0
-          for (const t of categoryTxns) {
-            cumul += Number(t.amount)
-            if (cumul > budget) {
-              const d = t.transaction_date
-              exceedDateStr = `${d.slice(8, 10)}/${d.slice(5, 7)}`
-              break
-            }
+        if (overrunAmount <= 0) return null
+
+        const driftPct = budget > 0 ? (spent / budget) * 100 - 100 : 0
+        let exceedDateStr: string | null = null
+        let cumul = 0
+        for (const operation of categoryOperations) {
+          cumul += Math.abs(Number(operation.budgetAccountingAmount ?? 0))
+          if (cumul > budget) {
+            exceedDateStr = `${operation.operationDate.slice(8, 10)}/${operation.operationDate.slice(5, 7)}`
+            break
           }
         }
+
         return {
-          id: r.category.id,
-          name: r.category.name,
-          iconKey: r.category.icon_key,
-          colorToken: r.category.color_token,
-          spent: r.spent_amount,
+          id: row.category.id,
+          name: row.category.name,
+          iconKey: row.category.icon_key ?? categoryOperations[0]?.categoryIconKey ?? null,
+          colorToken: row.category.color_token,
+          spent,
           driftPct,
           overrunAmount,
           exceedDate: exceedDateStr,
         }
       })
-      .filter((r) => r.driftPct > 0)
-      .sort((a, b) => b.driftPct - a.driftPct)
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => b.overrunAmount - a.overrunAmount)
       .slice(0, 6)
-  }, [summaries, monthExpenseTxns, todayDate])
+  }, [driftOperations, summaries])
 
   const accountEntries = useMemo<HomeAccountEntry[]>(() => {
     const source = accounts ?? []
@@ -1227,13 +1238,17 @@ export function Home() {
   )
   const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
   const provisionBudgetAmountDisplay = Number(dailyPayload?.budgets.provision_budget_amount ?? 0)
-  const savingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
+  const fallbackSavingsBudgetAmountDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
+  const planningEffectiveSavingsAmountDisplay = Number(currentMonthSavingsPlanning?.effectivePlannedSavingsAmount ?? 0)
+  const plannedSavingsAmountDisplay = planningEffectiveSavingsAmountDisplay > 0
+    ? planningEffectiveSavingsAmountDisplay
+    : fallbackSavingsBudgetAmountDisplay
   const { data: usefulRemainingData } = useHomeUsefulRemaining({
     year,
     month,
     fixedBudgetAmount: fixedBudgetAmountDisplay,
     provisionBudgetAmount: provisionBudgetAmountDisplay,
-    savingsBudgetAmount: savingsBudgetAmountDisplay,
+    savingsBudgetAmount: plannedSavingsAmountDisplay,
     daysRemaining,
   })
   const resteUtileDisplay = Number(usefulRemainingData?.usefulRemainingAmount ?? dailyPayload?.daily_pilotage.remaining_useful_amount ?? 0)
@@ -1305,8 +1320,8 @@ export function Home() {
     dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'discretionnaire')?.actual_amount ?? 0,
   )
   const protectedAmountsTotalDisplay = useMemo(
-    () => fixedBudgetAmountDisplay + provisionBudgetAmountDisplay + savingsBudgetAmountDisplay,
-    [fixedBudgetAmountDisplay, provisionBudgetAmountDisplay, savingsBudgetAmountDisplay],
+    () => fixedBudgetAmountDisplay + provisionBudgetAmountDisplay + plannedSavingsAmountDisplay,
+    [fixedBudgetAmountDisplay, plannedSavingsAmountDisplay, provisionBudgetAmountDisplay],
   )
 
   useEffect(() => {
@@ -1461,6 +1476,7 @@ export function Home() {
     () => driftRows.reduce((sum, row) => sum + Math.max(0, Number(row.overrunAmount ?? 0)), 0),
     [driftRows],
   )
+  const loadingDriftsData = loadingSummaries || loadingDriftOperations
   const optimizationTileRows = useMemo<OptimizationTileRow[]>(() => {
     const summaryRows = summaries ?? []
     return OPTIMIZATION_PRIORITIES_MOCK.map((row) => {
@@ -1488,19 +1504,19 @@ export function Home() {
   }, [summaries])
 
   const top5ExpenseRows = useMemo(() => {
-    const rows = monthExpenseTxns ?? []
+    const rows = driftOperations ?? []
     const categoryNameById = new Map<string, string>()
     ;(summaries ?? []).forEach((summary) => {
       categoryNameById.set(summary.category.id, summary.category.name)
     })
     const spentByCategory = new Map<string, { id: string; name: string; spent: number }>()
-    rows.forEach((txn) => {
-      if (txn.transaction_date > todayDate || !txn.category_id) return
-      const current = spentByCategory.get(txn.category_id)
-      spentByCategory.set(txn.category_id, {
-        id: txn.category_id,
-        name: current?.name ?? categoryNameById.get(txn.category_id) ?? 'Catégorie',
-        spent: (current?.spent ?? 0) + Number(txn.amount),
+    rows.forEach((operation) => {
+      if (!operation.categoryId) return
+      const current = spentByCategory.get(operation.categoryId)
+      spentByCategory.set(operation.categoryId, {
+        id: operation.categoryId,
+        name: current?.name ?? categoryNameById.get(operation.categoryId) ?? operation.categoryName ?? 'Catégorie',
+        spent: (current?.spent ?? 0) + Math.abs(Number(operation.budgetAccountingAmount ?? 0)),
       })
     })
     const budgetsByCategory = new Map<string, number>()
@@ -1515,7 +1531,7 @@ export function Home() {
         const driftPct = budget > 0 ? ((row.spent - budget) / budget) * 100 : 0
         return { ...row, driftPct }
       })
-  }, [monthExpenseTxns, summaries, todayDate])
+  }, [driftOperations, summaries])
 
   const selectedDriftCategoryMeta = useMemo(() => {
     if (!selectedDriftCategoryId) return null
@@ -1528,9 +1544,18 @@ export function Home() {
 
   const selectedDriftCategoryTransactions = useMemo(() => {
     if (!selectedDriftCategoryId) return null
-    const rows = monthExpenseTxns ?? []
-    return rows.filter((t) => t.category_id === selectedDriftCategoryId)
-  }, [selectedDriftCategoryId, monthExpenseTxns])
+    const rows = driftOperations ?? []
+    return rows
+      .filter((operation) => operation.categoryId === selectedDriftCategoryId)
+      .sort((a, b) => b.operationDate.localeCompare(a.operationDate))
+      .map((operation) => ({
+        id: operation.id,
+        operation_date: operation.operationDate,
+        label: operation.label || operation.categoryName || 'Opération',
+        amount: Math.abs(Number(operation.budgetAccountingAmount ?? 0)),
+        iconKey: operation.categoryIconKey ?? selectedDriftCategoryMeta?.iconKey ?? null,
+      }))
+  }, [driftOperations, selectedDriftCategoryId, selectedDriftCategoryMeta?.iconKey])
 
   const accountVisualGroup = resolveAccountVisualGroup(selectedAccountEntry?.preset.id)
   const heroPrimaryColor = accountVisualGroup === 'savings'
@@ -2376,7 +2401,7 @@ export function Home() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(savingsBudgetAmountDisplay)}</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(plannedSavingsAmountDisplay)}</span>
             </div>
             <div
               style={{
@@ -2457,8 +2482,9 @@ export function Home() {
         open={showDriftsModal}
         onClose={() => setShowDriftsModal(false)}
         driftRows={driftRows}
+        totalOverrunAmount={driftOverrunTotal}
         top5ExpenseRows={top5ExpenseRows}
-        loadingSummaries={loadingSummaries}
+        loadingSummaries={loadingDriftsData}
         onCategoryClick={(id) => {
           setSelectedDriftCategoryId(id)
           setShowDriftCategoryModal(true)
@@ -2474,7 +2500,7 @@ export function Home() {
         categoryName={selectedDriftCategoryMeta?.name ?? null}
         categoryColor={selectedDriftCategoryColor}
         categoryTransactions={selectedDriftCategoryTransactions}
-        loading={loadingSummaries}
+        loading={loadingDriftsData}
       />
     </div>
   )

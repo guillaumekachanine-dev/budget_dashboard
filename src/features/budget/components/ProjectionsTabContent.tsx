@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { TrendingUp, X } from 'lucide-react'
 import { ComposedChart, Area, Line, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, ReferenceLine } from 'recharts'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
@@ -14,10 +14,24 @@ import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
 import { QK, STALE } from '@/lib/queryKeys'
 import type { BudgetRevenueAnalytics, BudgetRevenueTransaction } from '@/features/budget/types'
 import { useBudgetRevenueSources2026, type RevenuSource2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
+import { useMonthlyTrajectoryData, type TrajectoryOperation } from '@/features/projections/hooks/useMonthlyTrajectoryData'
+import {
+  REVENUE_SCENARIO_2_SALARY_MONTHS,
+  REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
+  REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME,
+  REVENUE_SCENARIO_DEFAULT_INCOME_DAY,
+  REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME,
+  getRevenueScenario1ProjectedAnnualTotal,
+  getRevenueScenario2ProjectedAnnualTotal,
+  getRevenueScenario2ProjectedMonthAmount,
+} from '@/features/projections/utils/revenueScenarioProjection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type DisplayMode = 'depenses' | 'revenus'
+type AnnualDisplayMode = 'depenses' | 'revenus'
+type ProjectionPeriodMode = 'annual' | 'month'
+type ProjectionPeriodValue = 'year-2026' | '2026-06' | '2026-07' | '2026-08' | '2026-09' | '2026-10' | '2026-11' | '2026-12'
+type MonthlyChartView = 'curves' | 'table'
 type ExpenseSlide = 0 | 1
 type ExpenseKpiModalKey = 'ytd' | 'gap' | 'projection' | null
 type ExpenseMonthlyMetric = { period_month: number; expense_total: number }
@@ -48,6 +62,7 @@ const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD
 const SCENARIO_1_COLOR = '#D58A83'
 const SCENARIO_2_COLOR = '#15A9A1'
 const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const MONTHLY_PROJECTION_MONTHS_2026 = [6, 7, 8, 9, 10, 11, 12] as const
 
 /** Map known revenue-source names to semantic colours. Falls back to the green palette. */
 function resolveSourceColor(name: string, fallbackIndex: number): string {
@@ -424,14 +439,10 @@ function RevenueSection2026({
   const { data: rawSources } = useBudgetRevenueSources2026()
 
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
-  const guaranteedMonthlyIncome = 3338
-  const salaryAndPrimeMonthlyIncome = 6500
-  const scenario2UnemploymentMonths = 4
-  const scenario2SalaryMonths = 3
   const remainingMonths = Math.max(0, 12 - ytdMonths)
   const ytdRevenue2026 = series2026.reduce((sum, row) => sum + Number(row.revenue_amount ?? 0), 0)
-  const projectedScenario1 = ytdRevenue2026 + guaranteedMonthlyIncome * remainingMonths
-  const projectedScenario2 = ytdRevenue2026 + guaranteedMonthlyIncome * scenario2UnemploymentMonths + salaryAndPrimeMonthlyIncome * scenario2SalaryMonths
+  const projectedScenario1 = getRevenueScenario1ProjectedAnnualTotal(ytdRevenue2026, ytdMonths)
+  const projectedScenario2 = getRevenueScenario2ProjectedAnnualTotal(ytdRevenue2026)
   const assuredStartMonthLabel = MONTH_LABELS_SHORT[Math.max(0, Math.min(11, ytdMonths))] ?? 'juin'
   const assuredPeriodLabel = `${assuredStartMonthLabel.toLowerCase()}-déc. (${remainingMonths} mois)`
   // ── Donut data (2026 only) ────────────────────────────────────────────────
@@ -442,7 +453,7 @@ function RevenueSection2026({
       addProjectedAmountToSources(
         baseSources,
         ['chômage', 'chomage', 'indemnité', 'indemnite'],
-        guaranteedMonthlyIncome * remainingMonths,
+        REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME * remainingMonths,
         'Indemnités chômage',
       )
     }
@@ -451,13 +462,13 @@ function RevenueSection2026({
       addProjectedAmountToSources(
         baseSources,
         ['chômage', 'chomage', 'indemnité', 'indemnite'],
-        guaranteedMonthlyIncome * scenario2UnemploymentMonths,
+        REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME * REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
         'Indemnités chômage',
       )
       addProjectedAmountToSources(
         baseSources,
         ['salaire', 'prime'],
-        salaryAndPrimeMonthlyIncome * scenario2SalaryMonths,
+        REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME * REVENUE_SCENARIO_2_SALARY_MONTHS,
         'Salaire + primes',
       )
     }
@@ -466,13 +477,9 @@ function RevenueSection2026({
       .filter((source) => source.value > 0)
       .sort((a, b) => b.value - a.value)
   }, [
-    guaranteedMonthlyIncome,
     rawSources,
     remainingMonths,
     revenueDisplayMode,
-    salaryAndPrimeMonthlyIncome,
-    scenario2SalaryMonths,
-    scenario2UnemploymentMonths,
   ])
 
   const donutData = scenarioSourceValues.map((s, i) => ({
@@ -559,15 +566,15 @@ function RevenueSection2026({
         const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
         const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
         if (month < ytdMonths) return { monthLabel, actual, projected: null }
-        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
-        return { monthLabel, actual: null, projected: guaranteedMonthlyIncome }
+        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME }
+        return { monthLabel, actual: null, projected: REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME }
       })
       return {
         title: 'Scenario #1 : chômage full year',
         accentColor: SCENARIO_1_COLOR,
         lines: [
           { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
-          { label: 'revenus assurés', value: `${fmt(guaranteedMonthlyIncome)}/mois (Chômage)` },
+          { label: 'revenus assurés', value: `${fmt(REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME)}/mois (Chômage)` },
           { label: 'période concernée', value: assuredPeriodLabel },
         ],
         totalLabel: 'Projection #1',
@@ -581,23 +588,23 @@ function RevenueSection2026({
       const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
       const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
       if (month < ytdMonths) return { monthLabel, actual, projected: null }
-      if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
-      // months ytdMonths+1 … ytdMonths+scenario2UnemploymentMonths: chômage
-      // months after that (up to 12): salary
-      const projectedMonthOffset = month - ytdMonths // 1-indexed offset into projected period
-      const projected =
-        projectedMonthOffset <= scenario2UnemploymentMonths
-          ? guaranteedMonthlyIncome
-          : salaryAndPrimeMonthlyIncome
-      return { monthLabel, actual: null, projected }
+      return {
+        monthLabel,
+        actual: month === ytdMonths ? actual : null,
+        projected: getRevenueScenario2ProjectedMonthAmount({
+          month,
+          ytdMonths,
+          actualMonthAmount: actual,
+        }),
+      }
     })
     return {
       title: 'Scenario #2 : reprise salariat octobre',
       accentColor: SCENARIO_2_COLOR,
       lines: [
         { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
-        { label: 'indemnités chômage', value: `${fmt(guaranteedMonthlyIncome)} × ${scenario2UnemploymentMonths}(juin-sept.)` },
-        { label: 'salaire + primes', value: `${fmt(salaryAndPrimeMonthlyIncome)} × ${scenario2SalaryMonths} (oct.-déc.)` },
+        { label: 'indemnités chômage', value: `${fmt(REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME)} × ${REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS}(juin-sept.)` },
+        { label: 'salaire + primes', value: `${fmt(REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME)} × ${REVENUE_SCENARIO_2_SALARY_MONTHS} (oct.-déc.)` },
       ],
       totalLabel: 'Projection #2',
       totalValue: fmt(projectedScenario2),
@@ -606,12 +613,8 @@ function RevenueSection2026({
   }, [
     activeRevenueKpiModal,
     assuredPeriodLabel,
-    guaranteedMonthlyIncome,
     projectedScenario1,
     projectedScenario2,
-    salaryAndPrimeMonthlyIncome,
-    scenario2SalaryMonths,
-    scenario2UnemploymentMonths,
     series2026,
     ytdMonths,
     ytdRevenue2026,
@@ -1013,6 +1016,112 @@ function median(values: number[]): number {
 function formatMonthFullFr(month: number): string {
   const date = new Date(2026, Math.max(0, month - 1), 1)
   return new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(date)
+}
+
+function MonthlyTrajectoryOperationsModal({
+  dayLabel,
+  operations,
+  onClose,
+}: {
+  dayLabel: string
+  operations: TrajectoryOperation[]
+  onClose: () => void
+}) {
+  const incomeOps = operations.filter((op) => op.flowType === 'income')
+  const expenseOps = operations.filter((op) => op.flowType === 'expense')
+  const savingsOps = operations.filter((op) => op.flowType === 'savings')
+  const netDayAmount = operations.reduce((sum, op) => sum + Number(op.budgetAccountingAmount ?? 0), 0)
+
+  const sectionTitleStyle: React.CSSProperties = {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 800,
+    color: 'var(--neutral-700)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  }
+
+  const renderSection = (title: string, items: TrajectoryOperation[]) => (
+    <div style={{ display: 'grid', gap: 4 }}>
+      <p style={sectionTitleStyle}>{title}</p>
+      {items.map((op) => {
+        const amountColor = op.flowType === 'income' ? 'var(--color-success)' : 'var(--neutral-800)'
+        return (
+          <div key={`${title}-${op.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, padding: '6px 0', borderTop: '1px solid var(--neutral-150)' }}>
+            <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {op.label}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {op.categoryName ?? op.parentCategoryName ?? '—'} {op.isProjected ? '• planifiée' : '• réalisée'}
+              </span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)', color: amountColor }}>
+              {fmt(op.amount)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  return (
+    <AnimatePresence>
+      <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'rgba(13,13,31,0.52)' }}
+        />
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Opérations du ${dayLabel}`}
+          initial={{ scale: 0.94, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.94, opacity: 0 }}
+          transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 97, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)' }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(92vw, 560px)', maxHeight: '86vh', overflowY: 'auto', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)', boxShadow: '0 12px 48px rgba(13,13,31,0.22)', display: 'grid', gap: 'var(--space-3)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'grid', gap: 2 }}>
+                <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, lineHeight: 1.2 }}>
+                  {`Opérations du ${dayLabel}`}
+                </h3>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
+                  Total net du jour : <strong style={{ fontFamily: 'var(--font-mono)', color: netDayAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>{fmt(netDayAmount)}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                aria-label="Fermer la modale opérations"
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            {operations.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)' }}>Aucune opération comptable ce jour.</p>
+            ) : (
+              <>
+                {incomeOps.length > 0 ? renderSection('Revenus', incomeOps) : null}
+                {expenseOps.length > 0 ? renderSection('Dépenses', expenseOps) : null}
+                {savingsOps.length > 0 ? renderSection('Épargne', savingsOps) : null}
+              </>
+            )}
+          </div>
+        </motion.div>
+      </>
+    </AnimatePresence>
+  )
 }
 
 function ExpenseSection2026({
@@ -1470,8 +1579,12 @@ function ExpenseSection2026({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ProjectionsTabContent() {
-  const [mode, setMode] = useState<DisplayMode>('depenses')
-  const [projMonth, setProjMonth] = useState<number | null>(null) // null = full year 2026
+  const [annualMode, setAnnualMode] = useState<AnnualDisplayMode>('depenses')
+  const [showMonthlyExpenses, setShowMonthlyExpenses] = useState(true)
+  const [showMonthlyCashflow, setShowMonthlyCashflow] = useState(true)
+  const [monthlyChartView, setMonthlyChartView] = useState<MonthlyChartView>('curves')
+  const [selectedTrajectoryDay, setSelectedTrajectoryDay] = useState<number | null>(null)
+  const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>('year-2026')
   const [showPeriodModal, setShowPeriodModal] = useState(false)
 
   const { summary } = useAnnual2026Analysis()
@@ -1498,9 +1611,53 @@ export function ProjectionsTabContent() {
     },
   })
 
+  const periodOptions = useMemo<Array<{ value: ProjectionPeriodValue; label: string; mode: ProjectionPeriodMode; month: number | null }>>(
+    () => [
+      { value: 'year-2026', label: 'Année 2026', mode: 'annual', month: null },
+      ...MONTHLY_PROJECTION_MONTHS_2026.map((month) => ({
+        value: `2026-${String(month).padStart(2, '0')}` as ProjectionPeriodValue,
+        label: `${MONTHS_FR_FULL_PROJ[month - 1]} 2026`,
+        mode: 'month' as const,
+        month,
+      })),
+    ],
+    [],
+  )
+  const selectedPeriodOption = useMemo(
+    () => periodOptions.find((option) => option.value === selectedPeriod) ?? periodOptions[0],
+    [periodOptions, selectedPeriod],
+  )
+  const projectionPeriodMode = selectedPeriodOption.mode
+  const selectedProjectionMonth = selectedPeriodOption.month
+
   const now = new Date()
   const currentMonth = now.getMonth() + 1
-  const ytdMonths = summary?.ytdMonths ?? Math.min(now.getMonth() + 1, 12)
+  const ytdMonths = summary?.ytdMonths ?? Math.min(currentMonth, 12)
+  const monthlyRevenueSeries2026 = revenueData?.monthlySeries.filter((row) => row.month_start.startsWith('2026-')) ?? []
+  const selectedMonthActualRevenue = useMemo(() => {
+    if (!selectedProjectionMonth) return 0
+    const match = monthlyRevenueSeries2026.find((row) => Number(row.month_start.slice(5, 7)) === selectedProjectionMonth)
+    return Number(match?.revenue_amount ?? 0)
+  }, [monthlyRevenueSeries2026, selectedProjectionMonth])
+  const monthlyScenario2ProjectedIncomeAmount = useMemo(
+    () => selectedProjectionMonth
+      ? getRevenueScenario2ProjectedMonthAmount({
+        month: selectedProjectionMonth,
+        ytdMonths,
+        actualMonthAmount: selectedMonthActualRevenue,
+      })
+      : 0,
+    [selectedMonthActualRevenue, selectedProjectionMonth, ytdMonths],
+  )
+  const { data: monthlyTrajectoryData, isLoading: isMonthlyTrajectoryLoading } = useMonthlyTrajectoryData({
+    year: 2026,
+    month: selectedProjectionMonth ?? 6,
+    includeFuturePlanned: true,
+    projectedMonthlyIncomeAmount: monthlyScenario2ProjectedIncomeAmount,
+    projectedIncomeDay: REVENUE_SCENARIO_DEFAULT_INCOME_DAY,
+    enabled: projectionPeriodMode === 'month' && selectedProjectionMonth != null,
+  })
+
   const completedMonths = Math.max(0, currentMonth - 1)
   const ytdExpenseClosedMonths = useMemo(
     () => monthlyMetrics
@@ -1544,7 +1701,43 @@ export function ProjectionsTabContent() {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const periodLabel = projMonth === null ? '2026' : `${MONTHS_FR_FULL_PROJ[projMonth - 1]} 26`
+  const periodLabel = selectedPeriodOption.label
+  const monthlyTrajectoryRows = monthlyTrajectoryData?.tableRows ?? []
+  const monthlyTrajectoryIncomeAmount = Number(monthlyTrajectoryData?.monthlyProjectedIncomeAmount ?? 0)
+  const monthlyTrajectoryIncomeDay = monthlyTrajectoryData?.incomeDay ?? REVENUE_SCENARIO_DEFAULT_INCOME_DAY
+  const monthlyTrajectoryOperationsByDay = monthlyTrajectoryData?.operationsByDay ?? {}
+  const monthlyTrajectoryOperationsCountByDay = monthlyTrajectoryData?.operationsCountByDay ?? {}
+  const monthlyTrajectorySavingsDays = monthlyTrajectoryData?.savingsDays ?? []
+  const monthlyTrajectoryChartData = monthlyTrajectoryRows.map((row) => ({
+    day: row.day_of_month,
+    expenses: row.cumulative_expenses,
+    cashflow: row.cumulative_cashflow,
+  }))
+  const selectedTrajectoryOperations = selectedTrajectoryDay != null
+    ? (monthlyTrajectoryOperationsByDay[selectedTrajectoryDay] ?? [])
+    : []
+  const selectedTrajectoryDayLabel = useMemo(() => {
+    if (selectedTrajectoryDay == null) return '—'
+    const row = monthlyTrajectoryRows.find((entry) => entry.day_of_month === selectedTrajectoryDay)
+    if (!row) return `${String(selectedTrajectoryDay).padStart(2, '0')}/${String(selectedProjectionMonth ?? 0).padStart(2, '0')}`
+    return row.forecast_date.slice(8, 10) + '/' + row.forecast_date.slice(5, 7)
+  }, [monthlyTrajectoryRows, selectedProjectionMonth, selectedTrajectoryDay])
+  const toggleMonthlyExpenses = () => {
+    setShowMonthlyExpenses((active) => {
+      if (active && !showMonthlyCashflow) return true
+      return !active
+    })
+  }
+  const toggleMonthlyCashflow = () => {
+    setShowMonthlyCashflow((active) => {
+      if (active && !showMonthlyExpenses) return true
+      return !active
+    })
+  }
+
+  useEffect(() => {
+    setSelectedTrajectoryDay(null)
+  }, [selectedPeriod])
 
   function toggleBtnStyle(active: boolean): React.CSSProperties {
     return {
@@ -1603,14 +1796,14 @@ export function ProjectionsTabContent() {
               <div style={{ marginBottom: 'var(--space-3)' }}>
                 <button
                   type="button"
-                  onClick={() => { setProjMonth(null); setShowPeriodModal(false) }}
+                    onClick={() => { setSelectedPeriod('year-2026'); setShowPeriodModal(false) }}
                   style={{
                     width: '100%',
                     padding: '8px var(--space-3)',
-                    border: projMonth === null ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                    border: selectedPeriod === 'year-2026' ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
                     borderRadius: 'var(--radius-md)',
-                    background: projMonth === null ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
-                    color: projMonth === null ? 'var(--primary-600)' : 'var(--neutral-700)',
+                    background: selectedPeriod === 'year-2026' ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                    color: selectedPeriod === 'year-2026' ? 'var(--primary-600)' : 'var(--neutral-700)',
                     fontSize: 'var(--font-size-sm)',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -1621,31 +1814,29 @@ export function ProjectionsTabContent() {
                   2026 — Année complète
                 </button>
               </div>
-              {/* Month grid: 4 × 3 — past months disabled */}
+              {/* Month grid: Juin → Déc. 2026 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-                {MONTH_LABELS_SHORT.map((lbl, idx) => {
-                  const m = idx + 1
-                  const disabled = m < currentMonth
-                  const isSelected = projMonth === m
+                {MONTHLY_PROJECTION_MONTHS_2026.map((month) => {
+                  const monthValue = `2026-${String(month).padStart(2, '0')}` as ProjectionPeriodValue
+                  const isSelected = selectedPeriod === monthValue
                   return (
                     <button
-                      key={m}
+                      key={month}
                       type="button"
-                      disabled={disabled}
-                      onClick={() => { setProjMonth(m); setShowPeriodModal(false) }}
+                      onClick={() => { setSelectedPeriod(monthValue); setShowPeriodModal(false) }}
                       style={{
                         padding: '7px 4px',
                         border: isSelected ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
                         borderRadius: 'var(--radius-sm)',
                         background: isSelected ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : 'var(--neutral-50)',
-                        color: disabled ? 'var(--neutral-300)' : isSelected ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        color: isSelected ? 'var(--primary-600)' : 'var(--neutral-800)',
                         fontSize: 11,
                         fontWeight: isSelected ? 700 : 500,
-                        cursor: disabled ? 'default' : 'pointer',
+                        cursor: 'pointer',
                         transition: 'all var(--transition-base)',
                       }}
                     >
-                      {lbl}
+                      {MONTH_LABELS_SHORT[month - 1]}
                     </button>
                   )
                 })}
@@ -1681,26 +1872,281 @@ export function ProjectionsTabContent() {
             {periodLabel}
             <span style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--neutral-400)', marginTop: 1, flexShrink: 0 }} />
           </button>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
-            <button type="button" onClick={() => setMode('depenses')} style={{ ...toggleBtnStyle(mode === 'depenses'), textAlign: 'center' }}>Dépenses</button>
-            <button type="button" onClick={() => setMode('revenus')} style={{ ...toggleBtnStyle(mode === 'revenus'), textAlign: 'center' }}>Revenus</button>
-          </div>
+          {projectionPeriodMode === 'annual' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
+              <button type="button" onClick={() => setAnnualMode('depenses')} style={{ ...toggleBtnStyle(annualMode === 'depenses'), textAlign: 'center' }}>Dépenses</button>
+              <button type="button" onClick={() => setAnnualMode('revenus')} style={{ ...toggleBtnStyle(annualMode === 'revenus'), textAlign: 'center' }}>Revenus</button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: '3px', width: 224 }}>
+              <button type="button" onClick={toggleMonthlyExpenses} style={{ ...toggleBtnStyle(showMonthlyExpenses), textAlign: 'center' }}>Dépenses</button>
+              <button type="button" onClick={toggleMonthlyCashflow} style={{ ...toggleBtnStyle(showMonthlyCashflow), textAlign: 'center' }}>Cashflow</button>
+            </div>
+          )}
         </div>
 
-        {/* ── Revenue 2026 KPIs + histogram — revenus mode only ── */}
-        {mode === 'revenus' && (
-          <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} />
+        {projectionPeriodMode === 'annual' ? (
+          <>
+            {/* ── Revenue 2026 KPIs + histogram — revenus mode only ── */}
+            {annualMode === 'revenus' && (
+              <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} />
+            )}
+            {annualMode === 'depenses' && (
+              <ExpenseSection2026
+                ytdExpenseClosedMonths={ytdExpenseClosedMonths}
+                ytdBudgetClosedMonths={ytdBudgetClosedMonths}
+                projectedExpense2026={projectedExpense2026}
+                monthlyMetrics={monthlyMetrics}
+                completedMonths={completedMonths}
+                projectionDetailRows={expenseProjectionDetailRows}
+              />
+            )}
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+              <div style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 58, display: 'grid', placeItems: 'center' }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>—</p>
+              </div>
+              <div style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 58, display: 'grid', placeItems: 'center' }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>—</p>
+              </div>
+            </div>
+            <div style={{ background: 'var(--neutral-0)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--neutral-600)' }}>
+                    Trajectoire mensuelle
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
+                    {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 2026` : '—'}
+                  </p>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 16 }}>
+                  <TrendingUp size={14} />
+                  <span>{fmt(monthlyScenario2ProjectedIncomeAmount)}</span>
+                </div>
+              </div>
+
+              <div style={{ height: 354, overflow: 'hidden' }}>
+                {monthlyChartView === 'curves' ? (
+                  isMonthlyTrajectoryLoading ? (
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>Chargement…</p>
+                    </div>
+                  ) : monthlyTrajectoryChartData.length === 0 ? (
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>Aucune donnée pour ce mois.</p>
+                    </div>
+                  ) : (
+                    <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 4 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={monthlyTrajectoryChartData} margin={{ top: 8, right: 10, bottom: 6, left: -20 }}>
+                          <CartesianGrid vertical={false} stroke="var(--neutral-200)" strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="day"
+                            tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+                            axisLine={false}
+                            tickLine={false}
+                            interval={4}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 9, fill: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(v: number) => {
+                              const abs = Math.abs(Number(v))
+                              if (abs >= 1000) return `${Math.round(v / 1000)}k`
+                              return `${Math.round(v)}`
+                            }}
+                            width={38}
+                          />
+                          <ReferenceLine y={0} stroke="var(--neutral-300)" strokeDasharray="4 3" />
+                          {monthlyTrajectoryIncomeAmount > 0 ? (
+                            <ReferenceLine
+                              x={monthlyTrajectoryIncomeDay}
+                              stroke="var(--color-success)"
+                              strokeDasharray="4 3"
+                              strokeWidth={1}
+                              label={{
+                                value: `R${monthlyTrajectoryIncomeDay}`,
+                                position: 'insideTopRight',
+                                fontSize: 8,
+                                fill: 'var(--color-success)',
+                                fontWeight: 700,
+                              }}
+                            />
+                          ) : null}
+                          {showMonthlyExpenses ? (
+                            <Line
+                              type="monotone"
+                              dataKey="expenses"
+                              name="expenses"
+                              stroke="#FFAB2E"
+                              strokeWidth={2.6}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                          ) : null}
+                          {showMonthlyCashflow ? (
+                            <Line
+                              type="monotone"
+                              dataKey="cashflow"
+                              name="cashflow"
+                              stroke="#5B57F5"
+                              strokeWidth={2.6}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                          ) : null}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 14 }}>
+                        {showMonthlyExpenses ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ width: 14, height: 2, borderRadius: 2, background: '#FFAB2E' }} />
+                            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--neutral-600)' }}>Dépenses cumulées</span>
+                          </div>
+                        ) : null}
+                        {showMonthlyCashflow ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ width: 14, height: 2, borderRadius: 2, background: '#5B57F5' }} />
+                            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--neutral-600)' }}>Cashflow cumulé</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div style={{ height: '100%', overflowY: 'auto', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', background: 'var(--neutral-0)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: '13%', textAlign: 'left', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Jour</th>
+                          <th style={{ width: '16%', textAlign: 'right', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Dép.</th>
+                          <th style={{ width: '19%', textAlign: 'right', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Cashflow</th>
+                          <th style={{ width: '17%', textAlign: 'right', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Dép.cum</th>
+                          <th style={{ width: '19%', textAlign: 'right', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Cash.cum</th>
+                          <th style={{ width: '16%', textAlign: 'right', padding: '7px 8px', fontSize: 10, color: 'var(--neutral-600)', fontWeight: 700 }}>Opérat.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyTrajectoryRows.map((row) => (
+                          <tr key={row.forecast_date}>
+                            <td style={{ padding: '7px 8px', fontSize: 10, color: 'var(--neutral-700)', borderTop: '1px solid var(--neutral-150)', fontFamily: 'var(--font-mono)' }}>{row.day_of_month}</td>
+                            <td style={{ padding: '7px 8px', fontSize: 10, color: '#FFAB2E', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.daily_expenses)}</td>
+                            <td style={{ padding: '7px 8px', fontSize: 10, borderTop: '1px solid var(--neutral-150)', textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ color: row.daily_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                  {fmt(row.daily_cashflow)}
+                                </span>
+                                {monthlyTrajectorySavingsDays.includes(row.day_of_month) ? (
+                                  <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--primary-700)', border: '1px solid color-mix(in oklab, var(--primary-500) 50%, var(--neutral-0) 50%)', borderRadius: 'var(--radius-full)', padding: '1px 5px', lineHeight: 1.25 }}>
+                                    Épargne
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td style={{ padding: '7px 8px', fontSize: 10, color: '#FFAB2E', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.cumulative_expenses)}</td>
+                            <td style={{ padding: '7px 8px', fontSize: 10, color: row.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.cumulative_cashflow)}</td>
+                            <td style={{ padding: '7px 8px', borderTop: '1px solid var(--neutral-150)', textAlign: 'right' }}>
+                              {monthlyTrajectoryOperationsCountByDay[row.day_of_month] > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTrajectoryDay(row.day_of_month)}
+                                  aria-label={`Voir les opérations du ${row.forecast_date}`}
+                                  style={{ border: 'none', background: 'transparent', padding: 0, color: 'var(--neutral-900)', fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                >
+                                  <span>{monthlyTrajectoryOperationsCountByDay[row.day_of_month]}</span>
+                                  <span style={{ color: '#000', fontSize: 10 }}>▸</span>
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>0</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div
+                role="tablist"
+                aria-label="Affichage trajectoire mensuelle"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 4,
+                  padding: 3,
+                  borderRadius: 'var(--radius-full)',
+                  background: 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)',
+                  border: '1px solid color-mix(in oklab, var(--primary-500) 16%, var(--neutral-200) 84%)',
+                  marginTop: 8,
+                }}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={monthlyChartView === 'curves'}
+                  onClick={() => setMonthlyChartView('curves')}
+                  style={{
+                    border: monthlyChartView === 'curves' ? '1px solid color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)' : '1px solid transparent',
+                    background: monthlyChartView === 'curves' ? 'var(--neutral-0)' : 'transparent',
+                    color: monthlyChartView === 'curves' ? 'var(--primary-700)' : 'var(--neutral-600)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '5px 10px',
+                    fontSize: 9,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    transition: 'all 160ms ease',
+                    minHeight: 32,
+                    width: '100%',
+                    textAlign: 'center',
+                    textTransform: 'none',
+                  }}
+                >
+                  Courbes
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={monthlyChartView === 'table'}
+                  onClick={() => setMonthlyChartView('table')}
+                  style={{
+                    border: monthlyChartView === 'table' ? '1px solid color-mix(in oklab, var(--primary-600) 70%, var(--neutral-0) 30%)' : '1px solid transparent',
+                    background: monthlyChartView === 'table' ? 'var(--neutral-0)' : 'transparent',
+                    color: monthlyChartView === 'table' ? 'var(--primary-700)' : 'var(--neutral-600)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '5px 10px',
+                    fontSize: 9,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    transition: 'all 160ms ease',
+                    minHeight: 32,
+                    width: '100%',
+                    textAlign: 'center',
+                    textTransform: 'none',
+                  }}
+                >
+                  Tableau
+                </button>
+              </div>
+            </div>
+          </div>
         )}
-        {mode === 'depenses' && (
-          <ExpenseSection2026
-            ytdExpenseClosedMonths={ytdExpenseClosedMonths}
-            ytdBudgetClosedMonths={ytdBudgetClosedMonths}
-            projectedExpense2026={projectedExpense2026}
-            monthlyMetrics={monthlyMetrics}
-            completedMonths={completedMonths}
-            projectionDetailRows={expenseProjectionDetailRows}
+
+        {projectionPeriodMode === 'month' && selectedTrajectoryDay != null ? (
+          <MonthlyTrajectoryOperationsModal
+            dayLabel={selectedTrajectoryDayLabel}
+            operations={selectedTrajectoryOperations}
+            onClose={() => setSelectedTrajectoryDay(null)}
           />
-        )}
+        ) : null}
 
       </div>
     </>

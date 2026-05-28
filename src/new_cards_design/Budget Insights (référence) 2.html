@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Insights</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: #eaecf0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 56px 20px 100px;
+      transition: background 0.3s;
+    }
+
+    .icard {
+      cursor: pointer;
+      transition: box-shadow 0.22s ease, transform 0.22s ease, background 0.3s;
+    }
+    .icard:hover  { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(0,0,0,0.09) !important; }
+    .icard:active { transform: translateY(-1px); }
+
+    /* max-height animation — no JS measurement needed, always reliable */
+    .expand-wrapper {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.46s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .expand-wrapper.open {
+      max-height: 1100px; /* comfortably above any panel content */
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.32s ease-out both; }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c5cbd5; border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState, useRef, useLayoutEffect, useEffect } = React;
+const { TweaksPanel, useTweaks, TweakSection, TweakRadio, TweakToggle } = window;
+
+/* ─── TWEAK DEFAULTS ─────────────────────────────────────────── */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "density": "compact",
+  "dark": true
+}/*EDITMODE-END*/;
+
+/* ─── PALETTE ────────────────────────────────────────────────── */
+// Sober signal palette — used sparingly
+const P = {
+  bordeaux: '#7c2130',  // signal critique
+  petrol:   '#1a5c74',  // vigilance / 2025 reference
+  cyan:     '#0097b2',  // projection / 2026 revenue line
+  teal:     '#1d7a6d',  // positive reading
+  slate:    '#5a626f',  // neutral reference
+};
+
+/* ─── THEMES ─────────────────────────────────────────────────── */
+const THEMES = {
+  light: {
+    bg:              '#eaecf0',
+    card:            '#ffffff',
+    cardBorder:      '#e6e9ef',
+    cardBorderActive:'#0d1117',
+    text:            '#0d1117',
+    muted:           '#6e7685',
+    dim:             '#adb5c0',
+    panelBg:         '#ffffff',
+    divider:         '#e6e9ef',
+    pillBg:          '#ffffff',
+    pillBorder:      '#e6e9ef',
+    pillText:        '#7b8494',
+    gridLine:        '#f0f2f5',
+    bar25:           '#b8d4df',   // petrol tint for 2025 bars
+  },
+  dark: {
+    bg:              '#0c1018',
+    card:            '#141b27',
+    cardBorder:      '#222d3e',
+    cardBorderActive:'#dde3ec',
+    text:            '#dde3ec',
+    muted:           '#8893a0',
+    dim:             '#445060',
+    panelBg:         '#141b27',
+    divider:         '#1e2a3a',
+    pillBg:          '#141b27',
+    pillBorder:      '#222d3e',
+    pillText:        '#8893a0',
+    gridLine:        '#1a2434',
+    bar25:           '#1e3d4f',
+  },
+};
+
+/* ─── DATA ───────────────────────────────────────────────────── */
+const SAVINGS_BARS = [
+  { label: 'Revenus',  y25: 42141, y26: 19158 },
+  { label: 'Dépenses', y25: 10820, y26: 11823 },
+  { label: 'Capacité', y25: 31321, y26: 7335  },
+  { label: 'Épargne',  y25: 33500, y26: 4243  },
+];
+const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+// [idx, ref2025, actual2026, proj2026]
+const INCOME_DATA = [
+  [0, 10800,14500,null],[1, 10200,1200,null],[2, 11000,1800,null],[3, 10141,1658,null],
+  [4,null,null,3338],[5,null,null,3338],[6,null,null,3338],[7,null,null,3338],
+  [8,null,null,6500],[9,null,null,6500],[10,null,null,6500],[11,null,null,null],
+];
+const OBS = 4;
+const ACHATS = { months:['Jan','Fév','Mar*','Avr'], y25:[350,400,2213,359], y26:[750,700,780,706] };
+const TRANSPORT_CATS = [
+  { label:'Transport', y25:93,  y26:701, delta:'×8',   color: P.bordeaux },
+  { label:'Abonn.',    y25:166, y26:428, delta:'×2,5', color: P.petrol   },
+  { label:'Enfant',    y25:0,   y26:110, delta:'Nouv.',color: P.petrol   },
+];
+
+const CARDS = [
+  {
+    id:'savings', row:0,
+    value:'−87%', label:'épargne YTD',
+    badge:'Critique', signal:'bordeaux',
+    insight:"Le ciseau revenus–dépenses a réduit l'épargne à 4 243 € YTD contre 33 500 € en 2025. Stabiliser les entrées est le levier prioritaire avant toute action sur les dépenses.",
+    kpis:[
+      { label:'Revenus',  value:'−81%', note:'hors jan.', color: P.bordeaux },
+      { label:'Dépenses', value:'+9%',  note:'YTD',       color: P.petrol   },
+      { label:'Épargne',  value:'−87%', note:'YTD',       color: P.bordeaux },
+    ],
+    chart:'savings', spark:[100,82,58,35,13],
+  },
+  {
+    id:'income', row:0,
+    value:'÷2', label:'revenus 2026',
+    badge:'Critique', signal:'bordeaux',
+    insight:"Hors janvier, les revenus ont reculé de −81 % vs 2025. Delta concentré sur fév–avr. Projection : 4 mois d'indemnités (3 338 €/mois) puis 3 mois de reprise salariale (6 500 €/mois).",
+    kpis:[
+      { label:'YTD 2025', value:'42k€', note:'jan–avr', color: P.petrol   },
+      { label:'YTD 2026', value:'19k€', note:'jan–avr', color: P.bordeaux },
+      { label:'Δ N-1',    value:'−54%', note:'YTD',     color: P.bordeaux },
+    ],
+    chart:'income', spark:[100,11,17,15],
+  },
+  {
+    id:'achats-divers', row:1,
+    value:'−29%', label:'achats divers',
+    badge:'Vigilance', signal:'petrol',
+    insight:"Trompe-l'œil : un outlier mars 2025 (+2 213 €) gonfle la base. À périmètre comparable, la tendance réelle est +15 % — le poste progresse structurellement.",
+    kpis:[
+      { label:'2025 brut',    value:'4 122€', note:'YTD',  color: P.slate   },
+      { label:'2026 YTD',     value:'2 936€', note:'YTD',  color: P.teal    },
+      { label:'Hors outlier', value:'+15%',   note:'réel', color: P.bordeaux},
+    ],
+    chart:'achats', spark:[58,100,40,65],
+  },
+  {
+    id:'transport', row:1,
+    value:'+3', label:'postes structurels',
+    badge:'Vigilance', signal:'petrol',
+    insight:"Transport (×8), abonnements (×2,5) et famille/enfant (+110 €/mois) s'installent comme charges structurelles, alourdissant durablement le socle de dépenses contraintes.",
+    kpis:[
+      { label:'Transport', value:'×8',    note:'YTD',   color: P.bordeaux },
+      { label:'Abonn.',    value:'×2,5',  note:'YTD',   color: P.petrol   },
+      { label:'Enfant',    value:'+110€', note:'/mois', color: P.petrol   },
+    ],
+    chart:'transport', spark:[5,18,32,48],
+  },
+];
+
+/* ─── UTILS ──────────────────────────────────────────────────── */
+const fmtK   = v => v >= 1000 ? `${Math.round(v/1000)}k` : `${Math.round(v)}`;
+const sigColor = s => s === 'bordeaux' ? P.bordeaux : P.petrol;
+
+/* ─── SPARKLINE ──────────────────────────────────────────────── */
+function Sparkline({ data, color }) {
+  const W = 52, H = 20;
+  const max = Math.max(...data), min = Math.min(...data), rng = max-min||1;
+  const pts = data.map((v,i) => [
+    (i/(data.length-1))*W,
+    H - ((v-min)/rng)*(H-3) - 1.5,
+  ]);
+  const d = pts.map(([x,y],i) => `${i?'L':'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true" style={{display:'block',flexShrink:0}}>
+      <path d={d} stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ─── CHEVRON ────────────────────────────────────────────────── */
+function Chevron({ open, stroke }) {
+  return (
+    <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
+      style={{transform: open?'rotate(180deg)':'none', transition:'transform 0.28s ease', display:'block'}}>
+      <path d="M1 1L5 5L9 1" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/* ─── INSIGHT CARD ───────────────────────────────────────────── */
+function InsightCard({ card, isOpen, onToggle, T, compact }) {
+  const sc = sigColor(card.signal);
+  const fontSize = compact ? 'clamp(36px,10vw,44px)' : 'clamp(42px,11.5vw,54px)';
+
+  return (
+    <article
+      className="icard"
+      onClick={onToggle}
+      onKeyDown={e => (e.key==='Enter'||e.key===' ') && onToggle()}
+      role="button" tabIndex={0}
+      aria-expanded={isOpen}
+      style={{
+        position:'relative',
+        background: T.card,
+        border: `1px solid ${isOpen ? T.cardBorderActive : T.cardBorder}`,
+        borderRadius: 20,
+        padding: compact ? '18px 16px 15px' : '24px 20px 18px',
+        display:'flex', flexDirection:'column',
+        boxShadow: isOpen ? '0 4px 24px rgba(0,0,0,0.07)' : '0 1px 4px rgba(0,0,0,0.04)',
+        userSelect:'none', overflow:'hidden',
+      }}
+    >
+      {/* Accent strip — 2px, signal color */}
+      <div style={{
+        position:'absolute', top:0, left:0, right:0, height:2,
+        background: isOpen ? T.cardBorderActive : sc,
+        borderRadius:'20px 20px 0 0',
+        transition:'background 0.22s',
+      }}/>
+
+      {/* Badge */}
+      <span style={{
+        fontSize:8, fontWeight:700, letterSpacing:'0.13em',
+        textTransform:'uppercase', color: isOpen ? T.dim : sc,
+        marginBottom: compact ? 12 : 16,
+        transition:'color 0.22s',
+      }}>
+        {card.badge}
+      </span>
+
+      {/* Main value */}
+      <p style={{
+        fontFamily:'DM Mono, monospace',
+        fontSize, fontWeight:600, color: T.text,
+        lineHeight:0.92, letterSpacing:'-0.04em',
+        marginBottom: compact ? 8 : 10,
+        transition:'color 0.3s',
+      }}>
+        {card.value}
+      </p>
+
+      {/* Label */}
+      <p style={{
+        fontSize: compact ? 10.5 : 12,
+        fontWeight:500, color: T.muted,
+        lineHeight:1.35, flex:1,
+        marginBottom: compact ? 16 : 22,
+        transition:'color 0.3s',
+      }}>
+        {card.label}
+      </p>
+
+      {/* Footer */}
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <Sparkline data={card.spark} color={isOpen ? T.dim : sc} />
+        <div style={{
+          width:28, height:28, borderRadius:14,
+          background: isOpen ? T.cardBorderActive : T.gridLine,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          transition:'background 0.22s', flexShrink:0,
+        }}>
+          <Chevron open={isOpen} stroke={isOpen ? '#fff' : T.muted} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ─── KPI ROW (borderless) ───────────────────────────────────── */
+function KpiRow({ kpis, T }) {
+  return (
+    <div style={{
+      display:'grid', gridTemplateColumns:'repeat(3, 1fr)',
+      borderTop:`1px solid ${T.divider}`,
+      borderBottom:`1px solid ${T.divider}`,
+      padding:'22px 0',
+    }}>
+      {kpis.map((kpi, i) => (
+        <div key={i} style={{
+          display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+          borderLeft: i > 0 ? `1px solid ${T.divider}` : 'none',
+          padding:'0 12px',
+        }}>
+          <span style={{fontSize:8.5, fontWeight:700, color:T.dim, letterSpacing:'0.1em', textTransform:'uppercase', textAlign:'center', lineHeight:1.2}}>
+            {kpi.label}
+          </span>
+          <span style={{fontFamily:'DM Mono, monospace', fontSize:20, fontWeight:600, color:kpi.color, lineHeight:1, letterSpacing:'-0.02em'}}>
+            {kpi.value}
+          </span>
+          {kpi.note && <span style={{fontSize:9, color:T.dim, lineHeight:1}}>{kpi.note}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── LEGEND ITEM ────────────────────────────────────────────── */
+function Leg({ color, label, dashed, T }) {
+  return (
+    <span style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:9.5, color:T.muted, fontWeight:500}}>
+      {dashed
+        ? <svg width="16" height="6" style={{flexShrink:0}}><line x1="0" y1="3" x2="16" y2="3" stroke={color} strokeWidth="1.5" strokeDasharray="3 2"/></svg>
+        : <span style={{width:8, height:8, borderRadius:2, background:color, flexShrink:0, display:'inline-block'}}/>
+      }
+      {label}
+    </span>
+  );
+}
+
+/* ─── CHART CONSTANTS ────────────────────────────────────────── */
+const CW=302, CH=148, PL=36, PB=26, PT=6;
+const cw=CW-PL-4, ch=CH-PB-PT;
+
+function GL({ v, maxV, label, T }) {
+  const y = PT+ch-(v/maxV)*ch;
+  return (
+    <g>
+      <line x1={PL} y1={y} x2={CW-2} y2={y} stroke={T.gridLine} strokeWidth="1"/>
+      <text x={PL-5} y={y+3.5} textAnchor="end" fontSize="9" fill={T.dim} fontFamily="DM Mono, monospace">{label??fmtK(v)}</text>
+    </g>
+  );
+}
+
+function ChartMeta({ title, legend, T }) {
+  return (
+    <div style={{marginBottom:14}}>
+      <p style={{fontSize:9.5, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.dim, marginBottom:9}}>{title}</p>
+      <div style={{display:'flex', gap:14, flexWrap:'wrap'}}>{legend}</div>
+    </div>
+  );
+}
+
+/* ─── SAVINGS CHART ──────────────────────────────────────────── */
+function SavingsChart({ T }) {
+  const maxV=45000, n=SAVINGS_BARS.length, bw=13, gap=4;
+  return (
+    <div>
+      <ChartMeta T={T} title="Bilan comparatif · Jan–Avr" legend={[
+        <Leg key="25" color={T.bar25} label="2025" T={T}/>,
+        <Leg key="26" color={P.bordeaux} label="2026" T={T}/>,
+      ]}/>
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{overflow:'visible'}}>
+        {[0,15000,30000,45000].map(v=><GL key={v} v={v} maxV={maxV} T={T}/>)}
+        {SAVINGS_BARS.map((row,i)=>{
+          const x=PL+(i+0.5)*(cw/n);
+          const h25=(row.y25/maxV)*ch, h26=(row.y26/maxV)*ch;
+          return (
+            <g key={row.label}>
+              <rect x={x-bw-gap/2} y={PT+ch-h25} width={bw} height={h25} fill={T.bar25} rx="3"/>
+              <rect x={x+gap/2}    y={PT+ch-h26} width={bw} height={h26} fill={P.bordeaux} rx="3" opacity="0.88"/>
+              <text x={x} y={PT+ch+17} textAnchor="middle" fontSize="9" fill={T.dim} fontFamily="DM Sans,sans-serif" fontWeight="500">{row.label}</text>
+            </g>
+          );
+        })}
+        <line x1={PL} y1={PT+ch} x2={CW-2} y2={PT+ch} stroke={T.divider} strokeWidth="1"/>
+      </svg>
+    </div>
+  );
+}
+
+/* ─── INCOME CHART ───────────────────────────────────────────── */
+function IncomeChart({ T }) {
+  const maxV=16000, n=INCOME_DATA.length;
+  const xAt=i=>PL+(i/(n-1))*cw;
+  const yAt=v=>PT+ch-(Math.min(v,maxV)/maxV)*ch;
+  const pts25=INCOME_DATA.filter(d=>d[1]!=null).map(d=>`${xAt(d[0]).toFixed(1)},${yAt(d[1]).toFixed(1)}`);
+  const pts26=INCOME_DATA.slice(0,OBS).map(d=>`${xAt(d[0]).toFixed(1)},${yAt(d[2]??0).toFixed(1)}`);
+  const last=INCOME_DATA[OBS-1];
+  const ptsPrj=[
+    `${xAt(OBS-1).toFixed(1)},${yAt(last[2]??0).toFixed(1)}`,
+    ...INCOME_DATA.slice(OBS).filter(d=>d[3]!=null).map(d=>`${xAt(d[0]).toFixed(1)},${yAt(d[3]).toFixed(1)}`),
+  ];
+  const area=`M${pts26.join('L')}L${xAt(OBS-1).toFixed(1)},${(PT+ch).toFixed(1)}L${PL},${(PT+ch).toFixed(1)}Z`;
+  return (
+    <div>
+      <ChartMeta T={T} title="Revenus mensuels + projection 2026" legend={[
+        <Leg key="25"  color={T.dim}    label="Réf. 2025"  T={T}/>,
+        <Leg key="26"  color={P.cyan}   label="2026 réel"  T={T}/>,
+        <Leg key="prj" color={P.cyan}   label="Projection" dashed T={T}/>,
+      ]}/>
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{overflow:'visible'}}>
+        {[0,5000,10000,15000].map(v=><GL key={v} v={v} maxV={maxV} T={T}/>)}
+        <line x1={xAt(OBS-0.5)} y1={PT} x2={xAt(OBS-0.5)} y2={PT+ch} stroke={T.divider} strokeWidth="1" strokeDasharray="3 2"/>
+        <polyline points={pts25.join(' ')} fill="none" stroke={T.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5"/>
+        <path d={area} fill={P.cyan} opacity="0.07"/>
+        <polyline points={pts26.join(' ')} fill="none" stroke={P.cyan} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <polyline points={ptsPrj.join(' ')} fill="none" stroke={P.cyan} strokeWidth="2.2" strokeDasharray="5 3" strokeOpacity="0.55" strokeLinecap="round" strokeLinejoin="round"/>
+        {MONTHS.map((m,i)=>i%2===0?<text key={m} x={xAt(i)} y={PT+ch+17} textAnchor="middle" fontSize="9" fill={T.dim} fontFamily="DM Mono,monospace">{m}</text>:null)}
+        <line x1={PL} y1={PT+ch} x2={CW-2} y2={PT+ch} stroke={T.divider} strokeWidth="1"/>
+      </svg>
+    </div>
+  );
+}
+
+/* ─── ACHATS CHART ───────────────────────────────────────────── */
+function AchatsChart({ T }) {
+  const {months,y25,y26}=ACHATS, maxV=2400, n=months.length, bw=13, gap=4;
+  return (
+    <div>
+      <ChartMeta T={T} title="Achats divers · mensuel" legend={[
+        <Leg key="25" color={T.dim}    label="2025" T={T}/>,
+        <Leg key="26" color={P.petrol} label="2026" T={T}/>,
+      ]}/>
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{overflow:'visible'}}>
+        {[0,600,1200,1800,2400].map(v=><GL key={v} v={v} maxV={maxV} T={T}/>)}
+        {months.map((label,i)=>{
+          const x=PL+(i+0.5)*(cw/n), h25=(y25[i]/maxV)*ch, h26=(y26[i]/maxV)*ch, out=i===2;
+          return (
+            <g key={label}>
+              <rect x={x-bw-gap/2} y={PT+ch-h25} width={bw} height={h25} fill={out?P.bordeaux:T.dim} rx="3" opacity={out?0.35:0.35}/>
+              {out && <text x={x-bw/2-gap/2} y={PT+ch-h25-5} textAnchor="middle" fontSize="11" fill={P.bordeaux} fontWeight="700">!</text>}
+              <rect x={x+gap/2} y={PT+ch-h26} width={bw} height={h26} fill={P.petrol} rx="3" opacity="0.85"/>
+              <text x={x} y={PT+ch+17} textAnchor="middle" fontSize="9" fill={T.dim} fontFamily="DM Sans,sans-serif" fontWeight="500">{label}</text>
+            </g>
+          );
+        })}
+        <line x1={PL} y1={PT+ch} x2={CW-2} y2={PT+ch} stroke={T.divider} strokeWidth="1"/>
+      </svg>
+      <p style={{fontSize:9, color:T.dim, marginTop:6, fontStyle:'italic'}}>* Outlier mars 2025 — exclus de la base comparable</p>
+    </div>
+  );
+}
+
+/* ─── TRANSPORT CHART ────────────────────────────────────────── */
+function TransportChart({ T }) {
+  const maxV=750, n=TRANSPORT_CATS.length, bw=14, gap=5;
+  return (
+    <div>
+      <ChartMeta T={T} title="Top 3 divergences YTD (€/mois)" legend={[
+        <Leg key="25" color={T.dim}       label="2025" T={T}/>,
+        <Leg key="26" color={P.bordeaux}  label="2026" T={T}/>,
+      ]}/>
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{overflow:'visible'}}>
+        {[0,250,500,750].map(v=><GL key={v} v={v} maxV={maxV} label={`${v}`} T={T}/>)}
+        {TRANSPORT_CATS.map((cat,i)=>{
+          const x=PL+(i+0.5)*(cw/n), h25=cat.y25>0?(cat.y25/maxV)*ch:0, h26=(cat.y26/maxV)*ch;
+          return (
+            <g key={cat.label}>
+              <text x={x} y={PT+ch-h26-6} textAnchor="middle" fontSize="9" fill={cat.color} fontFamily="DM Mono,monospace" fontWeight="700">{cat.delta}</text>
+              {h25>0 && <rect x={x-bw-gap/2} y={PT+ch-h25} width={bw} height={h25} fill={T.dim} rx="3" opacity="0.35"/>}
+              <rect x={x+gap/2} y={PT+ch-h26} width={bw} height={h26} fill={cat.color} rx="3" opacity="0.85"/>
+              <text x={x} y={PT+ch+17} textAnchor="middle" fontSize="9" fill={T.dim} fontFamily="DM Sans,sans-serif" fontWeight="500">{cat.label}</text>
+            </g>
+          );
+        })}
+        <line x1={PL} y1={PT+ch} x2={CW-2} y2={PT+ch} stroke={T.divider} strokeWidth="1"/>
+      </svg>
+    </div>
+  );
+}
+
+/* ─── EXPANDED PANEL ─────────────────────────────────────────── */
+function ExpandedPanel({ card, T, compact }) {
+  return (
+    <div className="fade-up" style={{display:'flex', flexDirection:'column', gap: compact ? 20 : 28}}>
+      {/* Insight */}
+      <p style={{fontSize:13, lineHeight:1.75, color:T.muted, fontWeight:400, paddingBottom: compact ? 0 : 2}}>
+        {card.insight}
+      </p>
+      {/* KPI row — no boxes */}
+      <KpiRow kpis={card.kpis} T={T}/>
+      {/* Chart — no wrapper border */}
+      <div style={{paddingTop:4}}>
+        {card.chart==='savings'   && <SavingsChart   T={T}/>}
+        {card.chart==='income'    && <IncomeChart     T={T}/>}
+        {card.chart==='achats'    && <AchatsChart     T={T}/>}
+        {card.chart==='transport' && <TransportChart  T={T}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── INSIGHT ROW ────────────────────────────────────────────── */
+function InsightRow({ cards, expandedId, onToggle, T, compact }) {
+  const expandedCard = cards.find(c => c.id === expandedId) ?? null;
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap: compact ? 10 : 14}}>
+      {/* Cards */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap: compact ? 10 : 13}}>
+        {cards.map(card => (
+          <InsightCard key={card.id} card={card}
+            isOpen={expandedId===card.id}
+            onToggle={() => onToggle(card.id)}
+            T={T} compact={compact}/>
+        ))}
+      </div>
+
+      {/* Expandable panel — max-height CSS transition, zero JS measurement */}
+      <div className={`expand-wrapper${expandedCard ? ' open' : ''}`}>
+        {expandedCard && (
+          <div key={expandedCard.id} style={{
+            background: T.panelBg,
+            borderRadius: 20,
+            padding: compact ? '20px 18px 18px' : '28px 22px 24px',
+            boxShadow: '0 2px 28px rgba(0,0,0,0.07)',
+          }}>
+            <ExpandedPanel card={expandedCard} T={T} compact={compact}/>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── DIVIDER ────────────────────────────────────────────────── */
+function Divider({ label, T }) {
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:12}}>
+      <div style={{flex:1, height:1, background:T.divider}}/>
+      <span style={{fontSize:9, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.dim, whiteSpace:'nowrap'}}>
+        {label}
+      </span>
+      <div style={{flex:1, height:1, background:T.divider}}/>
+    </div>
+  );
+}
+
+/* ─── APP ────────────────────────────────────────────────────── */
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const T = THEMES[tweaks.dark ? 'dark' : 'light'];
+  const compact = tweaks.density === 'compact';
+  const [expandedId, setExpandedId] = useState(null);
+
+  useEffect(() => {
+    document.body.style.background = T.bg;
+    document.body.style.transition  = 'background 0.3s';
+  }, [T.bg]);
+
+  const toggle = id => setExpandedId(p => p === id ? null : id);
+  const row0 = CARDS.filter(c => c.row === 0);
+  const row1 = CARDS.filter(c => c.row === 1);
+  const exp0 = row0.some(c => c.id === expandedId) ? expandedId : null;
+  const exp1 = row1.some(c => c.id === expandedId) ? expandedId : null;
+
+  return (
+    <div style={{width:'100%', maxWidth:432, display:'flex', flexDirection:'column'}}>
+
+      {/* Header */}
+      <header style={{marginBottom: compact ? 28 : 40}}>
+        <p style={{fontSize:9, fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color:T.dim, marginBottom:8, transition:'color 0.3s'}}>
+          Budget Analytique
+        </p>
+        <h1 style={{fontSize: compact ? 22 : 27, fontWeight:700, color:T.text, letterSpacing:'-0.03em', lineHeight:1.12, marginBottom:16, transition:'color 0.3s'}}>
+          Insights clés
+        </h1>
+        <div style={{
+          display:'inline-flex', alignItems:'center', gap:8,
+          background:T.pillBg, border:`1px solid ${T.pillBorder}`,
+          borderRadius:20, padding:'7px 14px',
+          transition:'background 0.3s, border-color 0.3s',
+        }}>
+          <span style={{width:6, height:6, borderRadius:3, background:P.teal, flexShrink:0, display:'block'}}/>
+          <span style={{fontSize:11, color:T.pillText, fontWeight:500, transition:'color 0.3s'}}>
+            Janvier → Avril 2026 · 4 mois observés
+          </span>
+        </div>
+      </header>
+
+      {/* Content */}
+      <div style={{display:'flex', flexDirection:'column', gap: compact ? 20 : 30}}>
+        <Divider label="Flux financiers" T={T}/>
+        <InsightRow cards={row0} expandedId={exp0} onToggle={toggle} T={T} compact={compact}/>
+
+        <Divider label="Répartition des dépenses" T={T}/>
+        <InsightRow cards={row1} expandedId={exp1} onToggle={toggle} T={T} compact={compact}/>
+      </div>
+
+      {/* Hint */}
+      <p style={{textAlign:'center', fontSize:10, color:T.dim, marginTop:40, letterSpacing:'0.04em', transition:'color 0.3s'}}>
+        Appuyez sur une carte pour dérouler l'analyse
+      </p>
+
+      {/* Tweaks */}
+      <TweaksPanel>
+        <TweakSection label="Affichage">
+          <TweakToggle id="dark" label="Mode sombre" value={tweaks.dark} onChange={v => setTweak('dark', v)}/>
+          <TweakRadio id="density" label="Densité" value={tweaks.density}
+            onChange={v => setTweak('density', v)} options={['compact','comfortable']}/>
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

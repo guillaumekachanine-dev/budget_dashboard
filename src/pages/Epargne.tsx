@@ -7,6 +7,7 @@ import optimisationIcon from '@/assets/icons/app/epargne_optimisation.webp'
 import planning2026Icon from '@/assets/icons/app/epargne_planning_2026.webp'
 import performanceIcon from '@/assets/icons/app/epargne_performance.webp'
 import epargneIcon from '@/assets/icons/app/epargne_accueil.webp'
+import type { SavingsCurrentSummary } from '@/features/savings/types'
 import { useStatsReferenceData } from '@/features/stats/hooks/useStatsReferenceData'
 import { useAnnual2026Analysis } from '@/features/annual-analysis/hooks/useAnnual2026Analysis'
 import { SavingsAllocationDonut } from '@/features/savings/components/SavingsAllocationDonut'
@@ -232,6 +233,60 @@ function PlanningProgressBar({ progress }: { progress: PlanningProgress }) {
   )
 }
 
+function SavingsBreakdownBar({ currentSummary }: { currentSummary: SavingsCurrentSummary | null | undefined }) {
+  const livretsSharePct = Number(currentSummary?.livrets_share_pct ?? 0)
+  const placementsSharePct = Number(currentSummary?.placements_share_pct ?? 0)
+
+  return (
+    <div style={{ padding: '0 var(--page-gutter)' }}>
+      <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--neutral-150)', overflow: 'hidden', background: 'var(--neutral-0)' }}>
+        {/* Barre proportionnelle */}
+        <div style={{ height: 5, display: 'flex' }}>
+          <div style={{ width: `${livretsSharePct}%`, background: 'var(--color-positive)', transition: 'width 600ms cubic-bezier(0.22, 1, 0.36, 1)' }} />
+          <div style={{ flex: 1, background: 'var(--color-warning)' }} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr' }}>
+          {/* Livrets */}
+          <div style={{ padding: '10px var(--space-3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-positive)', flexShrink: 0 }} />
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Livrets
+              </span>
+            </div>
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+              {formatKpiCurrency(currentSummary?.livrets_total)}
+            </p>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-positive) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
+              {livretsSharePct > 0 ? `${Math.round(livretsSharePct)}%` : '—'}
+            </p>
+          </div>
+
+          {/* Séparateur vertical */}
+          <div style={{ background: 'var(--neutral-100)', margin: 'var(--space-2) 0' }} />
+
+          {/* Placements */}
+          <div style={{ padding: '10px var(--space-3)', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Placements
+              </span>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-warning)', flexShrink: 0 }} />
+            </div>
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+              {formatKpiCurrency(currentSummary?.placements_total)}
+            </p>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-warning) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
+              {placementsSharePct > 0 ? `${Math.round(placementsSharePct)}%` : '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
   return {
     border: active ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
@@ -388,30 +443,6 @@ export function Epargne() {
       },
     ]
   }, [objective2026Actualized, savingsAnalytics.data?.monthlyMetrics])
-
-  const epargneHomeKpis = useMemo<KpiTileItem[]>(() => {
-    const currentSummary = savingsAnalytics.data?.currentSummary
-    return [
-      {
-        label: 'Livrets',
-        value: formatKpiCurrency(currentSummary?.livrets_total),
-        tone: 'neutral',
-        backgroundColor: 'var(--color-positive)',
-        borderColor: 'color-mix(in oklab, var(--color-positive) 78%, var(--neutral-300) 22%)',
-        labelColor: '#fff',
-        valueColor: '#fff',
-      },
-      {
-        label: 'Placements',
-        value: formatKpiCurrency(currentSummary?.placements_total),
-        tone: 'warning',
-        backgroundColor: 'var(--color-warning)',
-        borderColor: 'color-mix(in oklab, var(--color-warning) 78%, var(--neutral-300) 22%)',
-        labelColor: '#fff',
-        valueColor: '#fff',
-      },
-    ]
-  }, [savingsAnalytics.data?.currentSummary])
 
   const optimizationAnnualObjective = useMemo(() => {
     const listedLevers = (optimizationCapacity.data?.optimization_levers ?? []).slice(0, 8)
@@ -762,8 +793,7 @@ export function Epargne() {
 
       {activeTab.id === 'epargne' ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'calc(var(--space-2) * -1)' }}>
-          <KpiTilesRow items={epargneHomeKpis} />
-          <SavingsAllocationDonut />
+          <SavingsAllocationDonut middleSlot={<SavingsBreakdownBar currentSummary={savingsAnalytics.data?.currentSummary} />} />
         </motion.section>
       ) : null}
 

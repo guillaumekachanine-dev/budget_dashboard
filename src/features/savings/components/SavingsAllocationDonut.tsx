@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { useSavingsAccountsDisplay } from '@/features/savings/hooks/useSavingsAccountsDisplay'
 import { useSavingsAnnualPerformance } from '@/features/savings/hooks/useSavingsAnnualPerformance'
@@ -148,7 +148,7 @@ function SavingsDonutTooltip({ active, payload }: DonutTooltipProps) {
 
 const CURRENT_YEAR = new Date().getFullYear()
 
-export function SavingsAllocationDonut() {
+export function SavingsAllocationDonut({ middleSlot }: { middleSlot?: ReactNode }) {
   const { data: accountsDisplay, isLoading: isLoadingAccounts, error: errorAccounts } = useSavingsAccountsDisplay()
   const { data: annualPerf, isLoading: isLoadingPerf } = useSavingsAnnualPerformance()
   const [activeSliceId, setActiveSliceId] = useState<string | null>(null)
@@ -280,8 +280,7 @@ export function SavingsAllocationDonut() {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(225px, 1fr))', gap: 'var(--space-4)', alignItems: 'start' }}>
-          <div style={{ height: 302, position: 'relative' }}>
+        <div style={{ height: 302, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -364,6 +363,8 @@ export function SavingsAllocationDonut() {
             </div>
           </div>
 
+          {middleSlot}
+
           <div style={{ display: 'grid', gap: '6px', width: '86%', margin: '0 auto' }}>
             {slices.map((slice) => {
               return (
@@ -423,7 +424,6 @@ export function SavingsAllocationDonut() {
               )
             })}
           </div>
-        </div>
       </div>
     </StatsSection>
   )
