@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
-import { animate, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -17,6 +17,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
 import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
 // Lazy-loaded: TrajectoireChart imports Recharts (445 KB raw). Deferring it keeps
@@ -1133,7 +1134,6 @@ export function Home() {
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showInfosTile, setShowInfosTile] = useState(true)
-  const [animatedResteUtile, setAnimatedResteUtile] = useState(0)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -1246,16 +1246,10 @@ export function Home() {
   const mainAccountDailyAvailableDisplay = budgetPerDayDisplay
   const mainAccountBalanceDisplay = Number(dailyPayload?.account.main_account_balance ?? 0)
 
-  useEffect(() => {
-    const controls = animate(0, resteUtileDisplay, {
-      duration: 0.4,
-      ease: 'easeOut',
-      onUpdate: (latestValue) => {
-        setAnimatedResteUtile(latestValue)
-      },
-    })
-    return () => controls.stop()
-  }, [resteUtileDisplay])
+  const animatedResteUtile = useCountUp(resteUtileDisplay)
+  const animatedBudgetPerDay = useCountUp(budgetPerDayDisplay)
+  const animatedBalance = useCountUp(mainAccountBalanceDisplay)
+
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
   const expenseMonthAmountDisplay = Number(dailyPayload?.totals.month_actual_total ?? 0)
   const overallConsumedPct = useMemo(() => {
@@ -1875,7 +1869,7 @@ export function Home() {
                           {formatCurrencyFloored(animatedResteUtile)}
                         </p>
                         <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.02em' }}>
-                          {`Budget/jour ${formatCurrencyFloored(budgetPerDayDisplay)}`}
+                          {`Budget/jour ${formatCurrencyFloored(animatedBudgetPerDay)}`}
                         </p>
                       </button>
                     </div>
@@ -1901,7 +1895,7 @@ export function Home() {
                         }}
                       >
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)' }}>
-                          {`Solde ${formatCurrencyFloored(mainAccountBalanceDisplay)}`}
+                          {`Solde ${formatCurrencyFloored(animatedBalance)}`}
                         </span>
                       </button>
                       <button

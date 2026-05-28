@@ -735,13 +735,7 @@ function ExpandedInsightPanel({
 
       {insightId === 'income' ? (
         loading ? (
-          <div style={{
-            height: 280,
-            borderRadius: 'var(--radius-xl)',
-            background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
-          }} />
+          <div className="skeleton" style={{ height: 280, borderRadius: 'var(--radius-xl)' }} />
         ) : error ? (
           <p style={{ margin: 0, fontSize: 11, color: INSIGHT_DARK.text }}>Erreur de chargement.</p>
         ) : (
@@ -1316,13 +1310,7 @@ function RepartitionComparisonSection() {
         {loading ? (
           <section style={{ padding: '0 var(--space-6)', width: '100%', boxSizing: 'border-box', overflowX: 'clip', height: '100%' }}>
             <div style={{ maxWidth: 600, margin: '0 auto', height: '100%' }}>
-              <div style={{
-                height: '100%',
-                borderRadius: 'var(--radius-2xl)',
-                background: 'linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-150) 50%, var(--neutral-100) 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'skeleton-shimmer 1.4s ease-in-out infinite',
-              }} />
+              <div className="skeleton" style={{ height: '100%', borderRadius: 'var(--radius-2xl)' }} />
             </div>
           </section>
         ) : null}
