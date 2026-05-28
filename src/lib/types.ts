@@ -135,7 +135,7 @@ export interface Transaction {
   is_hidden: boolean
   personal_scope?: string | null
   notes: string | null
-  trip_id: string | null
+  trip_id?: string | null
   meta: Record<string, unknown> | null
   created_at: string
   updated_at: string

@@ -7,7 +7,6 @@ import { useCreateTripManualExpense } from '../hooks/useCreateTripManualExpense'
 
 // ─── constantes ───────────────────────────────────────────────────────────────
 
-const VOYAGE_ACCENT      = '#38BDF8'
 const VOYAGE_ACCENT_DARK = '#0284C7'
 const VOYAGES_PARENT_ID  = 'a975a6e6-62d9-4686-8107-f4d76a7bd93d'
 
