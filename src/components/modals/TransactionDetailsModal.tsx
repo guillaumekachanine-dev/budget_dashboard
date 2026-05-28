@@ -8,6 +8,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useState } from 'react'
 import { CategoryPickerModal, ALL_CATEGORY_TOKEN } from './AddTransactionModal'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { TripPickerSection } from './TripPickerSection'
 
 interface TransactionDetailsModalProps {
   transaction: Transaction | null
@@ -632,6 +633,11 @@ export function TransactionDetailsModal({
                       </>
                     )}
                   </div>
+
+                  {/* Section voyage — indépendante du mode édition, toujours accessible */}
+                  {!isEditing ? (
+                    <TripPickerSection transaction={transaction} />
+                  ) : null}
 
                   <div style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
                     {isEditing ? (

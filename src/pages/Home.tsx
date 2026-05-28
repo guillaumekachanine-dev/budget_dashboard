@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { Bell, Check, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
+import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
+import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import {
   getCurrentPeriod,
@@ -1152,6 +1154,8 @@ export function Home() {
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showInfosTile, setShowInfosTile] = useState(true)
+  const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
+  const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -1780,7 +1784,13 @@ export function Home() {
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
           {isBudgetVoyageTab ? (
-            <div aria-label="Contenu budget voyage vide" style={{ minHeight: 320 }} />
+            <TripCockpitCard
+              onViewDetail={() => navigate('/budgets')}
+              onAddExpense={(tripId) => {
+                setTripExpenseInitialId(tripId)
+                setTripExpenseModalOpen(true)
+              }}
+            />
           ) : isCombinedSavingsPage ? (
             <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
               {combinedSavingsSections.map((section) => (
@@ -2575,6 +2585,15 @@ export function Home() {
         categoryColor={selectedDriftCategoryColor}
         categoryTransactions={selectedDriftCategoryTransactions}
         loading={loadingDriftsData}
+      />
+
+      <TripManualExpenseModal
+        open={tripExpenseModalOpen}
+        onClose={() => {
+          setTripExpenseModalOpen(false)
+          setTripExpenseInitialId(null)
+        }}
+        initialTripId={tripExpenseInitialId}
       />
     </div>
   )

@@ -12,6 +12,16 @@ export async function getTrips(year: number): Promise<Trip[]> {
   return (data ?? []) as unknown as Trip[]
 }
 
+export async function getAllTrips(): Promise<Trip[]> {
+  const { data, error } = await budgetDb
+    .from('trips')
+    .select('*')
+    .order('start_date', { ascending: false })
+
+  if (error) throw new Error(`getAllTrips failed: ${error.message}`)
+  return (data ?? []) as unknown as Trip[]
+}
+
 export async function getTripTransactions(tripIds: string[]): Promise<TripTransaction[]> {
   if (tripIds.length === 0) return []
 

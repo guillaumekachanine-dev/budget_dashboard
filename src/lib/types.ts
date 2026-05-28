@@ -135,6 +135,7 @@ export interface Transaction {
   is_hidden: boolean
   personal_scope?: string | null
   notes: string | null
+  trip_id: string | null
   meta: Record<string, unknown> | null
   created_at: string
   updated_at: string
@@ -538,6 +539,55 @@ export interface FluxOperationsUnifiedViewRow {
   display_amount: number | null
 }
 
+/** Dépense saisie manuellement pendant un voyage (budget_dashboard.trip_manual_expenses).
+ *  Lifecycle status: pending → matched | dismissed.
+ *  Note: pas de merchant_name — le schéma DB ne l'a pas (peut être ajouté via migration).
+ */
+export interface TripManualExpense {
+  id: string
+  user_id: string
+  trip_id: string
+  category_id: string | null
+  expense_date: string
+  amount: number
+  label: string
+  notes: string | null
+  status: 'pending' | 'matched' | 'dismissed'
+  matched_transaction_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row renvoyé par budget_dashboard.v_trip_cockpit.
+ *  Les champs numériques arrivent en string via PostgREST (type Postgres `numeric`).
+ *  La coercion est effectuée dans getTripCockpit.ts — ici on documente les types post-coercion.
+ */
+export interface TripCockpitRow {
+  trip_id: string
+  user_id: string
+  name: string
+  emoji: string | null
+  start_date: string
+  end_date: string
+  year: number
+  trip_notes: string | null
+  planned_budget: number | null
+  total_bank: number
+  total_manual_pending: number
+  total_actual: number
+  total_personal_actual: number
+  remaining: number | null
+  consumed_pct: number | null
+  expense_count: number
+  bank_expense_count: number
+  manual_pending_count: number
+  has_pending_manual: boolean
+  pending_match_count: number
+  days_total: number
+  avg_per_day: number
+  trip_status: 'past' | 'ongoing' | 'future'
+}
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>
   Insert: Insert & Record<string, unknown>
@@ -574,6 +624,7 @@ export type Database = {
       transactions_staging: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       savings_balance_snapshots: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
       trips: TableDef<Record<string, unknown>, Record<string, unknown>, Partial<Record<string, unknown>>>
+      trip_manual_expenses: TableDef<TripManualExpense, Omit<TripManualExpense, 'id' | 'created_at' | 'updated_at'>, Partial<TripManualExpense>>
     }
     Views: {
       budget_bucket_totals_by_period: { Row: BudgetBucketTotalsByPeriodRow & Record<string, unknown>; Relationships: [] }
@@ -594,6 +645,7 @@ export type Database = {
       v_planned_operations_occurrences_enriched: { Row: PlannedOperationsEnrichedViewRow & Record<string, unknown>; Relationships: [] }
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
       v_trip_transactions: { Row: Record<string, unknown>; Relationships: [] }
+      v_trip_cockpit: { Row: TripCockpitRow & Record<string, unknown>; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {

@@ -195,6 +195,38 @@ export function useUpdateTransaction() {
   })
 }
 
+// Mutation dédiée à l'affectation / désaffectation d'un voyage sur une transaction.
+// N'écrit QUE trip_id — ne touche jamais au montant, à la catégorie ni au flow_type.
+// Invalide en plus les caches voyage (cockpit, annuel, mois) au-delà de l'invalidation standard.
+export function useAssignTripToTransaction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ txId, tripId }: { txId: string; tripId: string | null }) => {
+      const { data, error } = await budgetDb
+        .from('transactions')
+        .update({ trip_id: tripId })
+        .eq('id', txId)
+        .select('id, account_id, trip_id')
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (updated) => {
+      if (updated?.account_id) {
+        invalidateTransactionsForAccount(queryClient, updated.account_id)
+      } else {
+        void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
+      }
+      void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
+      // Vues voyage : le cockpit et les données annuelles dépendent de trip_id
+      void queryClient.invalidateQueries({ queryKey: [QK.TRIP_COCKPIT] })
+      void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
+      void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_TRANSACTIONS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.TRIPS_FOR_MONTH] })
+    },
+  })
+}
+
 export function useDeleteTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
