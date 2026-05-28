@@ -153,7 +153,7 @@
   --mobile-header-row-min-height: 40px;
   --mobile-header-bottom-padding: 10px;
   --mobile-header-floating-gap: 16px;
-  --bottom-nav-visual-height: 56px;
+  --bottom-nav-visual-height: 64px;
   --bottom-nav-safe-bottom: var(--safe-bottom);
   --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom));
   --safe-top-offset: var(--safe-top);

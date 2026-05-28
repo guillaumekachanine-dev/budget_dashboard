@@ -365,8 +365,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(previousTxn)}
                       disabled={!previousTxn}
                       style={{
-                        minWidth: 34,
-                        minHeight: 34,
+                        minWidth: 44,
+                        minHeight: 44,
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: previousTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
@@ -420,8 +420,8 @@ export function TransactionDetailsModal({
                       onClick={() => handleNavigate(nextTxn)}
                       disabled={!nextTxn}
                       style={{
-                        minWidth: 34,
-                        minHeight: 34,
+                        minWidth: 44,
+                        minHeight: 44,
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(255,255,255,0.32)',
                         background: nextTxn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',

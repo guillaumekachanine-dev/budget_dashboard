@@ -224,7 +224,7 @@ function DriftCategoryTransactionsModal({
             >
               <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{categoryName ?? 'Catégorie'}</p>
-                <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
+                <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 44, height: 44, minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                   <X size={20} />
                 </button>
               </div>
@@ -363,8 +363,8 @@ function DriftsModal({
                     border: 'none',
                     background: 'var(--neutral-100)',
                     color: 'var(--neutral-600)',
-                    minWidth: 34,
-                    minHeight: 34,
+                    minWidth: 44,
+                    minHeight: 44,
                     borderRadius: 'var(--radius-full)',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -504,7 +504,7 @@ function DriftsTile({
       <p
         style={{
           margin: 0,
-          fontSize: 10,
+          fontSize: 'var(--font-size-xs)',
           fontWeight: 800,
           color: 'rgba(255,241,220,0.94)',
           textTransform: 'uppercase',
@@ -790,7 +790,7 @@ function BudgetProgressModal({
               style={{ width: 'min(400px, 100%)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-2xl)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)', pointerEvents: 'auto' }}
             >
               <div style={{ padding: 'var(--space-3) var(--space-4) 0', display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                   <X size={16} />
                 </button>
               </div>
@@ -1009,11 +1009,11 @@ function OptimizationsTile({
         {rows.map((row) => (
           <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 3, flex: 1 }}>
             <CategoryIcon iconKey={row.iconKey} label={row.label} size={18} />
-            <p style={{ margin: 0, fontSize: 9, color: 'var(--neutral-700)', lineHeight: 1.1 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', lineHeight: 1.1 }}>
               {row.label}
             </p>
             <OptimizationGauge tone={row.gaugeTone} />
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
               {`${formatCurrencyFloored(row.spentAmount)} / ${formatCurrencyFloored(row.budgetAmount)}`}
             </p>
           </div>
@@ -1046,8 +1046,8 @@ function InfosTile({
         right: 'var(--space-4)',
         bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
         zIndex: 50,
-        background: '#0F172A',
-        color: '#FFFFFF',
+        background: 'var(--neutral-900)',
+        color: 'var(--neutral-0)',
         border: 'none',
         borderRadius: 'var(--radius-2xl)',
         boxShadow: '0 20px 36px rgba(2, 6, 23, 0.45)',
@@ -1068,10 +1068,10 @@ function InfosTile({
             border: 'none',
             background: 'rgba(255,255,255,0.16)',
             color: 'rgba(255,255,255,0.9)',
-            width: 24,
-            height: 24,
-            minWidth: 24,
-            minHeight: 24,
+            width: 44,
+            height: 44,
+            minWidth: 44,
+            minHeight: 44,
             borderRadius: 'var(--radius-full)',
             display: 'inline-flex',
             alignItems: 'center',
@@ -1080,7 +1080,7 @@ function InfosTile({
             flexShrink: 0,
           }}
         >
-          <X size={13} strokeWidth={2.4} />
+          <X size={16} strokeWidth={2.4} />
         </button>
         <Bell size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.94)', lineHeight: 1.35 }}>
@@ -1099,7 +1099,7 @@ function InfosTile({
           padding: '0 var(--space-3)',
           fontSize: 13,
           fontWeight: 700,
-          color: '#FFFFFF',
+          color: 'var(--neutral-0)',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
         }}
@@ -1972,7 +1972,7 @@ export function Home() {
                             fontWeight: 900,
                             lineHeight: 0.95,
                             fontFamily: 'var(--font-mono)',
-                            color: '#0F172A',
+                            color: 'var(--neutral-900)',
                             letterSpacing: '-0.03em',
                             whiteSpace: 'nowrap',
                           }}
@@ -2026,7 +2026,7 @@ export function Home() {
                           padding: '10px var(--space-4)',
                           minHeight: 48,
                           cursor: 'pointer',
-                          color: '#FC5A5A',
+                          color: 'var(--color-negative)',
                         }}
                       >
                         <TriangleAlert size={16} color="#FC5A5A" />
@@ -2452,7 +2452,7 @@ export function Home() {
               }}
             >
               <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   Objectif mensuel d'épargne
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2461,7 +2461,7 @@ export function Home() {
               </div>
 
               <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   Taux de progression actuel
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2472,7 +2472,7 @@ export function Home() {
               <div style={{ height: 1, background: 'var(--neutral-200)' }} />
 
               <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   Épargné 2026 YTD
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2481,7 +2481,7 @@ export function Home() {
               </div>
 
               <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   Objectif annuel global
                 </p>
                 <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2532,7 +2532,7 @@ export function Home() {
             >
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <div style={{ display: 'grid', gap: 4, justifyItems: 'start' }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                     Revenus du mois
                   </p>
                   <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2540,7 +2540,7 @@ export function Home() {
                   </p>
                 </div>
                 <div style={{ display: 'grid', gap: 4, justifyItems: 'end', textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                     Dépenses du mois
                   </p>
                   <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
@@ -2598,7 +2598,7 @@ export function Home() {
                   type="button"
                   aria-label="Fermer"
                   onClick={() => setShowResteUtileModal(false)}
-                  style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 34, minHeight: 34, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 >
                   <X size={14} />
                 </button>
