@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquettes Modales — Budget Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #5B57F5;
+    --primary-light: #EAE9FE;
+    --positive: #2ED47A;
+    --negative: #FC5A5A;
+    --warning: #FFAB2E;
+    --neutral-0: #FFFFFF;
+    --neutral-50: #F8F8FC;
+    --neutral-100: #F0F0F8;
+    --neutral-200: #E2E2EF;
+    --neutral-300: #C8C8DE;
+    --neutral-400: #A0A0BC;
+    --neutral-500: #7070A0;
+    --neutral-600: #4A4A7A;
+    --neutral-700: #2A2A5A;
+    --neutral-900: #1C1C3A;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --shadow-card: 0 2px 12px rgba(28,28,58,0.07);
+    --shadow-modal: 0 -4px 40px rgba(28,28,58,0.18);
+    --shadow-chip: 0 1px 4px rgba(28,28,58,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: #f0f0f8;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--neutral-900);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: var(--neutral-500);
+    margin-bottom: 48px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 340px);
+    gap: 40px;
+    justify-content: center;
+    align-items: start;
+  }
+
+  .concept-block {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .concept-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .concept-label .badge {
+    background: var(--primary);
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 99px;
+  }
+  .concept-label .badge.recommended {
+    background: var(--positive);
+  }
+  .concept-label h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--neutral-700);
+  }
+
+  /* BOTTOM SHEET SHELL */
+  .sheet {
+    background: var(--neutral-0);
+    border-radius: 24px 24px 20px 20px;
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .handle-bar {
+    display: flex;
+    justify-content: center;
+    padding: 12px 0 0;
+  }
+  .handle {
+    width: 36px;
+    height: 4px;
+    background: var(--neutral-200);
+    border-radius: 99px;
+  }
+
+  /* =================== CONCEPT A — Ticket intelligent =================== */
+  .concept-a .sheet-header {
+    padding: 16px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pill-group {
+    display: flex;
+    gap: 6px;
+  }
+  .pill {
+    padding: 5px 12px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1.5px solid var(--neutral-200);
+    color: var(--neutral-500);
+    cursor: pointer;
+    background: transparent;
+  }
+  .pill.active-dep { background: #FEF0F0; border-color: var(--negative); color: var(--negative); }
+  .pill.active-rev { background: #EDFBF4; border-color: var(--positive); color: var(--positive); }
+  .pill.active-ep  { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+
+  .close-btn {
+    width: 28px; height: 28px;
+    border-radius: 99px;
+    background: var(--neutral-100);
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--neutral-500);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .amount-zone-a {
+    margin: 14px 20px 0;
+    padding: 14px 16px;
+    background: var(--neutral-50);
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--neutral-100);
+  }
+  .amount-hint { font-size: 10px; color: var(--neutral-400); font-weight: 600; margin-bottom: 2px; }
+  .amount-big {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--negative);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .amount-big.pos { color: var(--positive); }
+
+  .section-label {
+    margin: 14px 20px 6px;
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--neutral-400);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+
+  .detail-rows {
+    margin: 0 20px;
+    border: 1.5px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .detail-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 10px;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .row-icon { font-size: 15px; width: 20px; text-align: center; }
+  .row-label { font-size: 13px; font-weight: 600; color: var(--neutral-700); flex: 1; }
+  .row-value { font-size: 12px; font-weight: 700; color: var(--neutral-900); }
+  .row-chip {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 2px 8px;
+    border-radius: 99px;
+  }
+
+  .accordion-header {
+    margin: 12px 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--neutral-500);
+    cursor: pointer;
+  }
+  .accordion-arrow { font-size: 10px; }
+
+  .accordion-body {
+    margin: 8px 20px 0;
+    border: 1.5px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    background: var(--neutral-50);
+  }
+  .acc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .acc-row-label { color: var(--neutral-500); font-weight: 600; }
+
+  .imp-toggle {
+    display: flex; gap: 4px;
+  }
+  .imp-btn {
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1.5px solid var(--neutral-200);
+    color: var(--neutral-400);
+    background: transparent;
+  }
+  .imp-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+  .cta-btn {
+    margin: 14px 20px 20px;
+    width: calc(100% - 40px);
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: 15px;
+    font-weight: 800;
+    height: 52px;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+  }
+
+  /* =================== CONCEPT B — Cockpit =================== */
+  .cockpit-header {
+    background: linear-gradient(135deg, #FC5A5A 0%, #FF8A65 100%);
+    padding: 16px 20px 20px;
+  }
+  .cockpit-header .handle { background: rgba(255,255,255,0.35); margin: 0 auto 14px; display: block; }
+  .cockpit-type-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .cockpit-type-label {
+    font-size: 11px; font-weight: 800; letter-spacing: 1px;
+    color: rgba(255,255,255,0.8); text-transform: uppercase;
+  }
+  .cockpit-close {
+    width: 26px; height: 26px; border-radius: 99px;
+    background: rgba(255,255,255,0.25); border: none; color: white;
+    font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .cockpit-seg {
+    display: flex; gap: 4px;
+  }
+  .cockpit-seg-btn {
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 11px; font-weight: 700;
+    border: 1.5px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.7);
+    background: transparent;
+  }
+  .cockpit-seg-btn.active {
+    background: rgba(255,255,255,0.25); color: white; border-color: rgba(255,255,255,0.6);
+  }
+  .cockpit-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px; font-weight: 700;
+    color: white; letter-spacing: -1px;
+    text-align: center;
+    padding: 8px 0 4px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .cockpit-amount-input {
+    width: 100%; background: none; border: none; border-bottom: 2px solid rgba(255,255,255,0.4);
+    text-align: center; padding: 4px 0 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px; font-weight: 700; color: white;
+    letter-spacing: -1px; outline: none;
+  }
+
+  .cockpit-fields {
+    padding: 14px 20px 0;
+  }
+  .cockpit-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--neutral-100);
+  }
+  .cockpit-row:last-child { border-bottom: none; }
+  .cockpit-row-icon { font-size: 16px; width: 22px; text-align: center; }
+  .cockpit-row-content { flex: 1; }
+  .cockpit-row-main { font-size: 13px; font-weight: 700; color: var(--neutral-900); }
+  .cockpit-row-sub { font-size: 11px; color: var(--neutral-400); font-weight: 600; }
+
+  .imp-slider-visual {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .imp-dots { display: flex; gap: 3px; }
+  .imp-dot {
+    width: 8px; height: 8px; border-radius: 99px;
+    background: var(--negative);
+  }
+  .imp-dot.empty { background: var(--neutral-200); }
+  .imp-pct { font-size: 12px; font-weight: 700; color: var(--negative); }
+
+  .cockpit-more {
+    margin: 10px 20px 0;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: var(--primary); cursor: pointer;
+  }
+
+  /* =================== CONCEPT C — Layer card =================== */
+  .lc-header {
+    padding: 14px 20px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .type-pill-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: 99px;
+    background: #FEF0F0; border: 1.5px solid var(--negative);
+    color: var(--negative); font-size: 12px; font-weight: 800;
+    cursor: pointer;
+  }
+  .type-pill-btn .arrow { font-size: 9px; opacity: 0.6; }
+
+  .keypad-zone {
+    margin: 10px 20px 0;
+  }
+  .keypad-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 40px; font-weight: 700;
+    color: var(--negative); letter-spacing: -1px;
+    text-align: center;
+    padding: 10px 0 8px;
+    border-bottom: 2px solid var(--neutral-200);
+    margin-bottom: 10px;
+  }
+  .keypad-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .key {
+    height: 46px;
+    background: var(--neutral-50);
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--neutral-100);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--neutral-700);
+    cursor: pointer;
+  }
+  .key.backspace { color: var(--neutral-400); font-size: 16px; }
+  .key.comma { font-size: 22px; }
+
+  .chips-grid {
+    margin: 12px 20px 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .op-chip {
+    border: 1.5px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    background: var(--neutral-0);
+    box-shadow: var(--shadow-chip);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .op-chip:hover { border-color: var(--primary); }
+  .op-chip-icon { font-size: 18px; margin-bottom: 4px; }
+  .op-chip-value { font-size: 12px; font-weight: 700; color: var(--neutral-900); }
+  .op-chip-label { font-size: 10px; font-weight: 600; color: var(--neutral-400); margin-bottom: 2px; }
+
+  .imp-chip-visual {
+    display: flex; gap: 3px; margin-bottom: 4px; align-items: center;
+  }
+  .imp-seg {
+    width: 14px; height: 6px; border-radius: 2px;
+    background: var(--negative);
+  }
+  .imp-seg.empty { background: var(--neutral-200); }
+
+  .libelle-field {
+    margin: 10px 20px 0;
+    display: flex; align-items: center; gap: 10px;
+    border: 1.5px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    background: var(--neutral-0);
+    box-shadow: var(--shadow-chip);
+  }
+  .libelle-field-icon { font-size: 15px; flex-shrink: 0; }
+  .libelle-field-inner { flex: 1; }
+  .libelle-field-label { font-size: 10px; font-weight: 800; color: var(--neutral-400); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+  .libelle-field-value { font-size: 13px; font-weight: 700; color: var(--neutral-400); font-style: italic; }
+  .libelle-field-value.filled { color: var(--neutral-900); font-style: normal; }
+  .libelle-field.active {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .libelle-field.active .libelle-field-label { color: var(--primary); }
+  .libelle-field.active .libelle-field-value { color: var(--primary); font-style: normal; font-weight: 700; }
+
+  .advanced-toggle {
+    margin: 10px 20px 0;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: var(--neutral-400);
+    cursor: pointer; padding: 6px 0;
+  }
+  .adv-arrow { font-size: 9px; }
+
+  /* DETAIL MODE — Concept C */
+  .detail-hero {
+    margin: 12px 20px 0;
+    padding: 16px;
+    background: var(--neutral-50);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--neutral-100);
+    text-align: center;
+  }
+  .detail-cat-icon { font-size: 32px; margin-bottom: 4px; }
+  .detail-cat-parent { font-size: 14px; font-weight: 800; color: var(--neutral-900); margin-bottom: 2px; }
+  .detail-cat-sub { font-size: 12px; font-weight: 600; color: var(--neutral-400); margin-bottom: 10px; }
+  .detail-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 36px; font-weight: 700;
+    color: var(--negative); letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+  .detail-date { font-size: 12px; color: var(--neutral-400); font-weight: 600; }
+
+  .detail-chips-row {
+    margin: 10px 20px 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+
+  .detail-table {
+    margin: 10px 20px 0;
+    border: 1.5px solid var(--neutral-100);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .dt-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--neutral-100);
+    font-size: 12px;
+  }
+  .dt-row:last-child { border-bottom: none; }
+  .dt-label { color: var(--neutral-400); font-weight: 600; }
+  .dt-value { color: var(--neutral-900); font-weight: 700; }
+
+  .nav-row {
+    margin: 12px 20px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-btn {
+    font-size: 11px; font-weight: 700; color: var(--neutral-400);
+    cursor: pointer; display: flex; align-items: center; gap: 4px;
+  }
+
+  /* EDIT MODE buttons */
+  .edit-actions {
+    padding: 12px 20px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .edit-type-label { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--neutral-500); text-transform: uppercase; }
+  .edit-btns { display: flex; gap: 8px; align-items: center; }
+  .btn-cancel { font-size: 13px; font-weight: 700; color: var(--neutral-400); padding: 5px 10px; background: none; border: none; cursor: pointer; }
+  .btn-confirm {
+    width: 32px; height: 32px; border-radius: 99px;
+    background: var(--positive); border: none; color: white;
+    font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(46,212,122,0.35);
+  }
+
+  .edit-amount-zone {
+    margin: 10px 20px 0;
+    padding: 12px 14px 10px;
+    border-bottom: 2.5px solid var(--primary);
+    background: var(--primary-light);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .edit-amount-label { font-size: 10px; font-weight: 700; color: var(--primary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .edit-amount-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px; font-weight: 700; color: var(--primary); letter-spacing: -1px;
+  }
+
+  .edit-chips-active .op-chip {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .edit-chips-active .op-chip-value { color: var(--primary); }
+
+  .delete-zone {
+    margin: 10px 20px 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--neutral-100);
+  }
+  .delete-btn {
+    width: 100%;
+    background: transparent;
+    border: 1.5px solid #FC5A5A;
+    color: var(--negative);
+    border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 700;
+    height: 42px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  /* SUPPRESSION INLINE */
+  .delete-confirm-zone {
+    margin: 10px 20px 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--neutral-100);
+  }
+  .confirm-label { font-size: 11px; font-weight: 700; color: var(--neutral-400); margin-bottom: 8px; text-align: center; }
+  .confirm-btns { display: flex; gap: 8px; }
+  .btn-cancel-sm {
+    flex: 1; height: 40px; border: 1.5px solid var(--neutral-200);
+    background: white; border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 700; color: var(--neutral-500); cursor: pointer;
+  }
+  .btn-confirm-delete {
+    flex: 2; height: 40px;
+    background: var(--negative); border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 800; color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+
+  /* MODE LABELS */
+  .mode-badge {
+    display: inline-block;
+    font-size: 10px; font-weight: 800;
+    padding: 2px 8px; border-radius: 99px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .mode-create { background: var(--primary-light); color: var(--primary); }
+  .mode-detail { background: #EDFBF4; color: var(--positive); }
+  .mode-edit { background: #FFF3E0; color: var(--warning); }
+  .mode-delete { background: #FEF0F0; color: var(--negative); }
+
+  .sheet-spacing { padding-bottom: 4px; }
+
+  /* HEADER BAR — concept A detail */
+  .detail-header-a {
+    padding: 14px 20px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .back-btn {
+    font-size: 12px; font-weight: 700; color: var(--neutral-400);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .menu-btn {
+    font-size: 14px; font-weight: 800; color: var(--neutral-500);
+    background: var(--neutral-100); border: none; border-radius: 99px;
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; letter-spacing: 1px;
+  }
+
+  .hero-amount-a {
+    margin: 16px 20px 0;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, #FEF0F0, #FFF8F8);
+    border: 1.5px solid rgba(252,90,90,0.15);
+    text-align: center;
+  }
+  .cat-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: white; border-radius: 99px; padding: 4px 12px;
+    font-size: 12px; font-weight: 700; color: var(--neutral-700);
+    box-shadow: var(--shadow-chip); margin-bottom: 10px;
+  }
+  .hero-amount-a .amount-big { font-size: 36px; margin-bottom: 4px; }
+  .hero-meta { font-size: 12px; color: var(--neutral-400); font-weight: 600; }
+
+  .receipt-section {
+    margin: 12px 20px 0;
+  }
+  .receipt-title {
+    font-size: 10px; font-weight: 800; color: var(--neutral-400);
+    letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .receipt-table {
+    border: 1.5px solid var(--neutral-100);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .receipt-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--neutral-50);
+    font-size: 12px;
+  }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-label { color: var(--neutral-400); font-weight: 600; }
+  .receipt-val { color: var(--neutral-900); font-weight: 700; }
+  .receipt-val.primary { color: var(--primary); }
+
+  .edit-btn-a {
+    margin: 14px 20px 18px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--neutral-50); border: 1.5px solid var(--neutral-200);
+    border-radius: var(--radius-md); height: 44px;
+    font-size: 13px; font-weight: 700; color: var(--neutral-600);
+    cursor: pointer;
+  }
+
+  /* COCKPIT DETAIL */
+  .cockpit-detail-hero {
+    text-align: center; padding: 20px 20px 6px;
+  }
+  .cockpit-cat-icon { font-size: 36px; margin-bottom: 6px; }
+  .cockpit-cat-label {
+    font-size: 10px; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--neutral-400); margin-bottom: 2px;
+  }
+  .cockpit-amount-det {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 40px; font-weight: 700; color: var(--negative);
+    letter-spacing: -1px; margin: 8px 0 4px;
+  }
+  .cockpit-meta-det { font-size: 12px; color: var(--neutral-400); font-weight: 600; }
+
+  .cockpit-action-row {
+    margin: 12px 20px 0;
+    display: flex; gap: 8px;
+  }
+  .btn-edit-cockpit {
+    flex: 1; height: 44px; background: var(--primary-light);
+    border: none; border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 800; color: var(--primary);
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-more-cockpit {
+    width: 44px; height: 44px; background: var(--neutral-100);
+    border: none; border-radius: var(--radius-md);
+    font-size: 16px; font-weight: 800; color: var(--neutral-500);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    letter-spacing: 2px;
+  }
+
+  /* DIVIDER */
+  .section-divider {
+    margin: 40px 0 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .divider-line { flex: 1; height: 1px; background: var(--neutral-200); }
+  .divider-label { font-size: 11px; font-weight: 800; color: var(--neutral-400); letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: 340px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Refonte Modales Opérations — 3 Concepts</h1>
+<p class="subtitle">Maquettes visuelles · Budget Dashboard · Mobile-first · 375px</p>
+
+<!-- ROW 1 : MODE CRÉATION -->
+<div class="section-divider">
+  <div class="divider-line"></div>
+  <div class="divider-label">Mode Création</div>
+  <div class="divider-line"></div>
+</div>
+
+<div class="grid">
+
+  <!-- ======= CONCEPT A ======= -->
+  <div class="concept-block concept-a">
+    <div class="concept-label">
+      <span class="badge">A</span>
+      <h2>Ticket intelligent</h2>
+    </div>
+    <span class="mode-badge mode-create">Création</span>
+
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="sheet-header">
+        <div class="pill-group">
+          <button class="pill active-dep">Dépense</button>
+          <button class="pill">Revenu</button>
+          <button class="pill">Épargne</button>
+        </div>
+        <button class="close-btn">✕</button>
+      </div>
+
+      <div class="amount-zone-a">
+        <div class="amount-hint">MONTANT</div>
+        <div class="amount-big">− 0 €</div>
+      </div>
+
+      <div class="section-label">DÉTAILS ESSENTIELS</div>
+      <div class="detail-rows">
+        <div class="detail-row">
+          <span class="row-icon">📅</span>
+          <span class="row-label">Date</span>
+          <span class="row-chip">Aujourd'hui</span>
+        </div>
+        <div class="detail-row">
+          <span class="row-icon">🏷</span>
+          <span class="row-label">Catégorie</span>
+          <span class="row-chip">Choisir →</span>
+        </div>
+        <div class="detail-row">
+          <span class="row-icon">🏦</span>
+          <span class="row-label">Compte</span>
+          <span class="row-chip">Perso</span>
+        </div>
+      </div>
+
+      <div class="accordion-header">
+        <span class="accordion-arrow">▸</span>
+        <span>Détails avancés</span>
+      </div>
+      <div class="accordion-body">
+        <div class="acc-row">
+          <span class="acc-row-label">Imputation</span>
+          <div class="imp-toggle">
+            <button class="imp-btn">0%</button>
+            <button class="imp-btn">50%</button>
+            <button class="imp-btn active">100%</button>
+          </div>
+        </div>
+        <div class="acc-row" style="margin-top:4px">
+          <span class="acc-row-label">Bucket</span>
+          <div class="imp-toggle">
+            <button class="imp-btn">Fixe</button>
+            <button class="imp-btn active">Variable</button>
+          </div>
+        </div>
+        <div class="acc-row" style="margin-top:4px">
+          <span class="acc-row-label">Récurrence</span>
+          <span style="font-size:11px;font-weight:700;color:var(--neutral-400)">Non</span>
+        </div>
+      </div>
+
+      <button class="cta-btn">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- ======= CONCEPT B ======= -->
+  <div class="concept-block concept-b">
+    <div class="concept-label">
+      <span class="badge">B</span>
+      <h2>Cockpit opération</h2>
+    </div>
+    <span class="mode-badge mode-create">Création</span>
+
+    <div class="sheet">
+      <div class="cockpit-header">
+        <div class="handle" style="width:36px;height:4px;background:rgba(255,255,255,0.35);margin:0 auto 14px;border-radius:99px;display:block;"></div>
+        <div class="cockpit-type-row">
+          <span class="cockpit-type-label">Type d'opération</span>
+          <button class="cockpit-close">✕</button>
+        </div>
+        <div class="cockpit-seg" style="margin-bottom:14px">
+          <button class="cockpit-seg-btn active">Dépense</button>
+          <button class="cockpit-seg-btn">Revenu</button>
+          <button class="cockpit-seg-btn">Épargne</button>
+          <button class="cockpit-seg-btn">Transfert</button>
+        </div>
+        <input class="cockpit-amount-input" value="− 0 €" readonly />
+      </div>
+
+      <div class="cockpit-fields">
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">🏷</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main">Choisir une catégorie →</div>
+            <div class="cockpit-row-sub">Tap pour ouvrir la grille</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">📅</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main">28 mai 2026</div>
+            <div class="cockpit-row-sub">Aujourd'hui</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">🏦</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main">Compte perso</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">⚡</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main">Imputation</div>
+          </div>
+          <div class="imp-slider-visual">
+            <div class="imp-dots">
+              <div class="imp-dot"></div>
+              <div class="imp-dot"></div>
+              <div class="imp-dot"></div>
+              <div class="imp-dot empty"></div>
+            </div>
+            <span class="imp-pct">100%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cockpit-more">
+        <span>＋</span>
+        <span>Libellé · Bucket · Récurrence</span>
+      </div>
+
+      <button class="cta-btn" style="margin-top:14px">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- ======= CONCEPT C ======= -->
+  <div class="concept-block concept-c">
+    <div class="concept-label">
+      <span class="badge recommended">C ⭐</span>
+      <h2>Layer card — Recommandé</h2>
+    </div>
+    <span class="mode-badge mode-create">Création</span>
+
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="lc-header">
+        <button class="type-pill-btn">
+          Dépense <span class="arrow">▾</span>
+        </button>
+        <button class="close-btn">✕</button>
+      </div>
+
+      <div class="keypad-zone">
+        <div class="keypad-amount">− 0 €</div>
+        <div class="keypad-grid">
+          <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+          <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+          <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+          <div class="key comma">,</div><div class="key">0</div><div class="key backspace">⌫</div>
+        </div>
+      </div>
+
+      <div class="chips-grid">
+        <div class="op-chip">
+          <div class="op-chip-label">CATÉGORIE</div>
+          <div class="op-chip-icon">🏷</div>
+          <div class="op-chip-value">Choisir →</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label">DATE</div>
+          <div class="op-chip-icon">📅</div>
+          <div class="op-chip-value">Aujourd'hui</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label">COMPTE</div>
+          <div class="op-chip-icon">🏦</div>
+          <div class="op-chip-value">Compte perso</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label">IMPUTATION</div>
+          <div class="imp-chip-visual">
+            <div class="imp-seg"></div>
+            <div class="imp-seg"></div>
+            <div class="imp-seg"></div>
+            <div class="imp-seg empty"></div>
+          </div>
+          <div class="op-chip-value">100 %</div>
+        </div>
+      </div>
+
+      <div class="libelle-field">
+        <span class="libelle-field-icon">✏️</span>
+        <div class="libelle-field-inner">
+          <div class="libelle-field-label">Libellé</div>
+          <div class="libelle-field-value">Ajouter un libellé…</div>
+        </div>
+      </div>
+
+      <div class="advanced-toggle">
+        <span class="adv-arrow">▸</span>
+        <span>Budget · Récurrence</span>
+      </div>
+
+      <button class="cta-btn" style="margin-top:8px">Enregistrer</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ROW 2 : MODE DÉTAIL -->
+<div class="section-divider">
+  <div class="divider-line"></div>
+  <div class="divider-label">Mode Détail (lecture)</div>
+  <div class="divider-line"></div>
+</div>
+
+<div class="grid">
+
+  <!-- A DETAIL -->
+  <div class="concept-block concept-a">
+    <div class="concept-label"><span class="badge">A</span><h2>Ticket intelligent</h2></div>
+    <span class="mode-badge mode-detail">Détail</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="detail-header-a">
+        <div class="back-btn">← Retour</div>
+        <button class="menu-btn">···</button>
+      </div>
+      <div class="hero-amount-a">
+        <div class="cat-badge">🍕 Alimentation · Courses</div>
+        <div class="amount-big" style="font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;color:var(--negative);letter-spacing:-1px;margin-bottom:4px">− 1 759 €</div>
+        <div class="hero-meta">28 mai 2026 · Compte perso</div>
+      </div>
+      <div class="receipt-section">
+        <div class="receipt-title">Reçu</div>
+        <div class="receipt-table">
+          <div class="receipt-row"><span class="receipt-label">Libellé</span><span class="receipt-val">RESTO PARIS</span></div>
+          <div class="receipt-row"><span class="receipt-label">Type</span><span class="receipt-val">Dépense</span></div>
+          <div class="receipt-row"><span class="receipt-label">Bucket</span><span class="receipt-val">Variable</span></div>
+          <div class="receipt-row"><span class="receipt-label">Imputation</span><span class="receipt-val primary">100 %</span></div>
+          <div class="receipt-row"><span class="receipt-label">Récurrence</span><span class="receipt-val">Non</span></div>
+        </div>
+      </div>
+      <div class="edit-btn-a">✏️ Modifier cette opération</div>
+    </div>
+  </div>
+
+  <!-- B DETAIL -->
+  <div class="concept-block concept-b">
+    <div class="concept-label"><span class="badge">B</span><h2>Cockpit opération</h2></div>
+    <span class="mode-badge mode-detail">Détail</span>
+    <div class="sheet">
+      <div class="cockpit-header" style="padding-bottom:14px">
+        <div class="handle" style="width:36px;height:4px;background:rgba(255,255,255,0.35);margin:0 auto 12px;border-radius:99px;display:block;"></div>
+        <div class="cockpit-type-row">
+          <span class="cockpit-type-label">← DÉPENSE →</span>
+          <button class="cockpit-close">✕</button>
+        </div>
+      </div>
+      <div class="cockpit-detail-hero">
+        <div class="cockpit-cat-icon">🍕</div>
+        <div class="cockpit-cat-label">Alimentation · Courses</div>
+        <div class="cockpit-amount-det">− 1 759 €</div>
+        <div class="cockpit-meta-det">28 mai 2026 · Compte perso</div>
+      </div>
+      <div class="detail-table" style="margin-top:12px">
+        <div class="dt-row"><span class="dt-label">Libellé</span><span class="dt-value">RESTO PARIS</span></div>
+        <div class="dt-row"><span class="dt-label">Bucket</span><span class="dt-value">Variable</span></div>
+        <div class="dt-row"><span class="dt-label">Imputation</span><span class="dt-value" style="color:var(--negative)">100 %</span></div>
+        <div class="dt-row"><span class="dt-label">Récurrence</span><span class="dt-value">—</span></div>
+      </div>
+      <div class="cockpit-action-row" style="margin-bottom:16px">
+        <button class="btn-edit-cockpit">✏️ Modifier</button>
+        <button class="btn-more-cockpit">···</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- C DETAIL -->
+  <div class="concept-block concept-c">
+    <div class="concept-label"><span class="badge recommended">C ⭐</span><h2>Layer card — Recommandé</h2></div>
+    <span class="mode-badge mode-detail">Détail</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="lc-header">
+        <span style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--neutral-400);text-transform:uppercase">Dépense</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button style="background:none;border:none;font-size:13px;font-weight:700;color:var(--neutral-400);cursor:pointer;display:flex;align-items:center;gap:4px">✏ Éditer</button>
+          <button class="close-btn">✕</button>
+        </div>
+      </div>
+      <div class="detail-hero">
+        <div class="detail-cat-icon">🍕</div>
+        <div class="detail-cat-parent">Alimentation</div>
+        <div class="detail-cat-sub">Courses</div>
+        <div class="detail-amount">− 1 759 €</div>
+        <div class="detail-date">28 mai 2026</div>
+      </div>
+      <div class="detail-chips-row">
+        <div class="op-chip">
+          <div class="op-chip-label">COMPTE</div>
+          <div class="op-chip-icon">🏦</div>
+          <div class="op-chip-value">Perso</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label">IMPUTATION</div>
+          <div class="imp-chip-visual">
+            <div class="imp-seg"></div>
+            <div class="imp-seg"></div>
+            <div class="imp-seg"></div>
+            <div class="imp-seg empty"></div>
+          </div>
+          <div class="op-chip-value">100 %</div>
+        </div>
+      </div>
+      <div class="detail-table">
+        <div class="dt-row"><span class="dt-label">Libellé</span><span class="dt-value">RESTO PARIS</span></div>
+        <div class="dt-row"><span class="dt-label">Budget</span><span class="dt-value">Variable</span></div>
+        <div class="dt-row"><span class="dt-label">Récurrence</span><span class="dt-value">—</span></div>
+      </div>
+      <div class="nav-row">
+        <div class="nav-btn">◀ Préc.</div>
+        <div class="nav-btn">Suiv. ▶</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ROW 3 : MODE ÉDITION + SUPPRESSION -->
+<div class="section-divider">
+  <div class="divider-line"></div>
+  <div class="divider-label">Mode Édition · Confirmation Suppression</div>
+  <div class="divider-line"></div>
+</div>
+
+<div class="grid">
+
+  <!-- A EDIT -->
+  <div class="concept-block concept-a">
+    <div class="concept-label"><span class="badge">A</span><h2>Ticket intelligent</h2></div>
+    <span class="mode-badge mode-edit">Édition</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="sheet-header">
+        <div class="pill-group">
+          <button class="pill active-dep">Dépense</button>
+          <button class="pill">Revenu</button>
+          <button class="pill">Épargne</button>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="close-btn" style="background:var(--neutral-100);color:var(--neutral-400);font-size:11px;font-weight:700;width:auto;padding:0 10px;border-radius:99px">Annuler</button>
+          <button class="close-btn" style="background:var(--positive);color:white">✓</button>
+        </div>
+      </div>
+      <div class="amount-zone-a" style="border-color:var(--primary);background:var(--primary-light)">
+        <div class="amount-hint" style="color:var(--primary)">MONTANT</div>
+        <div class="amount-big" style="color:var(--primary)">− 1 759 €</div>
+      </div>
+      <div class="section-label">DÉTAILS ESSENTIELS</div>
+      <div class="detail-rows" style="border-color:var(--primary)">
+        <div class="detail-row" style="background:rgba(91,87,245,0.03)">
+          <span class="row-icon">📅</span>
+          <span class="row-label">Date</span>
+          <span class="row-chip" style="background:var(--primary);color:white">28 mai ▾</span>
+        </div>
+        <div class="detail-row" style="background:rgba(91,87,245,0.03)">
+          <span class="row-icon">🏷</span>
+          <span class="row-label">Catégorie</span>
+          <span class="row-chip" style="background:var(--primary);color:white">Alimentation ▾</span>
+        </div>
+        <div class="detail-row" style="background:rgba(91,87,245,0.03)">
+          <span class="row-icon">🏦</span>
+          <span class="row-label">Compte</span>
+          <span class="row-chip" style="background:var(--primary);color:white">Perso ▾</span>
+        </div>
+      </div>
+      <div class="accordion-header"><span class="accordion-arrow">▾</span><span>Détails avancés</span></div>
+      <div class="accordion-body">
+        <div class="acc-row">
+          <span class="acc-row-label">Imputation</span>
+          <div class="imp-toggle">
+            <button class="imp-btn">0%</button>
+            <button class="imp-btn">50%</button>
+            <button class="imp-btn active">100%</button>
+          </div>
+        </div>
+      </div>
+      <div class="delete-zone">
+        <button class="delete-btn">🗑 Supprimer cette opération</button>
+      </div>
+    </div>
+
+    <span class="mode-badge mode-delete" style="margin-top:8px">Suppression inline</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div style="padding:14px 20px 6px;text-align:center;font-size:13px;font-weight:700;color:var(--neutral-500)">
+        ⚠ Supprimer cette opération ?
+      </div>
+      <div style="padding:0 20px 4px;text-align:center;font-size:12px;color:var(--neutral-400)">
+        − 1 759 € · Alimentation · 28 mai
+      </div>
+      <div class="delete-confirm-zone" style="margin-top:10px">
+        <div class="confirm-btns">
+          <button class="btn-cancel-sm">Annuler</button>
+          <button class="btn-confirm-delete">⚠ Oui, supprimer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B EDIT -->
+  <div class="concept-block concept-b">
+    <div class="concept-label"><span class="badge">B</span><h2>Cockpit opération</h2></div>
+    <span class="mode-badge mode-edit">Édition</span>
+    <div class="sheet">
+      <div class="cockpit-header" style="padding-bottom:14px">
+        <div class="handle" style="width:36px;height:4px;background:rgba(255,255,255,0.35);margin:0 auto 12px;border-radius:99px;display:block;"></div>
+        <div class="cockpit-type-row">
+          <span class="cockpit-type-label" style="background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:4px;font-size:9px">EN COURS D'ÉDITION</span>
+          <div style="display:flex;gap:6px">
+            <button style="background:rgba(255,255,255,0.2);border:none;color:white;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer">Annuler</button>
+            <button style="background:var(--positive);border:none;color:white;width:28px;height:28px;border-radius:99px;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;">✓</button>
+          </div>
+        </div>
+        <input class="cockpit-amount-input" value="− 1 759 €" style="border-bottom-color:rgba(255,255,255,0.8)" />
+      </div>
+      <div class="cockpit-fields">
+        <div class="cockpit-row" style="background:rgba(91,87,245,0.04);border-radius:var(--radius-sm);padding:9px 10px">
+          <span class="cockpit-row-icon">🏷</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main" style="color:var(--primary)">Alimentation · Courses ▾</div>
+            <div class="cockpit-row-sub">Tap → grille catégories</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">📅</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main" style="color:var(--primary)">28 mai 2026 ▾</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">🏦</span>
+          <div class="cockpit-row-content">
+            <div class="cockpit-row-main" style="color:var(--primary)">Compte perso ▾</div>
+          </div>
+        </div>
+        <div class="cockpit-row">
+          <span class="cockpit-row-icon">⚡</span>
+          <div class="cockpit-row-content"><div class="cockpit-row-main">Imputation</div></div>
+          <div class="imp-toggle">
+            <button class="imp-btn">0%</button>
+            <button class="imp-btn">50%</button>
+            <button class="imp-btn active">100%</button>
+          </div>
+        </div>
+      </div>
+      <div class="delete-zone">
+        <button class="delete-btn">🗑 Supprimer cette opération</button>
+      </div>
+    </div>
+
+    <span class="mode-badge mode-delete" style="margin-top:8px">Suppression inline</span>
+    <div class="sheet">
+      <div class="cockpit-header" style="padding-bottom:12px;background:linear-gradient(135deg,#FC5A5A,#FF8A65)">
+        <div class="handle" style="width:36px;height:4px;background:rgba(255,255,255,0.35);margin:0 auto 10px;border-radius:99px;display:block;"></div>
+        <div style="text-align:center;color:white;font-size:12px;font-weight:800;">⚠ Confirmer la suppression</div>
+        <div style="text-align:center;color:rgba(255,255,255,0.7);font-size:11px;margin-top:2px">− 1 759 € · 28 mai</div>
+      </div>
+      <div class="delete-confirm-zone">
+        <div class="confirm-btns">
+          <button class="btn-cancel-sm">Annuler</button>
+          <button class="btn-confirm-delete">⚠ Oui, supprimer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C EDIT -->
+  <div class="concept-block concept-c">
+    <div class="concept-label"><span class="badge recommended">C ⭐</span><h2>Layer card — Recommandé</h2></div>
+    <span class="mode-badge mode-edit">Édition</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="edit-actions">
+        <span class="edit-type-label">Dépense</span>
+        <div class="edit-btns">
+          <button class="btn-cancel">Annuler</button>
+          <button class="btn-confirm">✓</button>
+        </div>
+      </div>
+
+      <div class="edit-amount-zone">
+        <div class="edit-amount-label">Montant</div>
+        <div class="edit-amount-val">− 1 759 €</div>
+      </div>
+
+      <div class="chips-grid edit-chips-active">
+        <div class="op-chip">
+          <div class="op-chip-label" style="color:var(--primary)">CATÉGORIE ▾</div>
+          <div class="op-chip-icon">🍕</div>
+          <div class="op-chip-value">Alimentation</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label" style="color:var(--primary)">DATE ▾</div>
+          <div class="op-chip-icon">📅</div>
+          <div class="op-chip-value">28 mai</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label" style="color:var(--primary)">COMPTE ▾</div>
+          <div class="op-chip-icon">🏦</div>
+          <div class="op-chip-value">Perso</div>
+        </div>
+        <div class="op-chip">
+          <div class="op-chip-label" style="color:var(--primary)">IMPUTATION ▾</div>
+          <div class="imp-chip-visual">
+            <div class="imp-seg" style="background:var(--primary)"></div>
+            <div class="imp-seg" style="background:var(--primary)"></div>
+            <div class="imp-seg" style="background:var(--primary)"></div>
+            <div class="imp-seg empty"></div>
+          </div>
+          <div class="op-chip-value">100 %</div>
+        </div>
+      </div>
+
+      <div class="libelle-field active">
+        <span class="libelle-field-icon">✏️</span>
+        <div class="libelle-field-inner">
+          <div class="libelle-field-label">Libellé</div>
+          <div class="libelle-field-value">RESTO PARIS</div>
+        </div>
+      </div>
+
+      <div class="advanced-toggle"><span class="adv-arrow">▸</span><span>Budget · Récurrence</span></div>
+
+      <div class="delete-zone">
+        <button class="delete-btn">🗑 Supprimer cette opération</button>
+      </div>
+    </div>
+
+    <span class="mode-badge mode-delete" style="margin-top:8px">Suppression inline — spring 3s</span>
+    <div class="sheet">
+      <div class="handle-bar"><div class="handle"></div></div>
+      <div class="edit-actions">
+        <span class="edit-type-label">Dépense</span>
+        <div class="edit-btns">
+          <button class="btn-cancel">Annuler</button>
+          <button class="btn-confirm">✓</button>
+        </div>
+      </div>
+      <div style="padding:10px 20px 6px;font-size:11px;font-weight:700;color:var(--neutral-400);text-align:center">
+        Supprimer − 1 759 € du 28 mai ?
+      </div>
+      <div class="delete-confirm-zone">
+        <div class="confirm-btns">
+          <button class="btn-cancel-sm">Annuler</button>
+          <button class="btn-confirm-delete">⚠ Oui, supprimer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

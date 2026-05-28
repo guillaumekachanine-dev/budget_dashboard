@@ -117,3 +117,20 @@ export interface HomeDailyBudgetPayload {
   by_bucket: HomeBudgetBucket[]
   by_category: HomeBudgetCategory[]
 }
+
+export type AccountBalanceStatus = {
+  account_id: string
+  account_name: string
+  observed_balance_amount: number | null
+  deferred_card_outstanding_amount: number | null
+  observed_operational_balance_amount: number | null
+  observed_date: string | null
+  estimated_balance_today: number | null
+  projected_balance_eom: number | null
+  actual_delta_since_observed: number | null
+  future_planned_delta_eom: number | null
+  as_of_date: string
+  month_end: string
+  confidence_level: 'observed' | 'estimated' | 'projected' | 'missing_snapshot' | string
+  source_label: string
+}

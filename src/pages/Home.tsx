@@ -21,6 +21,7 @@ import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBud
 import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemaining'
 import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
+import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -83,6 +84,11 @@ function formatDateShort(isoDate: string): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function formatSignedCurrency(value: number): string {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatCurrencyFloored(Math.abs(value))}`
+}
+
 const SAVINGS_BOOKLET_IDS = ['livret_a', 'ldds'] as const
 const SAVINGS_BOOKLET_CEILINGS: Record<(typeof SAVINGS_BOOKLET_IDS)[number], number> = {
   livret_a: 22_950,
@@ -116,6 +122,7 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 }
 
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
+const MAIN_CHECKING_ACCOUNT_ID = 'bcffa4d1-92b0-4feb-a492-51ea328cfce2'
 
 type SavingsTileStatus = 'validated' | 'pending' | 'alert'
 
@@ -1022,6 +1029,11 @@ export function Home() {
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
 
   const todayDate = now.toISOString().slice(0, 10)
+  const {
+    data: mainAccountBalanceStatus,
+    isLoading: loadingMainAccountBalanceStatus,
+    isError: hasMainAccountBalanceStatusError,
+  } = useAccountBalanceStatus(MAIN_CHECKING_ACCOUNT_ID, todayDate)
   const daysInMonth = new Date(year, month, 0).getDate()
   const daysElapsed = now.getDate()
   const daysRemaining = getDaysRemainingInMonth()
@@ -1254,14 +1266,26 @@ export function Home() {
   const variableSpentToDateDisplay = Number(dailyPayload?.totals.variable_actual_amount ?? 0)
   const mainAccountResteUtileDisplay = resteUtileDisplay
   const mainAccountDailyAvailableDisplay = budgetPerDayDisplay
-  const mainAccountBalanceDisplay = Number(dailyPayload?.account.main_account_balance ?? 0)
+  const fallbackMainAccountBalanceDisplay = Number(dailyPayload?.account.main_account_balance ?? 0)
+  const estimatedMainAccountBalance = Number(mainAccountBalanceStatus?.estimated_balance_today)
+  const hasEstimatedMainAccountBalance = Number.isFinite(estimatedMainAccountBalance)
+  const mainAccountBalanceDisplay = hasEstimatedMainAccountBalance
+    ? estimatedMainAccountBalance
+    : fallbackMainAccountBalanceDisplay
 
   const animatedResteUtile = useCountUp(resteUtileDisplay)
   const animatedBudgetPerDay = useCountUp(budgetPerDayDisplay)
   const animatedBalance = useCountUp(mainAccountBalanceDisplay)
+  const observedBalanceDisplay = mainAccountBalanceStatus?.observed_balance_amount
+  const deferredCardOutstandingDisplay = mainAccountBalanceStatus?.deferred_card_outstanding_amount
+  const observedOperationalBalanceDisplay = mainAccountBalanceStatus?.observed_operational_balance_amount
+  const observedDateDisplay = mainAccountBalanceStatus?.observed_date
+  const actualDeltaSinceObservedDisplay = mainAccountBalanceStatus?.actual_delta_since_observed
+  const plannedDeltaEomDisplay = mainAccountBalanceStatus?.future_planned_delta_eom
+  const projectedBalanceEomDisplay = mainAccountBalanceStatus?.projected_balance_eom
+  const hasMissingSnapshot = mainAccountBalanceStatus?.confidence_level === 'missing_snapshot'
 
   const revenueAmountDisplay = Number(dailyPayload?.realized.revenue_amount ?? 0)
-  const expenseMonthAmountDisplay = Number(dailyPayload?.totals.month_actual_total ?? 0)
   const overallConsumedPct = useMemo(() => {
     const consumed = Number(dailyPayload?.totals.consumed_pct ?? 0)
     return Math.max(0, Math.min(100, consumed))
@@ -1898,7 +1922,7 @@ export function Home() {
                       <button
                         type="button"
                         onClick={() => setShowHeroBalanceModal(true)}
-                        aria-label="Voir le détail revenus du mois et dépenses du mois"
+                        aria-label="Voir le détail du solde bancaire du compte principal"
                         style={{
                           border: '1px solid rgba(255,255,255,0.58)',
                           background: 'rgba(255,255,255,0.8)',
@@ -1914,8 +1938,13 @@ export function Home() {
                           cursor: 'pointer',
                         }}
                       >
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)' }}>
-                          {`Solde ${formatCurrencyFloored(animatedBalance)}`}
+                        <span style={{ display: 'grid', justifyItems: 'center', gap: 1 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                            Solde estimé
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                            {formatCurrencyFloored(animatedBalance)}
+                          </span>
                         </span>
                       </button>
                       <button
@@ -1945,7 +1974,7 @@ export function Home() {
                       </button>
                     </div>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-500)' }}>
-                      {`solde au ${todayDayMonthLabel}`}
+                      {hasEstimatedMainAccountBalance ? `Estimé au ${todayDayMonthLabel}` : `Solde au ${todayDayMonthLabel}`}
                     </p>
                   </div>
                 </div>
@@ -2331,26 +2360,89 @@ export function Home() {
       <BottomSheet
         open={showHeroBalanceModal}
         onClose={() => setShowHeroBalanceModal(false)}
-        title="Flux du mois"
+        title="Détail du solde"
         zIndex={69}
       >
-        <div style={{ padding: 'var(--space-5)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gap: 4 }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Revenus du mois
+        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
+          {loadingMainAccountBalanceStatus ? (
+            <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-500)', fontSize: 12 }}>Chargement du détail du solde…</p>
+          ) : hasMainAccountBalanceStatusError ? (
+            <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
+              Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
             </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--color-positive)', fontFamily: 'var(--font-mono)' }}>
-              {formatCurrencyFloored(revenueAmountDisplay)}
+          ) : hasMissingSnapshot ? (
+            <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-700)', fontSize: 13 }}>
+              Aucun solde bancaire de référence disponible.
             </p>
-          </div>
-          <div style={{ display: 'grid', gap: 4 }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Dépenses du mois
-            </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--color-negative)', fontFamily: 'var(--font-mono)' }}>
-              {formatCurrencyFloored(expenseMonthAmountDisplay)}
-            </p>
-          </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde observé banque</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                  {formatCurrencyFloored(Number(observedBalanceDisplay ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Date d&apos;observation</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                  {observedDateDisplay ? formatDateShort(observedDateDisplay) : '—'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Encours carte différée</span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    color: Number(deferredCardOutstandingDisplay ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                  }}
+                >
+                  {formatSignedCurrency(Number(deferredCardOutstandingDisplay ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde opérationnel observé</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                  {formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Mouvements depuis observation</span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    color: Number(actualDeltaSinceObservedDisplay ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                  }}
+                >
+                  {formatSignedCurrency(Number(actualDeltaSinceObservedDisplay ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde estimé aujourd&apos;hui</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                  {formatCurrencyFloored(Number(mainAccountBalanceStatus?.estimated_balance_today ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Opérations prévues restantes</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
+                  {formatCurrencyFloored(Number(plannedDeltaEomDisplay ?? 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde projeté fin de mois</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                  {formatCurrencyFloored(Number(projectedBalanceEomDisplay ?? 0))}
+                </span>
+              </div>
+            </div>
+          )}
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.4 }}>
+            Le solde estimé est calculé à partir du dernier solde bancaire observé, diminué de l&apos;encours carte différée, puis ajusté avec les mouvements réels enregistrés depuis cette date.
+          </p>
         </div>
       </BottomSheet>
 
