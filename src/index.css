@@ -22,6 +22,10 @@
   --color-error:    #FC5A5A;
   --color-negative: #FC5A5A;
   --color-info:     #5B57F5;
+  --color-bordeaux: #7C2130;
+  --color-petrol: #1A5C74;
+  --color-cyan-insight: #0097B2;
+  --color-teal-insight: #1D7A6D;
 
   /* NEUTRALS (grayscale) — source de vérité : tailwind.config.js */
   --neutral-0:   #FFFFFF;
@@ -44,20 +48,37 @@
   --viz-d: #8BC34A;  /* Lime / Category D */
   --viz-e: #B0BEC5;  /* Grey / Category E */
 
-  /* CATEGORY COLORS — source de vérité : tailwind.config.js cat.* */
-  --cat-transport:   #FF6B6B;
-  --cat-food:        #FFB347;
-  --cat-sport:       #4ECDC4;
-  --cat-education:   #A29BFE;
-  --cat-entertain:   #FD79A8;
-  --cat-household:   #6C5CE7;
-  --cat-bills:       #00B894;
-  --cat-subscript:   #E17055;
+  /* BUDGET BUCKET COLORS — source de vérité (socles/blocs) */
+  --bucket-socle-fixe: #5B57F5;
+  --bucket-variable-essentielle: #F5B731;
+  --bucket-discretionnaire: #FC5A5A;
+  --bucket-provision: #8BC34A;
+  --bucket-revenu: #2ED47A;
+  --bucket-epargne: #FFAB2E;
+  --bucket-voyage: #38BDF8;
+  --bucket-hors-pilotage: #B0BEC5;
+  --bucket-cagnotte: #4A4A62;
 
-  /* TYPOGRAPHY — DM Sans (UI) + DM Mono (chiffres) */
-  --font-display: 'DM Sans', sans-serif;
-  --font-sans:    'DM Sans', sans-serif;
-  --font-mono:    'DM Mono', monospace;
+  /* CATEGORY COLORS — palette fixe par catégorie */
+  --cat-logement:      #1D3F8F;  /* Logement */
+  --cat-alimentation:  #35C17B;  /* Alimentation */
+  --cat-divers:        #FDAA1B;  /* Achats divers */
+  --cat-sorties:       #FB5534;  /* Sorties */
+  --cat-voyages:       #38BDF8;  /* Voyages */
+  --cat-transport:     #FA8728;  /* Transport */
+  --cat-famille:       #D98880;  /* Famille/Enfant */
+  --cat-business:      #8B7954;  /* Business */
+  --cat-abonnements:   #8B51D0;  /* Abonnements */
+  --cat-sante:         #E82665;  /* Santé */
+  --cat-taxes:         #6B6B6B;  /* Taxes / Frais */
+  --cat-epargne:       #12B4A9;  /* Épargne */
+
+  /* TYPOGRAPHY — Nunito Variable (UI + chiffres) */
+  /* --font-mono conserve son token pour compatibilité ; tabular-nums global
+     assure l'alignement des chiffres sans recourir à une fonte monospace. */
+  --font-display: 'Nunito Variable', sans-serif;
+  --font-sans:    'Nunito Variable', sans-serif;
+  --font-mono:    'Nunito Variable', sans-serif;
 
   --font-size-xs:    11px;
   --font-size-sm:    12px;
@@ -132,7 +153,7 @@
   --mobile-header-row-min-height: 40px;
   --mobile-header-bottom-padding: 10px;
   --mobile-header-floating-gap: 16px;
-  --bottom-nav-visual-height: 56px;
+  --bottom-nav-visual-height: 64px;
   --bottom-nav-safe-bottom: var(--safe-bottom);
   --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom));
   --safe-top-offset: var(--safe-top);
@@ -182,6 +203,9 @@
     min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Nunito Variable : chiffres tabulaires globaux — remplace le comportement
+       à chasse fixe de DM Mono pour l'alignement des montants et tableaux. */
+    font-variant-numeric: tabular-nums;
   }
 
   #root {
@@ -274,9 +298,25 @@
     font-size: 10px; font-weight: 700; color: var(--neutral-600); overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* Skeleton loading */
+  /* Skeleton loading — shimmer sweep over base color */
   .skeleton {
-    @apply bg-neutral-200 animate-pulse rounded;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-xs);
+    background: var(--neutral-100);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 100%
+    );
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
   }
 
   /* Budget bar (keep existing) */
@@ -305,7 +345,6 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-x: clip;
   }
 
   .app-main {
@@ -344,7 +383,6 @@
   .app-shell {
     min-height: var(--app-height);
     height: auto;
-    overflow-x: hidden;
     overflow-y: visible;
   }
 
@@ -398,6 +436,6 @@
 }
 
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

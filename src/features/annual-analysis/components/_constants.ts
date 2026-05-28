@@ -1,12 +1,25 @@
+import { BUDGET_BUCKET_COLORS } from '@/lib/budgetBuckets'
+
+// ─── Flow types d'opérations planifiées ─────────────────────────────────────
+
+export const PLANNED_FLOW_LABELS: Record<string, string> = {
+  expense:  'Dépense planifiée',
+  income:   'Revenu planifié',
+  savings:  'Épargne planifiée',
+  transfer: 'Transfert planifié',
+}
+
 // ─── Buckets ──────────────────────────────────────────────────────────────────
 
 export const BUCKET_COLORS: Record<string, string> = {
-  socle_fixe:           '#5B57F5', // --primary-500
-  variable_essentielle: '#4CC9F0', // --viz-a
-  provision:            '#FFAB2E', // --color-warning
-  discretionnaire:      '#FF9F43', // --viz-c
-  cagnotte_projet:      '#2ED47A', // --color-success
-  hors_pilotage:        '#FC5A5A', // --color-error
+  socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
+  provision: BUDGET_BUCKET_COLORS.provision,
+  discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  voyage: BUDGET_BUCKET_COLORS.voyage,
+  revenu: BUDGET_BUCKET_COLORS.revenu,
+  epargne: BUDGET_BUCKET_COLORS.epargne,
+  hors_pilotage: BUDGET_BUCKET_COLORS.hors_pilotage,
 }
 
 export const BUCKET_LABELS: Record<string, string> = {
@@ -14,17 +27,59 @@ export const BUCKET_LABELS: Record<string, string> = {
   variable_essentielle: 'Variable essentielle',
   provision:            'Provisions',
   discretionnaire:      'Discrétionnaire',
+  voyage:               'Voyage',
   epargne:              'Épargne',
   revenu:               'Revenus',
   hors_pilotage:        'Hors pilotage',
 }
 
+export const EXPENSE_BUCKETS = [
+  'socle_fixe',
+  'variable_essentielle',
+  'discretionnaire',
+  'provision',
+  'voyage',
+] as const
+
+export const NON_EXPENSE_BUCKETS = [
+  'revenu',
+  'epargne',
+  'hors_pilotage',
+] as const
+
+export type ExpenseBucket = typeof EXPENSE_BUCKETS[number]
+
+export function isExpenseBucket(bucket: string | null | undefined): bucket is ExpenseBucket {
+  if (!bucket) return false
+  return (EXPENSE_BUCKETS as readonly string[]).includes(bucket)
+}
+
+export function assertNoNonExpenseBucketsInExpenseTotal(
+  buckets: Array<string | null | undefined>,
+  source: string,
+): void {
+  if (!import.meta.env.DEV) return
+  const invalidBuckets = [...new Set(
+    buckets
+      .map((bucket) => (bucket ?? '').trim())
+      .filter((bucket) => bucket.length > 0 && !isExpenseBucket(bucket)),
+  )]
+  if (invalidBuckets.length > 0) {
+    console.warn('[Budget Guard] Non-expense buckets included in expense calculation', {
+      source,
+      invalidBuckets,
+    })
+  }
+}
+
+// REGLE: 'epargne' n'est PAS un bucket de pilotage budgétaire — l'épargne est
+// trackée séparément dans les vues d'épargne. Ne jamais l'ajouter ici.
 export const PILOTAGE_BUCKET_ORDER = [
   'socle_fixe',
   'variable_essentielle',
   'discretionnaire',
   'provision',
-  'epargne',
+  'voyage',
 ] as const
 
 export const TECHNICAL_BUCKETS = [

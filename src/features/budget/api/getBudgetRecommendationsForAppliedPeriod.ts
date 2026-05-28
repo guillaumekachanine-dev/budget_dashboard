@@ -14,7 +14,7 @@ const BUDGET_RECOMMENDATION_COLUMNS = [
 ].join(', ')
 
 export async function getBudgetRecommendationsForAppliedPeriod(periodId: string): Promise<BudgetRecommendationApplied[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_recommendations')
     .select(BUDGET_RECOMMENDATION_COLUMNS)
     .eq('applied_period_id', periodId)

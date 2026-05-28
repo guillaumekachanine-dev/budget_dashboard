@@ -1,0 +1,441 @@
+import { useMemo, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
+import { useSavingsEvolutionFiveYears } from '@/features/savings/hooks/useSavingsEvolutionFiveYears'
+import { EmptyState, SkeletonCard, StatsSection } from '@/features/stats/components/ui'
+import type { SavingsEvolutionFiveYearsSeries } from '@/features/savings/types'
+import { SavingsPortfolioModal } from '@/features/savings/components/SavingsPortfolioModal'
+import amundiEpargneIcon from '@/assets/icons/accounts/amundi_epargne.webp'
+import bitcoinIcon from '@/assets/icons/accounts/bitcoin.webp'
+import peaIcon from '@/assets/icons/accounts/boursorama_pea.webp'
+import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
+import pegCapgeminiIcon from '@/assets/icons/accounts/peg_capgemini.webp'
+import { resolveSavingsPortfolioColor } from '@/features/savings/utils/savingsPortfolioColor'
+
+const EURO_ROUNDED = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+
+const PCT_INTEGER = new Intl.NumberFormat('fr-FR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+
+const PCT_ONE_DECIMAL = new Intl.NumberFormat('fr-FR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
+type StyledSeries = SavingsEvolutionFiveYearsSeries & {
+  shortLabel: string
+  iconSrc: string
+  listLabel: string
+}
+
+const LEGEND_ORDER: Record<string, number> = {
+  'liv a': 0,
+  'livr a': 0,
+  'livret a': 0,
+  ldds: 1,
+  pea: 2,
+  per: 3,
+  peg: 4,
+  bitcoin: 5,
+}
+
+const SHORTCUT_GRID_ORDER = ['Livret A', 'PEA', 'PEG', 'LDDS', 'PER', 'BTC'] as const
+
+function normalizeLabel(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function hasWord(normalized: string, word: string): boolean {
+  const pattern = new RegExp(`\\b${word}\\b`, 'i')
+  return pattern.test(normalized)
+}
+
+function resolveLegendLabel(label: string): string {
+  const normalized = normalizeLabel(label)
+  if (normalized.includes('livret a')) return 'Livret A'
+  if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return 'PEG'
+  if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return 'PER'
+  if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return 'BTC'
+  return label
+}
+
+function resolveSeriesIcon(label: string, family: 'livrets' | 'placements'): string {
+  const normalized = normalizeLabel(label)
+  if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return comptePrincipalIcon
+  if (hasWord(normalized, 'pea')) return peaIcon
+  if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return pegCapgeminiIcon
+  if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin')) return bitcoinIcon
+  if (hasWord(normalized, 'perco') || hasWord(normalized, 'percol') || normalized.includes('amundi')) return amundiEpargneIcon
+  if (family === 'livrets') return comptePrincipalIcon
+  return amundiEpargneIcon
+}
+
+function resolveListLabel(label: string): string {
+  const normalized = normalizeLabel(label)
+  if (hasWord(normalized, 'peg') || normalized.includes('capgemini')) return 'PEG'
+  if (hasWord(normalized, 'per') || normalized.includes('plan epargne retraite')) return 'PER'
+  if (hasWord(normalized, 'bitcoin') || normalized.includes('wallet bitcoin') || normalized.includes('wallet bitcon')) return 'BTC'
+  return label
+}
+
+function formatCurrency(value: number): string {
+  return EURO_ROUNDED.format(value).replace(/\s+€/u, '€')
+}
+
+function formatVariation(current: number, previous: number): string {
+  if (!Number.isFinite(previous) || previous <= 0) return '—'
+  const delta = ((current - previous) / previous) * 100
+  if (!Number.isFinite(delta)) return '—'
+  const sign = delta > 0 ? '+' : ''
+  return `${sign}${PCT_INTEGER.format(delta)}%`
+}
+
+function formatSignedCurrency(value: number): string {
+  const abs = formatCurrency(Math.abs(value))
+  if (value > 0) return `+${abs}`
+  if (value < 0) return `-${abs}`
+  return abs
+}
+
+function monthDiffInclusive(fromIso: string, to: Date): number {
+  const from = new Date(`${fromIso}T00:00:00`)
+  if (Number.isNaN(from.getTime())) return 1
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1
+  return Math.max(1, months)
+}
+
+function formatSignedPercentOneDecimal(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${PCT_ONE_DECIMAL.format(value)}%`
+}
+
+export function SavingsPortfoliosListSection() {
+  const { data, isLoading, error } = useSavingsEvolutionFiveYears()
+  const [selectedPortfolioKey, setSelectedPortfolioKey] = useState<string | null>(null)
+
+  const rows = useMemo(() => data?.rows ?? [], [data?.rows])
+  const series = useMemo(() => data?.series ?? [], [data?.series])
+  const yearlyAccountMetrics = useMemo(() => data?.yearly_account_metrics ?? {}, [data?.yearly_account_metrics])
+  const operationEvents = useMemo(() => data?.operation_events ?? [], [data?.operation_events])
+
+  const styledSeries: StyledSeries[] = useMemo(() => series.map((entry) => ({
+    ...entry,
+    shortLabel: resolveLegendLabel(entry.label),
+    color: resolveSavingsPortfolioColor({
+      key: entry.key,
+      label: entry.label,
+      savingsKind: entry.savings_kind,
+      fallbackColor: entry.color,
+    }),
+    iconSrc: resolveSeriesIcon(entry.label, entry.family),
+    listLabel: resolveListLabel(entry.label),
+  })), [series])
+
+  const orderedLegendSeries = useMemo(() => [...styledSeries].sort((a, b) => {
+    const aKey = normalizeLabel(a.shortLabel)
+    const bKey = normalizeLabel(b.shortLabel)
+    const aRank = LEGEND_ORDER[aKey] ?? 99
+    const bRank = LEGEND_ORDER[bKey] ?? 99
+    if (aRank !== bRank) return aRank - bRank
+    return a.shortLabel.localeCompare(b.shortLabel, 'fr')
+  }), [styledSeries])
+
+  const latestYear = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => Number(b.year) - Number(a.year))
+    return sorted[0]?.year ?? null
+  }, [rows])
+
+  const latestYearRow = useMemo(
+    () => rows.find((r) => r.year === latestYear) ?? null,
+    [rows, latestYear],
+  )
+
+  const previousYearRow = useMemo(() => {
+    if (!latestYear) return null
+    const prevYear = String(Number(latestYear) - 1)
+    return rows.find((r) => r.year === prevYear) ?? null
+  }, [rows, latestYear])
+
+  const listRows = useMemo(() => orderedLegendSeries.map((entry) => {
+    const accountId = entry.key
+    const yearValue = latestYearRow?.year ?? ''
+    const currentAmount = Number(latestYearRow?.[accountId] ?? 0)
+    const previousAmount = Number(previousYearRow?.[accountId] ?? 0)
+    const yearlyMetrics = yearlyAccountMetrics[`${accountId}::${yearValue}`]
+    const operationsCount = Number(yearlyMetrics?.operations_count ?? 0)
+    const totalSavedAmount = Number(yearlyMetrics?.total_saved_amount ?? 0)
+    const performanceAmount = currentAmount - previousAmount - totalSavedAmount
+
+    const accountEvents = operationEvents.filter((event) => event.account_key === accountId)
+    const contributionEvents = accountEvents.filter((event) => event.nature === 'virement' && event.amount > 0)
+    const totalContributions = contributionEvents.reduce((sum, event) => sum + event.amount, 0)
+    const firstContributionDate = contributionEvents[0]?.transaction_date ?? accountEvents[0]?.transaction_date ?? null
+    const activeMonths = firstContributionDate ? monthDiffInclusive(firstContributionDate, new Date()) : 1
+    const activeYears = activeMonths / 12
+
+    const totalPlusValueSinceOpening = currentAmount - totalContributions
+    const annualizedReturnPct = totalContributions > 0 && activeYears > 0
+      ? (Math.pow(currentAmount / totalContributions, 1 / activeYears) - 1) * 100
+      : null
+
+    return {
+      ...entry,
+      currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
+      variationVsPreviousYear: formatVariation(currentAmount, previousAmount),
+      operationsCount: Number.isFinite(operationsCount) ? operationsCount : 0,
+      performanceAmount: Number.isFinite(performanceAmount) ? performanceAmount : 0,
+      annualizedReturnPct: annualizedReturnPct != null && Number.isFinite(annualizedReturnPct) ? annualizedReturnPct : null,
+      totalPlusValueSinceOpening: Number.isFinite(totalPlusValueSinceOpening) ? totalPlusValueSinceOpening : 0,
+    }
+  }), [orderedLegendSeries, latestYearRow, previousYearRow, yearlyAccountMetrics, operationEvents])
+
+  const shortcutRows = useMemo(() => {
+    const rowsByLabel = new Map(listRows.map((row) => [row.listLabel, row] as const))
+    return SHORTCUT_GRID_ORDER
+      .map((label) => rowsByLabel.get(label))
+      .filter((row): row is (typeof listRows)[number] => row != null)
+  }, [listRows])
+
+  if (isLoading) {
+    return (
+      <StatsSection>
+        <SkeletonCard heightClass="h-40" lines={2} />
+      </StatsSection>
+    )
+  }
+
+  if (error || rows.length === 0) {
+    return (
+      <StatsSection>
+        <EmptyState message="Impossible de charger les portefeuilles." />
+      </StatsSection>
+    )
+  }
+
+  return (
+    <StatsSection>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: '2px var(--space-3)',
+          width: '100%',
+          maxWidth: 360,
+          margin: '0 auto',
+        }}
+      >
+        {shortcutRows.map((row) => (
+          <button
+            key={`shortcut-${row.key}`}
+            type="button"
+            onClick={() => setSelectedPortfolioKey(row.key)}
+            aria-label={`Ouvrir le modèle ${row.listLabel}`}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-50)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            style={{
+              /* Cadre supprimé : pas de border, shadow ni background */
+              border: 'none',
+              background: 'transparent',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-2) var(--space-2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              minWidth: 0,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <img
+              src={row.iconSrc}
+              alt=""
+              aria-hidden="true"
+              style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontSize: 'var(--font-size-base)',
+                color: 'var(--neutral-800)',
+                fontWeight: 'var(--font-weight-bold)',
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                lineHeight: 1.2,
+              }}
+            >
+              {row.listLabel}
+            </span>
+            {/* Flèche immédiatement après le nom, pas repoussée à droite */}
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: 20,
+                fontWeight: 600,
+                color: 'var(--neutral-400)',
+                lineHeight: 1,
+                flexShrink: 0,
+                marginLeft: 1,
+              }}
+            >
+              ›
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div
+        style={{
+          border: '1px solid var(--neutral-150)',
+          borderRadius: 'var(--radius-xl)',
+          background: 'var(--neutral-0)',
+          boxShadow: 'var(--shadow-card)',
+          padding: 'var(--space-4)',
+          display: 'grid',
+          gap: 'var(--space-4)',
+        }}
+      >
+        <div style={{ display: 'grid', gap: '6px' }}>
+          <div
+            aria-hidden="true"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
+              alignItems: 'center',
+              padding: '0 2px 8px',
+              columnGap: 8,
+            }}
+          >
+            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'left', paddingLeft: 31 }}>
+              portefeuille
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
+              valeur
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
+              rendement annualisé
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontWeight: 600, textAlign: 'center' }}>
+              plus-value totale
+            </span>
+          </div>
+
+          {listRows.map((row) => (
+            <div
+              key={row.key}
+              style={{
+                padding: '4px 2px',
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
+                alignItems: 'center',
+                columnGap: 8,
+                lineHeight: 1.1,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedPortfolioKey(row.key)}
+                aria-label={`Voir le détail de ${row.listLabel}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  minWidth: 0,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '2px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 150ms ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-100)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 3,
+                    height: 16,
+                    borderRadius: 2,
+                    background: row.family === 'livrets' ? '#2ED47A' : '#FFAB2E',
+                    flexShrink: 0,
+                    display: 'inline-block',
+                  }}
+                />
+                <img
+                  src={row.iconSrc}
+                  alt=""
+                  aria-hidden="true"
+                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--neutral-800)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.listLabel}
+                </span>
+                <span aria-hidden="true" style={{ fontSize: 9, color: 'var(--neutral-400)', flexShrink: 0, lineHeight: 1 }}>›</span>
+              </button>
+
+              <span style={{ fontSize: 11, color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {formatCurrency(row.currentAmount)}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {row.listLabel === 'PEG' ? '+3,4%' : formatSignedPercentOneDecimal(row.annualizedReturnPct)}
+              </span>
+              <span style={{
+                fontSize: 11,
+                color: row.totalPlusValueSinceOpening >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}>
+                {formatSignedCurrency(row.totalPlusValueSinceOpening)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {selectedPortfolioKey ? (() => {
+          const portfolioRow = listRows.find((r) => r.key === selectedPortfolioKey)
+          if (!portfolioRow) return null
+          return (
+            <SavingsPortfolioModal
+              key={selectedPortfolioKey}
+              account={{
+                key: portfolioRow.key,
+                label: portfolioRow.label,
+                color: portfolioRow.color,
+                family: portfolioRow.family,
+                savings_kind: portfolioRow.savings_kind,
+                risk_level: portfolioRow.risk_level,
+                shortLabel: portfolioRow.shortLabel,
+                iconSrc: portfolioRow.iconSrc,
+                listLabel: portfolioRow.listLabel,
+              }}
+              operationEvents={operationEvents}
+              rows={rows}
+              currentAmount={portfolioRow.currentAmount}
+              onClose={() => setSelectedPortfolioKey(null)}
+            />
+          )
+        })() : null}
+      </AnimatePresence>
+    </StatsSection>
+  )
+}

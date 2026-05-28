@@ -4,8 +4,8 @@ import type { AccountWithBalance } from '@/lib/types'
 
 async function fetchAccountsWithBalances(): Promise<AccountWithBalance[]> {
   const [{ data: accounts, error: accErr }, { data: balances, error: balErr }] = await Promise.all([
-    budgetDb().from('accounts').select('*').eq('include_in_dashboard', true).order('account_type'),
-    budgetDb().from('account_balances').select('account_id, current_balance'),
+    budgetDb.from('accounts').select('*').eq('include_in_dashboard', true).order('account_type'),
+    budgetDb.from('account_balances').select('account_id, current_balance'),
   ])
 
   if (accErr) throw accErr

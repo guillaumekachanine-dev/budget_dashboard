@@ -9,7 +9,7 @@ export interface Budget2026Line {
 }
 
 export async function getAnnual2026BudgetLines(): Promise<Budget2026Line[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('expense_budget_lines')
     .select('category_name, parent_category_name, amount, effective_bucket, method')
     .order('amount', { ascending: false })

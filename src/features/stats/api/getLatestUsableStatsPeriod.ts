@@ -42,7 +42,7 @@ function normalizePeriodRows(rows: BudgetBucketPeriodRow[]): Array<{ period_year
 }
 
 export async function getUsableStatsMonthlyPeriods(userId: string, year = STATS_REFERENCE_YEAR): Promise<UsableStatsPeriod[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_bucket_totals_by_period')
     .select('period_year, period_month')
     .eq('user_id', userId)
@@ -53,8 +53,6 @@ export async function getUsableStatsMonthlyPeriods(userId: string, year = STATS_
   if (error) {
     throw new Error(`getUsableStatsMonthlyPeriods failed: ${error.message}`)
   }
-
-  console.info('[stats periods][temporary] getUsableStatsMonthlyPeriods raw data=', data ?? [])
 
   const normalized = normalizePeriodRows((data ?? []) as BudgetBucketPeriodRow[])
   const periods = await Promise.all(normalized.map(async (period) => {
@@ -76,7 +74,7 @@ export async function getLatestUsableStatsPeriod(userId: string): Promise<Usable
 }
 
 export async function hasUsableStatsPeriod(userId: string, periodYear: number, periodMonth: number): Promise<boolean> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_bucket_totals_by_period')
     .select('period_year, period_month')
     .eq('user_id', userId)

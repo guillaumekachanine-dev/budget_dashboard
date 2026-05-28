@@ -5,7 +5,7 @@ export async function getSavingsBudgetLinesByPeriod(
   periodYear: number,
   periodMonth: number,
 ): Promise<SavingsBudgetLineSourceRow[]> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('savings_budget_lines_by_period')
     .select('*')
     .eq('period_year', periodYear)

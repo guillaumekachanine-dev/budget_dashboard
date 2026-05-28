@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, ChevronDown, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react'
+import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
@@ -15,45 +15,77 @@ import {
   Pie,
   ReferenceLine,
 } from 'recharts'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { formatCurrencyRounded } from '@/lib/utils'
-import { debugBudgetSupabaseConnection } from '@/debug/debugBudgetSupabase'
-import { supabase } from '@/lib/supabase'
+import { formatCurrencyFloored, formatCategoryModalLabel, todayIso, getTxLabel, categoryColorFromName } from '@/lib/utils'
+import { BUDGET_BUCKET_COLORS, getBudgetBucketColor } from '@/lib/budgetBuckets'
 import { budgetDb } from '@/lib/supabaseBudget'
-import type { Transaction } from '@/lib/types'
-import type { BudgetLineWithCategory, BudgetPeriodOption } from '@/features/budget/types'
+import type { FlowType, Transaction } from '@/lib/types'
+import type { BudgetLineWithCategory } from '@/features/budget/types'
 import { getBudgetPeriods } from '@/features/budget/api/getBudgetPeriods'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { HeaderPeriodMenu } from '@/components/layout/HeaderPeriodMenu'
 import { Button } from '@/components'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useBudgetRevenueAnalytics } from '@/features/budget/hooks/useBudgetRevenueAnalytics'
+import { useCategoryRolling12mStats } from '@/features/budget/hooks/useCategoryRolling12mStats'
 import { BudgetCategoryList } from '@/features/budget/components/BudgetCategoryList'
 import { formatPeriodLabel } from '@/features/budget/utils/budgetSelectors'
-import {
-  Annual2026BlockMetrics,
-  type MetricsDisplayMode,
-  type MetricsScopeSelection,
-} from '@/features/annual-analysis/components/Annual2026BlockMetrics'
+// Type-only import (erased at runtime — safe to keep static)
+import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import { BUCKET_LABELS, BUCKET_ORDER, PILOTAGE_BUCKET_ORDER, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
-import blockFixeIcon from '@/assets/icons/blocks/fixe.png'
-import blockVariableIcon from '@/assets/icons/blocks/variable.png'
-import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.png'
-import blockEpargneIcon from '@/assets/icons/blocks/epargne.png'
-import blockProvisionsIcon from '@/assets/icons/blocks/provisions.png'
-import blockRevenusIcon from '@/assets/icons/blocks/revenus.png'
+import blockFixeIcon from '@/assets/icons/blocks/fixe.webp'
+import blockVariableIcon from '@/assets/icons/blocks/variable.webp'
+import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp'
+import blockEpargneIcon from '@/assets/icons/blocks/epargne.webp'
+import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
+import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
+import enveloppesMensuellesIcon from '@/assets/icons/app/metriques_budgets.webp'
+import projectionsAnnuellesIcon from '@/assets/icons/app/budgets_projections.webp'
+import rechercheRapideIcon from '@/assets/icons/app/budgets_metriques.webp'
+import analyticsIcon from '@/assets/icons/app/analytics.webp'
+
+// Lazy-loaded tabs & heavy sub-components — only fetched when the user activates
+// the corresponding tab or slide, keeping the initial Budgets chunk lean.
+const Annual2026BlockMetrics = lazy(() =>
+  import('@/features/annual-analysis/components/Annual2026BlockMetrics').then(m => ({ default: m.Annual2026BlockMetrics }))
+)
+const MonthlyFlowsAnalysisCard = lazy(() =>
+  import('@/features/annual-analysis/components/Annual2026MonthlyTable').then(m => ({ default: m.MonthlyFlowsAnalysisCard }))
+)
+const AnnualProjectionSectionConnected = lazy(() =>
+  import('@/features/annual-analysis/components/AnnualCostProjection2026').then(m => ({ default: m.AnnualProjectionSectionConnected }))
+)
+const VoyagesFeaturePage = lazy(() =>
+  import('@/features/voyages/components/VoyagesFeaturePage').then(m => ({ default: m.VoyagesFeaturePage }))
+)
+const EnveloppesTab = lazy(() =>
+  import('@/features/budget/components/EnveloppesTab').then(m => ({ default: m.EnveloppesTab }))
+)
+const ProjectionsTab = lazy(() =>
+  import('@/features/budget/components/ProjectionsTab').then(m => ({ default: m.ProjectionsTab }))
+)
+const ProjectionsTabContent = lazy(() =>
+  import('@/features/budget/components/ProjectionsTabContent').then(m => ({ default: m.ProjectionsTabContent }))
+)
+const BudgetsAnalyticsTab = lazy(() =>
+  import('@/features/budget/components/BudgetsAnalyticsTab').then(m => ({ default: m.BudgetsAnalyticsTab }))
+)
 
 type PeriodKey = 'mois' | 'annee'
 type DataDisplayMode = 'reel' | 'budget'
 type SubCatTrend = 'up' | 'down' | 'equal'
+type BudgetYtdSlideView = 'kpi' | 'history' | 'monthly_flows_table' | 'monthly_flows_chart'
 
 interface MonthlyBucket {
   month: string
+  monthStart: string
   amount: number
+  chartAmount?: number
+  isScaleOverflow?: boolean
+  isScaleBreakMonth?: boolean
   budget: number
   evolutionPct: number | null
   isCurrent: boolean
@@ -68,7 +100,18 @@ interface PieDatum {
 
 type BudgetBlockId = 'socle_fixe' | 'variable_essentielle' | 'discretionnaire' | 'epargne' | 'provision' | 'cagnotte'
 const REVENUE_BLOCK_PAGE_ID = 'revenu' as const
+const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
+const REVENUE_HISTORY_Y_AXIS_MAX = 15000
+
+type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'metriques'
+type EnveloppesViewMode = 'categories' | 'socles'
+type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
+const BUDGETS_TABS: BudgetsTabConfig[] = [
+  { id: 'enveloppes', label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
+  { id: 'projections', label: 'Projections', iconSrc: projectionsAnnuellesIcon },
+  { id: 'analytics', label: 'Analytics', iconSrc: analyticsIcon },
+]
 
 interface BudgetBlockLineItem {
   id: string
@@ -107,6 +150,15 @@ interface CategoryBarRow {
   displayAmount: number
 }
 
+interface RevenueSourceDonutDatum {
+  id: string
+  name: string
+  parentName: string | null
+  value: number
+  transactionCount: number
+  color: string
+}
+
 interface PieSegmentCallout {
   id: string
   text: string
@@ -142,30 +194,20 @@ interface HistoryWindowMonth {
   periodMonth: number
 }
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function formatMoney(amount: number): string {
-  if (!Number.isFinite(amount)) return formatCurrencyRounded(0)
-  return formatCurrencyRounded(Math.floor(amount))
-}
-
 function formatPercentSigned(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+}
+
+function formatThousandsTick(value: number): string {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return '0'
+  return `${Math.round(numeric / 1000)}k`
 }
 
 function formatTxDateDayMonth(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '--/--'
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-}
-
-function formatTxDateFrench(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function formatMonthYearFrench(monthStart: string | null | undefined): string {
@@ -175,21 +217,6 @@ function formatMonthYearFrench(monthStart: string | null | undefined): string {
   return d
     .toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
     .replace('.', '')
-}
-
-function formatCategoryModalLabel(name: string): string {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
-  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
-  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
-  return name
-}
-
-function txLabel(tx: Transaction): string {
-  return (tx.normalized_label ?? tx.raw_label ?? 'Opération').trim() || 'Opération'
 }
 
 function extractPiePayload(slice: unknown): Partial<PieDatum> | null {
@@ -205,6 +232,24 @@ function pad2(value: number): string {
 
 function monthKey(periodYear: number, periodMonth: number): string {
   return `${periodYear}-${pad2(periodMonth)}`
+}
+
+function normalizeCategoryToken(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getSavingsSubCategoryRank(name: string): number {
+  const token = normalizeCategoryToken(name)
+  if (token.includes('virement') && token.includes('epargne')) return 0
+  if (token.includes('investissement')) return 1
+  if (token.includes('placement')) return 2
+  if (token.includes('projet')) return 3
+  if (token.includes('interet')) return 4
+  return 99
 }
 
 function buildHistoryWindow(periodYear: number, periodMonth: number, monthsBack: number): HistoryWindowMonth[] {
@@ -233,7 +278,7 @@ function getPeriodRange(
   selectedMonth: number,
 ): { startDate: string; endDate: string } {
   const now = new Date()
-  const today = todayStr()
+  const today = todayIso()
 
   if (key === 'annee') {
     return { startDate: `${selectedYear}-01-01`, endDate: today }
@@ -250,31 +295,34 @@ function getPeriodRange(
   return { startDate, endDate }
 }
 
+function formatMonthYearShort(month: number, year: number): string {
+  const monthLabel = MONTHS_FR_FULL[Math.max(0, Math.min(11, month - 1))] ?? 'Mois'
+  const shortYear = String(year).slice(-2)
+  return `${monthLabel} ${shortYear}`
+}
+
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-const VIZ_TOKENS = ['var(--viz-a)', 'var(--viz-b)', 'var(--viz-c)', 'var(--viz-d)', 'var(--viz-e)'] as const
 const BUDGET_BLOCKS: Array<{ id: BudgetBlockId; label: string; color: string }> = [
-  { id: 'socle_fixe', label: 'Fixe', color: 'var(--primary-500)' },
-  { id: 'variable_essentielle', label: 'Variable essentielle', color: 'var(--color-success)' },
-  { id: 'discretionnaire', label: 'Discrétionnaire', color: 'var(--color-error)' },
-  { id: 'epargne', label: 'Épargne', color: 'var(--color-warning)' },
-  { id: 'provision', label: 'Provision', color: 'var(--viz-d)' },
+  { id: 'socle_fixe', label: 'Fixe', color: BUDGET_BUCKET_COLORS.socle_fixe },
+  { id: 'variable_essentielle', label: 'Variable essentielle', color: BUDGET_BUCKET_COLORS.variable_essentielle },
+  { id: 'discretionnaire', label: 'Discrétionnaire', color: BUDGET_BUCKET_COLORS.discretionnaire },
+  { id: 'provision', label: 'Provision', color: BUDGET_BUCKET_COLORS.provision },
 ]
 
 const BLOCK_LIST_ORDER: BudgetBlockId[] = [
+  'discretionnaire',
   'socle_fixe',
   'variable_essentielle',
-  'discretionnaire',
   'provision',
-  'epargne',
 ]
 
 const BLOCK_PROGRESS_COLORS: Record<BudgetBlockId, string> = {
-  socle_fixe: '#5B57F5',
-  variable_essentielle: '#2ED47A',
-  epargne: '#FFAB2E',
-  provision: '#6C63FF',
-  discretionnaire: '#FC5A5A',
-  cagnotte: '#4A4A62',
+  socle_fixe: BUDGET_BUCKET_COLORS.socle_fixe,
+  variable_essentielle: BUDGET_BUCKET_COLORS.variable_essentielle,
+  epargne: BUDGET_BUCKET_COLORS.epargne,
+  provision: BUDGET_BUCKET_COLORS.provision,
+  discretionnaire: BUDGET_BUCKET_COLORS.discretionnaire,
+  cagnotte: BUDGET_BUCKET_COLORS.cagnotte,
 }
 
 const BLOCK_ICON_SRC: Record<BudgetBlockId, string> = {
@@ -293,15 +341,7 @@ const BUCKET_SCOPE_ICON_SRC: Record<string, string> = {
   discretionnaire: blockDiscretionnaireIcon,
   epargne: blockEpargneIcon,
   revenu: blockRevenusIcon,
-  cagnotte_projet: blockEpargneIcon,
-}
-
-function accentFromLabel(label: string | null | undefined): string {
-  const safeLabel = typeof label === 'string' && label.trim().length > 0 ? label : 'categorie'
-  const key = safeLabel.trim().toLowerCase()
-  let hash = 0
-  for (let i = 0; i < key.length; i += 1) hash = (hash << 5) - hash + key.charCodeAt(i)
-  return VIZ_TOKENS[Math.abs(hash) % VIZ_TOKENS.length]
+  voyage: blockProvisionsIcon,
 }
 
 function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockId | null {
@@ -314,23 +354,10 @@ function mapBudgetBucketToBlock(bucket: string | null | undefined): BudgetBlockI
       return 'discretionnaire'
     case 'provision':
       return 'provision'
-    case 'epargne':
-      return 'epargne'
+    // 'epargne' intentionnellement absent — l'épargne n'est jamais un block budgétaire
     default:
       return null
   }
-}
-
-function formatBudgetBucketLabel(bucket: string | null | undefined): string {
-  if (!bucket) return 'Non classé'
-  if (bucket === 'socle_fixe') return 'Fixe'
-  if (bucket === 'variable_essentielle') return 'Variable essentielle'
-  if (bucket === 'discretionnaire') return 'Discrétionnaire'
-  if (bucket === 'cagnotte_projet') return 'Cagnotte projet'
-  if (bucket === 'provision') return 'Provision'
-  if (bucket === 'epargne') return 'Épargne'
-  if (bucket === 'hors_pilotage') return 'Hors pilotage'
-  return bucket
 }
 
 function truncateCalloutLabel(value: string, maxLength = 14): string {
@@ -425,24 +452,97 @@ function buildSegmentCallouts(
   adjustStack(raw.filter((item) => item.side === 'left'))
   adjustStack(raw.filter((item) => item.side === 'right'))
 
-  return raw.map(({ side: _side, ...item }) => item)
+  return raw.map(({ side, ...item }) => {
+    if (side !== 'left' && side !== 'right') return item
+    return item
+  })
 }
 
 function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: MonthlyBucket }> }) {
   if (!active || !payload?.length) return null
-  const amount = Number(payload[0]?.value ?? 0)
+  const amount = Number(payload[0]?.payload?.amount ?? payload[0]?.value ?? 0)
   const budget = Number(payload[0]?.payload?.budget ?? 0)
   const gapPct = budget > 0 ? ((amount - budget) / budget) * 100 : null
   return (
     <div style={{ background: 'var(--primary-600)', borderRadius: 'var(--radius-md)', padding: '6px 11px', boxShadow: 'var(--shadow-md)', display: 'grid', gap: 2 }}>
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', textAlign: 'center' }}>
-        {formatMoney(amount)}
+        {formatCurrencyFloored(amount)}
       </span>
       {gapPct != null ? (
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: gapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', textAlign: 'center' }}>
           {formatPercentSigned(gapPct)}
         </span>
       ) : null}
+    </div>
+  )
+}
+
+interface BarClickBubbleProps {
+  data: MonthlyBucket
+  sixMonthAverage: number
+  sixMonthGapPct: number | null
+  chartX: number
+  onClose: () => void
+}
+
+function BarClickBubble({ data, sixMonthAverage, sixMonthGapPct, chartX, onClose }: BarClickBubbleProps) {
+  const gapPct = data.budget > 0 ? ((data.amount - data.budget) / data.budget) * 100 : null
+  const parts = data.monthStart.split('-')
+  const monthLabel = MONTHS_FR_FULL[Number(parts[1]) - 1] ?? ''
+  const year = parts[0] ?? ''
+  return (
+    <div style={{
+      position: 'absolute',
+      left: Math.max(4, Math.min(chartX - 88, 280)),
+      top: 6,
+      zIndex: 20,
+      pointerEvents: 'none',
+    }}>
+      <div style={{
+        pointerEvents: 'auto',
+        background: '#1e1b4b',
+        borderRadius: 'var(--radius-lg)',
+        padding: '10px 13px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.28)',
+        display: 'grid',
+        gap: 5,
+        minWidth: 176,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: 'var(--neutral-0)', textTransform: 'capitalize' }}>
+            {monthLabel} {year}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.14)', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'var(--neutral-0)', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, padding: 0, flexShrink: 0 }}
+          >
+            ✕
+          </button>
+        </div>
+        <div style={{ display: 'grid', gap: 4, borderTop: '1px solid rgba(255,255,255,0.13)', paddingTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Consommé</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(data.amount)}</span>
+          </div>
+          {gapPct != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>% écart</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: gapPct > 0 ? '#ff8fa3' : '#6fcf97', whiteSpace: 'nowrap' }}>{formatPercentSigned(gapPct)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(sixMonthAverage)}</span>
+          </div>
+          {sixMonthGapPct != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Écart moyen (6M)</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: sixMonthGapPct > 0 ? '#ff8fa3' : '#6fcf97', whiteSpace: 'nowrap' }}>{formatPercentSigned(sixMonthGapPct)}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -506,7 +606,7 @@ function SubCategoryTransactionsModal({
             }}
           >
             <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', background: categoryColor }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>{categoryName} - {formatMoney(categoryAmount)}</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>{categoryName} - {formatCurrencyFloored(categoryAmount)}</p>
               <button type="button" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: 'var(--neutral-0)', width: 32, height: 32, minWidth: 32, minHeight: 32, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Fermer">
                 <X size={20} />
               </button>
@@ -544,8 +644,10 @@ function SubCategoryTransactionsModal({
                     }}
                   >
                     <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>{formatTxDateDayMonth(tx.transaction_date)}</span>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>{txLabel(tx)}</span>
-                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatMoney(Number(tx.amount))}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'var(--neutral-800)' }}>
+                      {getTxLabel(tx)}{tx.personal_share_ratio != null && tx.personal_share_ratio !== 1 ? <span style={{ color: 'var(--neutral-400)', fontSize: 11, marginLeft: 4 }}>(dépense jointe)</span> : null}
+                    </span>
+                    <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(Number(tx.amount))}</span>
                   </button>
                 ))
               )}
@@ -559,6 +661,7 @@ function SubCategoryTransactionsModal({
 }
 
 export function Budgets() {
+  const queryClient = useQueryClient()
   const now = new Date()
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth()
@@ -572,7 +675,13 @@ export function Budgets() {
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
   const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
   const [selectedPeriodMonth, setSelectedPeriodMonth] = useState(defaultPeriodMonth)
-  const [availableBudgetPeriods, setAvailableBudgetPeriods] = useState<BudgetPeriodOption[]>([])
+  const [clickedCatBar, setClickedCatBar] = useState<{ payload: MonthlyBucket; chartX: number } | null>(null)
+  const [clickedBlockBar, setClickedBlockBar] = useState<{ payload: MonthlyBucket; chartX: number } | null>(null)
+  const { data: availableBudgetPeriods = [] } = useQuery({
+    queryKey: ['budget-periods'],
+    queryFn: getBudgetPeriods,
+    staleTime: 5 * 60_000,
+  })
   const [dataDisplayMode, setDataDisplayMode] = useState<DataDisplayMode>('reel')
   const selectedCat = searchParams.get('category') ?? 'all'
   const selectedBlockQuery = searchParams.get('block')
@@ -593,14 +702,30 @@ export function Budgets() {
   const [subCategoryToReopen, setSubCategoryToReopen] = useState<SubCategoryTrendItem | null>(null)
   const [selectedDonutSlice, setSelectedDonutSlice] = useState<PieDatum | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<BudgetBlockId | null>(null)
+  const [revenueGraphSlide, setRevenueGraphSlide] = useState(0)
+  const [revenueSourceView, setRevenueSourceView] = useState<'list' | 'donut'>('list')
+  const [selectedRevenueSourceId, setSelectedRevenueSourceId] = useState<string | null>(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const [slideThreeScopeSelection, setSlideThreeScopeSelection] = useState<MetricsScopeSelection>({
-    kind: 'bloc',
-    id: BUCKET_ORDER[0],
+    kind: 'categorie',
+    id: ALL_CATEGORIES_SCOPE_ID,
   })
   const [showSlideThreeScopeSheet, setShowSlideThreeScopeSheet] = useState(false)
   const [slideThreePeriod, setSlideThreePeriod] = useState('2026')
-  const [slideThreeDisplayMode, setSlideThreeDisplayMode] = useState<MetricsDisplayMode>('tableau')
+  const [selectedYtdSlideView, setSelectedYtdSlideView] = useState<BudgetYtdSlideView>('kpi')
+  const [showYtdSlideViewMenu, setShowYtdSlideViewMenu] = useState(false)
+  const [showSlideThreePeriodMenu, setShowSlideThreePeriodMenu] = useState(false)
+  const [budgetsTabId, setBudgetsTabId] = useState<BudgetsTabId>('enveloppes')
+  const [enveloppesViewMode, setEnveloppesViewMode] = useState<EnveloppesViewMode>('categories')
+  const [enveloppesRestoreRequest, setEnveloppesRestoreRequest] = useState<{
+    mode: EnveloppesViewMode
+    anchor: 'categories_list' | 'socles_list'
+    token: number
+  } | null>(null)
+  const enveloppesRestoreTokenRef = useRef(0)
+  const [showBudgetsTabModal, setShowBudgetsTabModal] = useState(false)
+  const [analyticsRefreshing, setAnalyticsRefreshing] = useState(false)
+  const [analyticsLastUpdatedAt, setAnalyticsLastUpdatedAt] = useState<Date>(() => new Date())
   const {
     data: budgetPayload,
   } = useBudgetPagePayload({
@@ -626,7 +751,6 @@ export function Budgets() {
   useEffect(() => {
     if (!import.meta.env.DEV || !budgetPayload) return
     console.log('[Budget Mapping Check] by_bucket keys', Object.keys(payloadByBucket))
-    console.log('[Budget Mapping Check] epargne', payloadByBucket.epargne)
     console.log('[Budget Mapping Check] provision', payloadByBucket.provision)
   }, [budgetPayload, payloadByBucket])
 
@@ -634,6 +758,16 @@ export function Budgets() {
     if (!import.meta.env.DEV) return
     console.log('[BudgetRevenueAnalytics]', revenueAnalytics)
   }, [revenueAnalytics])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.log('[BudgetYTD] selected slide view', {
+      selectedYtdSlideView,
+      slideThreeScopeSelection,
+      slideThreePeriod,
+      activeSlide,
+    })
+  }, [activeSlide, selectedYtdSlideView, slideThreePeriod, slideThreeScopeSelection])
 
   const visibleBudgetBuckets = useMemo(
     () => PILOTAGE_BUCKET_ORDER.map((bucket) => ({
@@ -651,11 +785,6 @@ export function Budgets() {
     () => (Array.isArray(budgetPayload?.by_category) ? budgetPayload.by_category : []),
     [budgetPayload],
   )
-  const payloadHistory = useMemo(
-    () => (Array.isArray(budgetPayload?.history_last_6m) ? budgetPayload.history_last_6m : []),
-    [budgetPayload],
-  )
-  const debugRanRef = useRef(false)
   const donutTooltipRef = useRef<HTMLDivElement | null>(null)
   const categoryDonutRef = useRef<HTMLDivElement | null>(null)
   const blockDonutRef = useRef<HTMLDivElement | null>(null)
@@ -664,12 +793,16 @@ export function Budgets() {
   const dragStartXRef = useRef<number | null>(null)
   const dragDeltaXRef = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
-  const hasAppliedDefaultParamsRef = useRef(false)
   const topSectionRef = useRef<HTMLElement | null>(null)
   const categoriesSectionRef = useRef<HTMLElement | null>(null)
   const blocksSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const projectionSectionTitleRef = useRef<HTMLHeadingElement | null>(null)
   const smoothScrollFrameRef = useRef<number | null>(null)
+  const topTravelSnapTimeoutRef = useRef<number | null>(null)
+  const voyagesCategoryIdRef = useRef<string | null>(null)
   const shouldFocusCategoriesSectionRef = useRef(false)
+  const shouldFocusBlocksSectionRef = useRef(false)
+  const [preferSoclesReturnAfterVoyages, setPreferSoclesReturnAfterVoyages] = useState(false)
   const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === 'undefined' ? 1024 : window.innerWidth))
 
   useEffect(() => {
@@ -683,15 +816,15 @@ export function Budgets() {
   const slideThreeParamCardWidth = isCompactMobile ? 132 : 140
 
   const setSelectedCat = useCallback((nextCategoryId: string) => {
-    const nextParams = new URLSearchParams(searchParams)
+    const nextParams = new URLSearchParams(searchParamsKey)
     if (nextCategoryId === 'all') nextParams.delete('category')
     else nextParams.set('category', nextCategoryId)
     nextParams.delete('block')
     setSearchParams(nextParams, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParamsKey, setSearchParams])
 
   const setSelectedBlockPage = useCallback((nextBlockId: BlockPageId | null) => {
-    const nextParams = new URLSearchParams(searchParams)
+    const nextParams = new URLSearchParams(searchParamsKey)
     if (nextBlockId) {
       nextParams.set('block', nextBlockId)
       nextParams.delete('category')
@@ -699,12 +832,9 @@ export function Budgets() {
       nextParams.delete('block')
     }
     setSearchParams(nextParams, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParamsKey, setSearchParams])
 
   useEffect(() => {
-    if (hasAppliedDefaultParamsRef.current) return
-    hasAppliedDefaultParamsRef.current = true
-
     setPeriodKey('mois')
     setSelectedPeriodYear(defaultPeriodYear)
     setSelectedPeriodMonth(defaultPeriodMonth)
@@ -717,39 +847,62 @@ export function Budgets() {
       nextParams.delete('block')
       setSearchParams(nextParams, { replace: true })
     }
-  }, [defaultPeriodMonth, defaultPeriodYear, searchParamsKey, setSearchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
-    let active = true
-
-    const loadBudgetPeriods = async () => {
-      try {
-        const periods = await getBudgetPeriods()
-        if (!active) return
-
-        setAvailableBudgetPeriods(periods)
-        if (!periods.length) return
-
-        const hasCurrentSelection = periods.some(
-          (period) => period.period_year === defaultPeriodYear && period.period_month === defaultPeriodMonth,
-        )
-
-        if (!hasCurrentSelection) {
-          setSelectedPeriodYear(periods[0].period_year)
-          setSelectedPeriodMonth(periods[0].period_month)
-        }
-      } catch {
-        if (!active) return
-        setAvailableBudgetPeriods([])
-      }
+    if (!availableBudgetPeriods.length) return
+    const hasCurrentSelection = availableBudgetPeriods.some(
+      (p) => p.period_year === defaultPeriodYear && p.period_month === defaultPeriodMonth,
+    )
+    if (!hasCurrentSelection) {
+      setSelectedPeriodYear(availableBudgetPeriods[0].period_year)
+      setSelectedPeriodMonth(availableBudgetPeriods[0].period_month)
     }
+  }, [availableBudgetPeriods, defaultPeriodYear, defaultPeriodMonth])
 
-    void loadBudgetPeriods()
+  const activeBudgetsTab = useMemo(
+    () => BUDGETS_TABS.find((t) => t.id === budgetsTabId) ?? BUDGETS_TABS[0],
+    [budgetsTabId],
+  )
 
-    return () => {
-      active = false
+  const handleBudgetsTabSelect = useCallback((tabId: BudgetsTabId) => {
+    setBudgetsTabId(tabId)
+    setSelectedCat('all')
+    setSelectedBlockPage(null)
+    setShowBudgetsTabModal(false)
+    setShowHeaderPeriodMenu(false)
+    setShowSlideThreeScopeSheet(false)
+    setShowCatSheet(false)
+  }, [setSelectedBlockPage, setSelectedCat])
+
+  const handleAnalyticsRefresh = useCallback(async () => {
+    if (analyticsRefreshing) return
+
+    setAnalyticsRefreshing(true)
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['annual-2025-analysis'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-ytd-flows'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-bucket-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['compared-category-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['annual-projection-overview-2026'] }),
+      ])
+      setAnalyticsLastUpdatedAt(new Date())
+    } finally {
+      setAnalyticsRefreshing(false)
     }
-  }, [nowMonth, nowYear])
+  }, [analyticsRefreshing, queryClient])
+
+  const analyticsLastUpdateLabel = useMemo(() => {
+    const date = analyticsLastUpdatedAt
+    if (Number.isNaN(date.getTime())) return 'Jamais mis à jour'
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `Actualisé le ${day}/${month} à ${hours}:${minutes}`
+  }, [analyticsLastUpdatedAt])
 
   const handleHeaderTitleReset = useCallback(() => {
     setSelectedCat('all')
@@ -767,8 +920,15 @@ export function Budgets() {
     smoothScrollFrameRef.current = null
   }, [])
 
+  const cancelTopTravelSnap = useCallback(() => {
+    if (topTravelSnapTimeoutRef.current == null) return
+    window.clearTimeout(topTravelSnapTimeoutRef.current)
+    topTravelSnapTimeoutRef.current = null
+  }, [])
+
   const scrollViewportToTop = useCallback(() => {
     cancelSmoothScroll()
+    cancelTopTravelSnap()
     const scroller = document.scrollingElement as HTMLElement | null
     if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     document.documentElement.scrollTop = 0
@@ -782,7 +942,78 @@ export function Budgets() {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       })
     })
-  }, [cancelSmoothScroll])
+  }, [cancelSmoothScroll, cancelTopTravelSnap])
+
+  const handleEnveloppesCategoryClick = useCallback((categoryId: string) => {
+    setEnveloppesViewMode('categories')
+    setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
+    setSelectedBlockPage(null)
+    setSelectedCat(categoryId)
+    scrollViewportToTop()
+  }, [setSelectedBlockPage, setSelectedCat, scrollViewportToTop])
+
+  const handleEnveloppesBlockClick = useCallback((blockId: string) => {
+    setEnveloppesViewMode('socles')
+    setEnveloppesRestoreRequest(null)
+    setSelectedBlockPage(null)
+    if (blockId === 'voyage') {
+      const voyagesCategoryId = voyagesCategoryIdRef.current
+      if (voyagesCategoryId) {
+        setPreferSoclesReturnAfterVoyages(true)
+        setSelectedCat(voyagesCategoryId)
+      } else {
+        setPreferSoclesReturnAfterVoyages(false)
+        setSelectedCat('all')
+      }
+      scrollViewportToTop()
+      return
+    }
+
+    setPreferSoclesReturnAfterVoyages(false)
+    setSelectedCat('all')
+    if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
+      setSelectedBlockPage(blockId)
+    }
+    scrollViewportToTop()
+  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
+
+  const handleEnveloppesRevenueClick = useCallback(() => {
+    setEnveloppesViewMode('socles')
+    setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
+    setSelectedCat('all')
+    setSelectedBlockPage(REVENUE_BLOCK_PAGE_ID)
+    scrollViewportToTop()
+  }, [scrollViewportToTop, setSelectedBlockPage, setSelectedCat])
+
+  const handleReturnToEnveloppes = useCallback(() => {
+    const shouldReturnToSocles = selectedBlockPageId != null || selectedBlockId != null || preferSoclesReturnAfterVoyages
+    const nextMode: EnveloppesViewMode = shouldReturnToSocles ? 'socles' : 'categories'
+    enveloppesRestoreTokenRef.current += 1
+    setEnveloppesViewMode(nextMode)
+    setEnveloppesRestoreRequest({
+      mode: nextMode,
+      anchor: nextMode === 'socles' ? 'socles_list' : 'categories_list',
+      token: enveloppesRestoreTokenRef.current,
+    })
+    shouldFocusBlocksSectionRef.current = false
+    shouldFocusCategoriesSectionRef.current = false
+    setActiveSlide(0)
+    setSelectedBlockPage(null)
+    setSelectedCat('all')
+    setPreferSoclesReturnAfterVoyages(false)
+    setBudgetsTabId('enveloppes')
+    setShowHeaderPeriodMenu(false)
+    setShowSlideThreeScopeSheet(false)
+    setShowCatSheet(false)
+  }, [preferSoclesReturnAfterVoyages, selectedBlockId, selectedBlockPageId, setSelectedBlockPage, setSelectedCat])
+
+  useEffect(() => {
+    if (budgetsTabId === 'enveloppes') return
+    setEnveloppesRestoreRequest(null)
+    setPreferSoclesReturnAfterVoyages(false)
+  }, [budgetsTabId])
 
   const smoothScrollToY = useCallback((targetY: number, duration = 760) => {
     cancelSmoothScroll()
@@ -825,25 +1056,37 @@ export function Budgets() {
       ? categoriesSectionRef.current
       : activeSlide === 1
         ? blocksSectionTitleRef.current
-        : null
+        : activeSlide === 2
+          ? projectionSectionTitleRef.current
+          : null
     if (!target) return
     const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
     smoothScrollToY(Math.max(0, y))
   }, [activeSlide, resolveTopOffset, smoothScrollToY])
 
   const scrollToTopSection = useCallback(() => {
-    const target = topSectionRef.current
-    if (!target) return
-    const y = target.getBoundingClientRect().top + window.scrollY - resolveTopOffset()
-    smoothScrollToY(Math.max(0, y))
-  }, [resolveTopOffset, smoothScrollToY])
+    const scroller = document.scrollingElement as HTMLElement | null
+    const startY = scroller?.scrollTop ?? window.scrollY
+    if (startY <= 1) {
+      scrollViewportToTop()
+      return
+    }
+    cancelTopTravelSnap()
+    const duration = Math.max(900, Math.min(1550, Math.round(startY * 0.65)))
+    smoothScrollToY(0, duration)
+    topTravelSnapTimeoutRef.current = window.setTimeout(() => {
+      scrollViewportToTop()
+      topTravelSnapTimeoutRef.current = null
+    }, duration + 90)
+  }, [cancelTopTravelSnap, scrollViewportToTop, smoothScrollToY])
 
   const scrollToCategoriesSectionTop = useCallback(() => {
     const target = categoriesSectionRef.current
     if (!target) return false
     const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
     const headerPx = Number.parseFloat(rawHeader || '0')
-    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx : 68
+    const breathingMargin = 12
+    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx + breathingMargin : 80
     const y = target.getBoundingClientRect().top + window.scrollY - effectiveHeaderOffset
     cancelSmoothScroll()
     const targetY = Math.max(0, y)
@@ -857,14 +1100,30 @@ export function Budgets() {
     return true
   }, [cancelSmoothScroll])
 
-  useEffect(() => () => cancelSmoothScroll(), [cancelSmoothScroll])
+  const scrollToBlocksSectionTop = useCallback(() => {
+    const target = blocksSectionTitleRef.current
+    if (!target) return false
+    const rawHeader = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+    const headerPx = Number.parseFloat(rawHeader || '0')
+    const breathingMargin = 12
+    const effectiveHeaderOffset = Number.isFinite(headerPx) ? headerPx + breathingMargin : 80
+    const y = target.getBoundingClientRect().top + window.scrollY - effectiveHeaderOffset
+    cancelSmoothScroll()
+    const targetY = Math.max(0, y)
+    const scroller = document.scrollingElement as HTMLElement | null
+    if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    window.requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+      window.scrollTo({ top: targetY, left: 0, behavior: 'auto' })
+    })
+    return true
+  }, [cancelSmoothScroll])
 
-  useEffect(() => {
-    if (import.meta.env.DEV && !debugRanRef.current) {
-      debugRanRef.current = true
-      void debugBudgetSupabaseConnection(supabase)
-    }
-  }, [])
+  useEffect(() => () => {
+    cancelSmoothScroll()
+    cancelTopTravelSnap()
+  }, [cancelSmoothScroll, cancelTopTravelSnap])
 
   useEffect(() => {
     const categoryElement = categoryDonutRef.current
@@ -969,6 +1228,37 @@ export function Budgets() {
     }
   }, [selectedCat, activeSlide, scrollToCategoriesSectionTop])
 
+  useEffect(() => {
+    if (!shouldFocusBlocksSectionRef.current) return
+    if (selectedBlockPageId != null || activeSlide !== 1) return
+
+    let cancelled = false
+
+    const tryFocus = (attemptsLeft: number) => {
+      if (cancelled || !shouldFocusBlocksSectionRef.current) return
+      const scrolledNow = scrollToBlocksSectionTop()
+      if (scrolledNow) {
+        shouldFocusBlocksSectionRef.current = false
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            void scrollToBlocksSectionTop()
+          })
+        })
+        return
+      }
+      if (attemptsLeft <= 0) return
+      window.setTimeout(() => {
+        tryFocus(attemptsLeft - 1)
+      }, 48)
+    }
+
+    tryFocus(14)
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedBlockPageId, activeSlide, scrollToBlocksSectionTop])
+
   const configuredBudgetCategoryLines = useMemo<BudgetLineWithCategory[]>(() => {
     if (!budgetPayload) return []
     const periodYear = Number(budgetPayload.selected_period?.period_year ?? selectedPeriodYear)
@@ -1001,7 +1291,9 @@ export function Budgets() {
     const periodYear = Number(budgetPayload.selected_period?.period_year ?? selectedPeriodYear)
     const periodMonth = Number(budgetPayload.selected_period?.period_month ?? selectedPeriodMonth)
 
-    return payloadByParentCategory.map((row) => ({
+    return payloadByParentCategory
+      .filter((row) => normalizeCategoryToken(row.parent_category_name) !== 'epargne')
+      .map((row) => ({
       id: `${row.parent_category_id}:${periodYear}-${periodMonth}`,
       period_id: '',
       category_id: row.parent_category_id,
@@ -1020,7 +1312,7 @@ export function Budgets() {
       final_budget_monthly_eur: null,
       manual_budget_monthly_eur: null,
       recommendation_comment: null,
-    }))
+      }))
   }, [payloadByParentCategory, budgetPayload, selectedPeriodMonth, selectedPeriodYear])
 
   const configuredBudgetActuals = useMemo(() => {
@@ -1064,13 +1356,47 @@ export function Budgets() {
     }))
   }, [budgetPayload, payloadByCategory])
 
-  const { data: categories = [], isFetched: categoriesFetched } = useCategories('expense')
-  const rootExpenseCategories = useMemo(() => categories.filter((c) => c.parent_id === null), [categories])
-  const expenseSubCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
+  const { data: categories = [], isFetched: categoriesFetched } = useCategories()
+  const expenseCategories = useMemo(() => categories.filter((c) => c.flow_type === 'expense'), [categories])
+  const rootExpenseCategories = useMemo(() => expenseCategories.filter((c) => c.parent_id === null), [expenseCategories])
+  const rootNavigableCategories = useMemo(
+    () =>
+      categories.filter((c) => (
+        c.parent_id === null
+        && c.flow_type === 'expense'  // REGLE: jamais flow_type = 'savings' dans le budget
+      )),
+    [categories],
+  )
+  const childCategories = useMemo(() => categories.filter((c) => c.parent_id !== null), [categories])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const expenseCategoryIdSet = useMemo(() => new Set(expenseCategories.map((c) => c.id)), [expenseCategories])
+  const savingsCategoryIds = useMemo(
+    () => categories.filter((c) => c.flow_type === 'savings').map((c) => c.id),
+    [categories],
+  )
+  const epargneRootCategory = useMemo(
+    () => categories.find((c) => c.parent_id === null && c.flow_type === 'savings' && normalizeCategoryToken(c.name) === 'epargne') ?? null,
+    [categories],
+  )
+  useEffect(() => {
+    const voyagesRootCategory = categories.find(
+      (c) => c.parent_id === null && c.flow_type === 'expense' && normalizeCategoryToken(c.name) === 'voyages',
+    ) ?? null
+    voyagesCategoryIdRef.current = voyagesRootCategory?.id ?? null
+  }, [categories])
+  const epargneSubCategories = useMemo(() => {
+    if (!epargneRootCategory) return []
+    return childCategories
+      .filter((c) => c.parent_id === epargneRootCategory.id)
+      .sort((a, b) => {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+        return a.name.localeCompare(b.name, 'fr')
+      })
+  }, [childCategories, epargneRootCategory])
   const slideThreeBlockOptions = useMemo(
     () => BUCKET_ORDER
-      .filter((bucketKey) => bucketKey !== 'hors_pilotage')
+      .filter((bucketKey) => bucketKey !== 'hors_pilotage' && bucketKey !== 'revenu')
       .map((bucketKey) => ({
         id: bucketKey,
         label: BUCKET_LABELS[bucketKey] ?? bucketKey,
@@ -1085,16 +1411,31 @@ export function Budgets() {
         iconType: 'block' as const,
         iconSrc: BUCKET_SCOPE_ICON_SRC[slideThreeScopeSelection.id] ?? blockProvisionsIcon,
         iconKey: null as string | null,
+        color: getBudgetBucketColor(slideThreeScopeSelection.id, 'var(--primary-500)'),
+      }
+    }
+    if (slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID) {
+      return {
+        label: 'Toutes catégories',
+        iconType: 'category' as const,
+        iconSrc: null as string | null,
+        iconKey: 'toutes_categories',
+        color: 'var(--primary-500)',
       }
     }
     const category = categoryById.get(slideThreeScopeSelection.id) ?? null
+    const categoryPayload = payloadByCategory.find((row) => row.category_id === slideThreeScopeSelection.id)
+    const scopeColor = categoryPayload?.budget_bucket
+      ? getBudgetBucketColor(categoryPayload.budget_bucket, categoryColorFromName(category?.name))
+      : categoryColorFromName(category?.name)
     return {
       label: category?.name ?? 'Catégorie',
       iconType: 'category' as const,
       iconSrc: null as string | null,
       iconKey: category?.icon_key ?? null,
+      color: scopeColor,
     }
-  }, [categoryById, slideThreeScopeSelection])
+  }, [categoryById, payloadByCategory, slideThreeScopeSelection])
   const slideThreePeriods = useMemo(() => ['2026', ...MONTHS_FR_FULL.slice(0, 5)], [])
 
   useEffect(() => {
@@ -1104,6 +1445,12 @@ export function Budgets() {
     }
   }, [selectedCat, categoryById, categoriesFetched, setSelectedCat])
 
+  useEffect(() => {
+    if (!epargneRootCategory) return
+    if (selectedCat !== epargneRootCategory.id) return
+    setSelectedCat('all')
+  }, [selectedCat, epargneRootCategory, setSelectedCat])
+
   const range = useMemo(
     () => getPeriodRange(periodKey, selectedPeriodYear, selectedPeriodMonth),
     [periodKey, selectedPeriodYear, selectedPeriodMonth],
@@ -1112,38 +1459,123 @@ export function Budgets() {
   const selectedCategoryIds = useMemo(() => {
     if (selectedCat === 'all') return undefined
     const ids = [selectedCat]
-    expenseSubCategories.forEach((c) => {
+    childCategories.forEach((c) => {
       if (c.parent_id === selectedCat) ids.push(c.id)
     })
     return ids
-  }, [expenseSubCategories, selectedCat])
+  }, [childCategories, selectedCat])
+
+  const selectedRootCategoryId = useMemo(() => {
+    if (selectedCat === 'all') return null
+    let current = categoryById.get(selectedCat) ?? null
+    if (!current) return selectedCat
+    while (current?.parent_id) {
+      current = categoryById.get(current.parent_id) ?? null
+    }
+    return current?.id ?? selectedCat
+  }, [categoryById, selectedCat])
+
+  const selectedRootCategory = useMemo(
+    () => (selectedRootCategoryId ? categoryById.get(selectedRootCategoryId) ?? null : null),
+    [categoryById, selectedRootCategoryId],
+  )
+
+  const isSavingsCategoryMode = useMemo(() => {
+    if (selectedCat === 'all') return false
+    if (!selectedRootCategory) return false
+    if (selectedRootCategory.flow_type === 'savings') return true
+    return normalizeCategoryToken(selectedRootCategory.name) === 'epargne'
+  }, [selectedCat, selectedRootCategory])
+
+  const isVoyagesCategoryMode = useMemo(() => {
+    if (selectedCat === 'all') return false
+    if (!selectedRootCategory) return false
+    return normalizeCategoryToken(selectedRootCategory.name) === 'voyages'
+  }, [selectedCat, selectedRootCategory])
+
+  const selectedCategoryFlowType: FlowType = isSavingsCategoryMode ? 'savings' : 'expense'
   const historyWindowMonths = useMemo(
     () => buildHistoryWindow(selectedPeriodYear, selectedPeriodMonth, 6),
     [selectedPeriodYear, selectedPeriodMonth],
   )
-  const selectedCategoryHistoryIds = useMemo(
-    () => selectedCategoryIds ?? (selectedCat !== 'all' ? [selectedCat] : []),
-    [selectedCategoryIds, selectedCat],
-  )
+  const historyRange = useMemo(() => {
+    if (!historyWindowMonths.length) return null
+    const first = historyWindowMonths[0]
+    const last = historyWindowMonths[historyWindowMonths.length - 1]
+    const endDateObj = new Date(last.periodYear, last.periodMonth, 0)
+    const endDate = `${endDateObj.getFullYear()}-${pad2(endDateObj.getMonth() + 1)}-${pad2(endDateObj.getDate())}`
+    return {
+      startDate: first.monthStart,
+      endDate,
+    }
+  }, [historyWindowMonths])
+  const selectedCategoryHistoryIds = useMemo(() => {
+    if (selectedCategoryIds) return selectedCategoryIds
+    if (selectedCat !== 'all') return [selectedCat]
+
+    const excludedRootNames = new Set(['revenus', 'transferts', 'epargne'])
+    const childrenCountByParentId = new Map<string, number>()
+    for (const category of categories) {
+      if (!category.parent_id) continue
+      childrenCountByParentId.set(category.parent_id, (childrenCountByParentId.get(category.parent_id) ?? 0) + 1)
+    }
+
+    const allowedRootIds = new Set(
+      rootExpenseCategories
+        .filter((root) => !excludedRootNames.has(normalizeCategoryToken(root.name)))
+        .map((root) => root.id),
+    )
+
+    return categories
+      .filter((category) => {
+        if (category.parent_id) return allowedRootIds.has(category.parent_id)
+        return allowedRootIds.has(category.id) && (childrenCountByParentId.get(category.id) ?? 0) === 0
+      })
+      .map((category) => category.id)
+  }, [selectedCategoryIds, selectedCat, categories, rootExpenseCategories])
 
   const { data: periodTxns } = useTransactions({
     ...range,
-    flowType: 'expense',
+    flowType: selectedCategoryFlowType,
     categoryIds: selectedCategoryIds,
+  })
+
+  const { data: periodSavingsTxns = [] } = useTransactions({
+    ...range,
+    flowType: 'savings',
+    categoryIds: savingsCategoryIds.length > 0 ? savingsCategoryIds : undefined,
+    debugSource: 'Budgets:periodSavings',
+  }, {
+    enabled: savingsCategoryIds.length > 0,
+  })
+
+  const { data: historySavingsTxns = [] } = useTransactions({
+    startDate: historyRange?.startDate,
+    endDate: historyRange?.endDate,
+    flowType: 'savings',
+    categoryIds: savingsCategoryIds.length > 0 ? savingsCategoryIds : undefined,
+    debugSource: 'Budgets:historySavings',
+  }, {
+    enabled: Boolean(historyRange) && savingsCategoryIds.length > 0,
   })
 
   const subCategoryModalIds = useMemo(() => {
     if (!selectedSubCategory) return undefined
     const ids = [selectedSubCategory.id]
-    expenseSubCategories.forEach((c) => {
+    childCategories.forEach((c) => {
       if (c.parent_id === selectedSubCategory.id) ids.push(c.id)
     })
     return ids
-  }, [selectedSubCategory, expenseSubCategories])
+  }, [selectedSubCategory, childCategories])
+
+  const selectedSubCategoryFlowType: FlowType = useMemo(() => {
+    if (!selectedSubCategory) return 'expense'
+    return categoryById.get(selectedSubCategory.id)?.flow_type === 'savings' ? 'savings' : 'expense'
+  }, [categoryById, selectedSubCategory])
 
   const { data: subCategoryTransactions, isLoading: loadingSubCategoryTransactions } = useTransactions({
     ...range,
-    flowType: 'expense',
+    flowType: selectedSubCategoryFlowType,
     categoryIds: subCategoryModalIds,
     debugSource: 'Budgets:subCategoryTransactions',
   }, {
@@ -1152,9 +1584,13 @@ export function Budgets() {
 
   const totalMonthlyBudget = useMemo(() => {
     if (!summaries?.length) return 0
-    if (selectedCat === 'all') return summaries.reduce((s, b) => s + b.budget_amount, 0)
+    if (selectedCat === 'all') {
+      return summaries.reduce((sum, summary) => (
+        expenseCategoryIdSet.has(summary.category.id) ? sum + summary.budget_amount : sum
+      ), 0)
+    }
     return summaries.find((s) => s.category.id === selectedCat)?.budget_amount ?? 0
-  }, [summaries, selectedCat])
+  }, [summaries, selectedCat, expenseCategoryIdSet])
 
   const selectedPeriodSpent = useMemo(() => {
     if (selectedCat === 'all') {
@@ -1174,10 +1610,6 @@ export function Budgets() {
       || line.parent_category_id === selectedCat
     ))
   }, [configuredBudgetCategoryLines, selectedCat])
-  const dominantCategoryBudgetLine = useMemo(() => {
-    if (!categoryBudgetLines.length) return null
-    return [...categoryBudgetLines].sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))[0]
-  }, [categoryBudgetLines])
   const categoryMonthlyBudget = useMemo(() => {
     if (selectedCat === 'all') return totalMonthlyBudget
     if (!categoryBudgetLines.length) return 0
@@ -1185,7 +1617,7 @@ export function Budgets() {
   }, [categoryBudgetLines, selectedCat, totalMonthlyBudget])
   const { data: categoryHistoryRaw = [] } = useQuery({
     queryKey: ['budgets', 'category-history', selectedCat, selectedPeriodYear, selectedPeriodMonth, selectedCategoryHistoryIds],
-    enabled: selectedCat !== 'all' && selectedCategoryHistoryIds.length > 0,
+    enabled: selectedCategoryHistoryIds.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
       if (!historyWindowMonths.length || selectedCategoryHistoryIds.length === 0) return []
@@ -1193,16 +1625,15 @@ export function Budgets() {
       const startMonth = historyWindowMonths[0].monthStart
       const endMonth = historyWindowMonths[historyWindowMonths.length - 1].monthStart
 
-      const { data, error } = await budgetDb()
-        .from('analytics_monthly_category_metrics')
-        .select('period_year, period_month, amount_total, category_id')
-        .eq('flow_type', 'expense')
+      const { data, error } = await budgetDb
+        .from('v_monthly_category_actuals_clean' as never)
+        .select('period_year, period_month, actual_amount, category_id')
         .in('category_id', selectedCategoryHistoryIds)
         .gte('month_start', startMonth)
         .lte('month_start', endMonth)
 
       if (error) throw new Error(`category history query failed: ${error.message}`)
-      return (data ?? []) as Array<{ period_year: number; period_month: number; amount_total: number | null }>
+      return (data ?? []) as Array<{ period_year: number; period_month: number; actual_amount: number | null }>
     },
   })
   const categoryRanking = useMemo(() => {
@@ -1218,10 +1649,6 @@ export function Budgets() {
     if (idx < 0) return null
     return { index: idx + 1, total: ranked.length }
   }, [selectedCat, selectedCatInfo, summaries])
-  const categoryBlockLabel = useMemo(() => {
-    const bucketLabel = formatBudgetBucketLabel(dominantCategoryBudgetLine?.budget_bucket)
-    return bucketLabel.toLowerCase()
-  }, [dominantCategoryBudgetLine?.budget_bucket])
   const budgetByCategoryId = useMemo(
     () =>
       (summaries ?? []).reduce<Map<string, number>>((acc, summary) => {
@@ -1231,28 +1658,6 @@ export function Budgets() {
     [summaries],
   )
 
-  const globalMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
-    const base = payloadHistory.map((row) => {
-      const monthIndex = Math.max(0, Math.min(11, Number(row.period_month) - 1))
-      const amount = Number(row.actual_total ?? 0)
-      const budget = Number(row.budget_total ?? 0)
-      const isCurrent = Number(row.period_year) === selectedPeriodYear && Number(row.period_month) === selectedPeriodMonth
-
-      return {
-        month: MONTH_LABELS_SHORT[monthIndex],
-        amount,
-        budget,
-        isCurrent,
-      }
-    })
-
-    return base.map((row, idx) => {
-      if (idx === 0) return { ...row, evolutionPct: null }
-      const prev = base[idx - 1].amount
-      if (prev <= 0) return { ...row, evolutionPct: null }
-      return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
-    })
-  }, [payloadHistory, selectedPeriodYear, selectedPeriodMonth])
   const categoryMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const actualByMonthKey = new Map<string, number>()
 
@@ -1261,13 +1666,14 @@ export function Budgets() {
       const periodMonth = Number(row.period_month)
       if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) continue
       const key = monthKey(periodYear, periodMonth)
-      actualByMonthKey.set(key, (actualByMonthKey.get(key) ?? 0) + Number(row.amount_total ?? 0))
+      actualByMonthKey.set(key, (actualByMonthKey.get(key) ?? 0) + Number(row.actual_amount ?? 0))
     }
 
     const base = historyWindowMonths.map((monthRow) => {
       const amount = actualByMonthKey.get(monthRow.key) ?? 0
       return {
         month: monthRow.monthLabel,
+        monthStart: monthRow.monthStart,
         amount,
         budget: categoryMonthlyBudget,
         isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
@@ -1281,7 +1687,7 @@ export function Budgets() {
       return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
     })
   }, [categoryHistoryRaw, historyWindowMonths, categoryMonthlyBudget, selectedPeriodYear, selectedPeriodMonth])
-  const monthlyHistory = selectedCat === 'all' ? globalMonthlyHistory : categoryMonthlyHistory
+  const monthlyHistory = categoryMonthlyHistory
 
   const realPieData = useMemo<PieDatum[]>(() => {
     if (!budgetPayload) return []
@@ -1292,7 +1698,7 @@ export function Budgets() {
           id: row.parent_category_id,
           name: row.parent_category_name,
           value: Number(row.actual_amount ?? 0),
-          color: accentFromLabel(row.parent_category_name),
+          color: categoryColorFromName(row.parent_category_name),
         }))
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
@@ -1304,7 +1710,7 @@ export function Budgets() {
         id: row.category_id,
         name: row.category_name,
         value: Number(row.actual_amount ?? 0),
-        color: accentFromLabel(row.category_name),
+        color: categoryColorFromName(row.category_name),
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -1319,7 +1725,7 @@ export function Budgets() {
           id: row.parent_category_id,
           name: row.parent_category_name,
           value: Number(row.budget_amount ?? 0),
-          color: accentFromLabel(row.parent_category_name),
+          color: categoryColorFromName(row.parent_category_name),
         }))
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
@@ -1331,7 +1737,7 @@ export function Budgets() {
         id: row.category_id,
         name: row.category_name,
         value: Number(row.budget_amount ?? 0),
-        color: accentFromLabel(row.category_name),
+        color: categoryColorFromName(row.category_name),
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -1343,20 +1749,27 @@ export function Budgets() {
     () => buildSegmentCallouts(pieData, pieTotal, categoryDonutSize, { maxVisible: 5, cyRatio: 0.46, outerRadius: 124 }),
     [pieData, pieTotal, categoryDonutSize],
   )
+  const budgetAmountByCategoryFromPayload = useMemo(
+    () => new Map(payloadByCategory.map((row) => [row.category_id, Number(row.budget_amount ?? 0)])),
+    [payloadByCategory],
+  )
   const listSubCategoryRows = useMemo<SubCategoryTrendItem[]>(() => {
     if (selectedCat === 'all') return []
     const txs = periodTxns ?? []
-    if (!expenseSubCategories.length) return []
+    if (!childCategories.length) return []
+    const isEpargneCategoryPage = Boolean(epargneRootCategory && selectedCat === epargneRootCategory.id)
 
     const totalsBySubCategory = txs.reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
-      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount) * (tx.personal_share_ratio ?? 1))
       return acc
     }, new Map<string, number>())
 
-    const visibleSubCategories = expenseSubCategories.filter((subCat) => subCat.parent_id === selectedCat)
+    const visibleSubCategories = isEpargneCategoryPage
+      ? epargneSubCategories
+      : childCategories.filter((subCat) => subCat.parent_id === selectedCat)
 
-    return visibleSubCategories
+    const rows = visibleSubCategories
       .map((subCat) => ({
         id: subCat.id,
         name: subCat.name,
@@ -1367,14 +1780,25 @@ export function Budgets() {
         threeMonthAvg: 0,
         trend: 'equal' as SubCatTrend,
       }))
-      .filter((row) => row.currentMonthAmount > 0 || (budgetByCategoryId.get(row.id) ?? 0) > 0)
-      .sort((a, b) => b.currentMonthAmount - a.currentMonthAmount)
-  }, [periodTxns, expenseSubCategories, selectedCat, categoryById, budgetByCategoryId])
+
+    const filteredRows = isEpargneCategoryPage
+      ? rows
+      : rows.filter((row) => row.currentMonthAmount > 0 || (budgetByCategoryId.get(row.id) ?? 0) > 0)
+
+    return filteredRows.sort((a, b) => {
+      if (isEpargneCategoryPage) {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+      }
+      return b.currentMonthAmount - a.currentMonthAmount
+    })
+  }, [periodTxns, childCategories, epargneSubCategories, epargneRootCategory, selectedCat, categoryById, budgetByCategoryId])
 
   const categoryBarRows = useMemo<CategoryBarRow[]>(() => {
     if (selectedCat === 'all') return []
+    const isEpargneCategoryPage = Boolean(epargneRootCategory && selectedCat === epargneRootCategory.id)
 
-    const rows = listSubCategoryRows
+    const baseRows = listSubCategoryRows
       .map((row) => {
         const budgetAmount = budgetByCategoryId.get(row.id) ?? 0
         const actualAmount = row.currentMonthAmount
@@ -1387,11 +1811,18 @@ export function Budgets() {
           displayAmount: actualAmount,
         } satisfies CategoryBarRow
       })
-      .filter((row) => row.actualAmount > 0 || row.budgetAmount > 0)
-      .sort((a, b) => b.displayAmount - a.displayAmount)
+    const filteredRows = isEpargneCategoryPage
+      ? baseRows
+      : baseRows.filter((row) => row.actualAmount > 0 || row.budgetAmount > 0)
 
-    return rows
-  }, [selectedCat, listSubCategoryRows, budgetByCategoryId])
+    return filteredRows.sort((a, b) => {
+      if (isEpargneCategoryPage) {
+        const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+        if (rankDiff !== 0) return rankDiff
+      }
+      return b.displayAmount - a.displayAmount
+    })
+  }, [selectedCat, listSubCategoryRows, budgetByCategoryId, epargneRootCategory])
   const subCategoryRowById = useMemo(
     () => new Map(listSubCategoryRows.map((row) => [row.id, row])),
     [listSubCategoryRows],
@@ -1400,10 +1831,30 @@ export function Budgets() {
   const periodSpentByCategory = useMemo(() => {
     return (periodTxns ?? []).reduce<Map<string, number>>((acc, tx) => {
       if (!tx.category_id) return acc
-      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount) * (tx.personal_share_ratio ?? 1))
       return acc
     }, new Map<string, number>())
   }, [periodTxns])
+
+  const periodSavingsByCategory = useMemo(() => {
+    return periodSavingsTxns.reduce<Map<string, number>>((acc, tx) => {
+      if (!tx.category_id) return acc
+      acc.set(tx.category_id, (acc.get(tx.category_id) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+  }, [periodSavingsTxns])
+
+  const historySavingsByMonthKey = useMemo(() => {
+    return historySavingsTxns.reduce<Map<string, number>>((acc, tx) => {
+      const date = tx.transaction_date?.slice(0, 10)
+      if (!date) return acc
+      const parsed = new Date(`${date}T00:00:00`)
+      if (Number.isNaN(parsed.getTime())) return acc
+      const key = monthKey(parsed.getFullYear(), parsed.getMonth() + 1)
+      acc.set(key, (acc.get(key) ?? 0) + Number(tx.amount))
+      return acc
+    }, new Map<string, number>())
+  }, [historySavingsTxns])
 
 	  const blockRows = useMemo<BudgetBlockRow[]>(() => {
 	    const initial = new Map<BudgetBlockId, BudgetBlockRow>()
@@ -1438,6 +1889,29 @@ export function Budgets() {
                 budgetAmount: Number(row.budget_amount ?? 0),
                 actualAmount: Number(row.actual_amount ?? 0),
               }))
+
+            if (primaryBlockId === 'epargne') {
+              const savingsLineSource = epargneSubCategories.length > 0
+                ? epargneSubCategories
+                : target.lines
+                  .map((line) => categoryById.get(line.id))
+                  .filter((line): line is NonNullable<typeof line> => Boolean(line))
+                  .sort((a, b) => {
+                    const rankDiff = getSavingsSubCategoryRank(a.name) - getSavingsSubCategoryRank(b.name)
+                    if (rankDiff !== 0) return rankDiff
+                    return a.name.localeCompare(b.name, 'fr')
+                  })
+
+              target.lines = savingsLineSource.map((subCategory) => ({
+                id: subCategory.id,
+                categoryName: subCategory.name,
+                parentCategoryName: subCategory.parent_id ? categoryById.get(subCategory.parent_id)?.name ?? null : null,
+                budgetAmount: budgetAmountByCategoryFromPayload.get(subCategory.id) ?? 0,
+                actualAmount: periodSavingsByCategory.get(subCategory.id) ?? 0,
+              }))
+              target.budgetAmount = target.lines.reduce((sum, line) => sum + line.budgetAmount, 0)
+              target.actualAmount = target.lines.reduce((sum, line) => sum + line.actualAmount, 0)
+            }
           }
 	      }
 	    }
@@ -1480,7 +1954,7 @@ export function Budgets() {
           return amountB - amountA
         }),
       }))
-  }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, dataDisplayMode])
+  }, [budgetPayload, visibleBudgetBuckets, payloadByCategory, configuredBudgetCategoryLines, selectedCat, periodSpentByCategory, periodSavingsByCategory, dataDisplayMode, epargneSubCategories, categoryById, budgetAmountByCategoryFromPayload])
 
   const blockPieData = useMemo<PieDatum[]>(
     () =>
@@ -1521,7 +1995,6 @@ export function Budgets() {
   const revenueSurplusPct = monthlyCommitmentsTarget > 0
     ? ((selectedMonthRevenueAmount - monthlyCommitmentsTarget) / monthlyCommitmentsTarget) * 100
     : null
-  const revenueSurplusAmount = selectedMonthRevenueAmount - monthlyCommitmentsTarget
   const isRevenueAboveTarget = selectedMonthRevenueAmount > monthlyCommitmentsTarget && monthlyCommitmentsTarget > 0
   const selectedBlock = useMemo(
     () => (selectedBlockId ? blockRows.find((row) => row.id === selectedBlockId) ?? null : null),
@@ -1532,16 +2005,33 @@ export function Budgets() {
     [selectedBlockPageId, blockRows],
   )
   const isRevenueBlockPage = selectedBlockPageId === REVENUE_BLOCK_PAGE_ID
+  const revenueGraphSlideCount = 3
+  const revenueSlideTitles = [
+    'Historique des revenus mensuels 25-26',
+    'Historique des opérations 25-26',
+    'Dernières opérations YTD',
+  ] as const
+  const revenueActiveSlideTitle = revenueSlideTitles[revenueGraphSlide] ?? revenueSlideTitles[0]
   const revenuePageColor = 'var(--color-success)'
+  const revenueTableHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
+  const revenueListHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
+  const categoryListHeaderBackground = `color-mix(in oklab, ${categoryColorFromName(selectedCatInfo?.name)} 22%, var(--neutral-0) 78%)`
+  const blockListHeaderBackground = `color-mix(in oklab, ${selectedBlockPage?.color ?? 'var(--primary-500)'} 22%, var(--neutral-0) 78%)`
   const revenueMonthlyHistory = useMemo<MonthlyBucket[]>(() => {
     const series = [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => a.month_start.localeCompare(b.month_start))
     const base = series.map((row) => {
       const date = new Date(`${row.month_start}T00:00:00`)
       const periodYear = Number.isNaN(date.getTime()) ? selectedPeriodYear : date.getFullYear()
       const periodMonth = Number.isNaN(date.getTime()) ? selectedPeriodMonth : date.getMonth() + 1
+      const amount = Number(row.revenue_amount ?? 0)
+      const isScaleOverflow = amount > REVENUE_HISTORY_Y_AXIS_MAX
       return {
         month: MONTH_LABELS_SHORT[Math.max(0, Math.min(11, periodMonth - 1))] ?? '--',
-        amount: Number(row.revenue_amount ?? 0),
+        monthStart: row.month_start,
+        amount,
+        chartAmount: Math.min(amount, REVENUE_HISTORY_Y_AXIS_MAX),
+        isScaleOverflow,
+        isScaleBreakMonth: isScaleOverflow && periodYear === 2025 && periodMonth === 1,
         budget: 0,
         isCurrent: periodYear === selectedPeriodYear && periodMonth === selectedPeriodMonth,
       }
@@ -1558,10 +2048,61 @@ export function Budgets() {
     () => (revenueAnalytics?.bySource ?? []).reduce((max, row) => Math.max(max, Number(row.total_amount ?? 0)), 0),
     [revenueAnalytics],
   )
+  const revenueSourceGreenPalette = useMemo(
+    () => ([
+      '#0C5D39',
+      '#167A4B',
+      '#1F955B',
+      '#2DB26E',
+      '#4BC684',
+      '#6FD69D',
+      '#94E3B7',
+      '#B9EED1',
+    ]),
+    [],
+  )
+  const revenueSourceDonutData = useMemo<RevenueSourceDonutDatum[]>(
+    () => (revenueAnalytics?.bySource ?? [])
+      .map((source, index) => {
+        const value = Number(source.total_amount ?? 0)
+        return {
+          id: `${source.source_name}-${source.parent_source_name ?? 'none'}-${index}`,
+          name: source.source_name,
+          parentName: source.parent_source_name ?? null,
+          value,
+          transactionCount: Number(source.transaction_count ?? 0),
+          color: revenueSourceGreenPalette[index % revenueSourceGreenPalette.length],
+        }
+      })
+      .filter((item) => item.value > 0),
+    [revenueAnalytics, revenueSourceGreenPalette],
+  )
+  const selectedRevenueSource = useMemo(() => {
+    if (!revenueSourceDonutData.length) return null
+    if (!selectedRevenueSourceId) return null
+    return revenueSourceDonutData.find((row) => row.id === selectedRevenueSourceId) ?? null
+  }, [revenueSourceDonutData, selectedRevenueSourceId])
+  const revenueSourceDonutTotal = useMemo(
+    () => revenueSourceDonutData.reduce((sum, row) => sum + row.value, 0),
+    [revenueSourceDonutData],
+  )
 
-  const headerPeriodLabel = periodKey === 'annee'
-    ? `Année ${selectedPeriodYear}`
-    : formatPeriodLabel(selectedPeriodYear, selectedPeriodMonth)
+  useEffect(() => {
+    if (isRevenueBlockPage) return
+    setRevenueGraphSlide(0)
+    setRevenueSourceView('list')
+  }, [isRevenueBlockPage])
+
+  useEffect(() => {
+    if (!isRevenueBlockPage) return
+    if (!revenueSourceDonutData.length) {
+      setSelectedRevenueSourceId(null)
+      return
+    }
+    if (selectedRevenueSourceId && revenueSourceDonutData.some((row) => row.id === selectedRevenueSourceId)) return
+    setSelectedRevenueSourceId(null)
+  }, [isRevenueBlockPage, revenueSourceDonutData, selectedRevenueSourceId])
+
   const headerPeriodOptions = useMemo(() => {
     const monthOptions = availableBudgetPeriods
       .filter((period) => {
@@ -1575,6 +2116,7 @@ export function Budgets() {
         active: periodKey === 'mois'
           && selectedPeriodYear === period.period_year
           && selectedPeriodMonth === period.period_month,
+        showDividerBefore: false,
         onSelect: () => {
           setPeriodKey('mois')
           setSelectedPeriodYear(period.period_year)
@@ -1598,14 +2140,78 @@ export function Budgets() {
   const isExpenseBlockPage = selectedBlockPage != null
   const isBlockMode = isExpenseBlockPage || isRevenueBlockPage
   const isCategoryMode = selectedCat !== 'all' && !isBlockMode
+  const isDetailMode = selectedCat !== 'all' || selectedBlockPage != null || isRevenueBlockPage
   const isRootMode = selectedCat === 'all' && !isBlockMode
   const showExtendedSlides = isRootMode
   const slideCount = showExtendedSlides ? 3 : 2
   const showRealBudgetToggle = showExtendedSlides && activeSlide < 2
   const isSlideThreeMetricsMode = showExtendedSlides && activeSlide === 2
+  const isSlideOneOrTwoMode = showExtendedSlides && activeSlide < 2
+  const shouldLoadRolling12mStats = isSlideThreeMetricsMode
+    && (selectedYtdSlideView === 'kpi' || selectedYtdSlideView === 'history')
+  const { data: categoryRolling12mStats = [] } = useCategoryRolling12mStats(shouldLoadRolling12mStats)
+  const ytdSlideViewLabel: Record<BudgetYtdSlideView, string> = {
+    kpi: 'KPI',
+    history: 'Historique',
+    monthly_flows_table: 'Flux mensuels',
+    monthly_flows_chart: 'Graphique flux',
+  }
+  const ytdSlideViewOptions: Array<{ id: BudgetYtdSlideView; label: string }> = [
+    { id: 'kpi', label: 'KPI' },
+    { id: 'history', label: 'Historique' },
+    { id: 'monthly_flows_table', label: 'Flux mensuels' },
+    { id: 'monthly_flows_chart', label: 'Graphique flux' },
+  ]
+  const isSlideThreeMonthlyFlowsView = isSlideThreeMetricsMode
+    && (selectedYtdSlideView === 'monthly_flows_table' || selectedYtdSlideView === 'monthly_flows_chart')
+  const slideThreeLockedPeriodLabel = '2026 YTD'
+  const ytdSlideHeading = selectedYtdSlideView === 'kpi'
+    ? ''
+    : selectedYtdSlideView === 'history'
+      ? 'Historique'
+      : selectedYtdSlideView === 'monthly_flows_table'
+        ? 'Flux mensuels'
+        : 'Graphique flux'
+  const ytdScopeLabel = slideThreeSelectedScopeMeta.label
+    ? `${slideThreeSelectedScopeMeta.label.charAt(0).toUpperCase()}${slideThreeSelectedScopeMeta.label.slice(1)}`
+    : '—'
+  const slideThreeMonthlyBudget = useMemo(() => {
+    if (!isSlideThreeMonthlyFlowsView) return null
+    if (slideThreeScopeSelection.kind === 'bloc') {
+      return payloadByBucket[slideThreeScopeSelection.id]?.budget_amount ?? null
+    }
+    if (slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id !== ALL_CATEGORIES_SCOPE_ID) {
+      return payloadByParentCategory.find((r) => r.parent_category_id === slideThreeScopeSelection.id)?.budget_amount ?? null
+    }
+    return null
+  }, [isSlideThreeMonthlyFlowsView, slideThreeScopeSelection, payloadByBucket, payloadByParentCategory])
+  const slideThreeBaseYear = useMemo(() => {
+    const yearOption = slideThreePeriods.find((periodOption) => /^\d{4}$/.test(periodOption))
+    return yearOption ? Number(yearOption) : selectedPeriodYear
+  }, [selectedPeriodYear, slideThreePeriods])
+  const headerPeriodLabel = useMemo(() => {
+    if (isSlideThreeMetricsMode) {
+      if (isSlideThreeMonthlyFlowsView) return slideThreeLockedPeriodLabel
+      if (/^\d{4}$/.test(slideThreePeriod)) return `Année ${slideThreePeriod}`
+      const shortYear = String(slideThreeBaseYear).slice(-2)
+      return `${slideThreePeriod} ${shortYear}`
+    }
+    if (periodKey === 'annee') return `Année ${selectedPeriodYear}`
+    return formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)
+  }, [
+    isSlideThreeMetricsMode,
+    isSlideThreeMonthlyFlowsView,
+    periodKey,
+    selectedPeriodMonth,
+    selectedPeriodYear,
+    slideThreeLockedPeriodLabel,
+    slideThreeBaseYear,
+    slideThreePeriod,
+  ])
   const canJumpToCategoriesSection = isRootMode && activeSlide === 0 && Boolean(configuredBudgetPeriod)
   const canJumpToBlocksSection = isRootMode && activeSlide === 1 && blockRows.length > 0
-  const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection
+  const canJumpToProjectionSection = isSlideThreeMetricsMode
+  const showSectionTravelShortcuts = canJumpToCategoriesSection || canJumpToBlocksSection || canJumpToProjectionSection
   const goToSlide = (index: number) => setActiveSlide(((index % slideCount) + slideCount) % slideCount)
   const goNextSlide = () => goToSlide(activeSlide + 1)
   const goPrevSlide = () => goToSlide(activeSlide - 1)
@@ -1613,6 +2219,17 @@ export function Budgets() {
   useEffect(() => {
     setActiveSlide((current) => Math.min(current, slideCount - 1))
   }, [slideCount])
+
+  useEffect(() => {
+    if (isSlideOneOrTwoMode) return
+    setShowHeaderPeriodMenu(false)
+  }, [isSlideOneOrTwoMode])
+
+  useEffect(() => {
+    if (isSlideThreeMetricsMode) return
+    setShowYtdSlideViewMenu(false)
+    setShowSlideThreePeriodMenu(false)
+  }, [isSlideThreeMetricsMode])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse') return
@@ -1709,6 +2326,10 @@ export function Budgets() {
     () => categoryBarRows.reduce((max, row) => Math.max(max, row.displayAmount), 0),
     [categoryBarRows],
   )
+  const categoryCurrentPeriodAmount = useMemo(
+    () => monthlyHistory.find((r) => r.isCurrent)?.amount ?? 0,
+    [monthlyHistory],
+  )
   const sixMonthAverageAmount = useMemo(() => {
     if (!monthlyHistory.length) return 0
     return monthlyHistory.reduce((sum, row) => sum + row.amount, 0) / monthlyHistory.length
@@ -1723,6 +2344,26 @@ export function Budgets() {
   const blockPageHistory = useMemo(() => {
     if (!selectedBlockPage) return []
 
+    if (selectedBlockPage.id === 'epargne') {
+      const base = historyWindowMonths.map((monthRow) => {
+        const amount = historySavingsByMonthKey.get(monthRow.key) ?? 0
+        return {
+          month: monthRow.monthLabel,
+          monthStart: monthRow.monthStart,
+          amount,
+          budget: Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0)),
+          isCurrent: monthRow.periodYear === selectedPeriodYear && monthRow.periodMonth === selectedPeriodMonth,
+        }
+      })
+
+      return base.map((row, idx) => {
+        if (idx === 0) return { ...row, evolutionPct: null }
+        const prev = base[idx - 1].amount
+        if (prev <= 0) return { ...row, evolutionPct: null }
+        return { ...row, evolutionPct: ((row.amount - prev) / prev) * 100 }
+      })
+    }
+
     const budgetRatio = totalMonthlyBudget > 0 ? selectedBlockPage.budgetAmount / totalMonthlyBudget : 0
     const actualRatio = selectedPeriodSpent > 0 ? selectedBlockPage.actualAmount / selectedPeriodSpent : 0
 
@@ -1731,7 +2372,7 @@ export function Budgets() {
       amount: Math.max(0, row.amount * actualRatio),
       budget: Math.max(0, row.budget * budgetRatio),
     }))
-  }, [monthlyHistory, selectedBlockPage, selectedPeriodSpent, totalMonthlyBudget])
+  }, [historySavingsByMonthKey, historyWindowMonths, monthlyHistory, selectedBlockPage, selectedPeriodMonth, selectedPeriodSpent, selectedPeriodYear, totalMonthlyBudget])
   const blockPageSixMonthAverage = useMemo(() => {
     if (!blockPageHistory.length) return 0
     return blockPageHistory.reduce((sum, row) => sum + row.amount, 0) / blockPageHistory.length
@@ -1751,79 +2392,261 @@ export function Budgets() {
   }, [dataDisplayMode, selectedBlockPage])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : 'var(--space-5)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
-        title="Budgets"
-        titleAriaLabel="Réinitialiser sur toutes catégories et période actuelle"
-        onTitleClick={handleHeaderTitleReset}
-        actionIcon={
-          isSlideThreeMetricsMode
-            ? (
-              slideThreeSelectedScopeMeta.iconType === 'block'
-                ? (
-                  <img
-                    src={slideThreeSelectedScopeMeta.iconSrc ?? blockProvisionsIcon}
-                    alt={`Icône ${slideThreeSelectedScopeMeta.label}`}
-                    width={28}
-                    height={28}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ display: 'block', objectFit: 'contain' }}
-                  />
-                  )
-                : <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={28} />
-            )
-            : isRevenueBlockPage
-            ? (
-              <img
-                src={blockRevenusIcon}
-                alt="Icône bloc Revenus"
-                width={28}
-                height={28}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-              />
-              )
-            : isExpenseBlockPage && selectedBlockPage
-            ? (
-              <img
-                src={BLOCK_ICON_SRC[selectedBlockPage.id]}
-                alt={`Icône bloc ${selectedBlockPage.label}`}
-                width={28}
-                height={28}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-              />
-              )
-            : selectedCat === 'all'
-              ? <Search size={24} />
-              : <CategoryIcon iconKey={selectedCatInfo?.icon_key} label={selectedCatInfo?.name} size={28} />
-        }
-        actionAriaLabel={isSlideThreeMetricsMode ? 'Choisir un bloc ou une catégorie' : 'Choisir une catégorie'}
-        onActionClick={() => {
-          setShowHeaderPeriodMenu(false)
-          if (isSlideThreeMetricsMode) {
-            setShowCatSheet(false)
-            setShowSlideThreeScopeSheet((current) => !current)
-            return
-          }
-          setShowSlideThreeScopeSheet(false)
-          setShowCatSheet((current) => !current)
-        }}
-        rightSlot={(
-          <HeaderPeriodMenu
-            buttonLabel={headerPeriodLabel}
-            buttonAriaLabel="Choisir une période"
-            menuAriaLabel="Choisir une période Budgets"
-            open={showHeaderPeriodMenu}
-            onOpenChange={setShowHeaderPeriodMenu}
-            onBeforeToggle={() => setShowCatSheet(false)}
-            options={headerPeriodOptions}
+        title={isDetailMode ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
+        titleAriaLabel={isDetailMode ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
+        onTitleClick={isDetailMode ? handleHeaderTitleReset : undefined}
+        contentOffsetY={4}
+        titleAfter={budgetsTabId === 'analytics' ? (
+          <button
+            type="button"
+            onClick={handleAnalyticsRefresh}
+            disabled={analyticsRefreshing}
+            aria-label="Actualiser les données analytics"
+            style={{
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px',
+              width: '24px',
+              height: '24px',
+              background: 'color-mix(in oklab, var(--neutral-0) 20%, var(--primary-600) 80%)',
+              color: 'var(--neutral-0)',
+              cursor: analyticsRefreshing ? 'not-allowed' : 'pointer',
+              opacity: analyticsRefreshing ? 0.6 : 1,
+              transition: 'all var(--transition-base)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <RotateCw size={12} style={{ transition: 'transform var(--transition-base)', transform: analyticsRefreshing ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+          </button>
+        ) : undefined}
+        titleMeta={budgetsTabId === 'analytics' ? (
+          <p style={{
+            margin: 0,
+            fontSize: '9px',
+            color: 'color-mix(in oklab, var(--neutral-0) 70%, var(--primary-100) 30%)',
+            fontWeight: 'var(--font-weight-medium)',
+            whiteSpace: 'nowrap',
+          }}>
+            {analyticsLastUpdateLabel}
+          </p>
+        ) : undefined}
+        actionIcon={(
+          <img
+            src={activeBudgetsTab.iconSrc}
+            alt={activeBudgetsTab.label}
+            width={30}
+            height={30}
+            loading="lazy"
+            decoding="async"
+            style={{ display: 'block', objectFit: 'contain' }}
           />
         )}
+        actionAriaLabel="Choisir un onglet budgets"
+        onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
+        rightSlot={budgetsTabId !== 'metriques' && budgetsTabId !== 'analytics' ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {isDetailMode && !isCategoryMode && !isExpenseBlockPage && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSlideOneOrTwoMode) {
+                    setShowCatSheet(false)
+                    setShowSlideThreeScopeSheet(false)
+                    setShowHeaderPeriodMenu((current) => !current)
+                    return
+                  }
+                  setShowHeaderPeriodMenu(false)
+                  if (isSlideThreeMetricsMode) {
+                    setShowCatSheet(false)
+                    setShowSlideThreeScopeSheet((current) => !current)
+                    return
+                  }
+                  setShowSlideThreeScopeSheet(false)
+                  setShowCatSheet((current) => !current)
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'color-mix(in oklab, var(--neutral-0) 92%, var(--primary-100) 8%)',
+                  fontSize: 'var(--font-size-base)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
+                  padding: 0,
+                  cursor: 'pointer',
+                  minHeight: 'var(--touch-target-min)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                {headerPeriodLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId('metriques')}
+              aria-label="Aller à la recherche rapide"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 'var(--touch-target-min)',
+                minWidth: 'var(--touch-target-min)',
+              }}
+            >
+              <img src={rechercheRapideIcon} alt="Recherche rapide" width={32} height={32} style={{ display: 'block', objectFit: 'contain' }} />
+            </button>
+          </div>
+        ) : undefined}
       />
+
+      {!isDetailMode && (budgetsTabId === 'enveloppes' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') && (() => {
+        const CIRCULAR_TABS = [
+          { id: 'enveloppes' as const, label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
+          { id: 'projections' as const, label: 'Projections', iconSrc: projectionsAnnuellesIcon },
+          { id: 'analytics' as const, label: 'Analytics', iconSrc: analyticsIcon },
+        ]
+        const currentIdx = CIRCULAR_TABS.findIndex((t) => t.id === budgetsTabId)
+        const prevTab = CIRCULAR_TABS[(currentIdx - 1 + CIRCULAR_TABS.length) % CIRCULAR_TABS.length]
+        const nextTab = CIRCULAR_TABS[(currentIdx + 1) % CIRCULAR_TABS.length]
+        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
+        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
+        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
+        const btnBase = {
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          minHeight: 'var(--touch-target-min)',
+        } as const
+        const TAB_TITLES: Record<string, string> = {
+          enveloppes: 'Enveloppes budgétaires',
+          projections: 'Projections annuelles',
+          analytics: 'Analyse comparée',
+        }
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto',
+            alignItems: 'center',
+            paddingLeft: 'var(--page-gutter)',
+            paddingRight: 'var(--page-gutter)',
+            marginTop: '-8px',
+          }}>
+            {/* Left: ◀ triangle outermost, then icon */}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId(prevTab.id)}
+              aria-label={`Aller à ${prevTab.label}`}
+              style={btnBase}
+            >
+              <div style={triLeft} />
+              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+            </button>
+            {/* Centered title */}
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              {TAB_TITLES[budgetsTabId]}
+            </h2>
+            {/* Right: icon, then ▶ triangle outermost */}
+            <button
+              type="button"
+              onClick={() => setBudgetsTabId(nextTab.id)}
+              aria-label={`Aller à ${nextTab.label}`}
+              style={btnBase}
+            >
+              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+              <div style={triRight} />
+            </button>
+          </div>
+        )
+      })()}
+
+      {isDetailMode ? (
+      <>
+      {showHeaderPeriodMenu && isSlideOneOrTwoMode ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 160,
+            background: 'rgba(10, 12, 22, 0.18)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            paddingTop: 'calc(var(--safe-top) + 68px)',
+            paddingLeft: 'var(--page-gutter)',
+            paddingRight: 'var(--page-gutter)',
+          }}
+          onClick={() => setShowHeaderPeriodMenu(false)}
+        >
+          <motion.div
+            role="menu"
+            aria-label="Choisir une période Budgets"
+            initial={{ opacity: 0, y: -8, scaleY: 0.9 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1 }}
+            exit={{ opacity: 0, y: -8, scaleY: 0.9 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            style={{
+              width: 'fit-content',
+              minWidth: 0,
+              maxWidth: 'calc(100vw - 2 * var(--page-gutter))',
+              maxHeight: 'min(68vh, 520px)',
+              overflowY: 'auto',
+              background: 'var(--neutral-0)',
+              border: '1px solid var(--neutral-200)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-card)',
+              padding: 'var(--space-2)',
+              display: 'grid',
+              gap: 2,
+              transformOrigin: 'top center',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {headerPeriodOptions.map((option) => (
+              <div key={option.key}>
+                {option.showDividerBefore ? (
+                  <div style={{ height: 1, background: 'var(--neutral-200)', margin: 'var(--space-1) 0' }} />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    option.onSelect()
+                    setShowHeaderPeriodMenu(false)
+                  }}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    background: option.active ? 'var(--primary-50)' : 'transparent',
+                    color: option.active ? 'var(--primary-700)' : 'var(--neutral-800)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: option.active ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                    textAlign: 'left',
+                    whiteSpace: 'nowrap',
+                    padding: 'var(--space-2) var(--space-3)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {option.label}
+                </button>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      ) : null}
 
       {showExtendedSlides ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: `0 ${slideHeaderHorizontalPadding}` }}>
@@ -1835,7 +2658,7 @@ export function Budgets() {
                 type="button"
                 onClick={() => setDataDisplayMode('reel')}
                 style={{
-                  border: '1px solid var(--neutral-200)',
+                  border: dataDisplayMode === 'reel' ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
                   background: dataDisplayMode === 'reel' ? 'var(--primary-50)' : 'var(--neutral-0)',
                   color: dataDisplayMode === 'reel' ? 'var(--primary-600)' : 'var(--neutral-600)',
                   borderRadius: 'var(--radius-md)',
@@ -1853,7 +2676,7 @@ export function Budgets() {
               >
                 <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Réel</span>
                 <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-                  {formatMoney(selectedPeriodSpent).replace(/\s+€/, '€')}
+                  {formatCurrencyFloored(selectedPeriodSpent).replace(/\s+€/, '€')}
                 </span>
               </button>
               <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontWeight: 700, flexShrink: 0 }}>-</span>
@@ -1861,7 +2684,7 @@ export function Budgets() {
                 type="button"
                 onClick={() => setDataDisplayMode('budget')}
                 style={{
-                  border: '1px solid var(--neutral-200)',
+                  border: dataDisplayMode === 'budget' ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
                   background: dataDisplayMode === 'budget' ? 'var(--primary-50)' : 'var(--neutral-0)',
                   color: dataDisplayMode === 'budget' ? 'var(--primary-600)' : 'var(--neutral-600)',
                   borderRadius: 'var(--radius-md)',
@@ -1879,7 +2702,7 @@ export function Budgets() {
               >
                 <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, lineHeight: 1 }}>Budget</span>
                 <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)', lineHeight: 1.2 }}>
-                  {formatMoney(totalMonthlyBudget).replace(/\s+€/, '€')}
+                  {formatCurrencyFloored(totalMonthlyBudget).replace(/\s+€/, '€')}
                 </span>
               </button>
             </div>
@@ -1913,64 +2736,17 @@ export function Budgets() {
             </div>
               </>
             ) : activeSlide === 2 ? (
-              <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center', position: 'relative' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}>
-                  <label
-                    style={{
-                      border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-0)',
-                      color: 'var(--neutral-600)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: 'var(--space-2) var(--space-3)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      textAlign: 'center',
-                      minWidth: slideThreeParamCardWidth,
-                      width: slideThreeParamCardWidth,
-                      minHeight: 48,
-                      cursor: 'pointer',
-                      position: 'relative',
-                    }}
-                  >
-                    <select
-                      aria-label="Choisir une période"
-                      value={slideThreePeriod}
-                      onChange={(event) => setSlideThreePeriod(event.target.value)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--neutral-700)',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        fontFamily: 'inherit',
-                        lineHeight: 1.1,
-                        width: '100%',
-                        textAlign: 'center',
-                        textAlignLast: 'center',
-                        outline: 'none',
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none',
-                        cursor: 'pointer',
-                        paddingRight: 12,
-                        paddingLeft: 8,
-                        WebkitTextSizeAdjust: '100%',
-                      }}
-                    >
-                      {slideThreePeriods.map((periodOption) => (
-                        <option key={periodOption} value={periodOption}>{periodOption}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
-                  </label>
                   <button
                     type="button"
-                    onClick={() => setSlideThreeDisplayMode((current) => (current === 'tableau' ? 'graphique' : 'tableau'))}
-                    aria-label="Basculer le mode d'affichage"
-                    aria-pressed={slideThreeDisplayMode === 'graphique'}
+                    onClick={() => {
+                      setShowYtdSlideViewMenu((current) => !current)
+                      setShowSlideThreePeriodMenu(false)
+                    }}
+                    aria-label="Choisir le contenu de la slide Analyse"
+                    aria-haspopup="menu"
+                    aria-expanded={showYtdSlideViewMenu}
                     style={{
                       border: '1px solid var(--neutral-200)',
                       background: 'var(--neutral-0)',
@@ -1991,11 +2767,180 @@ export function Budgets() {
                     }}
                   >
                     <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
-                      {slideThreeDisplayMode}
+                      {ytdSlideViewLabel[selectedYtdSlideView]}
                     </span>
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showYtdSlideViewMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSlideThreeMonthlyFlowsView) return
+                      setShowSlideThreePeriodMenu((current) => !current)
+                      setShowYtdSlideViewMenu(false)
+                    }}
+                    aria-label="Choisir une période"
+                    aria-haspopup="menu"
+                    aria-expanded={showSlideThreePeriodMenu}
+                    disabled={isSlideThreeMonthlyFlowsView}
+                    style={{
+                      border: '1px solid var(--neutral-200)',
+                      background: isSlideThreeMonthlyFlowsView ? 'var(--neutral-100)' : 'var(--neutral-0)',
+                      color: isSlideThreeMonthlyFlowsView ? 'var(--neutral-400)' : 'var(--neutral-600)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      textAlign: 'center',
+                      minWidth: slideThreeParamCardWidth,
+                      width: slideThreeParamCardWidth,
+                      minHeight: 48,
+                      cursor: isSlideThreeMonthlyFlowsView ? 'not-allowed' : 'pointer',
+                      position: 'relative',
+                      opacity: isSlideThreeMonthlyFlowsView ? 0.9 : 1,
+                    }}
+                  >
+                    {isSlideThreeMonthlyFlowsView ? (
+                      <span
+                        style={{
+                          color: 'var(--neutral-500)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          lineHeight: 1.1,
+                          width: '100%',
+                          textAlign: 'center',
+                          paddingRight: 12,
+                          paddingLeft: 8,
+                          WebkitTextSizeAdjust: '100%',
+                        }}
+                      >
+                        {slideThreeLockedPeriodLabel}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          color: 'var(--neutral-700)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          lineHeight: 1.1,
+                          width: '100%',
+                          textAlign: 'center',
+                          paddingRight: 12,
+                          paddingLeft: 8,
+                          WebkitTextSizeAdjust: '100%',
+                        }}
+                      >
+                        {slideThreePeriod}
+                      </span>
+                    )}
+                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showSlideThreePeriodMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
                   </button>
                 </div>
+                {(showYtdSlideViewMenu || showSlideThreePeriodMenu) ? (
+                  <>
+                    <div
+                      onClick={() => {
+                        setShowYtdSlideViewMenu(false)
+                        setShowSlideThreePeriodMenu(false)
+                      }}
+                      style={{ position: 'fixed', inset: 0, zIndex: 120 }}
+                    />
+                    {showYtdSlideViewMenu ? (
+                      <div
+                        role="menu"
+                        aria-label="Choisir un contenu pour la slide Analyse"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + var(--space-2))',
+                          left: 0,
+                          zIndex: 130,
+                          minWidth: 196,
+                          background: 'var(--neutral-0)',
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-lg)',
+                          boxShadow: 'var(--shadow-card)',
+                          padding: 'var(--space-2)',
+                          display: 'grid',
+                          gap: 2,
+                        }}
+                      >
+                        {ytdSlideViewOptions.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedYtdSlideView(option.id)
+                              setShowYtdSlideViewMenu(false)
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderRadius: 'var(--radius-sm)',
+                              background: selectedYtdSlideView === option.id ? 'var(--primary-50)' : 'transparent',
+                              color: selectedYtdSlideView === option.id ? 'var(--primary-700)' : 'var(--neutral-800)',
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: selectedYtdSlideView === option.id ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                              textAlign: 'left',
+                              padding: 'var(--space-2) var(--space-3)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {showSlideThreePeriodMenu && !isSlideThreeMonthlyFlowsView ? (
+                      <div
+                        role="menu"
+                        aria-label="Choisir une période pour la slide Analyse"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + var(--space-2))',
+                          right: 0,
+                          zIndex: 130,
+                          minWidth: 196,
+                          background: 'var(--neutral-0)',
+                          border: '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-lg)',
+                          boxShadow: 'var(--shadow-card)',
+                          padding: 'var(--space-2)',
+                          display: 'grid',
+                          gap: 2,
+                        }}
+                      >
+                        {slideThreePeriods.map((periodOption) => (
+                          <button
+                            key={periodOption}
+                            type="button"
+                            onClick={() => {
+                              setSlideThreePeriod(periodOption)
+                              setShowSlideThreePeriodMenu(false)
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderRadius: 'var(--radius-sm)',
+                              background: slideThreePeriod === periodOption ? 'var(--primary-50)' : 'transparent',
+                              color: slideThreePeriod === periodOption ? 'var(--primary-700)' : 'var(--neutral-800)',
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: slideThreePeriod === periodOption ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
+                              textAlign: 'left',
+                              padding: 'var(--space-2) var(--space-3)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {periodOption}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             ) : (
               <div aria-hidden="true" style={{ width: '100%', height: 80 }} />
@@ -2012,11 +2957,7 @@ export function Budgets() {
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedBlockPage(null)
-                      setActiveSlide(1)
-                      scrollViewportToTop()
-                    }}
+                    onClick={handleReturnToEnveloppes}
                     aria-label="Retour"
                     style={{
                       border: 'none',
@@ -2039,11 +2980,8 @@ export function Budgets() {
                   </button>
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
                     <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      {selectedBlockPage.label}
+                      {`Socle ${selectedBlockPage.label}`}
                     </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - Bloc
-                    </span>
                   </div>
                 </div>
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -2052,19 +2990,19 @@ export function Budgets() {
               </div>
 
               <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}
+                <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+                    {formatCurrencyFloored(selectedBlockPage.actualAmount).replace(/\s+€/, '€')}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(blockPageSixMonthAverage).replace(/\s+€/, '€')}</span>
+                <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}</span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: blockPageSixMonthGapPct == null ? 'var(--neutral-500)' : blockPageSixMonthGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{blockPageSixMonthGapPct == null ? '—' : formatPercentSigned(blockPageSixMonthGapPct)}</span>
+                <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount - selectedBlockPage.actualAmount).replace(/\s+€/, '€')}</span>
                 </div>
               </div>
             </div>
@@ -2074,11 +3012,23 @@ export function Budgets() {
 
       {isExpenseBlockPage && selectedBlockPage ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
+          <div style={{ height: 220, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={blockPageHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+              <BarChart
+                data={blockPageHistory}
+                barCategoryGap="18%"
+                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                onClick={(data) => {
+                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                  if (!payload) { setClickedBlockBar(null); return }
+                  setClickedBlockBar((prev) =>
+                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                  )
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                 <ReferenceLine y={Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0))} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2086,12 +3036,21 @@ export function Budgets() {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                     const item = payload
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
                   {blockPageHistory.map((entry, i) => <Cell key={`block-history-${i}`} fill={selectedBlockPage.color} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            {clickedBlockBar && (
+              <BarClickBubble
+                data={clickedBlockBar.payload}
+                sixMonthAverage={blockPageSixMonthAverage}
+                sixMonthGapPct={blockPageSixMonthGapPct}
+                chartX={clickedBlockBar.chartX}
+                onClose={() => setClickedBlockBar(null)}
+              />
+            )}
           </div>
 
           <div
@@ -2106,10 +3065,11 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Répartition par sous-catégories
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: blockListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+              <span>Répartition par sous-catégories</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
             </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {selectedBlockPage.lines.length === 0 ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune sous-catégorie active sur cette période
@@ -2165,7 +3125,7 @@ export function Budgets() {
                           />
                         </span>
                         <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {`${formatMoney(displayedAmount)} · ${dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}`}
+                          {`${formatCurrencyFloored(displayedAmount)} · ${dataDisplayMode === 'budget' ? `Réel ${formatCurrencyFloored(secondaryAmount)}` : `Budget ${formatCurrencyFloored(secondaryAmount)}`}`}
                         </span>
                       </span>
                     </button>
@@ -2185,11 +3145,7 @@ export function Budgets() {
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedBlockPage(null)
-                      setActiveSlide(1)
-                      scrollViewportToTop()
-                    }}
+                    onClick={handleReturnToEnveloppes}
                     aria-label="Retour"
                     style={{
                       border: 'none',
@@ -2212,35 +3168,29 @@ export function Budgets() {
                   </button>
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
                     <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      Revenus
+                      Socle revenus
                     </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - Socle revenus
-                    </span>
                   </div>
                 </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {`${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
-                </span>
               </div>
 
               <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois sélectionné</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois en cours</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 2025-2026</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 25-26</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
-                    {formatMoney(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
                 <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
                   <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
-                    {formatMoney(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
+                    {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
               </div>
@@ -2250,24 +3200,195 @@ export function Budgets() {
       ) : null}
 
       {isRevenueBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                    const item = payload
-                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
-                  }} />
-                  {revenueMonthlyHistory.map((entry, i) => <Cell key={`revenue-history-${i}`} fill={revenuePageColor} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+              {revenueActiveSlideTitle}
+            </p>
+            <div style={{ height: 220, minHeight: 220, overflow: 'hidden' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  width: `${revenueGraphSlideCount * 100}%`,
+                  transform: `translateX(-${(100 / revenueGraphSlideCount) * revenueGraphSlide}%)`,
+                  transition: 'transform 300ms ease',
+                }}
+              >
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={revenueMonthlyHistory} barCategoryGap="18%" margin={{ top: 18, right: 30, left: -8, bottom: 4 }}>
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 11, fill: 'var(--neutral-500)', dx: -6 }}
+                        tickFormatter={(value) => formatThousandsTick(Number(value))}
+                        domain={[0, REVENUE_HISTORY_Y_AXIS_MAX]}
+                        ticks={[0, 5000, 10000, 15000]}
+                        width={44}
+                      />
+                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                      <ReferenceLine
+                        y={REVENUE_HISTORY_Y_AXIS_MAX}
+                        stroke="var(--neutral-300)"
+                        strokeDasharray="3 4"
+                        ifOverflow="extendDomain"
+                      />
+                      <Bar
+                        dataKey="chartAmount"
+                        radius={[8, 8, 0, 0]}
+                        maxBarSize={46}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                          const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                          const item = payload
+                          if (!item || x == null || y == null || width == null) return null
+
+                          if (item.isScaleBreakMonth) {
+                            const xPos = Number(x)
+                            const yPos = Number(y)
+                            const w = Number(width)
+                            const capWidth = Math.max(12, w - 10)
+                            const capX = xPos + (w - capWidth) / 2
+                            const capY = yPos + 3
+                            return (
+                              <g>
+                                <rect
+                                  x={capX}
+                                  y={capY}
+                                  width={capWidth}
+                                  height={7}
+                                  rx={3}
+                                  fill="rgba(255,255,255,0.16)"
+                                  stroke="var(--color-warning)"
+                                  strokeWidth={1.5}
+                                  strokeDasharray="2 2"
+                                />
+                              </g>
+                            )
+                          }
+
+                          const xCenter = Number(x) + Number(width) / 2
+                          if (item.isCurrent || item.isScaleOverflow) return null
+                          return (
+                            <text
+                              x={xCenter}
+                              y={Number(y) - 6}
+                              textAnchor="middle"
+                              fill="var(--neutral-900)"
+                              fontSize={12}
+                              fontWeight={700}
+                            >
+                              {formatCurrencyFloored(item.amount)}
+                            </text>
+                          )
+                        }} />
+                        {revenueMonthlyHistory.map((entry, i) => (
+                          <Cell
+                            key={`revenue-history-${i}`}
+                            fill={revenuePageColor}
+                            fillOpacity={entry.isCurrent ? 1 : 0.62}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <div style={{ height: '100%', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 92px 62px', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: revenueTableHeaderBackground, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+                      <span>Mois</span>
+                      <span style={{ justifySelf: 'start', paddingLeft: 'var(--space-2)' }}>Montant</span>
+                      <span style={{ justifySelf: 'center', textAlign: 'center', width: '100%' }}>Entrées</span>
+                    </div>
+                    <div style={{ minHeight: 0, overflowY: 'auto' }}>
+                      {revenueHistoryRows.length ? revenueHistoryRows.map((row) => (
+                        <div key={row.month_start} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 92px 62px', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
+                            {formatMonthYearFrench(row.month_start)}
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700, justifySelf: 'start', paddingLeft: 'var(--space-2)' }}>
+                            {formatCurrencyFloored(row.revenue_amount)}
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', justifySelf: 'center', textAlign: 'center', width: '100%' }}>
+                            {row.transaction_count.toLocaleString('fr-FR')}
+                          </span>
+                        </div>
+                      )) : (
+                        <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ width: `${100 / revenueGraphSlideCount}%`, flexShrink: 0, height: 220 }}>
+                  <div style={{ height: '100%', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: revenueTableHeaderBackground, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-800)', fontWeight: 700 }}>
+                      <span>Date</span>
+                      <span style={{ paddingLeft: 'var(--space-1)' }}>Libellé / catégorie</span>
+                      <span>Montant</span>
+                    </div>
+                    <div style={{ minHeight: 0, overflowY: 'auto' }}>
+                      {revenueAnalytics?.lastTransactions.length ? revenueAnalytics.lastTransactions.map((tx) => (
+                        <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
+                          <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                            {formatTxDateDayMonth(tx.transaction_date)}
+                          </span>
+                          <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {tx.label || '—'}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {tx.category_name ?? '—'}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                            {formatCurrencyFloored(tx.pilotage_amount)}
+                          </span>
+                        </div>
+                      )) : (
+                        <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
+              {Array.from({ length: revenueGraphSlideCount }).map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setRevenueGraphSlide(idx)}
+                  aria-label={`Aller à la slide revenus ${idx + 1}`}
+                  style={{
+                    minWidth: 'var(--touch-target-min)',
+                    minHeight: 'var(--touch-target-min)',
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    padding: 0,
+                    background: 'transparent',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-base)',
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: idx === revenueGraphSlide ? 14 : 8,
+                      height: idx === revenueGraphSlide ? 14 : 8,
+                      borderRadius: 'var(--radius-full)',
+                      background: idx === revenueGraphSlide ? 'var(--primary-500)' : 'var(--neutral-300)',
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
 
           <div
@@ -2282,10 +3403,68 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Sources de revenus
-            </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 34, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', background: revenueListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-1) var(--space-2)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', lineHeight: 1.2, color: 'var(--neutral-900)', fontWeight: 700 }}>
+                Sources de revenus
+              </p>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  border: '1px solid var(--neutral-200)',
+                  background: 'var(--neutral-100)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: 2,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setRevenueSourceView('list')}
+                  aria-label="Afficher les sources en liste"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    minWidth: 26,
+                    minHeight: 26,
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    background: revenueSourceView === 'list' ? 'var(--neutral-0)' : 'transparent',
+                    color: revenueSourceView === 'list' ? 'var(--primary-500)' : 'var(--neutral-500)',
+                    boxShadow: revenueSourceView === 'list' ? 'var(--shadow-card)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <LayoutGrid size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevenueSourceView('donut')}
+                  aria-label="Afficher les sources en donut"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    minWidth: 26,
+                    minHeight: 26,
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    background: revenueSourceView === 'donut' ? 'var(--neutral-0)' : 'transparent',
+                    color: revenueSourceView === 'donut' ? 'var(--primary-500)' : 'var(--neutral-500)',
+                    boxShadow: revenueSourceView === 'donut' ? 'var(--shadow-card)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <CalendarDays size={13} />
+                </button>
+              </div>
+            </div>
+            <div style={{ minHeight: 0, overflowY: revenueSourceView === 'list' ? 'auto' : 'hidden', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
               {revenueAnalyticsLoading ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Chargement des revenus…
@@ -2298,15 +3477,91 @@ export function Budgets() {
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune source de revenus active sur cette période
                 </div>
+              ) : revenueSourceView === 'donut' ? (
+                <div style={{ minHeight: 0, height: '100%', display: 'grid', gridTemplateRows: '204px minmax(0,1fr)', gap: 'var(--space-2)' }}>
+                  <div style={{ minHeight: 204, height: 204, position: 'relative', display: 'grid', placeItems: 'center' }}>
+                    {selectedRevenueSource ? (
+                      <div style={{ position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)', maxWidth: '92%', borderRadius: 'var(--radius-md)', border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', boxShadow: 'var(--shadow-card)', padding: '4px 8px', display: 'grid', justifyItems: 'center', gap: 1, zIndex: 1 }}>
+                        <span style={{ fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                          {selectedRevenueSource.name}
+                        </span>
+                        <span style={{ fontSize: 11, lineHeight: 1.2, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          {formatCurrencyFloored(selectedRevenueSource.value)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div style={{ width: '100%', height: 204, maxWidth: 272 }}>
+                      <ResponsiveContainer width="100%" height={204}>
+                        <PieChart>
+                          <Pie
+                            data={revenueSourceDonutData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="56%"
+                            innerRadius={50}
+                            outerRadius={84}
+                            paddingAngle={2}
+                            onClick={(slice: unknown) => {
+                              const payload = extractPiePayload(slice) as Partial<RevenueSourceDonutDatum> | null
+                              if (!payload?.id) return
+                              setSelectedRevenueSourceId(payload.id)
+                            }}
+                          >
+                            {revenueSourceDonutData.map((entry) => (
+                              <Cell
+                                key={entry.id}
+                                fill={entry.color}
+                                fillOpacity={selectedRevenueSourceId && selectedRevenueSourceId !== entry.id ? 0.55 : 0.96}
+                                stroke={selectedRevenueSourceId === entry.id ? 'var(--neutral-900)' : 'var(--neutral-0)'}
+                                strokeWidth={selectedRevenueSourceId === entry.id ? 2 : 1}
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 6, alignContent: 'start' }}>
+                    {revenueSourceDonutData.map((entry) => (
+                        <button
+                          key={`${entry.id}-legend`}
+                          type="button"
+                          onClick={() => setSelectedRevenueSourceId(entry.id)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            display: 'grid',
+                            gridTemplateColumns: '10px minmax(0,1fr)',
+                            gap: 6,
+                            alignItems: 'center',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            opacity: selectedRevenueSourceId && selectedRevenueSourceId !== entry.id ? 0.66 : 1,
+                          }}
+                        >
+                          <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: entry.color, border: '1px solid color-mix(in oklab, var(--neutral-900) 18%, transparent)' }} />
+                          <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
+                            {`${entry.name} (${revenueSourceDonutTotal > 0 ? Math.round((entry.value / revenueSourceDonutTotal) * 100) : 0}%)`}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
               ) : (
-                revenueAnalytics.bySource.map((source) => {
+                revenueAnalytics.bySource.map((source, sourceIndex) => {
                   const displayedAmount = Number(source.total_amount ?? 0)
                   const barWidth = revenueSourceMaxAmount > 0 ? (displayedAmount / revenueSourceMaxAmount) * 100 : 0
+                  const normalizedSourceName = normalizeCategoryToken(source.source_name)
+                  const matchedCategory = categories.find((category) => normalizeCategoryToken(category.name) === normalizedSourceName) ?? null
+                  const iconKey = matchedCategory?.icon_key ?? null
+                  const sourceColor = revenueSourceGreenPalette[sourceIndex % revenueSourceGreenPalette.length]
                   return (
                     <div
                       key={`${source.source_name}-${source.parent_source_name ?? 'none'}`}
                       style={{
-                        padding: '3px 2px',
+                        padding: '5px 2px',
                         display: 'grid',
                         gridTemplateColumns: 'minmax(0,132px) minmax(0,1fr)',
                         alignItems: 'center',
@@ -2314,12 +3569,15 @@ export function Budgets() {
                         textAlign: 'left',
                       }}
                     >
-                      <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                        <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
-                          {source.source_name}
-                        </span>
-                        <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {source.parent_source_name ?? '—'}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', minWidth: 0 }}>
+                        <CategoryIcon iconKey={iconKey} label={source.source_name} size={16} />
+                        <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                          <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.3, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
+                            {source.source_name}
+                          </span>
+                          <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.2, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {source.parent_source_name ?? '—'}
+                          </span>
                         </span>
                       </span>
                       <span style={{ display: 'grid', gap: 2 }}>
@@ -2330,12 +3588,12 @@ export function Budgets() {
                               height: '100%',
                               display: 'block',
                               borderRadius: 'var(--radius-full)',
-                              background: revenuePageColor,
+                              background: sourceColor,
                             }}
                           />
                         </span>
-                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {`${formatMoney(displayedAmount)} · ${source.transaction_count} op · moy ${formatMoney(source.avg_amount)}`}
+                        <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {`${formatCurrencyFloored(displayedAmount)} - ${source.transaction_count} op`}
                         </span>
                       </span>
                     </div>
@@ -2344,149 +3602,98 @@ export function Budgets() {
               )}
             </div>
           </div>
-
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Historique mensuel 2025-2026
-            </p>
-            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
-                <span>Mois</span>
-                <span>Montant</span>
-                <span>Entrées</span>
-              </div>
-              <div style={{ maxHeight: 184, overflowY: 'auto' }}>
-                {revenueHistoryRows.length ? revenueHistoryRows.map((row) => (
-                  <div key={row.month_start} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 600 }}>
-                      {formatMonthYearFrench(row.month_start)}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatMoney(row.revenue_amount)}
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>
-                      {row.transaction_count.toLocaleString('fr-FR')}
-                    </span>
-                  </div>
-                )) : (
-                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Dernières entrées
-            </p>
-            <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-50)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700 }}>
-                <span>Date</span>
-                <span>Libellé / catégorie</span>
-                <span>Montant</span>
-              </div>
-              <div style={{ maxHeight: 208, overflowY: 'auto' }}>
-                {revenueAnalytics?.lastTransactions.length ? revenueAnalytics.lastTransactions.map((tx) => (
-                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: '1px solid var(--neutral-200)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      {formatTxDateFrench(tx.transaction_date)}
-                    </span>
-                    <span style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.label || '—'}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.category_name ?? '—'}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                      {formatMoney(tx.pilotage_amount)}
-                    </span>
-                  </div>
-                )) : (
-                  <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
-                )}
-              </div>
-            </div>
-          </div>
+        
         </motion.section>
       ) : null}
 
       {isCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      shouldFocusCategoriesSectionRef.current = true
-                      setActiveSlide(0)
-                      setSelectedCat('all')
+        isVoyagesCategoryMode ? (
+          <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+            <VoyagesFeaturePage
+              onBack={handleReturnToEnveloppes}
+            />
+          </Suspense>
+        ) : (
+          <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={handleReturnToEnveloppes}
+                      aria-label="Retour"
+                      style={{
+                        border: 'none',
+                        background: categoryColorFromName(selectedCatInfo?.name),
+                        color: 'var(--neutral-0)',
+                        width: 24,
+                        height: 24,
+                        minWidth: 24,
+                        minHeight: 24,
+                        borderRadius: 'var(--radius-full)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        flexShrink: 0,
                     }}
-                    aria-label="Retour"
-                    style={{
-                      border: 'none',
-                      background: accentFromLabel(selectedCatInfo?.name),
-                      color: 'var(--neutral-0)',
-                      width: 24,
-                      height: 24,
-                      minWidth: 24,
-                      minHeight: 24,
-                      borderRadius: 'var(--radius-full)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      padding: 0,
-                      flexShrink: 0,
-                  }}
-                >
-                  <ArrowLeft size={14} />
-                </button>
-                  <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
-                    <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
-                      {selectedCatInfo?.name ?? '—'}
-                    </p>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      - {categoryBlockLabel}
-                    </span>
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-1)' }}>
+                      <p style={{ margin: 0, minWidth: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>
+                        {selectedCatInfo?.name ?? '—'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {categoryRanking ? `${categoryRanking.index}/${categoryRanking.total}` : '—'}
-                </span>
-              </div>
-
-              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
-                    {formatMoney(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)', fontWeight: 800, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {categoryRanking ? `rang ${categoryRanking.index}/${categoryRanking.total}` : '—'}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>{formatMoney(sixMonthAverageAmount).replace(/\s+€/, '€')}</span>
-                </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Écart moyen</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{sixMonthAverageGapPct == null ? '—' : formatPercentSigned(sixMonthAverageGapPct)}</span>
+
+                <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                  <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+                      {formatCurrencyFloored(categoryCurrentPeriodAmount).replace(/\s+€/, '€')}
+                    </span>
+                  </div>
+                  <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}</span>
+                  </div>
+                  <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget - categoryCurrentPeriodAmount).replace(/\s+€/, '€')}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </motion.section>
+          </motion.section>
+        )
       ) : null}
 
-      {isCategoryMode ? (
+      {isCategoryMode && !isVoyagesCategoryMode ? (
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220 }}>
+          <div style={{ height: 220, position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+              <BarChart
+                data={monthlyHistory}
+                barCategoryGap="18%"
+                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                onClick={(data) => {
+                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                  if (!payload) { setClickedCatBar(null); return }
+                  setClickedCatBar((prev) =>
+                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                  )
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                 <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                 <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2494,12 +3701,21 @@ export function Budgets() {
                     const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                     const item = payload
                     if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                   }} />
-                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={accentFromLabel(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={categoryColorFromName(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            {clickedCatBar && (
+              <BarClickBubble
+                data={clickedCatBar.payload}
+                sixMonthAverage={sixMonthAverageAmount}
+                sixMonthGapPct={sixMonthAverageGapPct}
+                chartX={clickedCatBar.chartX}
+                onClose={() => setClickedCatBar(null)}
+              />
+            )}
           </div>
 
           <div
@@ -2514,10 +3730,11 @@ export function Budgets() {
               gap: 'var(--space-2)',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              Répartition par sous-catégories
+            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: categoryListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+              <span>Répartition par sous-catégories</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
             </p>
-            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)' }}>
+            <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-2)', paddingTop: 'var(--space-1)' }}>
               {categoryBarRows.length === 0 ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   Aucune sous-catégorie active sur cette période
@@ -2527,7 +3744,7 @@ export function Budgets() {
                   const source = subCategoryRowById.get(row.id)
                   if (!source) return null
                   const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
-                  const accent = accentFromLabel(row.name)
+                  const accent = categoryColorFromName(row.name)
                   return (
                     <button
                       key={row.id}
@@ -2564,7 +3781,7 @@ export function Budgets() {
                           />
                         </span>
                         <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                          {formatMoney(row.displayAmount)}
+                          {formatCurrencyFloored(row.displayAmount)}
                         </span>
                       </span>
                     </button>
@@ -2626,7 +3843,7 @@ export function Budgets() {
                   <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                       <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
-                        {formatMoney(donutCenterAmount)}
+                        {formatCurrencyFloored(donutCenterAmount)}
                       </span>
                       <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
                         {donutCenterLabel}
@@ -2688,7 +3905,7 @@ export function Budgets() {
                       const source = subCategoryRowById.get(row.id)
                       if (!source) return null
                       const barWidth = categoryBarMaxAmount > 0 ? (row.displayAmount / categoryBarMaxAmount) * 100 : 0
-                      const accent = accentFromLabel(row.name)
+                      const accent = categoryColorFromName(row.name)
                       return (
                         <button
                           key={row.id}
@@ -2725,7 +3942,7 @@ export function Budgets() {
                               />
                             </span>
                             <span style={{ fontSize: 10, lineHeight: 1.25, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                              {formatMoney(row.displayAmount)}
+                              {formatCurrencyFloored(row.displayAmount)}
                             </span>
                           </span>
                         </button>
@@ -2763,7 +3980,7 @@ export function Budgets() {
                             onClick={(slice: unknown) => {
                               const payload = extractPiePayload(slice)
                               const blockId = String(payload?.id ?? '')
-                              if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'epargne' || blockId === 'provision') {
+                              if (blockId === 'socle_fixe' || blockId === 'variable_essentielle' || blockId === 'discretionnaire' || blockId === 'provision') {
                                 setSelectedBlockId(blockId)
                               }
                             }}
@@ -2801,7 +4018,7 @@ export function Budgets() {
                       <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                           <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
-                            {formatMoney(blockDonutTotal)}
+                            {formatCurrencyFloored(blockDonutTotal)}
                           </span>
                           <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--neutral-500)', lineHeight: 1.1 }}>
                             {dataDisplayMode === 'budget' ? 'budgétés' : 'dépensés'}
@@ -2850,7 +4067,7 @@ export function Budgets() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatMoney(Number(value))} width={68} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
                       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
                       <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
@@ -2858,7 +4075,7 @@ export function Budgets() {
                           const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
                           const item = payload
                           if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatMoney(item.amount)}</text>
+                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
                         }} />
                         {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
                       </Bar>
@@ -2871,7 +4088,7 @@ export function Budgets() {
                       Montant moyen mensuel
                     </span>
                     <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                      {formatMoney(sixMonthAverageAmount)}
+                      {formatCurrencyFloored(sixMonthAverageAmount)}
                     </span>
                   </div>
                   <div style={{ display: 'grid', gap: 2 }}>
@@ -2894,30 +4111,60 @@ export function Budgets() {
                       <img
                         src={slideThreeSelectedScopeMeta.iconSrc ?? blockProvisionsIcon}
                         alt={`Icône ${slideThreeSelectedScopeMeta.label}`}
-                        width={22}
-                        height={22}
+                        width={25}
+                        height={25}
                         loading="lazy"
                         decoding="async"
                         style={{ display: 'block', objectFit: 'contain' }}
                       />
                     ) : (
-                      <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={22} />
+                      <CategoryIcon iconKey={slideThreeSelectedScopeMeta.iconKey} label={slideThreeSelectedScopeMeta.label} size={25} />
                     )}
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--neutral-800)' }}>
-                      {slideThreeSelectedScopeMeta.label}
-                    </p>
+                    <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                      <span style={{ fontWeight: 800 }}>{ytdScopeLabel}</span>
+                      <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                        {isSlideThreeMonthlyFlowsView && slideThreeMonthlyBudget != null
+                          ? ` - Budget ${Math.round(slideThreeMonthlyBudget).toLocaleString('fr-FR')}€`
+                          : ytdSlideHeading ? ` - ${ytdSlideHeading}` : ''}
+                      </span>
+                    </h3>
                   </div>
-                  <h3 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--font-size-base)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                    {slideThreeDisplayMode === 'tableau' ? 'Indicateurs clé' : 'Historique 6 mois'}
-                  </h3>
                 </section>
-                <Annual2026BlockMetrics
-                  hideParameterRow
-                  scopeSelection={slideThreeScopeSelection}
-                  period={slideThreePeriod}
-                  displayMode={slideThreeDisplayMode}
-                  compactMobile={isCompactMobile}
-                />
+                <Suspense fallback={<div style={{ minHeight: 240 }} />}>
+                {selectedYtdSlideView === 'kpi' ? (
+                  <div style={{ padding: isCompactMobile ? '0 var(--space-2)' : '0 var(--space-4)' }}>
+                    <Annual2026BlockMetrics
+                      hideParameterRow
+                      scopeSelection={slideThreeScopeSelection}
+                      visualAccentColor={slideThreeSelectedScopeMeta.color}
+                      period={slideThreePeriod}
+                      displayMode="tableau"
+                      compactMobile={isCompactMobile}
+                      rollingStats={categoryRolling12mStats}
+                    />
+                  </div>
+                ) : selectedYtdSlideView === 'history' ? (
+                  <Annual2026BlockMetrics
+                    hideParameterRow
+                    scopeSelection={slideThreeScopeSelection}
+                    visualAccentColor={slideThreeSelectedScopeMeta.color}
+                    period={slideThreePeriod}
+                    displayMode="graphique"
+                    compactMobile={isCompactMobile}
+                    rollingStats={categoryRolling12mStats}
+                  />
+                ) : (
+                  <div style={{ padding: '0 var(--space-5)', marginTop: 'var(--space-2)' }}>
+                    <MonthlyFlowsAnalysisCard
+                      year={2026}
+                      forcedView={selectedYtdSlideView === 'monthly_flows_chart' ? 'chart' : 'table'}
+                      showInternalViewToggle={false}
+                      variant="embedded"
+                      scopeSelection={slideThreeScopeSelection}
+                    />
+                  </div>
+                )}
+                </Suspense>
               </div>
             ) : null}
           </div>
@@ -2962,7 +4209,7 @@ export function Budgets() {
             <button
               type="button"
               onClick={scrollToLowerSection}
-              aria-label={canJumpToCategoriesSection ? 'Aller à la répartition par catégories' : 'Aller à la répartition par blocs'}
+              aria-label={canJumpToCategoriesSection ? 'Aller à la répartition par catégories' : canJumpToBlocksSection ? 'Aller à la répartition par blocs' : 'Aller à la projection coûts annuels'}
               style={{
                 width: 38,
                 height: 38,
@@ -3039,6 +4286,18 @@ export function Budgets() {
 		                const progressPct = Math.min(100, Math.round(consumptionRatio * 100))
 		                const variance = budgetAmount - actualAmount
 		                const isOverBudget = variance < 0
+                  const isSavingsBlock = row.id === 'epargne'
+                  const isSavingsPositive = isSavingsBlock && actualAmount > 0
+                  const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+                  const leftMetricLabel = isSavingsBlock ? 'Épargné' : 'Consommé'
+                  const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
+                  const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+                  const rightMetricColor = isSavingsBlock
+                    ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
+                    : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+                  const rightMetricText = isSavingsBlock
+                    ? `Reste ${formatCurrencyFloored(variance)}`
+                    : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
                   const blockIconSrc = BLOCK_ICON_SRC[row.id]
 		                return (
 		                  <button
@@ -3071,7 +4330,7 @@ export function Budgets() {
                           {`Socle ${row.label.toLowerCase()}`}
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                          {formatMoney(budgetAmount)}
+                          {formatCurrencyFloored(budgetAmount)}
                         </p>
                       </div>
 
@@ -3088,11 +4347,11 @@ export function Budgets() {
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoney(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({progressPct}%)</span>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: leftMetricColor, fontFamily: 'var(--font-mono)', fontWeight: isSavingsPositive ? 700 : 400 }}>
+                          {leftMetricLabel} {formatCurrencyFloored(actualAmount).replace(/\s+€/, '€')} <span style={{ color: leftMetricPctColor }}>({progressPct}%)</span>
                         </p>
-		                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-		                          {isOverBudget ? `Dépassement ${formatMoney(Math.abs(variance))}` : `Restant ${formatMoney(variance)}`}
+		                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: rightMetricColor, fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+		                          {rightMetricText}
 		                        </p>
 		                      </div>
 		                    </div>
@@ -3149,7 +4408,7 @@ export function Budgets() {
                           </span>
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                          {formatMoney(revenueAnalytics?.selectedMonthRevenue ?? 0)}
+                          {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0)}
                         </p>
                       </div>
 
@@ -3167,7 +4426,7 @@ export function Budgets() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                          {formatMoney(selectedMonthRevenueAmount)} <span style={{ color: 'var(--neutral-500)' }}>({revenueCoveragePctRounded}%)</span>
+                          {formatCurrencyFloored(selectedMonthRevenueAmount)} <span style={{ color: 'var(--neutral-500)' }}>({revenueCoveragePctRounded}%)</span>
                         </p>
                         <p
                           style={{
@@ -3182,17 +4441,46 @@ export function Budgets() {
                         >
                           {isRevenueAboveTarget
                             ? `Dépassement +${Math.round(revenueSurplusPct ?? 0)}%`
-                            : `Cible ${formatMoney(monthlyCommitmentsTarget)}`}
+                            : `Cible ${formatCurrencyFloored(monthlyCommitmentsTarget)}`}
                         </p>
                       </div>
-                      <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                        {isRevenueAboveTarget
-                          ? `+${formatMoney(Math.max(0, revenueSurplusAmount))} vs cible`
-                          : `${revenueAnalytics?.selectedMonthTransactionCount ?? 0} op.`}
-                      </p>
                     </div>
                   </button>
 		              </div>
+              <div aria-hidden="true" style={{ width: '100%', height: 120 }} />
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={scrollToTopSection}
+                  aria-label="Revenir au carrousel"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    minWidth: 38,
+                    minHeight: 38,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-0)',
+                    color: 'var(--neutral-700)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  <ArrowUp size={16} />
+                </button>
+              </div>
+            </motion.section>
+          ) : activeSlide === 2 ? (
+            <motion.section key="slide2-projection" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
+              <h3 ref={projectionSectionTitleRef} style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
+                Projection coûts annuels
+              </h3>
+              <Suspense fallback={<div style={{ minHeight: 280 }} />}>
+                <AnnualProjectionSectionConnected />
+              </Suspense>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
@@ -3264,7 +4552,7 @@ export function Budgets() {
                 <div style={{ padding: 'var(--space-3) var(--space-5)', background: selectedBlock.color, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-0)' }}>
-                      Bloc <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatMoney(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
+                      Bloc <span style={{ fontFamily: 'var(--font-mono)' }}>"{selectedBlock.label}"</span> - {formatCurrencyFloored(dataDisplayMode === 'budget' ? selectedBlock.budgetAmount : selectedBlock.actualAmount)}
                     </p>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.72)' }}>
                       {dataDisplayMode === 'budget' ? 'Vue budget' : 'Vue réel'}
@@ -3338,7 +4626,7 @@ export function Budgets() {
                               {line.categoryName}
                             </span>
                             <span style={{ fontSize: 13, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
-                              {formatMoney(displayedAmount)}
+                              {formatCurrencyFloored(displayedAmount)}
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
@@ -3346,7 +4634,7 @@ export function Budgets() {
                               {line.parentCategoryName ?? 'Autres'}
                             </span>
                             <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                              {dataDisplayMode === 'budget' ? `Réel ${formatMoney(secondaryAmount)}` : `Budget ${formatMoney(secondaryAmount)}`}
+                              {dataDisplayMode === 'budget' ? `Réel ${formatCurrencyFloored(secondaryAmount)}` : `Budget ${formatCurrencyFloored(secondaryAmount)}`}
                             </span>
                           </div>
                         </div>
@@ -3400,14 +4688,14 @@ export function Budgets() {
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-4)',
+                padding: 'calc(var(--safe-top-offset) + var(--space-1)) var(--space-4) var(--space-2)',
                 maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-4)', background: 'var(--neutral-300)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto var(--space-2)', background: 'var(--neutral-300)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Bloc ou catégorie</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowSlideThreeScopeSheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
                   <ChevronDown size={16} />
@@ -3415,12 +4703,12 @@ export function Budgets() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
                   <div>
-                    <p style={{ margin: '0 0 var(--space-2)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Blocs
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-1)' }}>
                       {slideThreeBlockOptions.map((option) => {
                         const selected = slideThreeScopeSelection.kind === 'bloc' && slideThreeScopeSelection.id === option.id
                         return (
@@ -3432,19 +4720,22 @@ export function Budgets() {
                               setShowSlideThreeScopeSheet(false)
                             }}
                             style={{
-                              border: selected ? '2px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              background: selected ? 'var(--primary-50)' : 'var(--neutral-0)',
-                              borderRadius: 'var(--radius-lg)',
-                              padding: '8px 6px',
+                              border: 'none',
+                              background: 'transparent',
+                              borderRadius: 'var(--radius-md)',
+                              padding: '3px 3px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 4,
+                              gap: 2,
                               cursor: 'pointer',
+                              opacity: selected ? 1 : 0.92,
                             }}
                           >
-                            <img src={option.iconSrc} alt={`Icône ${option.label}`} width={30} height={30} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.15 }}>{option.label}</span>
+                            <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
+                              <img src={option.iconSrc} alt={`Icône ${option.label}`} width={28} height={28} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.05 }}>{option.label}</span>
                           </button>
                         )
                       })}
@@ -3454,11 +4745,42 @@ export function Budgets() {
                   <div style={{ height: 1, background: 'var(--neutral-200)' }} />
 
                   <div>
-                    <p style={{ margin: '0 0 var(--space-2)', fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <p style={{ margin: '0 0 var(--space-1)', fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Catégories
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
-                      {rootExpenseCategories.map((category) => {
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-1) var(--space-1)' }}>
+                      {(() => {
+                        const selectedAll = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === ALL_CATEGORIES_SCOPE_ID
+                        return (
+                          <button
+                            key={ALL_CATEGORIES_SCOPE_ID}
+                            type="button"
+                            onClick={() => {
+                              setSlideThreeScopeSelection({ kind: 'categorie', id: ALL_CATEGORIES_SCOPE_ID })
+                              setShowSlideThreeScopeSheet(false)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              padding: '3px 2px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 2,
+                              cursor: 'pointer',
+                              opacity: selectedAll ? 1 : 0.92,
+                            }}
+                          >
+                            <div style={{ border: selectedAll ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
+                              <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={32} />
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
+                              Toutes
+                            </span>
+                          </button>
+                        )
+                      })()}
+                      {rootNavigableCategories.map((category) => {
                         const selected = slideThreeScopeSelection.kind === 'categorie' && slideThreeScopeSelection.id === category.id
                         return (
                           <button
@@ -3471,19 +4793,19 @@ export function Budgets() {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              padding: '6px 4px',
+                              padding: '3px 2px',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 5,
+                              gap: 2,
                               cursor: 'pointer',
                               opacity: selected ? 1 : 0.92,
                             }}
                           >
                             <div style={{ border: selected ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
-                              <CategoryIcon iconKey={category.icon_key} label={category.name} size={34} />
+                              <CategoryIcon iconKey={category.icon_key} label={category.name} size={32} />
                             </div>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
                               {formatCategoryModalLabel(category.name)}
                             </span>
                           </button>
@@ -3568,7 +4890,7 @@ export function Budgets() {
                       </span>
                     </button>
 
-                    {rootExpenseCategories.map((cat) => (
+                    {rootNavigableCategories.map((cat) => (
                       <button
                         key={cat.id}
                         type="button"
@@ -3594,6 +4916,104 @@ export function Budgets() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+      </>
+      ) : budgetsTabId === 'enveloppes' ? (
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <EnveloppesTab
+            onCategoryClick={handleEnveloppesCategoryClick}
+            onBlockClick={handleEnveloppesBlockClick}
+            onRevenueClick={handleEnveloppesRevenueClick}
+            initialViewMode={enveloppesViewMode}
+            onViewModeChange={setEnveloppesViewMode}
+            restoreRequest={enveloppesRestoreRequest}
+          />
+        </Suspense>
+      ) : budgetsTabId === 'analytics' ? (
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <BudgetsAnalyticsTab />
+        </Suspense>
+      ) : budgetsTabId === 'metriques' ? (
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <ProjectionsTab />
+        </Suspense>
+      ) : budgetsTabId === 'projections' ? (
+        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
+          <ProjectionsTabContent />
+        </Suspense>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8) var(--page-gutter)', gap: 'var(--space-3)', minHeight: 240 }}>
+          <img src={activeBudgetsTab.iconSrc} alt={activeBudgetsTab.label} width={48} height={48} style={{ objectFit: 'contain', opacity: 0.35 }} loading="lazy" decoding="async" />
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-400)', fontWeight: 'var(--font-weight-medium)' }}>Bientôt disponible</p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showBudgetsTabModal ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBudgetsTabModal(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sélectionner un onglet budgets"
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '-100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: 'var(--space-3)',
+                right: 'var(--space-3)',
+                top: 0,
+                zIndex: 61,
+                width: 'auto',
+                maxWidth: 430,
+                margin: '0 auto',
+                background: 'var(--neutral-0)',
+                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
+                padding: 'calc(64px + var(--safe-top) + var(--space-4)) var(--space-4) var(--space-3)',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div style={{ width: 28, height: 3, borderRadius: 'var(--radius-full)', background: 'var(--neutral-300)', margin: '0 auto var(--space-2)' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${BUDGETS_TABS.length}, minmax(0, 1fr))`, gap: 'var(--space-2)' }}>
+                {BUDGETS_TABS.map((tab) => {
+                  const isActive = tab.id === budgetsTabId
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleBudgetsTabSelect(tab.id)}
+                      style={{
+                        border: `1.5px solid ${isActive ? 'var(--primary-300)' : 'var(--neutral-150)'}`,
+                        background: isActive ? 'color-mix(in oklab, var(--primary-500) 8%, var(--neutral-0) 92%)' : 'var(--neutral-50)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '6px var(--space-2)',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 'var(--touch-target-min)',
+                        transition: 'background 150ms ease, border-color 150ms ease',
+                      }}
+                    >
+                      <span style={{ fontSize: 11, lineHeight: 1.2, fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-semibold)', color: isActive ? 'var(--primary-600)' : 'var(--neutral-700)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {tab.label}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </motion.div>
           </>

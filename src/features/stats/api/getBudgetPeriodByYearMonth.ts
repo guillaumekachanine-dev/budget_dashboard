@@ -4,7 +4,7 @@ import type { StatsPeriodRow } from '@/features/stats/types'
 const PERIOD_COLUMNS = ['id', 'period_year', 'period_month', 'label'].join(', ')
 
 export async function getBudgetPeriodByYearMonth(periodYear: number, periodMonth: number): Promise<StatsPeriodRow | null> {
-  const { data, error } = await budgetDb()
+  const { data, error } = await budgetDb
     .from('budget_periods')
     .select(PERIOD_COLUMNS)
     .eq('period_year', periodYear)

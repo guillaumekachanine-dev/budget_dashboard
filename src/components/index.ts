@@ -14,8 +14,6 @@ export { AddTransactionModal } from './modals/AddTransactionModal'
 
 // Other UI
 export { AccountCard } from './ui/AccountCard'
-export { AccountSlideCard } from './ui/AccountSlideCard'
-export { BudgetBar } from './ui/BudgetBar'
 export { CategoryIcon } from './ui/CategoryIcon'
 export { HeroCard } from './ui/HeroCard'
 export { Skeleton } from './ui/Skeleton'

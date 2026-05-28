@@ -1,0 +1,333 @@
+{
+  "name": "Budget Import — Screenshot Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "budget-import",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "budget-import"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extraire les champs du formulaire multipart + l'image binaire\nconst item = $input.first();\nconst body = item.json.body || item.json;\n\nif (!item.binary || !item.binary.file) {\n  throw new Error('Aucun fichier reçu — vérifier que le front envoie bien un fichier \"file\" en multipart/form-data');\n}\n\nreturn [{\n  json: {\n    user_id:        body.user_id        || '',\n    account_id:     body.account_id     || '',\n    category_hint:  body.category_hint  || 'operations',\n    period_start:   body.period_start   || '',\n    period_end:     body.period_end     || '',\n    directive:      body.directive      || '',\n    image_base64:   item.binary.file.data,\n    image_mime:     item.binary.file.mimeType || 'image/jpeg'\n  }\n}];"
+      },
+      "id": "a1000002-0000-0000-0000-000000000002",
+      "name": "Set Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/import_batches",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",    "value": "application/json" },
+            { "name": "Content-Profile", "value": "budget_dashboard" },
+            { "name": "Prefer",          "value": "return=representation" },
+            { "name": "apikey",          "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",   "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  user_id:       $json.user_id,\n  source_name:   'screenshot',\n  import_type:   $json.category_hint,\n  file_name:     'screenshot',\n  status:        'processing',\n  category_hint: $json.category_hint,\n  period_start:  $json.period_start,\n  period_end:    $json.period_end,\n  directive:     $json.directive,\n  llm_model:     'claude-sonnet-4-6',\n  row_count:     0\n}) }}"
+      },
+      "id": "a1000003-0000-0000-0000-000000000003",
+      "name": "Create Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/categories?is_active=eq.true&select=id,name,parent_id,flow_type&order=name",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept-Profile", "value": "budget_dashboard" },
+            { "name": "apikey",         "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",  "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": false
+      },
+      "id": "a1000004-0000-0000-0000-000000000004",
+      "name": "Fetch Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/category_mapping?select=keyword,category_id,priority,is_regex&order=priority.desc",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept-Profile", "value": "budget_dashboard" },
+            { "name": "apikey",         "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",  "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": false
+      },
+      "id": "a1000005-0000-0000-0000-000000000005",
+      "name": "Fetch Mapping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const metadata  = $('Set Metadata').first().json;\nconst categories = $('Fetch Categories').all().map(i => i.json);\nconst mappings   = $('Fetch Mapping').all().map(i => i.json);\nconst batchId    = $('Create Batch').first().json.id;\n\nconst catList = categories\n  .map(c => `- ${c.name} (id: ${c.id}, type: ${c.flow_type})`)\n  .join('\\n');\n\nconst mapList = mappings\n  .map(m => `- \"${m.keyword}\" → category_id: ${m.category_id}`)\n  .join('\\n');\n\nconst directive = metadata.directive\n  ? `\\nDIRECTIVE SPÉCIFIQUE : ${metadata.directive}`\n  : '';\n\nconst prompt = `Tu es un assistant spécialisé dans l'analyse de relevés bancaires français.\nAnalyse cette capture d'écran et extrais TOUTES les transactions visibles.\n\nPÉRIODE : du ${metadata.period_start} au ${metadata.period_end}${directive}\n\nCATÉGORIES DISPONIBLES :\n${catList}\n\nTABLE DE CORRESPONDANCE (marchands connus → catégorie) :\n${mapList.length > 0 ? mapList : '(aucune correspondance définie pour l\\'instant)'}\n\nRÈGLES :\n- Extrais uniquement les transactions explicitement visibles sur l'image\n- Montants débités = dépenses (flow_type: \"expense\"), crédits = revenus (flow_type: \"income\")\n- Virements vers épargne personnelle → flow_type: \"savings\"\n- Virements entre comptes propres → flow_type: \"transfer\"\n- En cas de doute sur un chiffre ou une date : confidence_score < 0.7\n- Utilise les category_id de la liste ci-dessus quand la correspondance est évidente\n\nRÉPONDS UNIQUEMENT avec un tableau JSON valide (rien avant ni après) :\n[\n  {\n    \"date\": \"YYYY-MM-DD\",\n    \"amount\": 45.90,\n    \"flow_type\": \"expense\",\n    \"raw_label\": \"CB CARREFOUR MARKET 15/05\",\n    \"normalized_label\": \"Carrefour Market\",\n    \"merchant_name\": \"Carrefour\",\n    \"suggested_category_id\": \"uuid-ou-null\",\n    \"confidence_score\": 0.95\n  }\n]`;\n\nreturn [{ json: { prompt, batch_id: batchId } }];"
+      },
+      "id": "a1000006-0000-0000-0000-000000000006",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",      "value": "application/json" },
+            { "name": "x-api-key",         "value": "REMPLACER_PAR_CLE_CLAUDE" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  model: 'claude-sonnet-4-6',\n  max_tokens: 4096,\n  messages: [{\n    role: 'user',\n    content: [\n      {\n        type: 'image',\n        source: {\n          type: 'base64',\n          media_type: $('Set Metadata').first().json.image_mime,\n          data: $('Set Metadata').first().json.image_base64\n        }\n      },\n      {\n        type: 'text',\n        text: $json.prompt\n      }\n    ]\n  }]\n}) }}"
+      },
+      "id": "a1000007-0000-0000-0000-000000000007",
+      "name": "Claude Vision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const claudeResponse = $('Claude Vision').first().json;\nconst metadata       = $('Set Metadata').first().json;\nconst batchId        = $('Create Batch').first().json.id;\nconst mappings       = $('Fetch Mapping').all().map(i => i.json);\n\n// Vérifier la structure de la réponse Claude\nif (!claudeResponse.content || !claudeResponse.content[0] || !claudeResponse.content[0].text) {\n  throw new Error('Réponse Claude invalide : ' + JSON.stringify(claudeResponse).substring(0, 300));\n}\n\nconst rawText = claudeResponse.content[0].text.trim();\nlet transactions = [];\n\ntry {\n  // Claude peut répondre avec ```json ... ``` ou directement le tableau\n  const clean = rawText\n    .replace(/^```json\\s*/,  '')\n    .replace(/^```\\s*/,      '')\n    .replace(/\\s*```$/,      '')\n    .trim();\n  transactions = JSON.parse(clean);\n  if (!Array.isArray(transactions)) {\n    throw new Error('La réponse doit être un tableau JSON, reçu : ' + typeof transactions);\n  }\n} catch (e) {\n  throw new Error(`Échec du parsing Claude : ${e.message}\\nRéponse brute : ${rawText.substring(0, 400)}`);\n}\n\nif (transactions.length === 0) {\n  throw new Error('Claude a retourné 0 transaction — vérifier l\\'image ou la période renseignée');\n}\n\n// Hash MD5 déterministe pour la déduplication\nconst crypto = require('crypto');\nfunction externalId(date, amount, label) {\n  const str = `${date}|${Math.abs(parseFloat(amount) || 0).toFixed(2)}|${(label || '').trim().toLowerCase()}`;\n  return crypto.createHash('md5').update(str).digest('hex');\n}\n\n// Résolution catégorie par correspondance de keyword\nfunction resolveCategory(rawLabel, merchantName) {\n  const text = `${rawLabel || ''} ${merchantName || ''}`.toLowerCase();\n  for (const m of mappings) {\n    try {\n      const match = m.is_regex\n        ? new RegExp(m.keyword, 'i').test(text)\n        : text.includes(m.keyword.toLowerCase());\n      if (match) return m.category_id;\n    } catch (_) {\n      continue; // ignorer les regex invalides\n    }\n  }\n  return null;\n}\n\nconst stagingRows = transactions.map((t, idx) => {\n  const resolvedCategory = t.suggested_category_id || resolveCategory(t.raw_label, t.merchant_name);\n\n  const direction =\n    t.flow_type === 'income'   ? 'income'       :\n    t.flow_type === 'savings'  ? 'savings'      :\n    t.flow_type === 'transfer' ? 'transfer_out'  :\n    'expense';\n\n  return {\n    user_id:                 metadata.user_id,\n    import_batch_id:         batchId,\n    row_number:              idx + 1,\n    raw_date:                t.date,\n    raw_amount:              String(t.amount),\n    raw_label:               t.raw_label,\n    parsed_transaction_date: t.date,\n    parsed_amount:           Math.abs(parseFloat(t.amount) || 0),\n    direction:               direction,\n    target_flow_type:        t.flow_type || 'expense',\n    normalized_label:        t.normalized_label || t.raw_label,\n    merchant_name:           t.merchant_name    || null,\n    target_category_id:      resolvedCategory   || null,\n    target_account_id:       metadata.account_id,\n    external_id:             externalId(t.date, t.amount, t.raw_label),\n    confidence_score:        t.confidence_score ?? 0.8,\n    parse_status:            'parsed',\n    mapping_status:          resolvedCategory ? 'mapped' : 'pending',\n    parsed_ok:               true,\n    is_duplicate_candidate:  false,\n    review_status:           'pending_review',\n    payload:                 t\n  };\n});\n\nreturn stagingRows.map(row => ({ json: row }));"
+      },
+      "id": "a1000008-0000-0000-0000-000000000008",
+      "name": "Parse & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Agréger toutes les lignes staging en un seul tableau pour l'insert batch\nconst rows = $input.all().map(i => i.json);\nreturn [{ json: { rows, count: rows.length } }];"
+      },
+      "id": "a1000009-0000-0000-0000-000000000009",
+      "name": "Aggregate Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/transactions_staging",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",    "value": "application/json" },
+            { "name": "Content-Profile", "value": "budget_dashboard" },
+            { "name": "Prefer",          "value": "return=minimal" },
+            { "name": "apikey",          "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",   "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.rows) }}"
+      },
+      "id": "a1000010-0000-0000-0000-000000000010",
+      "name": "Insert Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/import_batches?id=eq.' + $('Create Batch').first().json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",    "value": "application/json" },
+            { "name": "Content-Profile", "value": "budget_dashboard" },
+            { "name": "apikey",          "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",   "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ status: 'pending_review', row_count: $('Aggregate Rows').first().json.count }) }}"
+      },
+      "id": "a1000011-0000-0000-0000-000000000011",
+      "name": "Update Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  batch_id:  $('Create Batch').first().json.id,\n  status:    'pending_review',\n  row_count: $('Aggregate Rows').first().json.count\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1000012-0000-0000-0000-000000000012",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://ssrxraibinzmpndzudrs.supabase.co/rest/v1/import_batches?id=eq.' + ($('Create Batch').first().json.id || 'unknown') }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",    "value": "application/json" },
+            { "name": "Content-Profile", "value": "budget_dashboard" },
+            { "name": "apikey",          "value": "REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" },
+            { "name": "Authorization",   "value": "Bearer REMPLACER_PAR_SUPABASE_SERVICE_ROLE_KEY" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  status: 'error',\n  error_log: {\n    message:   ($json.error && $json.error.message) || $json.message || 'Erreur inconnue',\n    timestamp: new Date().toISOString()\n  }\n}) }}"
+      },
+      "id": "a1000013-0000-0000-0000-000000000013",
+      "name": "Error — Update Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  error:    true,\n  message:  ($json.error && $json.error.message) || 'Erreur lors du traitement du workflow',\n  batch_id: $('Create Batch').first().json.id || null\n}) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "a1000014-0000-0000-0000-000000000014",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 600]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Set Metadata", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set Metadata": {
+      "main": [
+        [{ "node": "Create Batch", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Batch": {
+      "main": [
+        [{ "node": "Fetch Categories", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error",    "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Categories": {
+      "main": [
+        [{ "node": "Fetch Mapping", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Mapping": {
+      "main": [
+        [{ "node": "Build Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [{ "node": "Claude Vision", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Vision": {
+      "main": [
+        [{ "node": "Parse & Validate",      "type": "main", "index": 0 }],
+        [{ "node": "Error — Update Batch",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse & Validate": {
+      "main": [
+        [{ "node": "Aggregate Rows",        "type": "main", "index": 0 }],
+        [{ "node": "Error — Update Batch",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Rows": {
+      "main": [
+        [{ "node": "Insert Staging", "type": "main", "index": 0 }]
+      ]
+    },
+    "Insert Staging": {
+      "main": [
+        [{ "node": "Update Batch",          "type": "main", "index": 0 }],
+        [{ "node": "Error — Update Batch",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Batch": {
+      "main": [
+        [{ "node": "Respond Success", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error — Update Batch": {
+      "main": [
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

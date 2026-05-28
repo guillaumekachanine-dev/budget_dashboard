@@ -5,6 +5,7 @@ import { prefetchRoute, type RoutePath } from '@/lib/routePrefetch'
 
 interface BottomNavProps {
   onAddClick: () => void
+  isAddMenuOpen?: boolean
 }
 
 const LEFT_ITEMS = [
@@ -14,16 +15,17 @@ const LEFT_ITEMS = [
 
 const RIGHT_ITEMS = [
   { to: '/budgets', icon: FolderOpen, label: 'Budgets' },
-  { to: '/stats', icon: BarChart2, label: 'Stats' },
+  { to: '/epargne', icon: BarChart2, label: 'Épargne' },
 ]
 
 type NavItemProps = {
   to: string
   icon: typeof Home
+  label: string
   end?: boolean
 }
 
-function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
+function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
   const warmup = () => prefetchRoute(to as RoutePath)
 
   return (
@@ -40,12 +42,14 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
           style={{
             position: 'relative',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 2,
             height: '100%',
             minWidth: 64,
-            padding: '0 10px',
-            opacity: isActive ? 1 : 0.58,
+            padding: '6px 10px 4px',
+            opacity: isActive ? 1 : 0.52,
             transition: 'opacity 200ms ease',
           }}
         >
@@ -53,28 +57,24 @@ function NavItem({ to, icon: Icon, end = false }: NavItemProps) {
             style={{
               display: 'inline-flex',
               color: 'var(--neutral-0)',
-              transform: isActive ? 'translateY(-4px) scale(1.08)' : 'translateY(0) scale(1)',
+              transform: isActive ? 'translateY(-1px) scale(1.06)' : 'translateY(0) scale(1)',
               transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
-            <Icon size={23} strokeWidth={isActive ? 2.4 : 1.9} />
+            <Icon size={22} strokeWidth={isActive ? 2.4 : 1.9} />
           </span>
           <span
             style={{
-              position: 'absolute',
-              bottom: 0,
-              display: 'block',
-              width: isActive ? 20 : 4,
-              height: 3,
-              borderRadius: '3px',
-              background: 'var(--neutral-0)',
-              opacity: isActive ? 1 : 0,
-              transform: isActive ? 'scaleX(1)' : 'scaleX(0.35)',
-              transformOrigin: 'center',
-              flexShrink: 0,
-              transition: 'width 320ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+              fontSize: 10,
+              fontWeight: isActive ? 700 : 600,
+              color: 'var(--neutral-0)',
+              letterSpacing: '0.01em',
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
             }}
-          />
+          >
+            {label}
+          </span>
         </div>
       )}
     </NavLink>
@@ -134,21 +134,21 @@ const fabBaseStyle: CSSProperties = {
   zIndex: 51,
 }
 
-export function BottomNav({ onAddClick }: BottomNavProps) {
+export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps) {
   const [fabHovered, setFabHovered] = useState(false)
 
   return (
     <div style={rootStyle}>
       <nav style={navStyle} aria-label="Navigation principale">
         <div style={navRowStyle}>
-          {LEFT_ITEMS.map(({ to, icon }, i) => (
-            <NavItem key={to} to={to} icon={icon} end={i === 0} />
+          {LEFT_ITEMS.map(({ to, icon, label }, i) => (
+            <NavItem key={to} to={to} icon={icon} label={label} end={i === 0} />
           ))}
 
           <div aria-hidden="true" />
 
-          {RIGHT_ITEMS.map(({ to, icon }) => (
-            <NavItem key={to} to={to} icon={icon} />
+          {RIGHT_ITEMS.map(({ to, icon, label }) => (
+            <NavItem key={to} to={to} icon={icon} label={label} />
           ))}
         </div>
       </nav>
@@ -160,12 +160,19 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         onMouseLeave={() => setFabHovered(false)}
         style={{
           ...fabBaseStyle,
-          transform: fabHovered
+          transform: fabHovered || isAddMenuOpen
             ? 'translate(-50%, calc(-50% - 5px)) scale(1.07)'
             : 'translate(-50%, calc(-50% - 5px)) scale(1)',
         }}
       >
-        <Plus size={20} strokeWidth={2.4} />
+        <Plus
+          size={20}
+          strokeWidth={2.4}
+          style={{
+            transform: isAddMenuOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+            transition: 'transform 180ms ease-out',
+          }}
+        />
       </button>
     </div>
   )

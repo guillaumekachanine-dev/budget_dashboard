@@ -71,8 +71,7 @@ export interface BudgetSummary {
   variableEssentielleBudget: number
   provisionBudget: number
   discretionnaireBudget: number
-  cagnotteProjetBudget: number
-  horsPilotageBudget: number
+  voyageBudget: number
 }
 
 export interface BudgetParentGroup {
@@ -203,5 +202,6 @@ export interface BudgetRevenueAnalytics {
   minMonthlyRevenue: number
   monthlySeries: BudgetRevenueMonthlyPoint[]
   bySource: BudgetRevenueSource[]
+  allTransactions: BudgetRevenueTransaction[]
   lastTransactions: BudgetRevenueTransaction[]
 }

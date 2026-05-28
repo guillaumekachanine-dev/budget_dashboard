@@ -7,6 +7,7 @@ import {
   formatCurrency,
   sortBudgetLinesForDisplay,
 } from '@/features/budget/utils/budgetSelectors'
+import { formatCurrencyFloored } from '@/lib/utils'
 
 interface BudgetCategoryListProps {
   lines: BudgetLineWithCategory[]
@@ -15,8 +16,45 @@ interface BudgetCategoryListProps {
   onLineClick?: (line: BudgetLineWithCategory) => void
 }
 
+const CATEGORY_DISPLAY_ORDER = [
+  'logement',
+  'alimentation',
+  'achats divers',
+  'sorties',
+  'voyages',
+  'transport',
+  'famille enfant',
+  'business',
+  'abonnements',
+  'sante',
+  'taxes frais',
+  'epargne',
+] as const
+
+function normalizeCategoryLabel(value?: string | null): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, onLineClick }: BudgetCategoryListProps) {
-  const sorted = sortBudgetLinesForDisplay(lines)
+  const sorted = useMemo(() => {
+    const fallbackSorted = sortBudgetLinesForDisplay(lines)
+    const rank = new Map<string, number>(CATEGORY_DISPLAY_ORDER.map((key, index) => [key, index]))
+
+    return [...fallbackSorted].sort((a, b) => {
+      const nameA = normalizeCategoryLabel(a.parent_category_name ?? a.category_name)
+      const nameB = normalizeCategoryLabel(b.parent_category_name ?? b.category_name)
+      const rankA = rank.get(nameA) ?? 999
+      const rankB = rank.get(nameB) ?? 999
+      if (rankA !== rankB) return rankA - rankB
+      return nameA.localeCompare(nameB, 'fr')
+    })
+  }, [lines])
   const { data: categories = [] } = useCategories('expense')
   const categoryIconKeyById = useMemo(() => new Map(categories.map((category) => [category.id, category.icon_key])), [categories])
   const actualByCategoryId = useMemo(() => {
@@ -47,6 +85,22 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
             const variance = budgetAmount - actualAmount
             const isOverBudget = variance < 0
             const resolvedIconKey = line.category_icon_key ?? (line.category_id ? (categoryIconKeyById.get(line.category_id) ?? null) : null)
+            const normalizedCategoryName = normalizeCategoryLabel(line.parent_category_name ?? line.category_name)
+            const displayIconKey = normalizedCategoryName === 'epargne' ? 'epargne' : resolvedIconKey
+            const isSavingsCategory = normalizedCategoryName === 'epargne'
+            const isSavingsPositive = isSavingsCategory && actualAmount > 0
+            const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+            const leftMetricLabel = isSavingsCategory ? 'Épargné' : 'Consommé'
+            const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
+            const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+            const rightMetricColor = isSavingsCategory
+              ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
+              : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+            const rightMetricText = hasActuals
+              ? (isSavingsCategory
+                ? `Reste ${formatCurrencyFloored(variance)}`
+                : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`))
+              : 'Pas encore de consommé'
 
             return (
               <div
@@ -60,7 +114,7 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
                 onMouseLeave={onLineClick ? (e) => { e.currentTarget.style.opacity = '1' } : undefined}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                  <CategoryIcon iconKey={resolvedIconKey} label={line.category_name ?? ''} size={56} />
+                  <CategoryIcon iconKey={displayIconKey} label={line.category_name ?? ''} size={56} />
                 </div>
 
                 <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
@@ -86,13 +140,11 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
-                      {formatCurrency(actualAmount)} <span style={{ color: 'var(--neutral-500)' }}>({actualPct}%)</span>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: leftMetricColor, fontFamily: 'var(--font-mono)', fontWeight: isSavingsPositive ? 700 : 400 }}>
+                      {leftMetricLabel} {formatCurrency(actualAmount).replace(/\s+€/, '€')} <span style={{ color: leftMetricPctColor }}>({actualPct}%)</span>
                     </p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: isOverBudget ? 'var(--color-error)' : 'var(--neutral-500)', fontFamily: 'var(--font-mono)', fontWeight: isOverBudget ? 700 : 400, flexShrink: 0 }}>
-                      {hasActuals
-                        ? (isOverBudget ? `Dépassement ${formatCurrency(Math.abs(variance))}` : `Restant ${formatCurrency(variance)}`)
-                        : 'Pas encore de consommé'}
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: rightMetricColor, fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+                      {rightMetricText}
                     </p>
                   </div>
                 </div>

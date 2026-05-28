@@ -1,37 +1,103 @@
-import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
-import type { CSSProperties } from 'react'
+import { useEffect, useMemo, useState, useDeferredValue, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ArrowLeft, Search, Check } from 'lucide-react'
-import { useTransactions } from '@/hooks/useTransactions'
+import { ChevronDown, Search, ArrowUp, Settings2, X, RotateCcw } from 'lucide-react'
+import { useFluxOperations, type FluxOperation } from '@/hooks/useFluxOperations'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
-import { usePlannedOperations } from '@/hooks/usePlannedOperations'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatCurrencyRounded } from '@/lib/utils'
 import { Button, Input } from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { AddPlannedOperationModal } from '@/components/modals/AddPlannedOperationModal'
+import { PlannedOperationDetailsModal } from '@/components/modals/PlannedOperationDetailsModal'
+import fluxActuelIcon from '@/assets/icons/app/flux_actuel.webp'
 import type {
   FlowType,
-  PlannedOperation,
-  PlannedOperationBudgetImpact,
-  PlannedOperationFlowType,
   Transaction,
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import planifierOperationIcon from '@/assets/icons/app/planifier_operation.png'
+import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
+import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.webp'
 
-type FlowFilter = 'all' | 'income' | 'expense' | 'transfer'
-type PlannedFlowFilter = 'all' | PlannedOperationFlowType
-type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
-type PeriodMode = 'current' | 'rolling' | 'future'
-type QuickParamPicker = 'type' | 'period' | 'modalite' | 'fixed' | 'account' | null
+type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
+type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'
+type PlannedModalityFilter = 'all' | 'done' | 'upcoming'
+type PlannedTypeFilter = 'all' | 'recurring' | 'one_time'
+type FluxTabId = 'actuel' | 'planifie'
 
-const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string }> = [
+type FluxTabConfig = { id: FluxTabId; label: string; iconSrc: string }
+const FLUX_TABS: FluxTabConfig[] = [
+  { id: 'actuel', label: 'Flux actuels', iconSrc: fluxActuelIcon },
+  { id: 'planifie', label: 'Planifié', iconSrc: fluxPlanifieIcon },
+]
+
+const HEADER_CATEGORY_ORDER = [
+  'alimentation',
+  'achats-divers',
+  'sorties',
+  'famille-enfant',
+  'logement',
+  'business',
+  'transport',
+  'voyages',
+  'sante',
+  'abonnements',
+  'taxes-frais',
+] as const
+
+function normalizeCategoryName(value?: string | null): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function headerCategoryOrderKey(name: string): string | null {
+  const normalized = normalizeCategoryName(name)
+  if (normalized.includes('alimentation')) return 'alimentation'
+  if (normalized.includes('achats') && normalized.includes('divers')) return 'achats-divers'
+  if (normalized.includes('sorties')) return 'sorties'
+  if (normalized.includes('famille') && normalized.includes('enfant')) return 'famille-enfant'
+  if (normalized.includes('logement')) return 'logement'
+  if (normalized.includes('business')) return 'business'
+  if (normalized.includes('transport')) return 'transport'
+  if (normalized.includes('voyages')) return 'voyages'
+  if (normalized.includes('sante')) return 'sante'
+  if (normalized.includes('abonn')) return 'abonnements'
+  if ((normalized.includes('taxes') && normalized.includes('frais')) || (normalized.includes('frais') && normalized.includes('impot'))) {
+    return 'taxes-frais'
+  }
+  return null
+}
+
+function headerCategoryLabel(name: string): string {
+  const key = headerCategoryOrderKey(name)
+  if (key === 'famille-enfant') return 'Famille/enfant'
+  if (key === 'abonnements') return 'Abonn.'
+  if (key === 'taxes-frais') return 'Taxes/frais'
+  return name
+}
+
+const FRENCH_MONTHS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+]
+
+function formatMonthLabel(dateKey: string): string {
+  const year = parseInt(dateKey.slice(0, 4), 10)
+  const month = parseInt(dateKey.slice(5, 7), 10) - 1
+  return `${FRENCH_MONTHS[month]} ${year}`
+}
+
+const FLOW_OPTIONS: Array<{ value: FlowFilter; label: string; hasSeparator?: boolean }> = [
   { value: 'all', label: 'Toutes' },
-  { value: 'expense', label: 'Depenses' },
+  { value: 'expense', label: 'Dépenses' },
   { value: 'income', label: 'Revenus' },
+  { value: 'savings', label: 'Epargne' },
   { value: 'transfer', label: 'Transferts' },
 ]
 
@@ -39,88 +105,73 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'day', label: 'Jour' },
   { value: 'week', label: 'Semaine' },
   { value: 'month', label: 'Mois' },
-  { value: 'quarter', label: 'Trimestre' },
-  { value: 'year', label: 'Annee' },
-  { value: 'all', label: 'Tout' },
-]
-
-const PLANNED_FLOW_OPTIONS: Array<{ value: PlannedFlowFilter; label: string }> = [
+  { value: 'year_2026', label: '2026' },
+  { value: 'year_2025', label: '2025' },
   { value: 'all', label: 'Toutes' },
-  { value: 'expense', label: 'Dépenses' },
-  { value: 'income', label: 'Revenus' },
-  { value: 'savings', label: 'Épargne' },
-  { value: 'transfer', label: 'Transferts' },
 ]
 
-const PLANNED_FLOW_LABELS: Record<PlannedOperationFlowType, string> = {
-  expense: 'Dépense planifiée',
-  income: 'Revenu planifié',
-  savings: 'Épargne planifiée',
-  transfer: 'Transfert planifié',
+const PLANNED_TYPE_OPTIONS: Array<{ value: PlannedTypeFilter; label: string }> = [
+  { value: 'all', label: 'Toutes' },
+  { value: 'recurring', label: 'Fixes récurrentes' },
+  { value: 'one_time', label: 'Ponctuelles' },
+]
+
+const PLANNED_PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
+  { value: 'week', label: 'Semaine' },
+  { value: 'month', label: 'Mois' },
+  { value: 'year_2026', label: '2026' },
+  { value: 'all', label: 'Toutes' },
+]
+
+function startOfIsoDay(d: Date): string {
+  // Important: do not use toISOString() for business calendar filters.
+  // UTC conversion can shift local midnight to the previous day.
+  return toLocalIsoDate(d)
 }
 
-const PLANNED_BUDGET_IMPACT_LABELS: Record<PlannedOperationBudgetImpact, string> = {
-  already_budgeted: 'Déjà budgétisée',
-  additional_commitment: 'Engagement additionnel',
-  informational: 'Informatif uniquement',
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function startOfIsoDay(d: Date): string {
-  const dt = new Date(d)
-  dt.setHours(0, 0, 0, 0)
-  return dt.toISOString().slice(0, 10)
-}
-
-function startOfIsoMonth(d: Date): string {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
-}
-
-function startOfIsoQuarter(d: Date): string {
-  const qMonth = Math.floor(d.getMonth() / 3) * 3
-  return new Date(d.getFullYear(), qMonth, 1).toISOString().slice(0, 10)
+  return toLocalIsoDate(new Date())
 }
 
 function startOfIsoYear(d: Date): string {
-  return new Date(d.getFullYear(), 0, 1).toISOString().slice(0, 10)
+  return toLocalIsoDate(new Date(d.getFullYear(), 0, 1))
 }
 
-function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: string; endDate?: string } {
-  const now = new Date()
+function endOfIsoYear(d: Date): string {
+  return toLocalIsoDate(new Date(d.getFullYear(), 11, 31))
+}
 
-  if (mode === 'future') {
-    const tomorrow = new Date(now)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const start = startOfIsoDay(tomorrow)
-    
-    switch (period) {
-      case 'day': return { startDate: start, endDate: start }
-      case 'week': {
-        const end = new Date(tomorrow)
-        end.setDate(tomorrow.getDate() + 6)
-        return { startDate: start, endDate: startOfIsoDay(end) }
-      }
-      case 'month': {
-        const end = new Date(tomorrow)
-        end.setDate(tomorrow.getDate() + 29)
-        return { startDate: start, endDate: startOfIsoDay(end) }
-      }
-      case 'quarter': {
-        const end = new Date(tomorrow)
-        end.setDate(tomorrow.getDate() + 89)
-        return { startDate: start, endDate: startOfIsoDay(end) }
-      }
-      case 'year': {
-        const end = new Date(tomorrow)
-        end.setDate(tomorrow.getDate() + 364)
-        return { startDate: start, endDate: startOfIsoDay(end) }
-      }
-      case 'all': return {}
-    }
-  }
+function startOfIsoWeek(d: Date): string {
+  const dt = new Date(d)
+  const day = dt.getDay() === 0 ? 6 : dt.getDay() - 1
+  dt.setDate(dt.getDate() - day)
+  return toLocalIsoDate(dt)
+}
+
+function endOfIsoWeek(d: Date): string {
+  const dt = new Date(d)
+  const day = dt.getDay() === 0 ? 6 : dt.getDay() - 1
+  dt.setDate(dt.getDate() + (6 - day))
+  return toLocalIsoDate(dt)
+}
+
+function startOfIsoMonth(d: Date): string {
+  return toLocalIsoDate(new Date(d.getFullYear(), d.getMonth(), 1))
+}
+
+function endOfIsoMonth(d: Date): string {
+  return toLocalIsoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+}
+
+function periodToRange(period: PeriodFilter): { startDate?: string; endDate?: string } {
+  const now = new Date()
 
   switch (period) {
     case 'day': {
@@ -128,58 +179,58 @@ function periodToRange(period: PeriodFilter, mode: PeriodMode): { startDate?: st
       return { startDate: start, endDate: todayIso() }
     }
     case 'week': {
-      if (mode === 'rolling') {
-        const start = new Date(now)
-        start.setDate(now.getDate() - 5)
-        return { startDate: startOfIsoDay(start), endDate: todayIso() }
-      }
-      const day = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - day)
-      return { startDate: startOfIsoDay(monday), endDate: todayIso() }
+      return { startDate: startOfIsoWeek(now), endDate: endOfIsoWeek(now) }
     }
     case 'month': {
-      if (mode === 'rolling') {
-        const start = new Date(now)
-        start.setDate(now.getDate() - 29)
-        return { startDate: startOfIsoDay(start), endDate: todayIso() }
-      }
-      return { startDate: startOfIsoMonth(now), endDate: todayIso() }
+      return { startDate: startOfIsoMonth(now), endDate: endOfIsoMonth(now) }
     }
-    case 'quarter': {
-      if (mode === 'rolling') {
-        const start = new Date(now)
-        start.setDate(now.getDate() - 89)
-        return { startDate: startOfIsoDay(start), endDate: todayIso() }
+    case 'year_2026':
+      return {
+        startDate: startOfIsoYear(new Date(2026, 0, 1)),
+        endDate: endOfIsoYear(new Date(2026, 0, 1)),
       }
-      return { startDate: startOfIsoQuarter(now), endDate: todayIso() }
-    }
-    case 'year': {
-      if (mode === 'rolling') {
-        const start = new Date(now)
-        start.setDate(now.getDate() - 364)
-        return { startDate: startOfIsoDay(start), endDate: todayIso() }
+    case 'year_2025':
+      return {
+        startDate: startOfIsoYear(new Date(2025, 0, 1)),
+        endDate: endOfIsoYear(new Date(2025, 0, 1)),
       }
-      return { startDate: startOfIsoYear(now), endDate: todayIso() }
-    }
     case 'all':
       return {}
+    default: {
+      return {}
+    }
   }
 }
 
-function displayTxnLabel(t: Transaction): string {
-  return (t.normalized_label ?? t.raw_label ?? 'Operation').trim() || 'Operation'
-}
+function periodToFullRange(period: PeriodFilter): { startDate?: string; endDate?: string } {
+  const now = new Date()
 
-function displayTxnCategoryName(t: Transaction): string {
-  return t.category?.name ?? 'Sans categorie'
-}
-
-function signedAmount(t: Transaction): number {
-  const amount = Number(t.amount) || 0
-  if (t.flow_type === 'expense') return -amount
-  if (t.flow_type === 'income') return amount
-  return 0
+  switch (period) {
+    case 'day': {
+      const today = startOfIsoDay(now)
+      return { startDate: today, endDate: today }
+    }
+    case 'week': {
+      return { startDate: startOfIsoWeek(now), endDate: endOfIsoWeek(now) }
+    }
+    case 'month': {
+      return { startDate: startOfIsoMonth(now), endDate: endOfIsoMonth(now) }
+    }
+    case 'year_2026':
+      return {
+        startDate: startOfIsoYear(new Date(2026, 0, 1)),
+        endDate: endOfIsoYear(new Date(2026, 0, 1)),
+      }
+    case 'year_2025':
+      return {
+        startDate: startOfIsoYear(new Date(2025, 0, 1)),
+        endDate: endOfIsoYear(new Date(2025, 0, 1)),
+      }
+    case 'all':
+      return {}
+    default:
+      return {}
+  }
 }
 
 function formatDateLabel(iso: string): string {
@@ -204,486 +255,155 @@ function formatMoneyInteger(amount: number): string {
   }).format(Math.floor(amount))
 }
 
-function formatCategoryModalLabel(name: string): string {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (normalized.includes('famille') && normalized.includes('enfant')) return 'Famille\nenfant'
-  if (normalized.includes('achats') && normalized.includes('divers')) return 'Achats\ndivers'
-  if (normalized.includes('frais') && normalized.includes('impot')) return 'Frais\nimpôts'
-  return name
-}
-
 function resultNoun(flow: FlowFilter): string {
   if (flow === 'expense') return 'dépenses'
   if (flow === 'income') return 'revenus'
   if (flow === 'transfer') return 'transferts internes'
+  if (flow === 'planned') return 'opérations récurrentes'
   return 'opérations'
 }
 
-function recurringLineLabel(operation: PlannedOperation): string {
-  if (!operation.is_recurring || operation.recurrence_frequency !== 'monthly') return 'Non'
-  const day = operation.recurrence_day_of_month
-    ?? new Date(`${operation.planned_date}T00:00:00`).getDate()
-  return `Tous les mois, le ${day}`
+function toDateKey(value?: string | null): string {
+  if (!value) return ''
+  return value.slice(0, 10)
 }
 
-function Sheet({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean
-  title: string
-  onClose: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(13,13,31,0.45)' }}
-          />
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-            style={{
-              position: 'fixed',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 61,
-              width: '100%',
-              maxWidth: 420,
-              margin: '0 auto',
-              background: 'var(--neutral-0)',
-              borderRadius: '20px 20px 0 0',
-              padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
-              maxHeight: 'calc(100dvh - 12px)',
-              boxShadow: 'var(--shadow-lg)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 12px', background: 'var(--neutral-200)' }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>{title}</p>
-              <Button type="button" variant="ghost" size="sm" onClick={onClose} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
-                <ChevronDown size={16} />
-              </Button>
-            </div>
-            <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' as CSSProperties['WebkitOverflowScrolling'] }}>{children}</div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>
-  )
+function isPastOrToday(isoDate: string, today: string): boolean {
+  return isoDate <= today
 }
 
-function SegmentedToggle({
-  left,
-  right,
-  value,
-  onChange,
-}: {
-  left: string
-  right: string
-  value: 'left' | 'right'
-  onChange: (next: 'left' | 'right') => void
-}) {
-  return (
-    <div style={{ display: 'inline-flex', gap: 2, border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-full)', padding: 2 }}>
-      <button
-        type="button"
-        onClick={() => onChange('left')}
-        style={{
-          border: 'none',
-          borderRadius: 'var(--radius-full)',
-          background: value === 'left' ? 'var(--neutral-100)' : 'transparent',
-          color: value === 'left' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-          fontSize: 11,
-          fontWeight: 800,
-          padding: '6px 10px',
-          cursor: 'pointer',
-        }}
-      >
-        {left}
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('right')}
-        style={{
-          border: 'none',
-          borderRadius: 'var(--radius-full)',
-          background: value === 'right' ? 'var(--neutral-100)' : 'transparent',
-          color: value === 'right' ? 'var(--neutral-900)' : 'var(--neutral-500)',
-          fontSize: 11,
-          fontWeight: 800,
-          padding: '6px 10px',
-          cursor: 'pointer',
-        }}
-      >
-        {right}
-      </button>
-    </div>
-  )
-}
+function isRealizedFluxOperation(operation: FluxOperation, today: string): boolean {
+  const isPast = isPastOrToday(operation.operation_date, today)
+  if (!isPast) return false
 
-type FilterDropdownOption = {
-  value: string
-  label: string
-  hasSeparator?: boolean
-  selected: boolean
-  onSelect: () => void
-}
-
-function FilterDropdown({
-  id,
-  label,
-  value,
-  options,
-  isOpen,
-  showMobileOverlay,
-  onToggle,
-  onClose,
-  headerContent,
-  compactValue = false,
-  heroTone = false,
-  fitContent = false,
-  hideLabel = false,
-  largeValue = false,
-}: {
-  id: Exclude<QuickParamPicker, null>
-  label: string
-  value: string
-  options: FilterDropdownOption[]
-  isOpen: boolean
-  showMobileOverlay: boolean
-  onToggle: () => void
-  onClose: () => void
-  headerContent?: React.ReactNode
-  compactValue?: boolean
-  heroTone?: boolean
-  fitContent?: boolean
-  hideLabel?: boolean
-  largeValue?: boolean
-}) {
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const [focusedIndex, setFocusedIndex] = useState(0)
-
-  useEffect(() => {
-    if (!isOpen) return
-    const selectedIndex = options.findIndex((opt) => opt.selected)
-    setFocusedIndex(selectedIndex >= 0 ? selectedIndex : 0)
-  }, [isOpen, options])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const onDocumentPointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node
-      if (!wrapperRef.current?.contains(target)) onClose()
-    }
-    document.addEventListener('mousedown', onDocumentPointerDown)
-    document.addEventListener('touchstart', onDocumentPointerDown, { passive: true })
-    return () => {
-      document.removeEventListener('mousedown', onDocumentPointerDown)
-      document.removeEventListener('touchstart', onDocumentPointerDown)
-    }
-  }, [isOpen, onClose])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const focusTimer = window.setTimeout(() => {
-      menuRef.current?.focus()
-      optionRefs.current[focusedIndex]?.focus()
-    }, 0)
-    return () => window.clearTimeout(focusTimer)
-  }, [focusedIndex, isOpen])
-
-  const onTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onToggle()
-    }
+  if (operation.operation_kind === 'actual') {
+    return operation.is_matched === false
   }
 
-  const onMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      onClose()
-      triggerRef.current?.focus()
-      return
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setFocusedIndex((current) => (current + 1) % options.length)
-      return
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setFocusedIndex((current) => (current - 1 + options.length) % options.length)
-      return
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      const option = options[focusedIndex]
-      if (option) option.onSelect()
-    }
+  if (operation.operation_kind === 'planned_occurrence') {
+    return operation.is_matched === true
   }
 
+  return false
+}
+
+function isFutureFixedPlannedOperation(operation: FluxOperation, today: string): boolean {
   return (
-    <div ref={wrapperRef} style={{ position: 'relative', minHeight: heroTone ? 34 : 58 }}>
-      {showMobileOverlay ? (
-        <AnimatePresence>
-          {isOpen ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onClose}
-              style={{ position: 'fixed', inset: 0, zIndex: 49, background: 'rgba(0,0,0,0.2)' }}
-            />
-          ) : null}
-        </AnimatePresence>
-      ) : null}
-
-      <motion.button
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-controls={`flux-filter-dropdown-${id}`}
-        aria-label={`Filtre ${label}`}
-        onClick={onToggle}
-        onKeyDown={onTriggerKeyDown}
-        whileHover={heroTone ? undefined : { scale: 1.05 }}
-        transition={{ duration: 0.16, ease: 'easeOut' }}
-        style={{
-          width: '100%',
-          minHeight: heroTone ? 34 : 58,
-          border: heroTone
-            ? 'none'
-            : `1px solid ${isOpen ? 'var(--primary-500)' : 'var(--neutral-200)'}`,
-          borderRadius: heroTone ? 0 : 'var(--radius-md)',
-          background: heroTone
-            ? 'transparent'
-            : (isOpen ? 'var(--primary-50)' : 'var(--neutral-0)'),
-          color: heroTone
-            ? 'var(--neutral-0)'
-            : (isOpen ? 'var(--primary-700)' : 'var(--neutral-700)'),
-          padding: heroTone ? 0 : 'var(--space-3) var(--space-4)',
-          cursor: 'pointer',
-          transition: 'all var(--transition-fast)',
-          boxShadow: heroTone ? 'none' : (isOpen ? 'var(--shadow-md)' : 'none'),
-          display: 'grid',
-          gap: heroTone ? 2 : 'var(--space-2)',
-          justifyItems: 'start',
-          textAlign: 'left',
-        }}
-      >
-        <span style={{ display: 'grid', textAlign: 'left', gap: 2, minWidth: 0 }}>
-          {!hideLabel && (
-            <span
-              style={{
-                fontSize: heroTone ? 9 : 'var(--font-size-xs)',
-                opacity: heroTone ? 0.68 : 0.72,
-                color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-                fontWeight: 'var(--font-weight-semibold)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              {label}
-              <ChevronDown
-                size={12}
-                style={{
-                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform var(--transition-fast)',
-                  color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-                  flexShrink: 0,
-                }}
-              />
-            </span>
-          )}
-          <span
-            style={{
-              fontSize: hideLabel
-                ? (heroTone ? 14 : 'var(--font-size-sm)')
-                : (heroTone ? (largeValue ? 14 : 13) : (compactValue ? 'var(--font-size-xs)' : 'var(--font-size-sm)')),
-              fontWeight: heroTone ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)',
-              fontFamily: heroTone ? 'var(--font-mono)' : 'inherit',
-              color: heroTone ? 'var(--neutral-0)' : 'inherit',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            {value}
-            {hideLabel && (
-              <ChevronDown
-                size={12}
-                style={{
-                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform var(--transition-fast)',
-                  color: heroTone ? 'rgba(255,255,255,0.88)' : 'inherit',
-                  flexShrink: 0,
-                }}
-              />
-            )}
-          </span>
-        </span>
-      </motion.button>
-
-      <AnimatePresence>
-        {isOpen ? (
-          <motion.div
-            id={`flux-filter-dropdown-${id}`}
-            role="listbox"
-            tabIndex={-1}
-            ref={menuRef}
-            onKeyDown={onMenuKeyDown}
-            initial={{ opacity: 0, scaleY: 0.8, scaleX: 0.95, y: -8 }}
-            animate={{ opacity: 1, scaleY: 1, scaleX: 1, y: 0 }}
-            exit={{ opacity: 0, scaleY: 0.9, scaleX: 0.95, y: -4 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + var(--space-2))',
-              left: 0,
-              zIndex: 220,
-              background: 'var(--neutral-0)',
-              border: '1px solid var(--neutral-200)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)',
-              padding: 'var(--space-3)',
-              width: fitContent ? 'max-content' : '100%',
-              minWidth: fitContent ? 132 : '100%',
-              maxWidth: fitContent ? 260 : '100%',
-              maxHeight: 300,
-              overflowY: 'auto',
-              transformOrigin: 'top center',
-              display: 'grid',
-              gap: 'var(--space-2)',
-            }}
-            className="flux-filter-dropdown-scroll"
-          >
-            {headerContent ? <div style={{ paddingBottom: 'var(--space-1)' }}>{headerContent}</div> : null}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {options.map((opt, index) => (
-                <Fragment key={opt.value}>
-                  <motion.button
-                    ref={(element) => {
-                      optionRefs.current[index] = element
-                    }}
-                    type="button"
-                    role="option"
-                    aria-selected={opt.selected}
-                    onClick={opt.onSelect}
-                    whileHover={{ backgroundColor: 'var(--neutral-50)', color: 'var(--primary-500)' }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    style={{
-                      border: 'none',
-                      borderLeft: opt.selected ? '3px solid var(--primary-500)' : '3px solid transparent',
-                      background: opt.selected ? 'var(--primary-50)' : 'transparent',
-                      color: opt.selected ? 'var(--primary-700)' : 'var(--neutral-700)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '6px 8px',
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: opt.selected ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
-                      cursor: 'pointer',
-                      transition: 'all var(--transition-fast)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      textAlign: 'left',
-                      outline: focusedIndex === index ? '1px solid var(--primary-300)' : 'none',
-                    }}
-                    onMouseEnter={() => setFocusedIndex(index)}
-                  >
-                    <span>{opt.label}</span>
-                    {opt.selected ? <Check size={16} color="var(--primary-500)" /> : null}
-                  </motion.button>
-                  {opt.hasSeparator && (
-                    <div style={{ height: 1, background: 'var(--neutral-200)', margin: '4px 0' }} />
-                  )}
-                </Fragment>
-              ))}
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
+    operation.operation_kind === 'planned_occurrence'
+    && operation.is_matched === false
+    && operation.operation_date > today
+    && operation.budget_behavior === 'fixed'
   )
 }
+
+// ─── Module-level style constants ────────────────────────────────────────────
+// Created once at module load; each transaction row references the same object
+// instead of allocating a new one per render (avoids 300-600 allocs per redraw).
+
+/** Static style for the category icon slot in every row */
+const TX_ROW_ICON_STYLE: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+}
+
+/** Static style for the label/description slot in every row */
+const TX_ROW_LABEL_STYLE: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 400,
+  color: 'var(--neutral-700)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+/** Static base for the planned-row amount span (color set inline) */
+const TX_ROW_AMOUNT_BASE: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 400,
+  fontFamily: 'var(--font-mono)',
+  textAlign: 'right',
+  whiteSpace: 'nowrap',
+}
+
+/** Static base for date text (color set inline for joint accounts) */
+const TX_ROW_DATE_BASE: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function Flux() {
   const { user } = useAuth()
   const [search, setSearch] = useState('')
+  // useDeferredValue keeps typing responsive while server-state query params update.
+  const deferredSearch = useDeferredValue(search)
   const [showSearchInput, setShowSearchInput] = useState(false)
   const [flow, setFlow] = useState<FlowFilter>('expense')
   const [period, setPeriod] = useState<PeriodFilter>('month')
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('current')
 
-  const [showTypeSheet, setShowTypeSheet] = useState(false)
-  const [showPeriodSheet, setShowPeriodSheet] = useState(false)
-  const [showCategorySheet, setShowCategorySheet] = useState(false)
   const [showHeaderCategorySheet, setShowHeaderCategorySheet] = useState(false)
   const [showAdvancedSheet, setShowAdvancedSheet] = useState(false)
 
-  const [categoryStage, setCategoryStage] = useState<'parents' | 'children'>('parents')
   const [selectedParentCategoryId, setSelectedParentCategoryId] = useState<string | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
 
   const [excludeRecurring] = useState(false)
-  const [budgetFilter, setBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
   const [accountFilter, setAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
-  const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null)
+  const [includeFutureFixed, setIncludeFutureFixed] = useState(false)
+  const [detailsOperation, setDetailsOperation] = useState<FluxOperation | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
-  const [draftPeriodMode, setDraftPeriodMode] = useState<PeriodMode>('current')
-  const [draftBudgetFilter, setDraftBudgetFilter] = useState<'all' | 'fixed' | 'variable'>('all')
   const [draftAccountFilter, setDraftAccountFilter] = useState<'all' | 'joint' | 'perso'>('all')
+  const [draftIncludeFutureFixed, setDraftIncludeFutureFixed] = useState(false)
   const [draftSelectedParentCategoryId, setDraftSelectedParentCategoryId] = useState<string | null>(null)
   const [draftSelectedCategoryId, setDraftSelectedCategoryId] = useState<string | null>(null)
-  const [showTypeMenu, setShowTypeMenu] = useState(false)
-  const [showPeriodMiniModal, setShowPeriodMiniModal] = useState(false)
-  const [quickParamPicker, setQuickParamPicker] = useState<QuickParamPicker>(null)
+  const [showParametersCategoryModal, setShowParametersCategoryModal] = useState(false)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
-  const [plannedFlowFilter, setPlannedFlowFilter] = useState<PlannedFlowFilter>('all')
-  const [isMobileViewport, setIsMobileViewport] = useState(() => {
-    if (typeof window === 'undefined') return true
-    return window.matchMedia('(max-width: 768px)').matches
-  })
+  const [plannedModalityFilter, setPlannedModalityFilter] = useState<PlannedModalityFilter>('all')
+  const [plannedTypeFilter, setPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
+  const [draftPlannedTypeFilter, setDraftPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
+  const [activeTabId, setActiveTabId] = useState<FluxTabId>('actuel')
+  const activeTab = FLUX_TABS.find((t) => t.id === activeTabId) ?? FLUX_TABS[0]
 
-  const categoryFlowType = (showAdvancedSheet ? draftFlow : flow) === 'income' ? 'income' : 'expense'
+  const activeFlowTypeForCategory = showAdvancedSheet ? draftFlow : flow
+  const categoryFlowType = activeFlowTypeForCategory === 'income'
+    ? 'income'
+    : activeFlowTypeForCategory === 'savings'
+      ? 'savings'
+      : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
+  const { data: allCategoriesData } = useCategories()
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
   const subCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id !== null), [flowCategories])
   const parentById = useMemo(() => new Map((rootCategories ?? []).map((c) => [c.id, c])), [rootCategories])
   const categoryById = useMemo(() => new Map((flowCategories ?? []).map((c) => [c.id, c])), [flowCategories])
+  const orderedHeaderRootCategories = useMemo(() => {
+    const byOrderKey = new Map<string, (typeof rootCategories)[number]>()
+    for (const category of rootCategories) {
+      const key = headerCategoryOrderKey(category.name)
+      if (key && !byOrderKey.has(key)) byOrderKey.set(key, category)
+    }
+    return HEADER_CATEGORY_ORDER
+      .map((key) => byOrderKey.get(key) ?? null)
+      .filter((category): category is (typeof rootCategories)[number] => category !== null)
+  }, [rootCategories])
 
-  const range = useMemo(() => periodToRange(period, periodMode), [period, periodMode])
-  const flowTypeFilter: FlowType | undefined = flow === 'all' ? undefined : (flow as FlowType)
+  const isPlannedMode = activeTabId === 'planifie'
+  const realizedRange = useMemo(() => periodToRange(period), [period])
+  const queryRange = useMemo(
+    () => (includeFutureFixed ? periodToFullRange(period) : realizedRange),
+    [includeFutureFixed, period, realizedRange],
+  )
+  const flowTypeFilter: FlowType | undefined = flow === 'all' || flow === 'planned' ? undefined : (flow as FlowType)
 
   const categoryIdsFilter = useMemo(() => {
     if (!selectedCategoryId && !selectedParentCategoryId) return undefined
@@ -691,107 +411,128 @@ export function Flux() {
     const children = subCategories.filter((c) => c.parent_id === selectedParentCategoryId).map((c) => c.id)
     return selectedParentCategoryId ? [selectedParentCategoryId, ...children] : undefined
   }, [selectedCategoryId, selectedParentCategoryId, subCategories])
+  const budgetFilter = 'all' as const
 
-  const { data: txns, isLoading } = useTransactions({
-    ...range,
+  const { data: operations = [], isLoading } = useFluxOperations({
+    userId: user?.id,
+    ...queryRange,
     flowType: flowTypeFilter,
     categoryIds: categoryIdsFilter,
+    budgetFilter,
+    accountKind: accountFilter,
+    search: deferredSearch,
+    includeShadowedActuals: false,
   })
-  const { data: plannedOperations = [], isLoading: isPlannedLoading } = usePlannedOperations(user?.id)
+
+  const today = todayIso()
+
+  const visibleOperations = useMemo(
+    () => operations.filter((operation) => {
+      if (isRealizedFluxOperation(operation, today)) return true
+      if (includeFutureFixed && isFutureFixedPlannedOperation(operation, today)) return true
+      return false
+    }),
+    [includeFutureFixed, operations, today],
+  )
 
   const filtered = useMemo(() => {
-    let list = (txns ?? []) as Transaction[]
+    let list = visibleOperations
 
-    if (excludeRecurring) list = list.filter((t) => !t.is_recurring)
-    if (budgetFilter === 'fixed') list = list.filter((t) => t.budget_behavior === 'fixed')
-    if (budgetFilter === 'variable') list = list.filter((t) => t.budget_behavior === 'variable' || t.budget_behavior === null)
-    if (accountFilter === 'joint') list = list.filter((t) => t.account?.name?.toLowerCase().includes('joint') ?? false)
-    if (accountFilter === 'perso') list = list.filter((t) => !(t.account?.name?.toLowerCase().includes('joint') ?? false))
+    if (excludeRecurring) list = list.filter((operation) => !operation.is_recurring)
+    if (flow === 'planned') list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter((t) => displayTxnLabel(t).toLowerCase().includes(q))
+    if (isPlannedMode) {
+      list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
+      if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'done')
+      if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'upcoming')
+      if (plannedTypeFilter === 'recurring') list = list.filter((operation) => Boolean(operation.is_recurring))
+      if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_recurring)
     }
 
     return list
-  }, [txns, excludeRecurring, budgetFilter, accountFilter, search])
+  }, [visibleOperations, excludeRecurring, flow, isPlannedMode, plannedModalityFilter, plannedTypeFilter])
 
-  const filteredPlannedOperations = useMemo(() => {
-    if (plannedFlowFilter === 'all') return plannedOperations
-    return plannedOperations.filter((operation) => operation.flow_type === plannedFlowFilter)
-  }, [plannedFlowFilter, plannedOperations])
+  // Planned mode: unique parent category names present in the loaded planned operations
+  const plannedParentCategoryNames = useMemo((): Set<string> | null => {
+    if (!isPlannedMode) return null
+    const names = new Set<string>()
+    for (const op of filtered) {
+      if (op.operation_kind !== 'planned_occurrence') continue
+      const name = op.parent_category_name ?? op.category_name
+      if (name) names.add(name.toLowerCase())
+    }
+    return names
+  }, [filtered, isPlannedMode])
 
-  const totalAmount = useMemo(() => filtered.reduce((sum, t) => sum + signedAmount(t), 0), [filtered])
+  // Root categories restricted to those with planned operations (all flow types)
+  const plannedModalRootCategories = useMemo(() => {
+    if (!plannedParentCategoryNames || !allCategoriesData) return null
+    return allCategoriesData.filter(
+      (c) => c.parent_id === null && plannedParentCategoryNames.has(c.name.toLowerCase()),
+    )
+  }, [allCategoriesData, plannedParentCategoryNames])
+
+  const generalMergedRows = useMemo(
+    () => filtered.map((operation) => ({ id: operation.id, dateKey: toDateKey(operation.operation_date), operation })),
+    [filtered],
+  )
+
+  const totalAmount = useMemo(
+    () => filtered.reduce((sum, operation) => sum + Number(operation.budget_accounting_amount || 0), 0),
+    [filtered],
+  )
+
+  const heroMainAmount = totalAmount
+  const listHeaderAmount = totalAmount
+  const operationsSummaryCount = filtered.length
+  const isListLoading = isLoading
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return
-    console.log('[planned_operations]', plannedOperations)
-  }, [plannedOperations])
-
-  useEffect(() => {
-    if (detailsTxn) {
-      const updated = filtered.find((t) => t.id === detailsTxn.id)
-      if (updated && updated !== detailsTxn) {
-        setDetailsTxn(updated)
+    if (detailsOperation) {
+      const updated = filtered.find((operation) => operation.id === detailsOperation.id)
+      if (updated && updated !== detailsOperation) {
+        setDetailsOperation(updated)
       }
     }
-  }, [filtered, detailsTxn])
-
-  const typeLabel = FLOW_OPTIONS.find((o) => o.value === flow)?.label ?? 'Depenses'
-  const periodLabel = PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? 'Mois'
-
-  const selectedChildren = useMemo(
-    () => (selectedParentCategoryId ? subCategories.filter((c) => c.parent_id === selectedParentCategoryId) : []),
-    [selectedParentCategoryId, subCategories],
-  )
-
-  const draftSelectedChildren = useMemo(
-    () => (draftSelectedParentCategoryId ? subCategories.filter((c) => c.parent_id === draftSelectedParentCategoryId) : []),
-    [draftSelectedParentCategoryId, subCategories],
-  )
+  }, [filtered, detailsOperation])
 
   useEffect(() => {
     setSelectedParentCategoryId(null)
     setSelectedCategoryId(null)
-    setCategoryStage('parents')
+    if (flow === 'planned') {
+      setPlannedModalityFilter('all')
+    }
   }, [flow])
 
   useEffect(() => {
-    if (!showAdvancedSheet) return
-    setDraftSelectedParentCategoryId(null)
-    setDraftSelectedCategoryId(null)
-    setCategoryStage('parents')
-  }, [draftFlow, showAdvancedSheet])
+    if (flow !== 'planned') return
+    if (period === 'month' || period === 'year_2026' || period === 'year_2025') return
+    setPeriod('month')
+  }, [flow, period])
 
-  const anySheetOpen = showTypeSheet || showPeriodSheet || showCategorySheet || showHeaderCategorySheet || showAdvancedSheet
+  useEffect(() => {
+    if (!showAdvancedSheet) return
+  }, [showAdvancedSheet])
+
+  useEffect(() => {
+    if (draftFlow !== 'planned') return
+    if (draftPeriod !== 'month' && draftPeriod !== 'year_2026' && draftPeriod !== 'year_2025') {
+      setDraftPeriod('month')
+    }
+  }, [draftFlow, draftPeriod])
+
+  const anySheetOpen = showHeaderCategorySheet || showAdvancedSheet || showParametersCategoryModal
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 220)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (!anySheetOpen) return
     return lockDocumentScroll()
   }, [anySheetOpen])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const media = window.matchMedia('(max-width: 768px)')
-    const onChange = (event: MediaQueryListEvent) => setIsMobileViewport(event.matches)
-    setIsMobileViewport(media.matches)
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [])
-
-  useEffect(() => {
-    const onEsc = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setQuickParamPicker(null)
-    }
-    document.addEventListener('keydown', onEsc)
-    return () => document.removeEventListener('keydown', onEsc)
-  }, [])
-
-  useEffect(() => {
-    if (!showAdvancedSheet && !showCategorySheet && !showHeaderCategorySheet) return
-    setQuickParamPicker(null)
-  }, [showAdvancedSheet, showCategorySheet, showHeaderCategorySheet])
 
   const selectedCategoryLabel = useMemo(() => {
     if (selectedCategoryId) return categoryById.get(selectedCategoryId)?.name ?? 'Catégorie'
@@ -803,90 +544,274 @@ export function Flux() {
     if (selectedParentCategoryId) return parentById.get(selectedParentCategoryId)?.icon_key ?? null
     return null
   }, [categoryById, parentById, selectedCategoryId, selectedParentCategoryId])
-
-  const operationsSummaryLabel = useMemo(() => `${filtered.length} ${resultNoun(flow)}`, [filtered.length, flow])
-  const cardTypeValue = useMemo(() => {
-    if (typeLabel.toLowerCase() === 'depenses') return 'Dépenses'
-    return typeLabel
-  }, [typeLabel])
-  const cardPeriodValue = useMemo(() => {
-    if (period === 'day') return 'Jour'
-    if (period === 'week') return 'Semaine'
-    if (period === 'month') return 'Mois'
-    if (period === 'year') {
-      const endIso = range.endDate ?? todayIso()
-      const year = new Date(endIso + 'T00:00:00').getFullYear()
-      return Number.isFinite(year) ? String(year) : String(new Date().getFullYear())
+  const draftSelectedCategoryMeta = useMemo(() => {
+    if (draftSelectedCategoryId) {
+      const category = categoryById.get(draftSelectedCategoryId)
+      if (!category) return null
+      return {
+        label: category.name,
+        iconKey: category.icon_key ?? null,
+      }
     }
-    return periodLabel === 'Annee' ? String(new Date().getFullYear()) : periodLabel
-  }, [period, periodLabel, range.endDate])
-  const cardBudgetValue = budgetFilter === 'all' ? 'Tout' : (budgetFilter === 'fixed' ? 'Fixe' : 'Variable')
-  const cardAccountValue = accountFilter === 'all' ? 'Tout' : (accountFilter === 'joint' ? 'Joint' : 'Perso')
-  const isTransferType = flow === 'transfer'
+    if (draftSelectedParentCategoryId) {
+      const category = parentById.get(draftSelectedParentCategoryId)
+      if (!category) return null
+      return {
+        label: headerCategoryLabel(category.name),
+        iconKey: category.icon_key ?? null,
+      }
+    }
+    return null
+  }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
+
+  const operationsSummaryLabel = useMemo(
+    () => `${operationsSummaryCount} ${resultNoun(flow)}`,
+    [operationsSummaryCount, flow],
+  )
   const selectedPeriodHeader = useMemo(() => {
-    const endIso = range.endDate ?? (filtered.length ? filtered[0].transaction_date : todayIso())
-    const inferredStart = filtered.length ? filtered[filtered.length - 1].transaction_date : endIso
-    const startIso = range.startDate ?? inferredStart
+    const endIso = queryRange.endDate ?? (filtered.length ? filtered[0].operation_date : todayIso())
+    const inferredStart = filtered.length ? filtered[filtered.length - 1].operation_date : endIso
+    const startIso = queryRange.startDate ?? inferredStart
 
     return {
       startLabel: formatDateLabel(startIso),
       endLabel: formatDateLabel(endIso),
       text: `Du ${formatDateLabel(startIso)} au ${formatDateLabel(endIso)}`,
     }
-  }, [range.endDate, range.startDate, filtered])
-
-  const draftTypeLabel = FLOW_OPTIONS.find((o) => o.value === draftFlow)?.label ?? 'Depenses'
-  const draftPeriodLabel = PERIOD_OPTIONS.find((o) => o.value === draftPeriod)?.label ?? 'Mois'
-  const categorySheetInParameters = showAdvancedSheet
-  const activeSelectedChildren = categorySheetInParameters ? draftSelectedChildren : selectedChildren
-  const draftCategoryLabel = useMemo(() => {
-    if (draftSelectedCategoryId) return categoryById.get(draftSelectedCategoryId)?.name ?? 'Categorie'
-    if (draftSelectedParentCategoryId) return parentById.get(draftSelectedParentCategoryId)?.name ?? 'Categorie'
-    return 'Toutes categories'
-  }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
-  const draftCategoryIconKey = useMemo(() => {
-    if (draftSelectedCategoryId) return categoryById.get(draftSelectedCategoryId)?.icon_key ?? null
-    if (draftSelectedParentCategoryId) return parentById.get(draftSelectedParentCategoryId)?.icon_key ?? null
-    return null
-  }, [categoryById, draftSelectedCategoryId, draftSelectedParentCategoryId, parentById])
-
-  const closeQuickPicker = () => {
-    setQuickParamPicker(null)
-  }
+  }, [filtered, queryRange.endDate, queryRange.startDate])
+  const listResultsLabel = useMemo(
+    () => `Du ${selectedPeriodHeader.startLabel} au ${selectedPeriodHeader.endLabel} - ${operationsSummaryLabel}`,
+    [operationsSummaryLabel, selectedPeriodHeader.endLabel, selectedPeriodHeader.startLabel],
+  )
 
   const applyParameters = () => {
     setFlow(draftFlow)
     setPeriod(draftPeriod)
-    setPeriodMode(draftPeriodMode)
-    setBudgetFilter(draftBudgetFilter)
     setAccountFilter(draftAccountFilter)
+    setIncludeFutureFixed(draftIncludeFutureFixed)
     setSelectedParentCategoryId(draftSelectedParentCategoryId)
     setSelectedCategoryId(draftSelectedCategoryId)
-    setShowTypeMenu(false)
-    setShowPeriodMiniModal(false)
+    setPlannedTypeFilter(draftPlannedTypeFilter)
+    setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
 
   const closeParametersModal = () => {
-    setShowTypeMenu(false)
-    setShowPeriodMiniModal(false)
+    setDraftFlow(flow)
+    setDraftPeriod(period)
+    setDraftAccountFilter(accountFilter)
+    setDraftIncludeFutureFixed(includeFutureFixed)
+    setDraftSelectedParentCategoryId(selectedParentCategoryId)
+    setDraftSelectedCategoryId(selectedCategoryId)
+    setDraftPlannedTypeFilter(plannedTypeFilter)
+    setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
+
+  const openParametersModal = () => {
+    setDraftFlow(flow)
+    setDraftPeriod(period)
+    setDraftAccountFilter(accountFilter)
+    setDraftIncludeFutureFixed(includeFutureFixed)
+    setDraftSelectedParentCategoryId(selectedParentCategoryId)
+    setDraftSelectedCategoryId(selectedCategoryId)
+    setDraftPlannedTypeFilter(plannedTypeFilter)
+    setShowParametersCategoryModal(false)
+    setShowAdvancedSheet(true)
+  }
+
+  const resetDraftParametersToDefaults = () => {
+    setDraftFlow('expense')
+    setDraftPeriod('month')
+    setDraftAccountFilter('all')
+    setDraftIncludeFutureFixed(false)
+    setDraftSelectedParentCategoryId(null)
+    setDraftSelectedCategoryId(null)
+    setDraftPlannedTypeFilter('all')
+  }
+
+  const handleOpenDetailsOperation = useCallback((operation: FluxOperation) => {
+    setDetailsOperation(operation)
+  }, [])
+
+  const transactionsForDetails = useMemo(() => {
+    return filtered
+      .filter((operation) => operation.operation_kind !== 'planned_occurrence')
+      .map<Transaction>((operation) => {
+        const flowType = operation.flow_type ?? 'expense'
+        const rawAmount = Math.abs(Number(operation.display_amount ?? operation.budget_accounting_amount ?? operation.amount ?? 0))
+        return {
+          id: operation.id,
+          user_id: operation.user_id,
+          account_id: operation.account_id ?? '00000000-0000-0000-0000-000000000000',
+          category_id: operation.category_id,
+          income_source_id: null,
+          import_batch_id: null,
+          staging_row_id: null,
+          transaction_date: operation.operation_date,
+          amount: rawAmount,
+          currency: operation.currency ?? 'EUR',
+          personal_share_ratio: operation.personal_share_ratio,
+          direction:
+            flowType === 'income'
+              ? 'income'
+              : flowType === 'transfer'
+                ? 'transfer_out'
+                : flowType === 'savings'
+                  ? 'savings'
+                  : 'expense',
+          flow_type: flowType,
+          budget_behavior: (operation.budget_behavior as Transaction['budget_behavior']) ?? 'variable',
+          raw_label: operation.label,
+          normalized_label: operation.label,
+          merchant_name: operation.merchant_name,
+          external_id: null,
+          is_recurring: Boolean(operation.is_recurring),
+          is_verified: true,
+          is_hidden: Boolean(operation.is_hidden),
+          notes: operation.notes,
+          meta: null,
+          personal_scope: null,
+          created_at: operation.created_at ?? new Date().toISOString(),
+          updated_at: operation.updated_at ?? new Date().toISOString(),
+          category: operation.category_id ? categoryById.get(operation.category_id) : undefined,
+        }
+      })
+  }, [categoryById, filtered])
+
+  const detailsTxn = useMemo(() => {
+    if (!detailsOperation || detailsOperation.operation_kind === 'planned_occurrence') return null
+    return transactionsForDetails.find((transaction) => transaction.id === detailsOperation.id) ?? null
+  }, [detailsOperation, transactionsForDetails])
+
+  const handleNavigateTransaction = useCallback((transaction: Transaction) => {
+    const next = filtered.find(
+      (operation) => operation.id === transaction.id && operation.operation_kind !== 'planned_occurrence',
+    )
+    if (next) setDetailsOperation(next)
+  }, [filtered])
+
+  // ─── Memoized list JSX ───────────────────────────────────────────────────
+  // Prevents re-diffing all rows when unrelated state (modal open, filter
+  // sheet, etc.) changes while `generalMergedRows` stays the same reference.
+  const generalRowItems = useMemo(() => generalMergedRows.map((row, index) => {
+    const prevRow = index > 0 ? generalMergedRows[index - 1] : null
+    const prevKey = prevRow?.dateKey ?? null
+    const curMonth = row.dateKey.slice(0, 7)
+    const prevMonth = prevKey?.slice(0, 7) ?? null
+    const monthChanged = prevMonth !== curMonth
+    const hasSeparator = monthChanged
+
+    let monthRowsSum = 0
+    if (monthChanged) {
+      let j = index
+      while (j < generalMergedRows.length && generalMergedRows[j].dateKey.slice(0, 7) === curMonth) {
+        const r = generalMergedRows[j]
+        const amt = Number(r.operation.budget_accounting_amount ?? 0)
+        monthRowsSum += amt
+        j++
+      }
+    }
+
+    const separators = monthChanged && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px var(--space-6) 3px' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          {formatMonthLabel(row.dateKey)}
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'var(--neutral-300)' }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-500)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          {formatCurrencyRounded(monthRowsSum)}
+        </span>
+      </div>
+    )
+
+    const operation = row.operation
+    const label = operation.label ?? 'Opération'
+    const category = operation.category_name ?? 'Sans catégorie'
+    const amount = Number(operation.display_amount ?? operation.budget_accounting_amount ?? 0)
+    const isJoint = operation.account_name?.toLowerCase().includes('joint') ?? false
+    const amountColor = (operation.flow_type === 'transfer' || operation.flow_type === 'savings')
+      ? 'var(--neutral-700)'
+      : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
+    const formattedAmount = operation.operation_kind === 'planned_occurrence'
+      ? formatCurrency(Math.abs(amount))
+      : formatCurrency(amount)
+
+    return (
+      <Fragment key={row.id}>
+        {separators}
+        <button
+          type="button"
+          onClick={() => handleOpenDetailsOperation(operation)}
+          style={{
+            width: '100%', border: 'none', background: 'transparent',
+            display: 'grid', gridTemplateColumns: '42px 26px 1fr auto',
+            alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer',
+            transition: 'background-color var(--transition-fast)',
+            padding: hasSeparator ? '9px var(--space-6) 7px' : '7px var(--space-6)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <span style={{ ...TX_ROW_DATE_BASE, color: isJoint ? '#C9A26A' : 'var(--neutral-600)' }}>
+            {formatDateLabel(operation.operation_date)}
+          </span>
+          <span style={TX_ROW_ICON_STYLE}>
+            <CategoryIcon iconKey={operation.category_icon_key} label={category} size={24} />
+          </span>
+          <span style={TX_ROW_LABEL_STYLE}>{label}</span>
+          <span style={{ ...TX_ROW_AMOUNT_BASE, color: amountColor }}>
+            {operation.operation_kind === 'planned_occurrence'
+              ? <span style={{ fontStyle: 'italic' }}>{formattedAmount}</span>
+              : formattedAmount}
+          </span>
+        </button>
+      </Fragment>
+    )
+  }), [generalMergedRows, handleOpenDetailsOperation])
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <PageHeader
         title="Flux"
-        rightLabel={selectedCategoryLabel.toLowerCase()}
+        contentOffsetY={3}
         actionIcon={
           selectedCategoryId || selectedParentCategoryId
             ? <CategoryIcon iconKey={selectedCategoryIconKey} label={selectedCategoryLabel} size={30} />
-            : <Search size={24} />
+            : <img src={activeTab.iconSrc} alt="" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}
       />
 
+      {/* ── Tab navigation circulaire ── */}
+      {(() => {
+        const currentIdx = FLUX_TABS.findIndex((t) => t.id === activeTabId)
+        const prevTab = FLUX_TABS[(currentIdx - 1 + FLUX_TABS.length) % FLUX_TABS.length]
+        const nextTab = FLUX_TABS[(currentIdx + 1) % FLUX_TABS.length]
+        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
+        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
+        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
+        const btnBase = { border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', minHeight: 'var(--touch-target-min)' } as const
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', paddingLeft: 'var(--page-gutter)', paddingRight: 'var(--page-gutter)', marginTop: '-8px' }}>
+            <button type="button" onClick={() => setActiveTabId(prevTab.id)} aria-label={`Aller à ${prevTab.label}`} style={btnBase}>
+              <div style={triLeft} />
+              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+            </button>
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              {activeTab.label}
+            </h2>
+            <button type="button" onClick={() => setActiveTabId(nextTab.id)} aria-label={`Aller à ${nextTab.label}`} style={btnBase}>
+              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
+              <div style={triRight} />
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ── Hero compact : montant uniquement ── */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -898,262 +823,79 @@ export function Flux() {
             style={{
               background: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 88%, #000 12%) 0%, color-mix(in oklab, var(--color-warning) 70%, #000 30%) 58%, color-mix(in oklab, var(--color-warning) 52%, #000 48%) 100%)',
               borderRadius: 'var(--radius-2xl)',
-              padding: 'var(--space-5)',
+              padding: 'var(--space-3) var(--space-6)',
               boxShadow: 'var(--shadow-card)',
-              position: 'relative',
-              overflow: 'visible',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <span style={{ position: 'absolute', right: -8, top: -12, fontSize: 88, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.06)', lineHeight: 1, userSelect: 'none', pointerEvents: 'none', letterSpacing: '-0.04em' }}>
-              FLUX
-            </span>
-
-            <button
-              type="button"
-              aria-label="Planifier une opération"
-              title="Planifier une opération"
-              onClick={() => setShowPlannedOperationModal(true)}
-              style={{
-                position: 'absolute',
-                top: 'var(--space-2)',
-                right: 'var(--space-2)',
-                border: 'none',
-                background: 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: 0,
-                width: 68,
-                height: 68,
-                zIndex: 2,
-              }}
-            >
-              <img
-                src={planifierOperationIcon}
-                alt=""
-                width={64}
-                height={64}
-                loading="lazy"
-                decoding="async"
-                style={{ display: 'block', objectFit: 'contain' }}
-                aria-hidden="true"
-              />
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-                {selectedPeriodHeader.text}
-              </p>
-            </div>
-
-            <p style={{ margin: '2px 0 0', fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-              {filtered.length ? formatMoneyInteger(totalAmount) : formatMoneyInteger(0)}
+            <p style={{ margin: 0, fontSize: 'clamp(28px, 8vw, 40px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              {formatMoneyInteger(heroMainAmount)}
             </p>
-
-            <div style={{ marginTop: 0 }}>
-              <div style={{ display: 'inline-flex' }}>
-                <FilterDropdown
-                  id="type"
-                  label="Type"
-                  value={cardTypeValue}
-                  compactValue={isTransferType}
-                  isOpen={quickParamPicker === 'type'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'type' ? null : 'type'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  hideLabel
-                  largeValue
-                  options={FLOW_OPTIONS.map((opt) => ({
-                    value: opt.value,
-                    label: opt.label,
-                    hasSeparator: opt.value === 'all',
-                    selected: flow === opt.value,
-                    onSelect: () => {
-                      setFlow(opt.value)
-                      closeQuickPicker()
-                    },
-                  }))}
-                />
-              </div>
-            </div>
-
-            <div style={{ margin: 'var(--space-4) 0 var(--space-3)', height: 1, background: 'rgba(255,255,255,0.16)' }} />
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', alignItems: 'start' }}>
-              <div>
-                <FilterDropdown
-                  id="period"
-                  label="Période"
-                  value={cardPeriodValue}
-                  isOpen={quickParamPicker === 'period'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'period' ? null : 'period'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    { value: 'all', label: 'Toute', hasSeparator: true },
-                    { value: 'day', label: 'Jour' },
-                    { value: 'week', label: 'Semaine' },
-                    { value: 'month', label: 'Mois' },
-                    { value: 'year', label: 'Année' },
-                  ].map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                    hasSeparator: option.hasSeparator,
-                    selected: period === option.value,
-                    onSelect: () => {
-                      setPeriod(option.value as PeriodFilter)
-                      closeQuickPicker()
-                    },
-                  }))}
-                />
-              </div>
-
-              <div>
-                <FilterDropdown
-                  id="modalite"
-                  label="Modalité"
-                  value={periodMode === 'current' ? 'Fixe' : (periodMode === 'rolling' ? 'Glissant' : 'À venir')}
-                  isOpen={quickParamPicker === 'modalite'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'modalite' ? null : 'modalite'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'current',
-                      label: 'Fixe',
-                      selected: periodMode === 'current',
-                      onSelect: () => {
-                        setPeriodMode('current')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'rolling',
-                      label: 'Glissant',
-                      selected: periodMode === 'rolling',
-                      onSelect: () => {
-                        setPeriodMode('rolling')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'future',
-                      label: 'À venir',
-                      selected: periodMode === 'future',
-                      onSelect: () => {
-                        setPeriodMode('future')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
-
-              <div>
-                <FilterDropdown
-                  id="fixed"
-                  label="Budget"
-                  value={cardBudgetValue}
-                  isOpen={quickParamPicker === 'fixed'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'fixed' ? null : 'fixed'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'all',
-                      label: 'Tout',
-                      hasSeparator: true,
-                      selected: budgetFilter === 'all',
-                      onSelect: () => {
-                        setBudgetFilter('all')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'variable',
-                      label: 'Variable',
-                      selected: budgetFilter === 'variable',
-                      onSelect: () => {
-                        setBudgetFilter('variable')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'fixed',
-                      label: 'Fixe',
-                      selected: budgetFilter === 'fixed',
-                      onSelect: () => {
-                        setBudgetFilter('fixed')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
-
-              <div>
-                <FilterDropdown
-                  id="account"
-                  label="Compte"
-                  value={cardAccountValue}
-                  isOpen={quickParamPicker === 'account'}
-                  showMobileOverlay={isMobileViewport}
-                  onToggle={() => setQuickParamPicker((current) => (current === 'account' ? null : 'account'))}
-                  onClose={closeQuickPicker}
-                  heroTone
-                  fitContent
-                  options={[
-                    {
-                      value: 'all',
-                      label: 'Tout',
-                      hasSeparator: true,
-                      selected: accountFilter === 'all',
-                      onSelect: () => {
-                        setAccountFilter('all')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'perso',
-                      label: 'Perso',
-                      selected: accountFilter === 'perso',
-                      onSelect: () => {
-                        setAccountFilter('perso')
-                        closeQuickPicker()
-                      },
-                    },
-                    {
-                      value: 'joint',
-                      label: 'Joint',
-                      selected: accountFilter === 'joint',
-                      onSelect: () => {
-                        setAccountFilter('joint')
-                        closeQuickPicker()
-                      },
-                    },
-                  ]}
-                />
-              </div>
-            </div>
           </div>
         </div>
       </motion.section>
 
+      {/* ── Boutons d'action centrés ── */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: '-8px' }}>
+        <button
+          type="button"
+          aria-label="Ouvrir les paramètres"
+          onClick={openParametersModal}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            border: 'none',
+            background: 'var(--color-warning)',
+            borderRadius: 'var(--radius-full)',
+            padding: '6px 14px 6px 10px',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--neutral-0)',
+            boxShadow: '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
+          }}
+        >
+          <Settings2 size={13} strokeWidth={2.2} />
+          Paramètres
+        </button>
+        {isPlannedMode ? (
+          <button
+            type="button"
+            aria-label="Nouvelle opération planifiée"
+            onClick={() => setShowPlannedOperationModal(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              border: 'none',
+              background: '#0097A7',
+              borderRadius: 'var(--radius-full)',
+              padding: '6px 14px 6px 10px',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--neutral-0)',
+              boxShadow: '0 2px 8px rgba(0, 151, 167, 0.38)',
+            }}
+          >
+            <img src={planifierOperationIcon} alt="" width={13} height={13} style={{ display: 'block', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} aria-hidden="true" />
+            Planifier
+          </button>
+        ) : null}
+      </div>
+
       <section>
-        <div style={{ padding: '0 var(--space-6)' }}>
           <div
             style={{
+              position: 'sticky',
+              top: 'var(--safe-top, 0px)',
+              zIndex: 10,
+              background: 'var(--neutral-0)',
               borderBottom: '1px solid var(--neutral-200)',
-              paddingBottom: 10,
+              padding: 'var(--space-3) var(--space-6) 10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1162,7 +904,7 @@ export function Flux() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {operationsSummaryLabel}
+                {listResultsLabel}
               </span>
               <button
                 type="button"
@@ -1190,19 +932,23 @@ export function Flux() {
                 <Search size={12} />
               </button>
             </div>
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                fontFamily: 'var(--font-mono)',
-                color: totalAmount > 0 ? 'var(--color-success)' : totalAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {formatCurrency(totalAmount)}
-            </span>
+            <div style={{ display: 'grid', justifyItems: 'end', gap: 1 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)' }}>
+                {includeFutureFixed ? 'Réalisé + fixes à venir' : 'Réalisé'}
+              </span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-mono)',
+                  color: listHeaderAmount > 0 ? 'var(--color-success)' : listHeaderAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {formatCurrencyRounded(listHeaderAmount)}
+              </span>
+            </div>
           </div>
-        </div>
 
         {showSearchInput ? (
           <div style={{ padding: 'var(--space-3) var(--space-6) 0' }}>
@@ -1218,276 +964,18 @@ export function Flux() {
           </div>
         ) : null}
 
-        {isLoading ? (
+        {isListLoading ? (
           <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>Chargement…</div>
-        ) : filtered.length === 0 ? (
+        ) : generalMergedRows.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-12)' }}>
             Aucune operation
           </motion.div>
         ) : (
           <div>
-            {filtered.map((t) => {
-              const label = displayTxnLabel(t)
-              const category = displayTxnCategoryName(t)
-              const amount = signedAmount(t)
-
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setDetailsTxn(t)}
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    borderBottom: '1px solid var(--neutral-200)',
-                    background: 'transparent',
-                    display: 'grid',
-                    gridTemplateColumns: '42px 26px 1fr auto',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: 'var(--space-3) var(--space-6)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'background-color var(--transition-fast)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--neutral-50)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                    }}
-                  >
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', whiteSpace: 'nowrap' }}>
-                    {formatDateLabel(t.transaction_date)}
-                  </span>
-                  <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CategoryIcon iconKey={t.category?.icon_key ?? null} label={category} size={24} />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 400,
-                      color: 'var(--neutral-700)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 400,
-                      fontFamily: 'var(--font-mono)',
-                      textAlign: 'right',
-                      whiteSpace: 'nowrap',
-                      color: amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
-                    }}
-                  >
-                    {formatCurrency(amount)}
-                  </span>
-                </button>
-              )
-            })}
+            {generalRowItems}
           </div>
         )}
       </section>
-
-      <section>
-        <div style={{ padding: '0 var(--space-6)' }}>
-          <div
-            style={{
-              borderBottom: '1px solid var(--neutral-200)',
-              paddingBottom: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)' }}>
-              Opérations planifiées
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-700)' }}>
-              {filteredPlannedOperations.length}
-            </span>
-          </div>
-
-          <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-            {PLANNED_FLOW_OPTIONS.map((option) => {
-              const selected = plannedFlowFilter === option.value
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setPlannedFlowFilter(option.value)}
-                  style={{
-                    border: selected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                    borderRadius: 'var(--radius-full)',
-                    background: selected ? 'var(--primary-50)' : 'var(--neutral-0)',
-                    color: selected ? 'var(--primary-700)' : 'var(--neutral-700)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {option.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {isPlannedLoading ? (
-          <div style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>Chargement…</div>
-        ) : filteredPlannedOperations.length === 0 ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-8)' }}>
-            Aucune opération planifiée
-          </motion.div>
-        ) : (
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            {filteredPlannedOperations.map((operation) => {
-              const amount = Math.abs(Number(operation.planned_amount ?? 0))
-              const flowLabel = PLANNED_FLOW_LABELS[operation.flow_type]
-              const impactLabel = PLANNED_BUDGET_IMPACT_LABELS[operation.budget_impact]
-              const recurringLabel = recurringLineLabel(operation)
-              const recurringMonthly = operation.is_recurring && operation.recurrence_frequency === 'monthly'
-              const flowColor = operation.flow_type === 'income'
-                ? 'var(--color-success)'
-                : operation.flow_type === 'expense'
-                  ? 'var(--color-error)'
-                  : operation.flow_type === 'savings'
-                    ? 'var(--viz-a)'
-                    : 'var(--neutral-600)'
-
-              return (
-                <div
-                  key={operation.id}
-                  style={{
-                    borderBottom: '1px solid var(--neutral-200)',
-                    padding: 'var(--space-3) var(--space-6)',
-                    display: 'grid',
-                    gap: 'var(--space-2)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)' }}>
-                      {formatDateLabel(operation.planned_date)}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: flowColor }}>
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                    <span style={{ fontSize: 13, color: 'var(--neutral-800)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {operation.label}
-                    </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: flowColor, border: `1px solid ${flowColor}`, borderRadius: 'var(--radius-full)', padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                      {flowLabel}
-                    </span>
-                  </div>
-
-                  {operation.merchant_name ? (
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-600)' }}>
-                      {`Marchand: ${operation.merchant_name}`}
-                    </p>
-                  ) : null}
-
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Impact budget: ${impactLabel}`}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Récurrent mensuel: ${recurringMonthly ? 'Oui' : 'Non'}`}
-                    </p>
-                    {recurringMonthly ? (
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', fontWeight: 700 }}>
-                        {recurringLabel}
-                      </p>
-                    ) : null}
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                      {`Catégorie: ${operation.category?.name ?? '—'}`}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      <Sheet open={showTypeSheet} title="Type" onClose={() => setShowTypeSheet(false)}>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {FLOW_OPTIONS.map((opt) => (
-            <Button
-              key={opt.value}
-              type="button"
-              variant={flow === opt.value ? 'secondary' : 'outline'}
-              size="md"
-              onClick={() => {
-                setFlow(opt.value)
-                setShowTypeSheet(false)
-              }}
-              className="w-full justify-start"
-            >
-              {opt.label}
-            </Button>
-          ))}
-        </div>
-      </Sheet>
-
-      <Sheet open={showPeriodSheet} title="Periode" onClose={() => setShowPeriodSheet(false)}>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {PERIOD_OPTIONS.map((opt) => {
-            const supportsMode = ['week', 'month', 'quarter', 'year'].includes(opt.value)
-            return (
-              <div
-                key={opt.value}
-                style={{
-                  border: '1px solid var(--neutral-200)',
-                  borderRadius: 'var(--radius-xl)',
-                  background: period === opt.value ? 'var(--primary-50)' : 'var(--neutral-0)',
-                  padding: '10px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPeriod(opt.value)
-                    setShowPeriodSheet(false)
-                  }}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: 'var(--neutral-900)',
-                    padding: 0,
-                  }}
-                >
-                  {opt.label}
-                </button>
-                {supportsMode ? (
-                  <SegmentedToggle
-                    left="En cours"
-                    right="Glissant"
-                    value={periodMode === 'current' ? 'left' : 'right'}
-                    onChange={(next) => setPeriodMode(next === 'left' ? 'current' : 'rolling')}
-                  />
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-      </Sheet>
 
       <AnimatePresence>
         {showHeaderCategorySheet ? (
@@ -1519,7 +1007,7 @@ export function Flux() {
                 background: 'var(--neutral-0)',
                 borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
                 padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-5) var(--space-5)',
-                maxHeight: '78dvh',
+                maxHeight: '72dvh',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
               }}
@@ -1533,9 +1021,30 @@ export function Flux() {
               </div>
 
               <div style={{ overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
-                  {rootCategories.map((cat) => (
+                <div style={{ display: 'grid' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2) var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedParentCategoryId(null)
+                        setSelectedCategoryId(null)
+                        setShowHeaderCategorySheet(false)
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '5px 4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 4,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={32} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', lineHeight: 1.08, textAlign: 'center' }}>Toutes</span>
+                    </button>
+                    {orderedHeaderRootCategories.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
@@ -1547,234 +1056,20 @@ export function Flux() {
                       style={{
                         border: 'none',
                         background: 'transparent',
-                        padding: '6px 4px',
+                        padding: '5px 4px',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 5,
+                        gap: 4,
                         cursor: 'pointer',
                       }}
                     >
-                      <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
+                      <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={32} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'normal', lineHeight: 1.08, textAlign: 'center' }}>{headerCategoryLabel(cat.name)}</span>
                     </button>
-                  ))}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedParentCategoryId(null)
-                        setSelectedCategoryId(null)
-                        setShowHeaderCategorySheet(false)
-                      }}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '6px 4px',
-                        minWidth: 88,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 5,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                    </button>
+                    ))}
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showCategorySheet ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowCategorySheet(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(13,13,31,0.45)' }}
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
-              style={{
-                position: 'fixed',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 121,
-                width: '100%',
-                maxWidth: 420,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                borderRadius: '20px 20px 0 0',
-                padding: '12px var(--space-6) calc(var(--space-6) + var(--safe-bottom-offset))',
-                maxHeight: 'calc(100dvh - 12px)',
-                overflow: 'hidden',
-                boxShadow: 'var(--shadow-lg)',
-              }}
-            >
-              <div style={{ width: 36, height: 4, borderRadius: 2, margin: '4px auto 12px', background: 'var(--neutral-200)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {categoryStage === 'children' ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCategoryStage('parents')
-                        if (categorySheetInParameters) setDraftSelectedCategoryId(null)
-                        else setSelectedCategoryId(null)
-                      }}
-                      className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0"
-                    >
-                      <ArrowLeft size={16} />
-                    </Button>
-                  ) : null}
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Categorie</p>
-                </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategorySheet(false)} className="h-11 w-11 rounded-full bg-[var(--neutral-100)] px-0">
-                  <ChevronDown size={16} />
-                </Button>
-              </div>
-
-              <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' as CSSProperties['WebkitOverflowScrolling'] }}>
-                {categoryStage === 'parents' ? (
-                  <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
-                      {rootCategories.map((cat) => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => {
-                            if (categorySheetInParameters) {
-                              setDraftSelectedParentCategoryId(cat.id)
-                              setDraftSelectedCategoryId(null)
-                            } else {
-                              setSelectedParentCategoryId(cat.id)
-                              setSelectedCategoryId(null)
-                            }
-                            setCategoryStage('children')
-                          }}
-                          style={{
-                            border: '1px solid var(--neutral-200)',
-                            background: 'var(--neutral-0)',
-                            borderRadius: 'var(--radius-lg)',
-                            padding: '10px 8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={30} />
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (categorySheetInParameters) {
-                            setDraftSelectedParentCategoryId(null)
-                            setDraftSelectedCategoryId(null)
-                          } else {
-                            setSelectedParentCategoryId(null)
-                            setSelectedCategoryId(null)
-                          }
-                          setShowCategorySheet(false)
-                        }}
-                        style={{
-                          border: '1px solid var(--neutral-200)',
-                          background: 'var(--neutral-0)',
-                          borderRadius: 'var(--radius-lg)',
-                          padding: '10px 8px',
-                          minWidth: 88,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 6,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>
-                          <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={24} />
-                        </div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
-                      {activeSelectedChildren.map((sub) => (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onClick={() => {
-                            if (categorySheetInParameters) setDraftSelectedCategoryId(sub.id)
-                            else setSelectedCategoryId(sub.id)
-                            setShowCategorySheet(false)
-                          }}
-                          style={{
-                            border: '1px solid var(--neutral-200)',
-                            background: 'var(--neutral-0)',
-                            borderRadius: 'var(--radius-lg)',
-                            padding: '10px 8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <CategoryIcon iconKey={sub.icon_key} label={sub.name} size={30} />
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub.name}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (categorySheetInParameters) setDraftSelectedCategoryId(null)
-                          else setSelectedCategoryId(null)
-                          setShowCategorySheet(false)
-                        }}
-                        style={{
-                          border: '1px solid var(--neutral-200)',
-                          background: 'var(--neutral-0)',
-                          borderRadius: 'var(--radius-lg)',
-                          padding: '10px 8px',
-                          minWidth: 88,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 6,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--neutral-100)', display: 'grid', placeItems: 'center' }}>↺</div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)' }}>Toutes</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </motion.div>
           </>
@@ -1789,230 +1084,289 @@ export function Flux() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeParametersModal}
-              style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.52)' }}
+              style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(13,13,31,0.45)' }}
             />
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="Paramètres de recherche"
-              initial={{ y: '-100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '-100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+              aria-label="Paramètres"
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+              onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'fixed',
-                left: 0,
-                right: 0,
-                top: 0,
+                left: 'var(--page-gutter)',
+                right: 'var(--page-gutter)',
+                top: '24vh',
                 zIndex: 81,
-                width: '100%',
-                maxWidth: 430,
+                maxWidth: 320,
                 margin: '0 auto',
                 background: 'var(--neutral-0)',
-                borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)',
-                padding: 'calc(var(--safe-top-offset) + var(--space-2)) var(--space-6) var(--space-6)',
-                maxHeight: '78dvh',
-                boxShadow: 'var(--shadow-lg)',
-                overflow: 'hidden',
+                borderRadius: 'var(--radius-2xl)',
+                padding: 'var(--space-4)',
+                boxShadow: '0 8px 40px rgba(13,13,31,0.18)',
                 display: 'grid',
-                gridTemplateRows: 'auto 1fr auto',
-                gap: 'var(--space-4)',
+                gap: 'var(--space-3)',
               }}
             >
-              <div style={{ width: 36, height: 4, borderRadius: 'var(--radius-full)', margin: '2px auto 2px', background: 'var(--neutral-300)' }} />
-
-              <div style={{ overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 'var(--space-4)' }}>
-                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--space-2)' }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCategorySheet(true)}
-                    aria-label="Choisir une catégorie"
-                    style={{
-                      width: 92,
-                      height: 92,
-                      borderRadius: 'var(--radius-full)',
-                      border: '1px solid var(--neutral-200)',
-                      background: 'var(--neutral-50)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {draftCategoryLabel === 'Toutes categories'
-                      ? <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={50} />
-                      : <CategoryIcon iconKey={draftCategoryIconKey} label={draftCategoryLabel} size={50} />}
-                  </button>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    {draftCategoryLabel}
-                  </p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-                  <div style={{ position: 'relative', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Type</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPeriodMiniModal(false)
-                        setShowTypeMenu((current) => !current)
-                      }}
-                      style={{
-                        marginTop: 'var(--space-2)',
-                        width: '100%',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'var(--neutral-0)',
-                        color: 'var(--neutral-800)',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        padding: '10px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{draftTypeLabel}</span>
-                      <ChevronDown size={14} />
-                    </button>
-                    <AnimatePresence>
-                      {showTypeMenu ? (
-                        <motion.div
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 4 }}
-                          style={{
-                            position: 'absolute',
-                            top: 'calc(100% - 4px)',
-                            left: 0,
-                            right: 0,
-                            zIndex: 2,
-                            border: '1px solid var(--neutral-200)',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'var(--neutral-0)',
-                            boxShadow: 'var(--shadow-md)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {FLOW_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => {
-                                setDraftFlow(opt.value)
-                                setShowTypeMenu(false)
-                              }}
-                              style={{
-                                width: '100%',
-                                border: 'none',
-                                background: draftFlow === opt.value ? 'var(--primary-50)' : 'var(--neutral-0)',
-                                color: draftFlow === opt.value ? 'var(--primary-700)' : 'var(--neutral-700)',
-                                fontSize: 13,
-                                fontWeight: 700,
-                                textAlign: 'left',
-                                padding: '10px 12px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Période</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowTypeMenu(false)
-                        setShowPeriodMiniModal(true)
-                      }}
-                      style={{
-                        marginTop: 'var(--space-2)',
-                        width: '100%',
-                        border: '1px solid var(--neutral-200)',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'var(--neutral-0)',
-                        color: 'var(--neutral-800)',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        padding: '10px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{draftPeriodLabel}</span>
-                      <ChevronDown size={14} />
-                    </button>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Fixe / variable</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {(['all', 'variable', 'fixed'] as const).map(val => {
-                        const label = val === 'all' ? 'Tout' : (val === 'fixed' ? 'Fixe' : 'Variable');
-                        const isSelected = draftBudgetFilter === val;
-                        return (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setDraftBudgetFilter(val)}
-                            style={{
-                              padding: '6px 0',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: isSelected ? 'var(--primary-500)' : '#fff',
-                              color: isSelected ? '#fff' : 'var(--neutral-700)',
-                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-sm)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>Compte</p>
-                    <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                      {(['all', 'perso', 'joint'] as const).map(val => {
-                        const label = val === 'all' ? 'Tout' : (val === 'joint' ? 'Joint' : 'Perso');
-                        const isSelected = draftAccountFilter === val;
-                        return (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setDraftAccountFilter(val)}
-                            style={{
-                              padding: '6px 0',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: isSelected ? 'var(--primary-500)' : '#fff',
-                              color: isSelected ? '#fff' : 'var(--neutral-700)',
-                              border: isSelected ? '1px solid var(--primary-500)' : '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-sm)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>Paramètres</p>
+                <button
+                  type="button"
+                  onClick={resetDraftParametersToDefaults}
+                  aria-label="Réinitialiser les paramètres"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-500)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'background 130ms, color 130ms',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-200)'; e.currentTarget.style.color = 'var(--neutral-700)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--neutral-100)'; e.currentTarget.style.color = 'var(--neutral-500)' }}
+                >
+                  <RotateCcw size={13} strokeWidth={2.4} />
+                </button>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowParametersCategoryModal(true)}
+                style={{
+                  width: '100%',
+                  border: draftSelectedCategoryMeta ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: draftSelectedCategoryMeta ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : 'var(--neutral-50)',
+                  color: draftSelectedCategoryMeta ? 'var(--primary-600)' : 'var(--neutral-800)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '9px 8px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-base)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                {draftSelectedCategoryMeta ? (
+                  <>
+                    <CategoryIcon iconKey={draftSelectedCategoryMeta.iconKey} label={draftSelectedCategoryMeta.label} size={18} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{draftSelectedCategoryMeta.label}</span>
+                  </>
+                ) : (
+                  'choisir une catégorie'
+                )}
+              </button>
+
+              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Type d'opérations</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                </div>
+                {isPlannedMode ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                    {PLANNED_TYPE_OPTIONS.map((option) => {
+                      const isSelected = draftPlannedTypeFilter === option.value
+                      const isOverridingDefault = isSelected && option.value !== 'all'
+                      return (
+                        <button
+                          key={`planned-type-${option.value}`}
+                          type="button"
+                          onClick={() => setDraftPlannedTypeFilter(option.value)}
+                          style={{
+                            padding: '7px 4px',
+                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                            fontSize: 11,
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-base)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                    {FLOW_OPTIONS.map((option) => {
+                      const isSelected = draftFlow === option.value
+                      const isOverridingDefault = isSelected && option.value !== 'all'
+                      return (
+                        <button
+                          key={`type-${option.value}`}
+                          type="button"
+                          onClick={() => setDraftFlow(option.value)}
+                          style={{
+                            padding: '7px 4px',
+                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                            fontSize: 11,
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-base)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setDraftIncludeFutureFixed((current) => !current)}
+                      style={{
+                        padding: '7px 4px',
+                        border: draftIncludeFutureFixed ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: draftIncludeFutureFixed
+                          ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
+                          : 'var(--neutral-50)',
+                        color: draftIncludeFutureFixed ? 'var(--primary-600)' : 'var(--neutral-800)',
+                        fontSize: 11,
+                        fontWeight: draftIncludeFutureFixed ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-base)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Fixes à venir
+                    </button>
+                    <p
+                      style={{
+                        gridColumn: '1 / -1',
+                        margin: 0,
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: 'var(--neutral-500)',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      Ajoute les opérations fixes planifiées non encore réalisées sur la période sélectionnée.
+                    </p>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Période</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                  {(isPlannedMode ? PLANNED_PERIOD_OPTIONS : PERIOD_OPTIONS).map((option) => {
+                    const isSelected = draftPeriod === option.value
+                    const isOverridingDefault = isSelected && option.value !== (isPlannedMode ? 'month' : 'month')
+                    return (
+                      <button
+                        key={`period-${option.value}`}
+                        type="button"
+                        onClick={() => setDraftPeriod(option.value)}
+                        style={{
+                          padding: '7px 4px',
+                          border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                          color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                          fontSize: 11,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer',
+                          transition: 'all var(--transition-base)',
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Compte</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                  {[
+                    { value: 'all' as const, label: 'Tous' },
+                    { value: 'perso' as const, label: 'Personnel' },
+                    { value: 'joint' as const, label: 'Joint' },
+                  ].map((option) => {
+                    const isSelected = draftAccountFilter === option.value
+                    const isOverridingDefault = isSelected && option.value !== 'all'
+                    return (
+                      <button
+                        key={`account-${option.value}`}
+                        type="button"
+                        onClick={() => setDraftAccountFilter(option.value)}
+                        style={{
+                          padding: '7px 4px',
+                          border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                          color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                          fontSize: 11,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer',
+                          transition: 'all var(--transition-base)',
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderTop: '1px solid var(--neutral-200)',
+                  paddingTop: 'var(--space-3)',
+                  marginTop: 'var(--space-1)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={closeParametersModal}
+                  style={{
+                    border: '1px solid color-mix(in oklab, var(--color-warning) 36%, var(--neutral-200) 64%)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'color-mix(in oklab, var(--color-warning) 12%, var(--neutral-0) 88%)',
+                    color: 'color-mix(in oklab, var(--color-warning) 52%, #5a2700 48%)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    width: '100%',
+                    height: 36,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Annuler
+                </button>
+                <div />
                 <button
                   type="button"
                   onClick={applyParameters}
@@ -2021,122 +1375,174 @@ export function Flux() {
                     borderRadius: 'var(--radius-md)',
                     background: 'var(--primary-500)',
                     color: 'var(--neutral-0)',
-                    fontSize: 13,
+                    fontSize: 11,
                     fontWeight: 800,
-                    padding: '10px 18px',
+                    width: '100%',
+                    height: 36,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
                     cursor: 'pointer',
                   }}
                 >
-                  Appliquer
+                  Valider
                 </button>
               </div>
+            </motion.div>
 
-              <AnimatePresence>
-                {showPeriodMiniModal ? (
-                  <>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={() => setShowPeriodMiniModal(false)}
-                      style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'rgba(13,13,31,0.24)' }}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                      style={{
-                        position: 'absolute',
-                        left: 'var(--space-4)',
-                        right: 'var(--space-4)',
-                        top: '40%',
-                        zIndex: 4,
-                        borderRadius: 'var(--radius-xl)',
-                        border: '1px solid var(--neutral-200)',
-                        background: 'var(--neutral-0)',
-                        boxShadow: 'var(--shadow-lg)',
-                        padding: 'var(--space-4)',
-                        display: 'grid',
-                        gap: 'var(--space-3)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <SegmentedToggle
-                          left="Fixe"
-                          right="Glissant"
-                          value={draftPeriodMode === 'current' ? 'left' : 'right'}
-                          onChange={(next) => setDraftPeriodMode(next === 'left' ? 'current' : 'rolling')}
-                        />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                        {[
-                          { value: 'day', label: 'Jour' },
-                          { value: 'week', label: 'Semaine' },
-                          { value: 'month', label: 'Mois' },
-                          { value: 'year', label: 'Année' },
-                        ].map((option) => (
+            <AnimatePresence>
+              {showParametersCategoryModal ? (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    style={{ position: 'fixed', inset: 0, zIndex: 82, background: 'rgba(13,13,31,0.32)' }}
+                  />
+                  <motion.div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Choisir une catégorie"
+                    initial={{ scale: 0.94, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.94, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      position: 'fixed',
+                      left: 'var(--page-gutter)',
+                      right: 'var(--page-gutter)',
+                      top: '22vh',
+                      zIndex: 83,
+                      maxWidth: 320,
+                      margin: '0 auto',
+                      background: 'var(--neutral-0)',
+                      borderRadius: 'var(--radius-2xl)',
+                      padding: 'var(--space-4)',
+                      boxShadow: '0 8px 40px rgba(13,13,31,0.18)',
+                      display: 'grid',
+                      gap: 'var(--space-3)',
+                    }}
+                  >
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                      {(isPlannedMode && plannedModalRootCategories && plannedModalRootCategories.length > 0
+                        ? plannedModalRootCategories
+                        : orderedHeaderRootCategories.slice(0, 11)
+                      ).map((category) => {
+                        const isSelected = draftSelectedParentCategoryId === category.id && draftSelectedCategoryId == null
+                        const displayName = headerCategoryLabel(category.name) === 'Famille/enfant' ? 'Famille\nenfant' : headerCategoryLabel(category.name)
+                        return (
                           <button
-                            key={option.value}
+                            key={`params-category-${category.id}`}
                             type="button"
                             onClick={() => {
-                              setDraftPeriod(option.value as PeriodFilter)
-                              setShowPeriodMiniModal(false)
+                              setDraftSelectedParentCategoryId(category.id)
+                              setDraftSelectedCategoryId(null)
+                              setShowParametersCategoryModal(false)
                             }}
                             style={{
-                              border: '1px solid var(--neutral-200)',
-                              borderRadius: 'var(--radius-md)',
-                              background: draftPeriod === option.value ? 'var(--primary-50)' : 'var(--neutral-0)',
-                              color: draftPeriod === option.value ? 'var(--primary-700)' : 'var(--neutral-700)',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              padding: '9px 6px',
+                              border: 'none',
+                              borderRadius: 0,
+                              background: 'transparent',
+                              padding: '6px 4px',
+                              display: 'grid',
+                              justifyItems: 'center',
+                              gap: 4,
                               cursor: 'pointer',
                             }}
                           >
-                            {option.label}
+                            <CategoryIcon iconKey={category.icon_key} label={category.name} size={28} />
+                            <span style={{ fontSize: 9, fontWeight: isSelected ? 800 : 700, color: isSelected ? 'var(--primary-700)' : 'var(--neutral-700)', textAlign: 'center', lineHeight: 1.08, maxWidth: '100%', whiteSpace: 'pre-line' }}>
+                              {displayName}
+                            </span>
                           </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  </>
-                ) : null}
-              </AnimatePresence>
-            </motion.div>
+                        )
+                      })}
+                      <button
+                        type="button"
+                        aria-label="Fermer la sélection catégorie"
+                        onClick={() => setShowParametersCategoryModal(false)}
+                        style={{
+                          border: 'none',
+                          borderRadius: 'var(--radius-full)',
+                          background: 'var(--color-error)',
+                          color: 'var(--neutral-0)',
+                          width: 34,
+                          height: 34,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          justifySelf: 'center',
+                          alignSelf: 'center',
+                        }}
+                      >
+                        <X size={13} strokeWidth={2.6} />
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              ) : null}
+            </AnimatePresence>
           </>
         ) : null}
       </AnimatePresence>
 
-      <style>{`
-        .flux-filter-dropdown-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: var(--neutral-300) var(--neutral-100);
-        }
-        .flux-filter-dropdown-scroll::-webkit-scrollbar {
-          width: 6px;
-        }
-        .flux-filter-dropdown-scroll::-webkit-scrollbar-track {
-          background: var(--neutral-100);
-          border-radius: var(--radius-pill);
-        }
-        .flux-filter-dropdown-scroll::-webkit-scrollbar-thumb {
-          background: var(--neutral-300);
-          border-radius: var(--radius-pill);
-        }
-      `}</style>
-
       <TransactionDetailsModal
         transaction={detailsTxn}
         categories={flowCategories ?? []}
-        transactionList={filtered}
-        onNavigate={setDetailsTxn}
-        onClose={() => setDetailsTxn(null)}
-        showEditControls={true}
+        transactionList={transactionsForDetails}
+        onNavigate={handleNavigateTransaction}
+        onClose={() => setDetailsOperation(null)}
+        showEditControls={false}
+      />
+
+      <PlannedOperationDetailsModal
+        operation={detailsOperation?.operation_kind === 'planned_occurrence' ? detailsOperation : null}
+        onClose={() => setDetailsOperation(null)}
       />
 
       <AddPlannedOperationModal
         open={showPlannedOperationModal}
         onClose={() => setShowPlannedOperationModal(false)}
       />
+
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            key="scroll-top"
+            type="button"
+            aria-label="Revenir en haut"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.12, ease: [0.34, 1.56, 0.64, 1] }}
+            style={{
+              position: 'fixed',
+              bottom: 'calc(var(--nav-height) + 16px)',
+              right: 16,
+              zIndex: 200,
+              width: 44,
+              height: 44,
+              borderRadius: 'var(--radius-full)',
+              border: 'none',
+              background: 'var(--primary-600)',
+              color: 'var(--neutral-0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(91,87,245,0.35)',
+              cursor: 'pointer',
+            }}
+            whileTap={{ scale: 0.9 }}
+          >
+            <ArrowUp size={20} strokeWidth={2.5} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
-import { refreshBudgetAnalytics } from '@/features/budget/api/refreshBudgetAnalytics'
+import { QK } from '@/lib/queryKeys'
 import { getMonthlyMetrics } from '@/features/budget/api/getMonthlyMetrics'
 import { getMonthlyVariableCategories } from '@/features/budget/api/getMonthlyVariableCategories'
 import { getVariableCategorySummary } from '@/features/budget/api/getVariableCategorySummary'
@@ -43,127 +44,58 @@ function pickLatestRefreshedAt(
   return allDates.sort((a, b) => b.localeCompare(a))[0] ?? null
 }
 
+async function fetchBudgetAnalyticsData(year: number | undefined) {
+  const [metrics, variableCategories, categorySummary] = await Promise.all([
+    getMonthlyMetrics(year),
+    getMonthlyVariableCategories(year),
+    getVariableCategorySummary(),
+  ])
+  return {
+    monthlyMetrics: metrics,
+    monthlyVariableCategories: variableCategories,
+    variableCategorySummary: categorySummary,
+    refreshedAt: pickLatestRefreshedAt(metrics, variableCategories, categorySummary),
+  }
+}
+
 export function useBudgetAnalytics(options: UseBudgetAnalyticsOptions = {}): UseBudgetAnalyticsResult {
-  const { year, autoRefresh = false, autoLoad = true } = options
+  const { year, autoLoad = true } = options
   const { user, loading: authLoading } = useAuth()
   const userId = user?.id ?? null
+  const queryClient = useQueryClient()
 
-  const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [monthlyMetrics, setMonthlyMetrics] = useState<AnalyticsMonthlyMetrics[]>([])
-  const [monthlyVariableCategories, setMonthlyVariableCategories] = useState<AnalyticsMonthlyCategoryMetrics[]>([])
-  const [variableCategorySummary, setVariableCategorySummary] = useState<AnalyticsVariableCategorySummary[]>([])
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null)
 
-  const mountedRef = useRef(true)
-  const runIdRef = useRef(0)
-
-  useEffect(() => {
-    mountedRef.current = true
-
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
-  const loadDatasets = useCallback(async (): Promise<void> => {
-    if (!userId) {
-      throw new Error('Utilisateur non connecté: impossible de charger les analytics budget.')
-    }
-
-    const runId = ++runIdRef.current
-
-    const [metrics, variableCategories, categorySummary] = await Promise.all([
-      getMonthlyMetrics(year),
-      getMonthlyVariableCategories(year),
-      getVariableCategorySummary(),
-    ])
-
-    if (!mountedRef.current || runId !== runIdRef.current) return
-
-    setMonthlyMetrics(metrics)
-    setMonthlyVariableCategories(variableCategories)
-    setVariableCategorySummary(categorySummary)
-    setRefreshedAt(pickLatestRefreshedAt(metrics, variableCategories, categorySummary))
-  }, [userId, year])
+  const query = useQuery({
+    queryKey: [QK.BUDGET_ANALYTICS, userId, year],
+    queryFn: () => fetchBudgetAnalyticsData(year),
+    enabled: !!userId && !authLoading && autoLoad,
+    staleTime: 5 * 60_000,
+  })
 
   const reloadOnly = useCallback(async () => {
-    if (!userId) {
-      setError('Utilisateur non connecté: impossible de charger les analytics budget.')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    try {
-      await loadDatasets()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Chargement analytics impossible.'
-      if (mountedRef.current) setError(message)
-    } finally {
-      if (mountedRef.current) setLoading(false)
-    }
-  }, [loadDatasets, userId])
+    await query.refetch()
+  }, [query])
 
   const refreshAndReload = useCallback(async () => {
-    if (!userId) {
-      setError('Utilisateur non connecté: impossible de recalculer les analytics budget.')
-      return
-    }
-
+    if (!userId) return
     setRefreshing(true)
-    setError(null)
     try {
-      await refreshBudgetAnalytics(userId)
-      await loadDatasets()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Recalcul analytics impossible.'
-      if (mountedRef.current) setError(message)
+      await queryClient.invalidateQueries({ queryKey: [QK.BUDGET_ANALYTICS, userId, year] })
     } finally {
-      if (mountedRef.current) setRefreshing(false)
+      setRefreshing(false)
     }
-  }, [loadDatasets, userId])
+  }, [userId, year, queryClient])
 
-  useEffect(() => {
-    if (!autoLoad) return
-    if (authLoading) return
-
-    if (!userId) {
-      setError('Utilisateur non connecté: analytics budget indisponibles.')
-      return
-    }
-
-    if (autoRefresh) {
-      void refreshAndReload()
-      return
-    }
-
-    void reloadOnly()
-  }, [autoLoad, autoRefresh, authLoading, refreshAndReload, reloadOnly, userId])
-
-  return useMemo(
-    () => ({
-      loading,
-      refreshing,
-      error,
-      monthlyMetrics,
-      monthlyVariableCategories,
-      variableCategorySummary,
-      refreshedAt,
-      refreshAndReload,
-      reloadOnly,
-    }),
-    [
-      loading,
-      refreshing,
-      error,
-      monthlyMetrics,
-      monthlyVariableCategories,
-      variableCategorySummary,
-      refreshedAt,
-      refreshAndReload,
-      reloadOnly,
-    ],
-  )
+  return {
+    loading: autoLoad ? query.isPending : false,
+    refreshing,
+    error: query.error?.message ?? null,
+    monthlyMetrics: query.data?.monthlyMetrics ?? [],
+    monthlyVariableCategories: query.data?.monthlyVariableCategories ?? [],
+    variableCategorySummary: query.data?.variableCategorySummary ?? [],
+    refreshedAt: query.data?.refreshedAt ?? null,
+    refreshAndReload,
+    reloadOnly,
+  }
 }

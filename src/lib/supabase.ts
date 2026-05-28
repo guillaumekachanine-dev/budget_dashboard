@@ -17,6 +17,11 @@ export const supabase = createClient<Database, 'budget_dashboard'>(supabaseUrl, 
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  // Realtime n'est pas utilisé dans cette app (pas de subscriptions .channel()).
+  // Désactiver la connexion WebSocket évite une connexion réseau inutile au démarrage.
+  realtime: {
+    params: { eventsPerSecond: 0 },
+  },
 })
 
 declare global {

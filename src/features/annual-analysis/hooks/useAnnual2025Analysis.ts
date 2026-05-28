@@ -1,14 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type {
   Annual2025Analysis,
   Annual2025InsightRow,
+  Annual2025YearlyBucketRow,
+  Annual2025YearlyCategoryRow,
   AnnualTotalsPayload,
   MonthlyProfilePoint,
   Top5CategoryItem,
 } from '@/features/annual-analysis/types'
-import { getAnnual2025Insights } from '@/features/annual-analysis/api/getAnnual2025Insights'
-import { getAnnual2025YearlyBuckets } from '@/features/annual-analysis/api/getAnnual2025YearlyBuckets'
-import { getAnnual2025YearlyParentCategories } from '@/features/annual-analysis/api/getAnnual2025YearlyParentCategories'
+import { budgetDb } from '@/lib/supabaseBudget'
+
+async function getAnnual2025Insights(): Promise<Annual2025InsightRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_insights')
+    .select('insight_key, insight_level, value_text, value_numeric, payload')
+  if (error) throw new Error(`getAnnual2025Insights failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025InsightRow[]
+}
+
+async function getAnnual2025YearlyBuckets(): Promise<Annual2025YearlyBucketRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_yearly_bucket_summary')
+    .select('analysis_year, budget_bucket, amount_total_year, share_of_year_expense_pct, rank_in_year')
+    .eq('analysis_year', 2025)
+    .order('rank_in_year', { ascending: true })
+  if (error) throw new Error(`getAnnual2025YearlyBuckets failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025YearlyBucketRow[]
+}
+
+async function getAnnual2025YearlyParentCategories(): Promise<Annual2025YearlyCategoryRow[]> {
+  const { data, error } = await budgetDb
+    .from('analytics_2025_yearly_category_summary')
+    .select('category_name, category_level, amount_total_year, share_of_year_expense_pct, rank_in_year, analysis_year')
+    .eq('analysis_year', 2025)
+    .eq('category_level', 'parent')
+    .order('rank_in_year', { ascending: true })
+  if (error) throw new Error(`getAnnual2025YearlyParentCategories failed: ${error.message}`)
+  return (data ?? []) as unknown as Annual2025YearlyCategoryRow[]
+}
 
 function asNumber(v: unknown): number {
   const n = Number(v)
@@ -61,64 +90,44 @@ function parseTop5Categories(insight: Annual2025InsightRow | undefined): Top5Cat
   })
 }
 
-const INITIAL_STATE: Annual2025Analysis = {
-  loading: true,
-  error: null,
-  annualTotals: null,
-  insightByKey: {},
-  yearlyBuckets: [],
-  yearlyParentCategories: [],
-  monthlyProfile: [],
-  top5ParentCategories: [],
-  top5LeafCategories: [],
+type Annual2025Data = Omit<Annual2025Analysis, 'loading' | 'error'>
+
+async function fetchAnnual2025Analysis(): Promise<Annual2025Data> {
+  const [insights, buckets, parentCategories] = await Promise.all([
+    getAnnual2025Insights(),
+    getAnnual2025YearlyBuckets(),
+    getAnnual2025YearlyParentCategories(),
+  ])
+
+  const insightByKey = Object.fromEntries(insights.map((row) => [row.insight_key, row]))
+
+  return {
+    annualTotals: parseAnnualTotals(insightByKey['annual_totals']),
+    insightByKey,
+    yearlyBuckets: buckets,
+    yearlyParentCategories: parentCategories,
+    monthlyProfile: parseMonthlyProfile(insightByKey['monthly_profile']),
+    top5ParentCategories: parseTop5Categories(insightByKey['top5_parent_categories']),
+    top5LeafCategories: parseTop5Categories(insightByKey['top5_leaf_categories']),
+  }
 }
 
 export function useAnnual2025Analysis(): Annual2025Analysis {
-  const [state, setState] = useState<Annual2025Analysis>(INITIAL_STATE)
+  const query = useQuery({
+    queryKey: ['annual-2025-analysis'],
+    queryFn: fetchAnnual2025Analysis,
+    staleTime: 15 * 60_000,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setState((prev) => ({ ...prev, loading: true, error: null }))
-
-      try {
-        const [insights, buckets, parentCategories] = await Promise.all([
-          getAnnual2025Insights(),
-          getAnnual2025YearlyBuckets(),
-          getAnnual2025YearlyParentCategories(),
-        ])
-
-        if (cancelled) return
-
-        const insightByKey = Object.fromEntries(insights.map((row) => [row.insight_key, row]))
-
-        setState({
-          loading: false,
-          error: null,
-          annualTotals: parseAnnualTotals(insightByKey['annual_totals']),
-          insightByKey,
-          yearlyBuckets: buckets,
-          yearlyParentCategories: parentCategories,
-          monthlyProfile: parseMonthlyProfile(insightByKey['monthly_profile']),
-          top5ParentCategories: parseTop5Categories(insightByKey['top5_parent_categories']),
-          top5LeafCategories: parseTop5Categories(insightByKey['top5_leaf_categories']),
-        })
-      } catch (err) {
-        if (cancelled) return
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Erreur inconnue lors du chargement',
-        }))
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return state
+  return {
+    loading: query.isPending,
+    error: query.error?.message ?? null,
+    annualTotals: query.data?.annualTotals ?? null,
+    insightByKey: query.data?.insightByKey ?? {},
+    yearlyBuckets: query.data?.yearlyBuckets ?? [],
+    yearlyParentCategories: query.data?.yearlyParentCategories ?? [],
+    monthlyProfile: query.data?.monthlyProfile ?? [],
+    top5ParentCategories: query.data?.top5ParentCategories ?? [],
+    top5LeafCategories: query.data?.top5LeafCategories ?? [],
+  }
 }

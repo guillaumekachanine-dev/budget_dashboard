@@ -1,0 +1,15 @@
+# Fiscal Meridian
+
+A philosophy of measured tension — where the language of financial precision meets the restraint of fine cartography.
+
+---
+
+The visual field is governed by a strict vertical axis — an invisible meridian line that cleaves composition into positive and negative territories. This is not decoration; it is the organizing law of the universe here. Everything that grows to the right does so with warmth, amber, ember. Everything that recedes to the left does so in cool slate, ash, silence. The axis itself remains invisible, yet every element bows to it with the reverence of a scientific diagram. This binary geography is painstakingly established — the product of deep expertise in how the eye reads space and interprets opposing forces.
+
+Color operates as a system of atmospheric pressure: warm amber (#C8944A lineage) signals surplus, expansion, breath. Cool teal-steel (#3B7A8A lineage) signals contraction, debt, the held note. Neutrals — creams, off-whites, deep charcoals — serve as the paper substrate, never competing, always supporting. The palette is deliberately limited to five tones maximum, and within those five tones, infinite nuance. A meticulously calibrated gradient shifts almost imperceptibly between states, the kind of chromatic precision only visible upon sustained examination.
+
+Form follows the discipline of the instrument: thin strokes, precise terminators, measured gaps. Bar elements taper with intention — not because they must geometrically, but because a tapered form suggests direction, energy contained. The bars are not rectangles; they are vectors with mass. Each is rendered with the care of a master typographer setting lead type — every weight considered, every edge deliberate. The composition rewards the viewer who pauses: there is always one more layer of refinement to discover.
+
+Scale creates hierarchy without text. The dominant element commands through physical mass alone; secondary elements whisper their values in fine mono type, set at 9–11px, restrained as footnotes in a scientific journal. Typography is never decorative — it is measurement notation. Use only one serif face for titles (InstrumentSerif or Lora Italic, thin weight) paired with one mono face (DM Mono or GeistMono) for numerical values. The juxtaposition of these two vernaculars — the literary and the technical — creates the emotional register of something both human and precise.
+
+Whitespace is the fifth element, treated with the same gravity as the drawn marks. The canvas breathes in wide margins and deliberate voids. No element crowds another. Every composition should look as though it were printed once, corrected by hand under lamplight, printed again — a process of painstaking refinement. The final work must bear the unmistakable signature of someone at the absolute top of their field: no wasted mark, no accidental void, no color that does not serve the whole. This is the product of countless hours and a deep, lived mastery of visual communication.

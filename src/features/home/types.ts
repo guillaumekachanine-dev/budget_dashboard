@@ -3,10 +3,12 @@ export type HomeBudgetBucketId =
   | 'variable_essentielle'
   | 'discretionnaire'
   | 'provision'
+  | 'voyage'
   | 'epargne'
 
 export interface HomeBudgetBucket {
   budget_bucket: HomeBudgetBucketId
+  budget_line_count: number
   budget_amount: number
   actual_amount: number
   remaining_amount: number
@@ -58,23 +60,29 @@ export interface HomeDailyBudgetPayload {
     period_year: number
     period_month: number
     days_remaining: number
+    total_operations_count: number
+    total_operations_amount: number
   }
   account: {
     main_account_id: string
     main_account_name: string
     main_account_balance: number | null
+    joint_account_balance: number
+    total_checking_balance: number
   }
   budgets: {
     fixed_budget_amount: number
     variable_essential_budget_amount: number
     discretionary_budget_amount: number
     provision_budget_amount: number
+    voyage_budget_amount: number
     savings_budget_amount: number
   }
   realized: {
     revenue_amount: number
     savings_actual_amount: number
     provision_actual_amount: number
+    travel_actual_amount: number
     total_transaction_count: number
     pilotage_operation_amount: number
     consumption_expense_amount: number
@@ -92,6 +100,19 @@ export interface HomeDailyBudgetPayload {
     count: number
     total_amount: number
     items: PlannedOperationItem[]
+  }
+  planned_operations_impact: {
+    additional_commitment_amount: number
+    remaining_useful_impact_amount: number
+  }
+  totals: {
+    month_budget_total: number
+    month_actual_total: number
+    month_variance_amount: number
+    variable_budget_amount: number
+    variable_actual_amount: number
+    projected_end_of_month_expense_amount: number
+    consumed_pct: number
   }
   by_bucket: HomeBudgetBucket[]
   by_category: HomeBudgetCategory[]

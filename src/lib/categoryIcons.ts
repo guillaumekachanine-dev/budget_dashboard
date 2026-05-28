@@ -16,21 +16,29 @@ const fallbackIconModules = import.meta.glob(
   }
 ) as Record<string, string>;
 
-function normalizeIconKey(value?: string | null): string {
+const _normalizeCache = new Map<string, string>()
+
+export function normalizeIconKey(value?: string | null): string {
   if (!value) return "";
 
-  return value
+  const cached = _normalizeCache.get(value)
+  if (cached !== undefined) return cached
+
+  const result = value
     .split("/")
     .pop()!
     .replace(/(\.png|\.svg|\.webp)+$/gi, "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/['’]/g, "_")
+    .replace(/[\u2018\u2019]/g, "_")
     .replace(/&/g, "et")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .toLowerCase();
+
+  _normalizeCache.set(value, result)
+  return result
 }
 
 function buildRegistry(modules: Record<string, string>): Record<string, string> {
