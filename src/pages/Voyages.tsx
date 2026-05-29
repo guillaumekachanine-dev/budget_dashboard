@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Plus, Pencil, CheckCircle2, ArrowRightLeft, Plane,
+  ArrowLeft, Plus, Pencil, ArrowRightLeft, Plane,
   ReceiptText, AlertCircle, X, Link,
 } from 'lucide-react'
 import { useTripCockpit, selectDefaultTrip } from '@/features/voyages/hooks/useTripCockpit'
@@ -93,32 +93,33 @@ function TripRailCard({
         cursor:        'pointer',
         textAlign:     'left',
         width:         150,
-        height:        170,
+        height:        148,
         flexShrink:    0,
         overflow:      'hidden',
         transition:    'border-color 120ms ease, box-shadow 120ms ease',
         boxShadow:     isSelected ? '0 0 0 2px rgba(56,189,248,0.15), var(--shadow-card)' : 'var(--shadow-card)',
       }}
     >
-      {/* Moitié supérieure: ambiance graphic */}
+      {/* Zone supérieure colorée : nom centré, pas d'emoji */}
       <div
         style={{
-          position:   'relative',
-          width:      '100%',
-          height:     74,
-          background: ambianceBg,
-          overflow:   'hidden',
-          display:    'flex',
-          alignItems: 'center',
+          position:       'relative',
+          width:          '100%',
+          height:         88,
+          background:     ambianceBg,
+          overflow:       'hidden',
+          display:        'flex',
+          alignItems:     'center',
           justifyContent: 'center',
+          flexShrink:     0,
         }}
       >
         <AmbianceBgScene emoji={tripEmoji} />
-        
-        {/* Emoji centered */}
-        <span style={{ fontSize: 24, zIndex: 1, position: 'relative' }}>{tripEmoji}</span>
 
-        {/* Micro-badge de statut en haut à droite */}
+        {/* Voile sombre pour garantir la lisibilité du texte */}
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)' }} />
+
+        {/* Badge statut */}
         <span
           style={{
             position:      'absolute',
@@ -139,19 +140,33 @@ function TripRailCard({
         >
           {badge.label}
         </span>
+
+        {/* Nom centré */}
+        <p style={{
+          position:     'relative',
+          zIndex:       2,
+          margin:       0,
+          fontSize:     13,
+          fontWeight:   800,
+          color:        '#fff',
+          overflow:     'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace:   'nowrap',
+          lineHeight:   1.2,
+          textShadow:   '0 1px 4px rgba(0,0,0,0.5)',
+          maxWidth:     'calc(100% - 12px)',
+          textAlign:    'center',
+        }}>
+          {trip.name}
+        </p>
       </div>
 
-      {/* Moitié inférieure: text content */}
-      <div style={{ padding: 'var(--space-2) var(--space-3)', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
-            {trip.name}
-          </p>
-          <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--neutral-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fmtDateShort(trip.start_date)} → {fmtDateShort(trip.end_date)}
-          </p>
-        </div>
-        <div style={{ marginTop: 'auto' }}>
+      {/* Partie inférieure : dates + budget, centrés */}
+      <div style={{ padding: 'var(--space-1.5) var(--space-3)', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', boxSizing: 'border-box', textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+          {fmtDateShort(trip.start_date)} → {fmtDateShort(trip.end_date)}
+        </p>
+        <div style={{ marginTop: 4 }}>
           {trip.planned_budget ? (
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>
               {hasData
@@ -414,9 +429,6 @@ export function Voyages() {
     return filteredTrips.reduce((sum, t) => sum + (t.planned_budget ?? 0), 0)
   }, [filteredTrips])
 
-  const monthlyBudget = useMemo(() => {
-    return annualBudget / 12
-  }, [annualBudget])
 
   // ── Tri unifié du carrousel de voyages de l'année sélectionnée ──────────
   const sortedTrips = useMemo(() => {
@@ -537,7 +549,7 @@ export function Voyages() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        style={{ flex: 1, padding: `var(--space-4) 0 120px` }}
+        style={{ flex: 1, padding: `var(--space-2) 0 120px` }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
 
@@ -572,12 +584,12 @@ export function Voyages() {
           ) : (
             <>
               {/* ── Titre Centré type Budgets ── */}
-              <h2 style={{ margin: 'var(--space-2) 0 var(--space-3)', fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
+              <h2 style={{ margin: 'var(--space-1) 0 var(--space-2)', fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
                 Voyages
               </h2>
 
               {/* ── Sélecteur d'année type Budgets ── */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     type="button"
@@ -652,61 +664,6 @@ export function Voyages() {
                 </div>
               </div>
 
-              {/* ── Deux cartes KPI statiques sous le sélecteur ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', maxWidth: 280, margin: '0 auto var(--space-6)', padding: '0 var(--page-gutter)' }}>
-                <button
-                  type="button"
-                  onClick={() => setAnnualBudgetModalOpen(true)}
-                  style={{
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: 'var(--space-2) var(--space-4)',
-                    minHeight: 36,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: 'var(--shadow-card)',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
-                >
-                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.04em', marginBottom: 2 }}>
-                    Budget annuel
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
-                    {formatCurrencyFloored(annualBudget).replace(/\s+€/, '€')}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMonthlyAverageModalOpen(true)}
-                  style={{
-                    border: '1px solid var(--neutral-200)',
-                    background: 'var(--neutral-0)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: 'var(--space-2) var(--space-4)',
-                    minHeight: 36,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: 'var(--shadow-card)',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
-                >
-                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-500)', letterSpacing: '0.04em', marginBottom: 2 }}>
-                    Moyen / mois
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
-                    {formatCurrencyFloored(monthlyBudget).replace(/\s+€/, '€')}
-                  </span>
-                </button>
-              </div>
-
               {/* ── Rail unique de sélection des voyages de l'année ── */}
               {sortedTrips.length === 0 ? (
                 <div style={{ margin: `0 ${PAGE_GUTTER} var(--space-6)`, padding: 'var(--space-8) var(--space-4)', background: 'var(--neutral-0)', border: '1px solid var(--neutral-150)', borderRadius: 'var(--radius-md)', textAlign: 'center', color: 'var(--neutral-400)', boxShadow: 'var(--shadow-card)' }}>
@@ -741,6 +698,7 @@ export function Voyages() {
                     style={{
                       margin:       `0 ${PAGE_GUTTER} var(--space-4)`,
                       background:   'var(--neutral-0)',
+                      border:       '1px solid var(--neutral-200)',
                       borderRadius: 'var(--radius-card)',
                       boxShadow:    'var(--shadow-card)',
                       overflow:     'hidden',
@@ -833,7 +791,7 @@ export function Voyages() {
                     </div>
 
                     {/* Content Section */}
-                    <div style={{ padding: 'var(--space-4)' }}>
+                    <div style={{ padding: 'var(--space-4)', background: 'var(--neutral-25, #fafafa)' }}>
                       {/* 3 KPI pills */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
                         {/* KPI spent */}
@@ -1118,25 +1076,6 @@ export function Voyages() {
                             Rapproche-les avec les transactions bancaires importées.
                           </p>
                         </div>
-                      </div>
-                    </section>
-                  ) : selectedTrip.expense_count > 0 ? (
-                    <section style={{ margin: `0 ${PAGE_GUTTER} var(--space-4)` }}>
-                      <div
-                        style={{
-                          background:   'rgba(46,212,122,0.07)',
-                          border:       '1px solid rgba(46,212,122,0.25)',
-                          borderRadius: 'var(--radius-md)',
-                          padding:      'var(--space-3)',
-                          display:      'flex',
-                          alignItems:   'center',
-                          gap:          'var(--space-2)',
-                        }}
-                      >
-                        <CheckCircle2 size={16} color="var(--color-success)" style={{ flexShrink: 0 }} />
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)' }}>
-                          Tout est à jour — aucun rapprochement en attente.
-                        </p>
                       </div>
                     </section>
                   ) : null}
