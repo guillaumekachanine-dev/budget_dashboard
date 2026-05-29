@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Bell, Check, TriangleAlert, X } from 'lucide-react'
+import { Bell, Check, ChevronRight, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/utils'
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
 import type { AccountWithBalance } from '@/lib/types'
+import type { PlannedOperationItem } from '@/features/home/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
@@ -25,6 +26,9 @@ import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemai
 import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
 import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
+import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
+import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
+import { formatSignedEuro } from '@/features/stats/components/ui/analyticsFormatters'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -63,6 +67,11 @@ const HOME_SWIPE_PILLS = [
   { id: 'budget_voyage', label: 'Voyage' },
 ] as const
 const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
+
+// Swipe constants (module-level pour stabilité des dépendances)
+const SWIPE_TAB_IDS = HOME_SWIPE_PILLS.map((p) => p.id)
+const SWIPE_MIN_DELTA_X = 50
+const SWIPE_RATIO = 1.5
 
 function mapPresetIdToDisplayed(presetId: string): string {
   if (presetId === 'per') {
@@ -139,14 +148,7 @@ type OptimizationPriorityMock = {
   categoryNameMatchers: string[]
 }
 
-type OptimizationGaugeTone = 'success' | 'warning' | 'danger'
 
-type OptimizationTileRow = OptimizationPriorityMock & {
-  gaugeTone: OptimizationGaugeTone
-  spentAmount: number
-  budgetAmount: number
-  monthlyTargetAmount: number
-}
 
 const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
   {
@@ -255,6 +257,195 @@ function DriftCategoryTransactionsModal({
           )
         })
       )}
+    </BottomSheet>
+  )
+}
+
+function PlannedOpsModal({
+  open,
+  onClose,
+  j3Items,
+  j7OnlyItems,
+}: {
+  open: boolean
+  onClose: () => void
+  j3Items: PlannedOperationItem[]
+  j7OnlyItems: PlannedOperationItem[]
+}) {
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      zIndex={200}
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+              Opérations planifiées
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      }
+    >
+      <div style={{ padding: '0 var(--space-5) var(--space-6)', display: 'grid', gap: 'var(--space-6)' }}>
+        {/* Section J+3 */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: 'var(--primary-500)', boxShadow: '0 0 0 3px rgba(91,87,245,0.2)' }} />
+            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>
+              Échéance J+3 (sous 3 jours)
+            </h4>
+          </div>
+          {j3Items.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic', paddingLeft: 'var(--space-4)' }}>
+              Aucune opération planifiée.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--space-2)', paddingLeft: 'var(--space-4)' }}>
+              {j3Items.map((item) => {
+                const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+                const isIncome = item.flow_type === 'income'
+                const isSavings = item.flow_type === 'savings'
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--neutral-100)',
+                    }}
+                  >
+                    <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.label}
+                        </span>
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 'var(--radius-sm)',
+                          textTransform: 'uppercase',
+                          background: isIncome
+                            ? 'rgba(46, 212, 122, 0.1)'
+                            : isSavings
+                              ? 'rgba(255, 171, 46, 0.1)'
+                              : 'rgba(91, 87, 245, 0.1)',
+                          color: isIncome
+                            ? 'var(--color-positive)'
+                            : isSavings
+                              ? 'var(--color-warning)'
+                              : 'var(--primary-500)',
+                          flexShrink: 0
+                        }}>
+                          {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
+                        {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)',
+                      fontFamily: 'var(--font-mono)',
+                      flexShrink: 0
+                    }}>
+                      {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Section J+4 à J+7 */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: '#FFAB2E', boxShadow: '0 0 0 3px rgba(255,171,46,0.2)' }} />
+            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>
+              Échéance J+4 à J+7
+            </h4>
+          </div>
+          {j7OnlyItems.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic', paddingLeft: 'var(--space-4)' }}>
+              Aucune opération planifiée.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--space-2)', paddingLeft: 'var(--space-4)' }}>
+              {j7OnlyItems.map((item) => {
+                const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+                const isIncome = item.flow_type === 'income'
+                const isSavings = item.flow_type === 'savings'
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--neutral-100)',
+                    }}
+                  >
+                    <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.label}
+                        </span>
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 'var(--radius-sm)',
+                          textTransform: 'uppercase',
+                          background: isIncome
+                            ? 'rgba(46, 212, 122, 0.1)'
+                            : isSavings
+                              ? 'rgba(255, 171, 46, 0.1)'
+                              : 'rgba(91, 87, 245, 0.1)',
+                          color: isIncome
+                            ? 'var(--color-positive)'
+                            : isSavings
+                              ? 'var(--color-warning)'
+                              : 'var(--primary-500)',
+                          flexShrink: 0
+                        }}>
+                          {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
+                        {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)',
+                      fontFamily: 'var(--font-mono)',
+                      flexShrink: 0
+                    }}>
+                      {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </BottomSheet>
   )
 }
@@ -480,77 +671,186 @@ function DriftsTile({
   )
 }
 
-function PlannedWindowTile({
+function TimelineRow({
   label,
-  operationsCount,
-  totalAmount,
+  sublabel,
+  value,
+  dotColor,
+  shadowColor,
+  onClick,
+  hasOps,
 }: {
-  label: 'J+3' | 'J+7'
-  operationsCount: number
-  totalAmount: number
+  label: string
+  sublabel: string
+  value: string
+  dotColor: string
+  shadowColor: string
+  onClick: () => void
+  hasOps: boolean
 }) {
-  const isJ7 = label === 'J+7'
-  const contentLabel =
-    operationsCount <= 0
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
+        border: 'none',
+        padding: '12px 16px',
+        marginLeft: -16,
+        marginRight: -16,
+        width: 'calc(100% + 32px)',
+        borderRadius: 'var(--radius-lg)',
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'background 0.2s ease, transform 0.2s ease',
+        transform: hovered ? 'translateX(2px)' : 'translateX(0)',
+        outline: 'none',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', minWidth: 0, flex: 1 }}>
+        {/* Dot container */}
+        <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 'var(--radius-full)',
+              background: dotColor,
+              boxShadow: `0 0 0 4px ${shadowColor}`,
+              transition: 'transform 0.2s ease',
+              transform: hovered ? 'scale(1.25)' : 'scale(1)',
+            }}
+          />
+        </div>
+
+        {/* Labels */}
+        <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 800,
+                color: 'var(--neutral-900)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {label}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--neutral-500)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {sublabel}
+            </span>
+          </div>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: hasOps ? 700 : 500,
+              color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {value}
+          </span>
+        </div>
+      </div>
+
+      {/* Action/chevron indicator */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          color: hovered ? 'var(--neutral-800)' : 'var(--neutral-400)',
+          transition: 'color 0.2s ease, transform 0.2s ease',
+          transform: hovered ? 'translateX(2px)' : 'translateX(0)',
+        }}
+      >
+        <ChevronRight size={18} />
+      </div>
+    </button>
+  )
+}
+
+function PlannedOpsTimeline({
+  j3Count,
+  j3Amount,
+  j7Count,
+  j7Amount,
+  onClick,
+}: {
+  j3Count: number
+  j3Amount: number
+  j7Count: number
+  j7Amount: number
+  onClick: () => void
+}) {
+  const j3Text =
+    j3Count <= 0
       ? 'aucune opération'
-      : `${operationsCount} opé. ${formatCurrencyFloored(totalAmount)}`
+      : `${j3Count} opé. · ${j3Amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(j3Amount))}`
+
+  const j7Text =
+    j7Count <= 0
+      ? 'aucune opération'
+      : `${j7Count} opé. · ${j7Amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(j7Amount))}`
 
   return (
     <div
-      role="status"
-      aria-label={
-        operationsCount <= 0
-          ? `${label} : aucune opération`
-          : `${label} : ${operationsCount} opérations, ${formatCurrencyFloored(totalAmount)}`
-      }
       style={{
-        width: '100%',
-        minHeight: 52,
         display: 'flex',
-        alignItems: 'center',
+        flexDirection: 'column',
+        position: 'relative',
+        paddingLeft: 'var(--space-6)',
         gap: 'var(--space-3)',
       }}
     >
-      <span
-        aria-hidden="true"
+      {/* Connecting Vertical Line */}
+      <div
         style={{
-          width: 12,
-          height: 12,
+          position: 'absolute',
+          left: 21,
+          top: 24,
+          bottom: 24,
+          width: 2,
+          background: 'linear-gradient(180deg, var(--primary-500) 0%, #FFAB2E 100%)',
           borderRadius: 'var(--radius-full)',
-          background: isJ7 ? '#FFAB2E' : '#94A3B8',
-          boxShadow: isJ7 ? '0 0 0 4px rgba(255,171,46,0.2)' : 'none',
-          marginLeft: -22,
-          flexShrink: 0,
+          opacity: 0.6,
         }}
       />
-      <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 17,
-            fontWeight: 800,
-            color: isJ7 ? '#0F172A' : '#94A3B8',
-            letterSpacing: '0.03em',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {label}
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            fontWeight: isJ7 ? 800 : 600,
-            color: isJ7 ? '#0F172A' : '#94A3B8',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {contentLabel}
-        </p>
-      </div>
+
+      {/* J+3 Step */}
+      <TimelineRow
+        label="J+3"
+        sublabel="Échéance 3 jours"
+        value={j3Text}
+        dotColor="var(--primary-500)"
+        shadowColor="rgba(91, 87, 245, 0.2)"
+        onClick={onClick}
+        hasOps={j3Count > 0}
+      />
+
+      {/* J+7 Step */}
+      <TimelineRow
+        label="J+7"
+        sublabel="Échéance 7 jours"
+        value={j7Text}
+        dotColor="#FFAB2E"
+        shadowColor="rgba(255, 171, 46, 0.2)"
+        onClick={onClick}
+        hasOps={j7Count > 0}
+      />
     </div>
   )
 }
@@ -618,6 +918,77 @@ function ProgressRing({
     </svg>
   )
 }
+
+function AccountProgressRing({
+  pct,
+  size = 120,
+  amountText,
+  label = 'Reste utile',
+  onClick,
+}: {
+  pct: number
+  size?: number
+  amountText: string
+  label?: string
+  onClick?: () => void
+}) {
+  const sw = 10
+  const r = (size - sw) / 2
+  const cx = size / 2
+  const cy = size / 2
+  const circumference = 2 * Math.PI * r
+  const progress = Math.max(0, Math.min(1, pct / 100))
+  const dashOffset = circumference * (1 - progress)
+
+  const trackColor = 'rgba(255, 255, 255, 0.12)'
+  const arcColor = pct > 100 ? '#FC5A5A' : '#38BDF8'
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        width: size,
+        height: size,
+        border: 'none',
+        background: 'transparent',
+        padding: 0,
+        cursor: onClick ? 'pointer' : 'default',
+        overflow: 'visible',
+      }}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ display: 'block', transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={trackColor} strokeWidth={sw} />
+        {progress > 0 ? (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={arcColor}
+            strokeWidth={sw}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+          />
+        ) : null}
+      </svg>
+      <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box', pointerEvents: 'none' }}>
+        <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+          {amountText}
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
+          {label}
+        </span>
+      </div>
+    </button>
+  )
+}
+
 
 // ─── ProgressCircleTile ───────────────────────────────────────────────────────
 function ProgressCircleTile({
@@ -846,40 +1217,24 @@ function SavingsTile({
   )
 }
 
-function OptimizationGauge({ tone }: { tone: OptimizationGaugeTone }) {
-  const pct = tone === 'success' ? 38 : tone === 'warning' ? 68 : 96
-  const color =
-    tone === 'success' ? 'var(--color-success)'
-    : tone === 'warning' ? 'var(--color-warning)'
-    : 'var(--color-negative)'
 
-  return (
-    <div style={{ width: '100%', display: 'grid', gap: 3 }} aria-hidden="true">
-      <div style={{ width: '100%', height: 6, background: 'var(--neutral-200)', borderRadius: 3, overflow: 'hidden' }}>
-        <div
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            background: color,
-            borderRadius: 3,
-            transition: 'width 600ms cubic-bezier(0.22, 1, 0.36, 1)',
-          }}
-        />
-      </div>
-      <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
-        {`${pct}%`}
-      </span>
-    </div>
-  )
-}
 
 function OptimizationsTile({
-  rows,
   onClick,
+  theme = 'light',
 }: {
-  rows: OptimizationTileRow[]
   onClick: () => void
+  theme?: 'light' | 'dark'
 }) {
+  const isDark = theme === 'dark'
+  const { balance, isLoading } = useOptimizationBalance()
+
+  const isPositive = balance >= 0
+  const formattedAmount = isLoading ? '— €' : formatSignedEuro(balance)
+  const toneColor = isPositive 
+    ? (isDark ? '#2ED47A' : '#1E854A') 
+    : (isDark ? '#FC5A5A' : '#D32F2F')
+
   return (
     <button
       type="button"
@@ -887,16 +1242,20 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 120,
-        border: 'none',
-        background: 'rgba(255,255,255,0.72)',
+        minHeight: 84,
+        border: isDark ? '1px solid rgba(56, 189, 248, 0.25)' : 'none',
+        background: isDark
+          ? 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)'
+          : 'rgba(255,255,255,0.72)',
         borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
+        boxShadow: 'var(--shadow-card)',
         cursor: 'pointer',
         overflow: 'hidden',
-        padding: 'var(--space-4)',
-        display: 'grid',
-        gap: 'var(--space-3)',
+        padding: 'var(--space-4) var(--space-5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-4)',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
@@ -908,117 +1267,50 @@ function OptimizationsTile({
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
-      <p
+      <div style={{ display: 'grid', gap: 2, textAlign: 'left' }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 13,
+            fontWeight: 800,
+            color: isDark ? '#FFFFFF' : 'var(--neutral-900)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          Optimisations / dépassements
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 600,
+            color: isDark ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-500)',
+          }}
+        >
+          Mois en cours
+        </p>
+      </div>
+
+      <span
         style={{
-          margin: 0,
-          fontSize: 11,
+          fontSize: 24,
           fontWeight: 800,
-          color: 'var(--neutral-800)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.07em',
-          textAlign: 'left',
+          fontFamily: 'var(--font-mono)',
+          color: toneColor,
+          transition: 'color var(--transition-base)',
         }}
       >
-        Optimisations
-      </p>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-        {rows.map((row) => (
-          <div key={row.label} style={{ minWidth: 0, display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 3, flex: 1 }}>
-            <CategoryIcon iconKey={row.iconKey} label={row.label} size={18} />
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--neutral-700)', lineHeight: 1.1 }}>
-              {row.label}
-            </p>
-            <OptimizationGauge tone={row.gaugeTone} />
-            <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
-              {`${formatCurrencyFloored(row.spentAmount)} / ${formatCurrencyFloored(row.budgetAmount)}`}
-            </p>
-          </div>
-        ))}
-      </div>
+        {formattedAmount}
+      </span>
     </button>
   )
 }
 
-// ─── InfosTile ────────────────────────────────────────────────────────────────
-// Module libre : notes ponctuelles + rappels automatiques.
-// showSnapshotReminder = true les 2 derniers jours du mois courant ;
-// disparaît automatiquement au 1er du mois suivant.
-function InfosTile({
-  showSnapshotReminder,
-  onClose,
-}: {
-  showSnapshotReminder: boolean
-  onClose: () => void
-}) {
-  const hasContent = showSnapshotReminder
-
-  return (
-    <div
-      role="region"
-      aria-label="Informations et rappels"
-      style={{
-        background: 'var(--neutral-900)',
-        borderRadius: 'var(--radius-xl)',
-        padding: 'var(--space-3) var(--space-4)',
-        minHeight: 52,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 'var(--space-3)',
-      }}
-    >
-      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1 }}>
-        <Bell size={15} color="rgba(255,255,255,0.65)" strokeWidth={2.2} style={{ flexShrink: 0 }} aria-hidden="true" />
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.88)', lineHeight: 1.35 }}>
-          {hasContent
-            ? 'Snapshot fin de mois prêt : valide tes catégories.'
-            : 'Aucune info pour le moment.'}
-        </p>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
-        <button
-          type="button"
-          style={{
-            border: 'none',
-            background: 'rgba(255,255,255,0.14)',
-            borderRadius: 'var(--radius-md)',
-            minHeight: 30,
-            padding: '0 var(--space-3)',
-            fontSize: 12,
-            fontWeight: 700,
-            color: 'var(--neutral-0)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Vérifier
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer le module d'information"
-          style={{
-            border: 'none',
-            background: 'rgba(255,255,255,0.10)',
-            color: 'rgba(255,255,255,0.65)',
-            width: 30,
-            height: 30,
-            minWidth: 30,
-            minHeight: 30,
-            borderRadius: 'var(--radius-full)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
-        >
-          <X size={13} strokeWidth={2.5} />
-        </button>
-      </div>
-    </div>
-  )
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function Home() {
@@ -1030,6 +1322,7 @@ export function Home() {
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
+  const { data: upcomingOps } = useUpcomingPlannedOperations()
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
@@ -1045,40 +1338,57 @@ export function Home() {
   const sectionHorizontalPadding = '0 calc(var(--space-6) + 6px)'
 
   const upcomingOpsWindows = useMemo(() => {
-    const items = dailyPayload?.planned_operations?.items ?? []
+    const items = upcomingOps ?? []
     const plus3Date = new Date(now)
     plus3Date.setDate(now.getDate() + 3)
     const plus7Date = new Date(now)
     plus7Date.setDate(now.getDate() + 7)
-    const end3 = plus3Date.toISOString().slice(0, 10)
-    const end7 = plus7Date.toISOString().slice(0, 10)
+    const end3 = toLocalIsoDate(plus3Date)
+    const end7 = toLocalIsoDate(plus7Date)
+    const localToday = toLocalIsoDate(now)
 
     let count3 = 0
     let count7 = 0
     let amount3 = 0
     let amount7 = 0
+    const items3: PlannedOperationItem[] = []
+    const items7Only: PlannedOperationItem[] = []
 
     for (const item of items) {
-      if (item.flow_type !== 'expense') continue
       const date = String(item.planned_date ?? '').slice(0, 10)
       if (!date) continue
-      if (date <= todayDate) continue
+      if (date < localToday) continue
+      
       const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+      const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
+
       if (date <= end3) {
         count3 += 1
-        amount3 += amount
+        if (isOutflow) {
+          amount3 += amount
+        } else {
+          amount3 -= amount
+        }
+        items3.push(item)
       }
       if (date <= end7) {
         count7 += 1
-        amount7 += amount
+        if (isOutflow) {
+          amount7 += amount
+        } else {
+          amount7 -= amount
+        }
+        if (date > end3) {
+          items7Only.push(item)
+        }
       }
     }
 
     return {
-      j3: { count: count3, amount: amount3 },
-      j7: { count: count7, amount: amount7 },
+      j3: { count: count3, amount: amount3, items: items3 },
+      j7: { count: count7, amount: amount7, items: items3.concat(items7Only), itemsOnly: items7Only },
     }
-  }, [dailyPayload?.planned_operations?.items, now, todayDate])
+  }, [upcomingOps, now])
 
   const driftCategories = useMemo(() => {
     const rows = summaries ?? []
@@ -1154,7 +1464,8 @@ export function Home() {
   const [showSavingsModal, setShowSavingsModal] = useState(false)
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
-  const [showInfosTile, setShowInfosTile] = useState(true)
+  const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
+  const [infosSheetOpen, setInfosSheetOpen] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
@@ -1174,12 +1485,12 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
@@ -1188,11 +1499,12 @@ export function Home() {
         setShowSavingsModal(false)
         setShowOptimizationsModal(false)
         setShowProgressModal(false)
+        setShowPlannedOpsModal(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1247,8 +1559,11 @@ export function Home() {
     selectedAccountEntry != null
     && (SAVINGS_BOOKLET_IDS as readonly string[]).includes(selectedAccountEntry.preset.id)
   const selectedBalance = Number(selectedAccount?.current_balance ?? 0)
-  const todayDayMonthLabel = useMemo(
-    () => now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+  const todayShortDateLabel = useMemo(
+    () => {
+      const label = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      return label.replace('.', '')
+    },
     [now],
   )
   const fixedBudgetAmountDisplay = Number(dailyPayload?.budgets.fixed_budget_amount ?? 0)
@@ -1298,12 +1613,6 @@ export function Home() {
     const consumed = Number(dailyPayload?.totals.consumed_pct ?? 0)
     return Math.max(0, Math.min(100, consumed))
   }, [dailyPayload])
-  const heroRingSize = 252
-  const heroRingStroke = 2
-  const heroRingRadius = (heroRingSize - heroRingStroke) / 2
-  const heroRingCircumference = 2 * Math.PI * heroRingRadius
-  const heroRingProgress = Math.max(0, Math.min(100, overallConsumedPct))
-  const heroRingOffset = heroRingCircumference * (1 - heroRingProgress / 100)
 
   const monthlyBlockProgress = useMemo<MonthlyBlockProgressItem[]>(() => {
     return EXPENSE_BUCKET_IDS.map((id) => {
@@ -1363,6 +1672,42 @@ export function Home() {
     const normalized = presetId === 'ldds' ? 'livret_a' : mapPresetIdToDisplayed(presetId)
     setSelectedAccountPresetId(normalized)
   }, [])
+
+  // ─── Swipe horizontal pour changer d'onglet ────────────────────────────────
+  const swipeTouchStart = useRef<{ x: number; y: number } | null>(null)
+
+  const handleSwipeTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0]
+    swipeTouchStart.current = { x: t.clientX, y: t.clientY }
+  }, [])
+
+  const handleSwipeTouchEnd = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!swipeTouchStart.current) return
+      const t = e.changedTouches[0]
+      const deltaX = t.clientX - swipeTouchStart.current.x
+      const deltaY = t.clientY - swipeTouchStart.current.y
+      swipeTouchStart.current = null
+
+      // Seuils : horizontal significatif ET dominant
+      if (Math.abs(deltaX) < SWIPE_MIN_DELTA_X) return
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_RATIO) return
+
+      // Ignorer si la cible est dans un élément scrollable horizontalement
+      const target = e.target as HTMLElement
+      if (target.closest('[data-swipe-ignore]')) return
+
+      const currentId = selectedAccountPresetId ?? SWIPE_TAB_IDS[0]
+      const currentIdx = SWIPE_TAB_IDS.indexOf(currentId as (typeof SWIPE_TAB_IDS)[number])
+      const len = SWIPE_TAB_IDS.length
+      // swipe gauche → onglet suivant, swipe droite → onglet précédent (circulaire)
+      const nextIdx = deltaX < 0
+        ? (currentIdx + 1) % len
+        : (currentIdx - 1 + len) % len
+      handleSelectAccountPreset(SWIPE_TAB_IDS[nextIdx] as string)
+    },
+    [selectedAccountPresetId, handleSelectAccountPreset],
+  )
 
   const heroMetrics = useMemo(
     () => [
@@ -1504,31 +1849,7 @@ export function Home() {
     [driftRows],
   )
   const loadingDriftsData = loadingSummaries || loadingDriftOperations
-  const optimizationTileRows = useMemo<OptimizationTileRow[]>(() => {
-    const summaryRows = summaries ?? []
-    return OPTIMIZATION_PRIORITIES_MOCK.map((row) => {
-      const matchingRows = summaryRows.filter((summaryRow) => {
-        const categoryName = normalizeLabel(summaryRow.category.name ?? '')
-        return row.categoryNameMatchers.some((matcher) => categoryName.includes(normalizeLabel(matcher)))
-      })
-      const spentAmount = matchingRows.reduce((sum, summaryRow) => sum + Number(summaryRow.spent_amount ?? 0), 0)
-      const budgetAmount = matchingRows.reduce((sum, summaryRow) => sum + Number(summaryRow.budget_amount ?? 0), 0)
-      const monthlyTargetAmount = Math.max(0, row.expectedAnnualAmount / 12)
-      const gaugeTone: OptimizationGaugeTone = spentAmount < monthlyTargetAmount
-        ? 'success'
-        : spentAmount <= budgetAmount
-          ? 'warning'
-          : 'danger'
 
-      return {
-        ...row,
-        spentAmount,
-        budgetAmount,
-        monthlyTargetAmount,
-        gaugeTone,
-      }
-    })
-  }, [summaries])
 
   const top5ExpenseRows = useMemo(() => {
     const rows = driftOperations ?? []
@@ -1707,6 +2028,8 @@ export function Home() {
 
   return (
     <div
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -1728,7 +2051,7 @@ export function Home() {
           marginBottom: 'var(--space-6)',
         }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44 }}>
           <h1
             style={{
               margin: 0,
@@ -1832,164 +2155,127 @@ export function Home() {
               {isMainCheckingAccount ? (
                 <div
                   style={{
-                    position: 'relative',
+                    background: 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)',
+                    borderRadius: 'var(--radius-xl)',
+                    boxShadow: 'var(--shadow-card)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
                     overflow: 'hidden',
-                    borderRadius: 'var(--radius-2xl)',
-                    padding: 'var(--space-5) var(--space-3) var(--space-4)',
+                    padding: 'var(--space-4)',
                     display: 'grid',
-                    justifyItems: 'center',
                     gap: 'var(--space-4)',
                   }}
                 >
-                  <motion.div
-                    aria-hidden="true"
-                    initial={{ scale: 1, opacity: 0.92 }}
-                    animate={{ scale: [1, 1.05, 1], opacity: [0.88, 1, 0.88] }}
-                    transition={{ duration: 5.2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
-                    style={{
-                      position: 'absolute',
-                      inset: '-12% -10% 8%',
-                      background:
-                        'radial-gradient(70% 70% at 30% 40%, rgba(91,87,245,0.26) 0%, rgba(91,87,245,0) 72%), radial-gradient(74% 72% at 74% 54%, rgba(255,171,46,0.24) 0%, rgba(255,171,46,0) 75%), linear-gradient(135deg, rgba(91,87,245,0.2) 0%, rgba(255,171,46,0.2) 100%)',
-                      filter: 'blur(46px)',
-                      pointerEvents: 'none',
-                    }}
-                  />
-
-                  <div style={{ position: 'relative', width: '100%', display: 'grid', justifyItems: 'center', gap: 'var(--space-4)', zIndex: 1 }}>
-                    <div style={{ position: 'relative', minHeight: 200, width: '100%', maxWidth: 360, display: 'grid', placeItems: 'center' }}>
-                      <svg
-                        width={heroRingSize}
-                        height={heroRingSize}
-                        viewBox={`0 0 ${heroRingSize} ${heroRingSize}`}
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          top: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          overflow: 'visible',
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        <circle
-                          cx={heroRingSize / 2}
-                          cy={heroRingSize / 2}
-                          r={heroRingRadius}
-                          fill="none"
-                          stroke="rgba(46, 212, 122, 0.2)"
-                          strokeWidth={heroRingStroke}
-                        />
-                        <circle
-                          cx={heroRingSize / 2}
-                          cy={heroRingSize / 2}
-                          r={heroRingRadius}
-                          fill="none"
-                          stroke="#2ED47A"
-                          strokeWidth={heroRingStroke}
-                          strokeLinecap="round"
-                          strokeDasharray={heroRingCircumference}
-                          strokeDashoffset={heroRingOffset}
-                          transform={`rotate(-90 ${heroRingSize / 2} ${heroRingSize / 2})`}
-                        />
-                      </svg>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowResteUtileModal(true)}
-                        aria-label="Voir le détail du calcul du reste utile"
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          textAlign: 'center',
-                          display: 'grid',
-                          gap: 'var(--space-1)',
-                          justifyItems: 'center',
-                          cursor: 'pointer',
-                          padding: 0,
-                        }}
-                      >
-                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '0.01em' }}>
-                          Reste utile
-                        </p>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: 'clamp(52px, 15vw, 88px)',
-                            fontWeight: 900,
-                            lineHeight: 0.95,
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--neutral-900)',
-                            letterSpacing: '-0.03em',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {formatCurrencyFloored(animatedResteUtile)}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.02em' }}>
-                          {`Budget/jour ${formatCurrencyFloored(animatedBudgetPerDay)}`}
-                        </p>
-                      </button>
+                  {/* ── Header: Nom + Date ─────────────────────── */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          Compte principal
+                        </h3>
+                      </div>
                     </div>
-
-                    <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowHeroBalanceModal(true)}
-                        aria-label="Voir le détail du solde bancaire du compte principal"
-                        style={{
-                          border: '1px solid rgba(255,255,255,0.58)',
-                          background: 'rgba(255,255,255,0.8)',
-                          backdropFilter: 'blur(12px)',
-                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
-                          borderRadius: 'var(--radius-full)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 'var(--space-2)',
-                          padding: '10px var(--space-4)',
-                          minHeight: 48,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <span style={{ display: 'grid', justifyItems: 'center', gap: 1 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                            Solde estimé
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                            {formatCurrencyFloored(animatedBalance)}
-                          </span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowDriftsModal(true)}
-                        aria-label="Voir le détail des dérives"
-                        style={{
-                          border: '1px solid rgba(255,255,255,0.58)',
-                          background: 'rgba(255,255,255,0.8)',
-                          backdropFilter: 'blur(12px)',
-                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
-                          borderRadius: 'var(--radius-full)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 'var(--space-2)',
-                          padding: '10px var(--space-4)',
-                          minHeight: 48,
-                          cursor: 'pointer',
-                          color: 'var(--color-negative)',
-                        }}
-                      >
-                        <TriangleAlert size={16} color="#FC5A5A" />
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>
-                          {`Dérives ${driftRows.length}`}
-                        </span>
-                      </button>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.95)' }}>
+                        {todayShortDateLabel}
+                      </span>
                     </div>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--neutral-500)' }}>
-                      {hasEstimatedMainAccountBalance ? `Estimé au ${todayDayMonthLabel}` : `Solde au ${todayDayMonthLabel}`}
+                  </div>
+
+                  {/* ── Central Progress Ring ─────────────────────────────── */}
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
+                    <AccountProgressRing
+                      pct={overallConsumedPct}
+                      amountText={formatCurrencyFloored(animatedResteUtile)}
+                      onClick={() => setShowResteUtileModal(true)}
+                    />
+                  </div>
+
+                  {/* ── Calculation Line ──────────────────────────────────── */}
+                  <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
+                      Budget / jour : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(animatedBudgetPerDay)}</span>
                     </p>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                      {overallConsumedPct.toFixed(0)}% consommé
+                    </p>
+                  </div>
+
+                  {/* ── CTAs ──────────────────────────────────────────────── */}
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowHeroBalanceModal(true)}
+                      aria-label="Voir le détail du solde bancaire du compte principal"
+                      style={{
+                        flex: '1 1 auto',
+                        display: 'inline-flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1,
+                        border: '1px solid rgba(255,255,255,0.25)',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: '#FFFFFF',
+                        borderRadius: 'var(--radius-button)',
+                        padding: '4px var(--space-3)',
+                        minHeight: 40,
+                        cursor: 'pointer',
+                        transition: 'background 120ms ease',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                      }}
+                    >
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Solde estimé
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                        {formatCurrencyFloored(animatedBalance)}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDriftsModal(true)}
+                      aria-label="Voir le détail des dérives"
+                      style={{
+                        flex: '1 1 auto',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 'var(--space-2)',
+                        border: driftRows.length > 0 ? '1px solid rgba(252,90,90,0.4)' : '1px solid rgba(255,255,255,0.25)',
+                        background: driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.1)',
+                        color: driftRows.length > 0 ? '#FC5A5A' : 'rgba(255,255,255,0.9)',
+                        borderRadius: 'var(--radius-button)',
+                        padding: '4px var(--space-3)',
+                        minHeight: 40,
+                        cursor: 'pointer',
+                        transition: 'background 120ms ease',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.2)' : 'rgba(255,255,255,0.18)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      {driftRows.length > 0 ? (
+                        <>
+                          <TriangleAlert size={15} color="#FC5A5A" />
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>
+                            {`${driftRows.length} dérive${driftRows.length > 1 ? 's' : ''}`}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
+                          Aucune dérive
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -2158,40 +2444,13 @@ export function Home() {
               transition={{ duration: 0.35, delay: 0.16 }}
               style={{ padding: sectionHorizontalPadding }}
             >
-              <div
-                style={{
-                  maxWidth: 600,
-                  margin: '0 auto',
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1.08fr) minmax(0, 0.92fr)',
-                  gap: 'var(--space-3)',
-                  alignItems: 'stretch',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-4)',
-                    paddingLeft: 'var(--space-3)',
-                    borderLeft: '2px solid #E2E8F0',
-                  }}
-                >
-                  <PlannedWindowTile
-                    label="J+3"
-                    operationsCount={upcomingOpsWindows.j3.count}
-                    totalAmount={upcomingOpsWindows.j3.amount}
-                  />
-                  <PlannedWindowTile
-                    label="J+7"
-                    operationsCount={upcomingOpsWindows.j7.count}
-                    totalAmount={upcomingOpsWindows.j7.amount}
-                  />
-                </div>
-                <SavingsTile
-                  status={savingsTileStatus}
-                  monthAmountLabel={savingsTileMonthAmountLabel}
-                  onClick={() => setShowSavingsModal(true)}
+              <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 var(--space-2)' }}>
+                <PlannedOpsTimeline
+                  j3Count={upcomingOpsWindows.j3.count}
+                  j3Amount={upcomingOpsWindows.j3.amount}
+                  j7Count={upcomingOpsWindows.j7.count}
+                  j7Amount={upcomingOpsWindows.j7.amount}
+                  onClick={() => setShowPlannedOpsModal(true)}
                 />
               </div>
             </motion.section>
@@ -2205,17 +2464,7 @@ export function Home() {
               style={{ padding: sectionHorizontalPadding }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto' }}>
-                <div
-                  style={{
-                    background: 'rgba(46, 212, 122, 0.1)',
-                    borderRadius: 'var(--radius-2xl)',
-                    padding: 'var(--space-4)',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr',
-                  }}
-                >
-                  <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
-                </div>
+                <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} theme="dark" />
               </div>
             </motion.section>
           ) : (
@@ -2254,31 +2503,155 @@ export function Home() {
                 style={{ padding: sectionHorizontalPadding }}
               >
                 <div style={{ maxWidth: 600, margin: '0 auto' }}>
-                  <OptimizationsTile rows={optimizationTileRows} onClick={() => setShowOptimizationsModal(true)} />
+                  <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
                 </div>
               </motion.section>
             </>
           )}
 
-          {/* ── Module libre Infos ── */}
-          {showInfosTile ? (
-            <motion.section
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.22 }}
-              style={{ padding: sectionHorizontalPadding }}
-            >
-              <div style={{ maxWidth: 600, margin: '0 auto' }}>
-                <InfosTile
-                  showSnapshotReminder={showSnapshotReminder}
-                  onClose={() => setShowInfosTile(false)}
+          {/* ── Module libre Infos — bouton cloche compact ── */}
+          <motion.section
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+            style={{ padding: sectionHorizontalPadding }}
+          >
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                id="infos-bell-btn"
+                type="button"
+                onClick={() => setInfosSheetOpen(true)}
+                aria-label={showSnapshotReminder ? 'Voir les informations disponibles' : 'Aucune information'}
+                aria-haspopup="dialog"
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-xl)',
+                  border: showSnapshotReminder
+                    ? '1px solid rgba(255,171,46,0.5)'
+                    : '1px solid var(--neutral-200)',
+                  background: showSnapshotReminder
+                    ? 'rgba(255,171,46,0.12)'
+                    : 'var(--neutral-0)',
+                  boxShadow: showSnapshotReminder
+                    ? '0 0 0 3px rgba(255,171,46,0.15), var(--shadow-card)'
+                    : 'var(--shadow-card)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 150ms ease, box-shadow 150ms ease, transform 150ms ease',
+                  flexShrink: 0,
+                  position: 'relative',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = showSnapshotReminder
+                    ? '0 0 0 3px rgba(255,171,46,0.2), var(--shadow-lg)'
+                    : 'var(--shadow-lg)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = showSnapshotReminder
+                    ? '0 0 0 3px rgba(255,171,46,0.15), var(--shadow-card)'
+                    : 'var(--shadow-card)'
+                }}
+              >
+                <Bell
+                  size={20}
+                  color={showSnapshotReminder ? '#FFAB2E' : 'var(--neutral-400)'}
+                  strokeWidth={2.2}
+                  aria-hidden="true"
                 />
-              </div>
-            </motion.section>
-          ) : null}
+                {/* Pastille active */}
+                {showSnapshotReminder && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      top: 9,
+                      right: 9,
+                      width: 7,
+                      height: 7,
+                      borderRadius: 'var(--radius-full)',
+                      background: '#FFAB2E',
+                      boxShadow: '0 0 0 2px var(--neutral-0)',
+                    }}
+                  />
+                )}
+              </button>
+            </div>
+          </motion.section>
         </>
       ) : null}
+
+      {/* ── BottomSheet Infos ── */}
+      <BottomSheet
+        open={infosSheetOpen}
+        onClose={() => setInfosSheetOpen(false)}
+        zIndex={65}
+        header={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <Bell
+                size={16}
+                color={showSnapshotReminder ? '#FFAB2E' : 'var(--neutral-400)'}
+                strokeWidth={2.2}
+                aria-hidden="true"
+              />
+              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                Informations
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInfosSheetOpen(false)}
+              aria-label="Fermer"
+              style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        }
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
+          <div
+            style={{
+              background: 'var(--neutral-900)',
+              borderRadius: 'var(--radius-xl)',
+              padding: 'var(--space-4)',
+              display: 'grid',
+              gap: 'var(--space-3)',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.88)', lineHeight: 1.45 }}>
+              {showSnapshotReminder
+                ? 'Snapshot fin de mois prêt : valide tes catégories.'
+                : 'Aucune info pour le moment.'}
+            </p>
+            {showSnapshotReminder && (
+              <button
+                type="button"
+                style={{
+                  alignSelf: 'flex-start',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.14)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: 34,
+                  padding: '0 var(--space-4)',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: 'var(--neutral-0)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Vérifier
+              </button>
+            )}
+          </div>
+        </div>
+      </BottomSheet>
 
       <BottomSheet
         open={showOptimizationsModal}
@@ -2609,6 +2982,13 @@ export function Home() {
         }}
         tripId={matchingTripId}
         tripName={matchingTripName}
+      />
+
+      <PlannedOpsModal
+        open={showPlannedOpsModal}
+        onClose={() => setShowPlannedOpsModal(false)}
+        j3Items={upcomingOpsWindows.j3.items}
+        j7OnlyItems={upcomingOpsWindows.j7.itemsOnly}
       />
     </div>
   )

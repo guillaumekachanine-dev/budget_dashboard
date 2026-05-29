@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { Plus, ArrowRightLeft, ArrowRight, Plane } from 'lucide-react'
+import { Plus, ArrowRightLeft, ArrowRight, Plane, ShoppingBag } from 'lucide-react'
+import { useTripExpenses } from '../hooks/useTripExpenses'
+import type { TripExpenseRow } from '../types'
 import { useTripCockpit } from '../hooks/useTripCockpit'
 import type { TripCockpitRow } from '@/lib/types'
 import { formatCurrencyFloored } from '@/lib/utils'
@@ -29,14 +31,14 @@ function fmtDateShort(iso: string): string {
 
 function daysUntil(isoDate: string): number {
   const target = new Date(`${isoDate}T00:00:00`)
-  const now    = new Date()
+  const now = new Date()
   now.setHours(0, 0, 0, 0)
   return Math.max(0, Math.round((target.getTime() - now.getTime()) / 86_400_000))
 }
 
 function daysElapsed(isoStart: string): number {
   const start = new Date(`${isoStart}T00:00:00`)
-  const now   = new Date()
+  const now = new Date()
   now.setHours(0, 0, 0, 0)
   return Math.max(0, Math.round((now.getTime() - start.getTime()) / 86_400_000))
 }
@@ -61,7 +63,7 @@ function TripProgressRing({
   const dashOffset = circumference * (1 - progress)
 
   const trackColor = 'rgba(255, 255, 255, 0.12)'
-  const arcColor = pct > 100 ? '#FC5A5A' : '#38BDF8'
+  const arcColor = pct > 100 ? '#FC5A5A' : '#FB923C'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
@@ -135,47 +137,23 @@ function TripCard({
   return (
     <div
       style={{
-        background: 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)',
+        background: 'radial-gradient(120% 90% at 14% -8%, rgba(251, 146, 60, 0.25) 0%, rgba(251, 146, 60, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(244, 63, 94, 0.15) 0%, rgba(244, 63, 94, 0) 62%), linear-gradient(145deg, #171210 0%, #241D1A 47%, #3E2F2A 100%)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-card)',
-        border: '1px solid rgba(56, 189, 248, 0.25)',
+        border: '1px solid rgba(251, 146, 60, 0.2)',
         overflow: 'hidden',
         padding: 'var(--space-4)',
         display: 'grid',
         gap: 'var(--space-4)',
       }}
     >
-      {/* ── Header: Nom + Status + Dates ─────────────────────── */}
+      {/* ── Header: Nom + Dates ───────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+        {/* 1. Nom seul — sans émoji ni pastille statut */}
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
-            <span style={{ fontSize: 20 }}>{trip.emoji ?? '✈️'}</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {trip.name}
-            </h3>
-          </div>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            padding: '2px 8px',
-            borderRadius: 'var(--radius-full)',
-            background: trip.trip_status === 'ongoing'
-              ? 'rgba(56,189,248,0.25)'
-              : trip.trip_status === 'future'
-                ? 'rgba(129,140,248,0.25)'
-                : 'rgba(255,255,255,0.12)',
-            color: trip.trip_status === 'ongoing'
-              ? '#38BDF8'
-              : trip.trip_status === 'future'
-                ? '#818CF8'
-                : 'rgba(255,255,255,0.6)',
-            whiteSpace: 'nowrap',
-            display: 'inline-block',
-          }}>
-            {trip.trip_status === 'ongoing' ? 'En cours' : trip.trip_status === 'future' ? 'À venir' : 'Passé'}
-          </span>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {trip.name}
+          </h3>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
@@ -189,7 +167,7 @@ function TripCard({
         </div>
       </div>
 
-      {/* ── Central Progress Ring ─────────────────────────────── */}
+      {/* ── Central Progress Ring ───────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
         <TripProgressRing
           pct={consumedPct}
@@ -197,16 +175,22 @@ function TripCard({
         />
       </div>
 
-      {/* ── Calculation Line ──────────────────────────────────── */}
+      {/* ── 2. Ligne consommation unifiée ─────────────────────────────── */}
       <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
           {hasPlannedBudget ? (
             <>
-              Consommé <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span> sur <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(budget)}</span>
+              {'Consommé '}
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span>
+              {' / '}
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(budget)}</span>
+              {' €'}
             </>
           ) : (
             <>
-              Dépensé : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span>
+              {'Dépensé\u00a0: '}
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span>
+              {'\u00a0€'}
             </>
           )}
         </p>
@@ -217,43 +201,13 @@ function TripCard({
         )}
       </div>
 
-      {/* ── Ligne méta: compteurs ─────────────────────────────────────── */}
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          color: 'rgba(255,255,255,0.45)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 'var(--space-2)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span>{`${trip.expense_count} dépense${trip.expense_count !== 1 ? 's' : ''}`}</span>
-        {trip.pending_match_count > 0 ? (
-          <>
-            <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
-            <span style={{ color: '#FFAB2E', fontWeight: 600 }}>
-              {`${trip.pending_match_count} à rapprocher`}
-            </span>
-          </>
-        ) : null}
-        {trip.has_pending_manual && trip.pending_match_count === 0 ? (
-          <>
-            <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)' }}>saisies en attente</span>
-          </>
-        ) : null}
-      </p>
-
-      {/* ── CTAs ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+      {/* ── 3. CTAs — mêmes dimensions, même ligne ──────────── */}
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         <button
           type="button"
           onClick={onViewDetail}
           style={{
-            flex: '1 1 auto',
+            flex: '1 1 0',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -263,6 +217,7 @@ function TripCard({
             color: '#FFFFFF',
             borderRadius: 'var(--radius-button)',
             padding: '8px var(--space-3)',
+            minHeight: 40,
             fontSize: 12,
             fontWeight: 700,
             cursor: 'pointer',
@@ -285,7 +240,7 @@ function TripCard({
             type="button"
             onClick={onAddExpense}
             style={{
-              flex: '0 0 auto',
+              flex: '1 1 0',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -295,6 +250,7 @@ function TripCard({
               color: 'rgba(255,255,255,0.9)',
               borderRadius: 'var(--radius-button)',
               padding: '8px var(--space-3)',
+              minHeight: 40,
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
@@ -318,7 +274,7 @@ function TripCard({
             type="button"
             onClick={onMatch}
             style={{
-              flex: '0 0 auto',
+              flex: '1 1 0',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -328,6 +284,7 @@ function TripCard({
               color: '#FFAB2E',
               borderRadius: 'var(--radius-button)',
               padding: '8px var(--space-3)',
+              minHeight: 40,
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
@@ -350,82 +307,158 @@ function TripCard({
   )
 }
 
-// ─── Composant interne : chips voyages à venir ────────────────────────────────
+// ─── Composant interne : dernières transactions du voyage ─────────────────────
 
-function UpcomingChips({
-  trips,
-  currentTripId,
+function RecentTransactions({
+  expenses,
+  isLoading,
 }: {
-  trips: TripCockpitRow[]
-  currentTripId: string
+  expenses: TripExpenseRow[]
+  isLoading: boolean
 }) {
-  const others = trips.filter(t => t.trip_id !== currentTripId).slice(0, 3)
-  if (others.length === 0) return null
+  const recent = useMemo(() => expenses.slice(0, 5), [expenses])
 
   return (
     <div>
-      <p
+      {/* Header */}
+      <div
         style={{
-          margin: '0 0 var(--space-2) 0',
-          fontSize: 11,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.07em',
-          color: 'var(--neutral-400)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 'var(--space-3)',
         }}
       >
-        Prochains voyages
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {others.map(t => (
-          <div
-            key={t.trip_id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-2)',
-              background: 'var(--neutral-0)',
-              border: '1px solid var(--neutral-100)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--space-2) var(--space-3)',
-              boxShadow: '0 1px 4px rgba(28,28,58,0.04)',
-            }}
-          >
-            <span style={{ fontSize: 16 }}>{t.emoji ?? '✈️'}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: 'var(--neutral-800)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t.name}
-              </p>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-400)' }}>
-                {fmtDate(t.start_date)}
-              </p>
-            </div>
-            {t.planned_budget != null ? (
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--neutral-600)',
-                  flexShrink: 0,
-                }}
-              >
-                {formatCurrencyFloored(t.planned_budget)}
-              </span>
-            ) : null}
-          </div>
-        ))}
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            color: 'var(--neutral-500)',
+          }}
+        >
+          Dernières transactions
+        </p>
       </div>
+
+      {/* Body */}
+      {isLoading ? (
+        /* Skeleton */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          {[70, 90, 55].map((w, i) => (
+            <div
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              style={{
+                height: 44,
+                background: 'var(--neutral-100)',
+                borderRadius: 'var(--radius-md)',
+                width: `${w}%`,
+                animation: 'pulse 1.4s ease-in-out infinite',
+              }}
+            />
+          ))}
+        </div>
+      ) : recent.length === 0 ? (
+        /* Empty state */
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            padding: 'var(--space-5) var(--space-4)',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px dashed rgba(255,255,255,0.12)',
+            borderRadius: 'var(--radius-lg)',
+            textAlign: 'center',
+          }}
+        >
+          <ShoppingBag size={20} color="rgba(255,255,255,0.3)" />
+          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+            Aucune transaction pour ce voyage
+          </p>
+        </div>
+      ) : (
+        /* Transaction list */
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+          }}
+        >
+          {recent.map((tx, idx) => {
+            const dateStr = new Date(`${tx.expense_date}T00:00:00`).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'short',
+            })
+            const isLast = idx === recent.length - 1
+            return (
+              <div
+                key={`${tx.source_type}-${tx.source_id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  padding: '10px var(--space-3)',
+                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.07)',
+                }}
+              >
+                {/* Date badge */}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'rgba(255,255,255,0.45)',
+                    width: 38,
+                    textAlign: 'right',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {dateStr}
+                </span>
+
+                {/* Label */}
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'rgba(255,255,255,0.9)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tx.label || tx.category_name || '—'}
+                </span>
+
+                {/* Amount */}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-mono)',
+                    color: '#FB923C',
+                  }}
+                >
+                  {formatCurrencyFloored(tx.personal_amount)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -537,7 +570,10 @@ export interface TripCockpitCardProps {
 }
 
 export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCockpitCardProps) {
-  const { selectedTrip, upcomingTrips, isLoading, error } = useTripCockpit()
+  const { selectedTrip, isLoading, error } = useTripCockpit()
+  const { expenses: tripExpenses, isLoading: expensesLoading } = useTripExpenses(
+    selectedTrip?.trip_id ?? null
+  )
 
   if (isLoading) return <TripSkeleton />
 
@@ -571,9 +607,10 @@ export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCoc
         onAddExpense={onAddExpense ? () => onAddExpense(selectedTrip.trip_id) : undefined}
         onMatch={onMatch ? () => onMatch(selectedTrip.trip_id, selectedTrip.name) : undefined}
       />
-      {upcomingTrips.length > 0 ? (
-        <UpcomingChips trips={upcomingTrips} currentTripId={selectedTrip.trip_id} />
-      ) : null}
+      <RecentTransactions
+        expenses={tripExpenses}
+        isLoading={expensesLoading}
+      />
     </div>
   )
 }

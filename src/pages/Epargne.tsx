@@ -906,57 +906,91 @@ export function Epargne() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
           <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
             {/* Period chip strip */}
-            <div
-              style={{
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                WebkitOverflowScrolling: 'touch',
-                scrollbarWidth: 'none',
-                paddingLeft: 'var(--page-gutter)',
-                paddingRight: 'var(--page-gutter)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              {OPTIMIZATION_PERIOD_OPTIONS.flatMap((option) => {
-                const isActive = option.id === optimizationPeriodId
-                const elements = []
-                if (option.mode === 'year') {
-                  elements.push(
-                    <div
-                      key={`sep-${option.id}`}
-                      aria-hidden="true"
-                      style={{ width: 1, height: 20, background: 'var(--neutral-200)', flexShrink: 0 }}
-                    />
-                  )
-                }
-                elements.push(
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setOptimizationPeriodId(option.id)}
-                    aria-pressed={isActive}
+            {/* Period selector navigation row identical to Budgets page style */}
+            <div style={{ padding: '0 var(--page-gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', marginTop: 0, marginBottom: 'var(--space-3)' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIdx = OPTIMIZATION_PERIOD_OPTIONS.findIndex((o) => o.id === optimizationPeriodId)
+                    if (currentIdx > 0) {
+                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[currentIdx - 1].id)
+                    }
+                  }}
+                  disabled={optimizationPeriodId === OPTIMIZATION_PERIOD_OPTIONS[0].id}
+                  aria-label="Période précédente"
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    width: 24,
+                    height: 24,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[0].id ? 'pointer' : 'not-allowed',
+                    opacity: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[0].id ? 1 : 0.5,
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
                     style={{
-                      flexShrink: 0,
-                      border: isActive ? '2px solid var(--primary-500)' : '1.5px solid var(--neutral-200)',
-                      background: isActive ? 'var(--primary-500)' : 'var(--neutral-0)',
-                      color: isActive ? '#fff' : 'var(--neutral-700)',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '0 14px',
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      minHeight: 36,
-                      transition: 'all var(--transition-base)',
-                      whiteSpace: 'nowrap',
+                      width: 0,
+                      height: 0,
+                      borderTop: '5px solid transparent',
+                      borderBottom: '5px solid transparent',
+                      borderRight: '7px solid var(--neutral-600)',
+                      marginLeft: -1,
                     }}
-                  >
-                    {option.shortLabel}
-                  </button>
-                )
-                return elements
-              })}
+                  />
+                </button>
+
+                <span
+                  style={{
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 700,
+                    color: 'var(--neutral-700)',
+                    letterSpacing: '0.01em',
+                    userSelect: 'none',
+                  }}
+                >
+                  {optimizationPeriod.label}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIdx = OPTIMIZATION_PERIOD_OPTIONS.findIndex((o) => o.id === optimizationPeriodId)
+                    if (currentIdx < OPTIMIZATION_PERIOD_OPTIONS.length - 1) {
+                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[currentIdx + 1].id)
+                    }
+                  }}
+                  disabled={optimizationPeriodId === OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id}
+                  aria-label="Période suivante"
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    width: 24,
+                    height: 24,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id ? 'pointer' : 'not-allowed',
+                    opacity: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id ? 1 : 0.5,
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderTop: '5px solid transparent',
+                      borderBottom: '5px solid transparent',
+                      borderLeft: '7px solid var(--neutral-600)',
+                      marginRight: -1,
+                    }}
+                  />
+                </button>
+              </div>
             </div>
 
             <StatsOptimizationsTab

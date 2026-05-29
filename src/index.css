@@ -152,7 +152,7 @@
   --header-height: calc(var(--safe-top) + 70px);
   --bottom-nav-visual-height: 64px;
   --bottom-nav-safe-bottom: var(--safe-bottom);
-  --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom) + 10px);
+  --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom) + 4px);
   --safe-top-offset: var(--safe-top);
   --safe-bottom-offset: var(--safe-bottom);
   --app-height: 100dvh;

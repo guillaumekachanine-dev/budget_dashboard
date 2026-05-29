@@ -485,7 +485,7 @@ export function Voyages() {
           boxSizing:     'border-box',
         }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <button
               type="button"

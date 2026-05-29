@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { EmptyState, SkeletonCard, StatsSection, formatEuro } from '@/features/stats/components/ui'
+import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
+import { formatSignedEuro } from '@/features/stats/components/ui/analyticsFormatters'
 
 const OPTIMIZATION_YEAR = 2026
 const OPTIMIZATION_CONTENT_MAX_WIDTH = 548
@@ -16,16 +18,6 @@ export type AnnualHorizonData = {
   potentialShare: number
   finalObjectivePct: number
 }
-
-type OptimizationBucketImpact = {
-  bucketKey: string
-  bucketLabel: string
-  color: string
-  monthlyOptimization: number
-  annualOptimization: number
-  categories: string[]
-}
-
 function normalizeBucketKey(value: string | null | undefined): string {
   return (value ?? '')
     .normalize('NFD')
@@ -41,17 +33,6 @@ function normalizeCategoryKey(value: string | null | undefined): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
-}
-
-function resolveBucketLabel(bucketKey: string): string {
-  const map: Record<string, string> = {
-    socle_fixe: 'Socle fixe',
-    variable_essentielle: 'Variable',
-    provision: 'Provision',
-    discretionnaire: 'Discrétionnaire',
-    voyage: 'Voyage',
-  }
-  return map[bucketKey] ?? bucketKey.split('_').filter(Boolean).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
 }
 
 function resolveBucketColor(bucketKey: string): string {
@@ -212,7 +193,9 @@ function LeverCard({
 
   const bucketKey = normalizeBucketKey(lever.budget_bucket)
   const bucketColor = resolveBucketColor(bucketKey)
-  const iconKey = resolveOptimizationLeverIconKey(lever.category_name)
+  const rawIconKey = resolveOptimizationLeverIconKey(lever.category_name)
+  // Fallback to normalized category name as iconKey if mapping doesn't exist
+  const iconKey = rawIconKey || normalizeCategoryKey(lever.category_name)
 
   const hasMonthlyData = categoryActual != null && spendObjective != null
   const progressPct = hasMonthlyData && spendObjective! > 0
@@ -229,6 +212,8 @@ function LeverCard({
         background: 'var(--neutral-0)',
         boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
+        flexShrink: 0,
+        scrollSnapAlign: 'start',
       }}
     >
       {/* Top accent */}
@@ -236,7 +221,7 @@ function LeverCard({
 
       <div style={{ padding: 'var(--space-3) var(--space-4) var(--space-4)' }}>
         {/* Header row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
             <div style={{ flexShrink: 0 }}>
               <CategoryIcon iconKey={iconKey} label={lever.category_name ?? 'Poste'} size={30} />
@@ -245,49 +230,33 @@ function LeverCard({
               <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lever.category_name ?? '—'}
               </p>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  marginTop: 3,
-                  padding: '1px 7px',
-                  borderRadius: 'var(--radius-full)',
-                  background: `color-mix(in oklab, ${bucketColor} 11%, var(--neutral-0) 89%)`,
-                  border: `1px solid color-mix(in oklab, ${bucketColor} 30%, var(--neutral-200) 70%)`,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: bucketColor,
-                  letterSpacing: '0.02em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {resolveBucketLabel(bucketKey)}
-              </span>
             </div>
           </div>
 
-          {/* Gain pill */}
+          {/* Gain pill (1 line compact design) */}
           <div
             style={{
               flexShrink: 0,
               background: 'color-mix(in oklab, var(--color-positive) 10%, var(--neutral-0) 90%)',
               border: '1.5px solid color-mix(in oklab, var(--color-positive) 30%, var(--neutral-200) 70%)',
               borderRadius: 'var(--radius-md)',
-              padding: '5px 10px',
-              textAlign: 'center',
+              padding: '3px 8px',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '2px',
             }}
           >
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--color-positive)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', lineHeight: 1 }}>
+            <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--color-positive)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', lineHeight: 1 }}>
               +{formatEuro(monthlyGain)}
-            </p>
-            <p style={{ margin: '2px 0 0', fontSize: 9, fontWeight: 600, color: 'var(--neutral-500)', letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>
+            </span>
+            <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neutral-500)', letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1 }}>
               /mois
-            </p>
+            </span>
           </div>
         </div>
 
-        {/* Stats row */}
-        <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderRadius: 'var(--radius-md)', background: 'var(--neutral-50)', border: '1px solid var(--neutral-150)', overflow: 'hidden' }}>
+        {/* Stats row (No frames, only clean dark vertical dividers) */}
+        <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', padding: '4px 0' }}>
           {[
             { label: 'Moy. 6 mois', value: formatEuro(monthlyAvg > 0 ? monthlyAvg : null) },
             { label: 'Budget', value: categoryBudget != null ? formatEuro(categoryBudget) : '—' },
@@ -296,9 +265,9 @@ function LeverCard({
             <div
               key={stat.label}
               style={{
-                padding: '6px 0',
+                padding: '2px 0',
                 textAlign: 'center',
-                borderLeft: i > 0 ? '1px solid var(--neutral-150)' : undefined,
+                borderLeft: i > 0 ? '1px solid var(--neutral-300)' : undefined,
               }}
             >
               <p style={{ margin: 0, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--neutral-400)', lineHeight: 1 }}>
@@ -374,58 +343,6 @@ function LeverCard({
   )
 }
 
-function BucketImpactGrid({ buckets }: { buckets: OptimizationBucketImpact[] }) {
-  return (
-    <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-      <SectionLabel label="Impact par bloc" count={buckets.length} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-2)' }}>
-        {buckets.map((impact) => (
-          <article
-            key={impact.bucketKey}
-            style={{
-              borderRadius: 'var(--radius-xl)',
-              border: '1px solid var(--neutral-150)',
-              borderLeft: `3px solid ${impact.color}`,
-              background: 'var(--neutral-0)',
-              boxShadow: 'var(--shadow-card)',
-              padding: 'var(--space-3)',
-              display: 'grid',
-              gap: 3,
-              minWidth: 0,
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                fontSize: 11,
-                fontWeight: 800,
-                color: 'var(--neutral-800)',
-                lineHeight: 1.2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {impact.bucketLabel}
-            </p>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', lineHeight: 1 }}>
-              +{formatEuro(impact.monthlyOptimization)}<span style={{ fontSize: 9, fontWeight: 600, opacity: 0.75 }}>/mois</span>
-            </p>
-            <p style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', lineHeight: 1 }}>
-              +{formatEuro(impact.annualOptimization)}<span style={{ fontSize: 9, fontWeight: 600, opacity: 0.8 }}>/an</span>
-            </p>
-            {impact.categories.length > 0 ? (
-              <p style={{ margin: '2px 0 0', fontSize: 9, color: 'var(--neutral-500)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                {impact.categories.slice(0, 3).join(' · ')}
-              </p>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ─── Main component ────────────────────────────────────────────────────────────
 
 type StatsOptimizationsTabProps = {
@@ -444,6 +361,11 @@ export function StatsOptimizationsTab({
   annualHorizon,
 }: StatsOptimizationsTabProps) {
   const { data, isLoading, error } = useOptimizationCapacity(OPTIMIZATION_YEAR)
+  const { balance } = useOptimizationBalance(
+    monthlyBudgetByCategory,
+    monthlyActualByCategory,
+    selectedMonth
+  )
 
   const optimizationLevers = data?.optimization_levers ?? []
   const displayedLevers = optimizationLevers.slice(0, 8)
@@ -459,39 +381,6 @@ export function StatsOptimizationsTab({
     [displayedLevers],
   )
   const totalAnnualGain = totalMonthlyGain * ANNUAL_GAIN_MONTHS
-
-  const bucketImpacts = useMemo<OptimizationBucketImpact[]>(() => {
-    const grouped = new Map<string, {
-      monthlyOptimization: number
-      annualOptimization: number
-      categories: Set<string>
-    }>()
-
-    for (const lever of displayedLevers) {
-      const bucketKey = normalizeBucketKey(lever.budget_bucket)
-      if (!bucketKey) continue
-      const monthly = Math.max(0, Number(lever.realistic_monthly_gain ?? 0))
-      const annual = monthly * ANNUAL_GAIN_MONTHS
-      const categoryName = (lever.parent_category_name ?? lever.category_name ?? '').trim()
-
-      const existing = grouped.get(bucketKey) ?? { monthlyOptimization: 0, annualOptimization: 0, categories: new Set<string>() }
-      existing.monthlyOptimization += Number.isFinite(monthly) ? monthly : 0
-      existing.annualOptimization += Number.isFinite(annual) ? annual : 0
-      if (categoryName) existing.categories.add(categoryName)
-      grouped.set(bucketKey, existing)
-    }
-
-    return [...grouped.entries()]
-      .map(([bucketKey, values]) => ({
-        bucketKey,
-        bucketLabel: resolveBucketLabel(bucketKey),
-        color: resolveBucketColor(bucketKey),
-        monthlyOptimization: values.monthlyOptimization,
-        annualOptimization: values.annualOptimization,
-        categories: [...values.categories].slice(0, 3),
-      }))
-      .sort((a, b) => b.monthlyOptimization - a.monthlyOptimization)
-  }, [displayedLevers])
 
   void elapsedMonthsInYear
 
@@ -530,31 +419,85 @@ export function StatsOptimizationsTab({
             />
           ) : null}
 
-          {/* Lever cards */}
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-            <SectionLabel label="Leviers d'action" count={displayedLevers.length} />
+          {/* Balance card */}
+          {totalAnnualGain > 0 ? (
+            <div
+              style={{
+                background: balance >= 0 ? 'rgba(46, 212, 122, 0.08)' : 'rgba(252, 90, 90, 0.08)',
+                border: `1px solid ${balance >= 0 ? 'rgba(46, 212, 122, 0.25)' : 'rgba(252, 90, 90, 0.25)'}`,
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-3) var(--space-4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-3)',
+                boxShadow: 'var(--shadow-card)',
+                marginTop: 'calc(var(--space-2) * -1)',
+              }}
+            >
+              <div style={{ display: 'grid', gap: 1 }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--neutral-800)' }}>
+                  Optimisations / dépassements
+                </p>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>
+                  Mois en cours
+                </p>
+              </div>
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-mono)',
+                  color: balance >= 0 ? '#2ED47A' : '#FC5A5A',
+                }}
+              >
+                {formatSignedEuro(balance)}
+              </span>
+            </div>
+          ) : null}
+
+          {/* Lever cards (horizontal scroll carousel) */}
+          <div style={{ display: 'grid', gap: 'var(--space-3)', width: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '0 var(--page-gutter)' }}>
+              <SectionLabel label="Leviers d'action" count={displayedLevers.length} />
+            </div>
 
             {displayedLevers.length === 0 ? (
-              <EmptyState message="Aucun levier d'optimisation disponible." />
+              <div style={{ padding: '0 var(--page-gutter)' }}>
+                <EmptyState message="Aucun levier d'optimisation disponible." />
+              </div>
             ) : (
-              displayedLevers.map((lever, index) => {
-                const catKey = normalizeCategoryKey(lever.category_name)
-                const categoryBudget = monthlyBudgetByCategory?.get(catKey) ?? null
-                const categoryActual = monthlyActualByCategory?.get(catKey) ?? null
-                return (
-                  <LeverCard
-                    key={`${catKey || 'lever'}-${index}`}
-                    lever={lever}
-                    categoryBudget={categoryBudget !== undefined ? categoryBudget : null}
-                    categoryActual={categoryActual !== undefined ? categoryActual : null}
-                  />
-                )
-              })
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 'var(--space-3)',
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  scrollSnapType: 'x mandatory',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  paddingLeft: 'var(--page-gutter)',
+                  paddingRight: 'var(--page-gutter)',
+                  paddingBottom: 'var(--space-2)',
+                }}
+              >
+                {displayedLevers.map((lever, index) => {
+                  const catKey = normalizeCategoryKey(lever.category_name)
+                  const categoryBudget = monthlyBudgetByCategory?.get(catKey) ?? null
+                  const categoryActual = monthlyActualByCategory?.get(catKey) ?? null
+                  return (
+                    <div key={`${catKey || 'lever'}-${index}`} style={{ width: '280px', flexShrink: 0 }}>
+                      <LeverCard
+                        lever={lever}
+                        categoryBudget={categoryBudget !== undefined ? categoryBudget : null}
+                        categoryActual={categoryActual !== undefined ? categoryActual : null}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
-
-          {/* Bucket impact grid */}
-          {bucketImpacts.length > 0 ? <BucketImpactGrid buckets={bucketImpacts} /> : null}
 
         </StatsSection>
       ) : null}
