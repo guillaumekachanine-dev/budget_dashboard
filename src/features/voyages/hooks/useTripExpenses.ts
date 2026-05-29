@@ -20,7 +20,7 @@ export function useTripExpenses(tripId: string | null) {
 
   // Breakdown par catégorie (js-combine-iterations : un seul parcours)
   const categoryBreakdown = useMemo<TripCategoryBreakdownFull[]>(() => {
-    const total = expenses.reduce((s, e) => s + e.amount, 0)
+    const total = expenses.reduce((s, e) => s + e.personal_amount, 0)
     const map   = new Map<string, { name: string; parent: string | null; amount: number; count: number }>()
 
     for (const e of expenses) {
@@ -28,10 +28,10 @@ export function useTripExpenses(tripId: string | null) {
       const name = e.category_name ?? 'Autre'
       const existing = map.get(key)
       if (existing) {
-        existing.amount += e.amount
+        existing.amount += e.personal_amount
         existing.count  += 1
       } else {
-        map.set(key, { name, parent: e.parent_category_name, amount: e.amount, count: 1 })
+        map.set(key, { name, parent: e.parent_category_name, amount: e.personal_amount, count: 1 })
       }
     }
 

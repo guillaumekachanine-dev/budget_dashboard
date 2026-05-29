@@ -53,7 +53,7 @@ export function useVoyagesData(year: number) {
       const tripTxs = [...(txByTrip.get(trip.id) ?? [])].sort((a, b) =>
         `${a.transaction_date}::${a.id}`.localeCompare(`${b.transaction_date}::${b.id}`),
       )
-      const total = tripTxs.reduce((sum, tx) => sum + Number(tx.amount), 0)
+      const total = tripTxs.reduce((sum, tx) => sum + Number(tx.amount) * (tx.personal_share_ratio ?? 1.0), 0)
       const duration = dateDiffDays(trip.start_date, trip.end_date)
       const avgPerDay = duration > 0 ? total / duration : 0
 
@@ -61,7 +61,7 @@ export function useVoyagesData(year: number) {
       for (const tx of tripTxs) {
         const catId = tx.category_id ?? '__unknown__'
         const existing = byCatMap.get(catId) ?? { amount: 0, txCount: 0 }
-        existing.amount += Number(tx.amount)
+        existing.amount += Number(tx.amount) * (tx.personal_share_ratio ?? 1.0)
         existing.txCount += 1
         byCatMap.set(catId, existing)
       }

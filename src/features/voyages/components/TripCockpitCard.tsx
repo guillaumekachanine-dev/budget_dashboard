@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { MapPin, Plus, ArrowRightLeft, ArrowRight, Plane } from 'lucide-react'
+import { Plus, ArrowRightLeft, ArrowRight, Plane } from 'lucide-react'
 import { useTripCockpit } from '../hooks/useTripCockpit'
 import type { TripCockpitRow } from '@/lib/types'
 import { formatCurrencyFloored } from '@/lib/utils'
@@ -13,18 +13,6 @@ const MONTHS_FR = [
 
 const VOYAGE_ACCENT = '#38BDF8'  // --bucket-voyage
 const VOYAGE_ACCENT_DARK = '#0284C7'
-
-const STATUS_LABEL: Record<TripCockpitRow['trip_status'], string> = {
-  ongoing: 'En cours',
-  future:  'À venir',
-  past:    'Passé',
-}
-
-const STATUS_BADGE: Record<TripCockpitRow['trip_status'], { bg: string; color: string }> = {
-  ongoing: { bg: 'rgba(56,189,248,0.15)', color: VOYAGE_ACCENT_DARK },
-  future:  { bg: 'rgba(91,87,245,0.10)', color: 'var(--primary-600)' },
-  past:    { bg: 'var(--neutral-100)',   color: 'var(--neutral-500)' },
-}
 
 // ─── Utilitaires locaux ───────────────────────────────────────────────────────
 
@@ -53,78 +41,53 @@ function daysElapsed(isoStart: string): number {
   return Math.max(0, Math.round((now.getTime() - start.getTime()) / 86_400_000))
 }
 
-// ─── Composant interne : barre de progression ─────────────────────────────────
+function TripProgressRing({
+  pct,
+  size = 120,
+  amountText,
+  label = 'Reste utile'
+}: {
+  pct: number
+  size?: number
+  amountText: string
+  label?: string
+}) {
+  const sw = 10
+  const r = (size - sw) / 2
+  const cx = size / 2
+  const cy = size / 2
+  const circumference = 2 * Math.PI * r
+  const progress = Math.max(0, Math.min(1, pct / 100))
+  const dashOffset = circumference * (1 - progress)
 
-function ProgressBar({ pct, accent }: { pct: number; accent: string }) {
-  const clamped = Math.min(100, Math.max(0, pct))
-  const overBudget = pct > 100
-  const barColor = overBudget ? 'var(--color-error)' : accent
+  const trackColor = 'rgba(255, 255, 255, 0.12)'
+  const arcColor = pct > 100 ? '#FC5A5A' : '#38BDF8'
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-      <div
-        role="progressbar"
-        aria-valuenow={clamped}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        style={{
-          height: 6,
-          borderRadius: 'var(--radius-full)',
-          background: 'var(--neutral-100)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${clamped}%`,
-            borderRadius: 'var(--radius-full)',
-            background: barColor,
-            transition: 'width 0.4s ease',
-          }}
-        />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ display: 'block', transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={trackColor} strokeWidth={sw} />
+        {progress > 0 ? (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={arcColor}
+            strokeWidth={sw}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+          />
+        ) : null}
+      </svg>
+      <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box' }}>
+        <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+          {amountText}
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
+          {label}
+        </span>
       </div>
-    </div>
-  )
-}
-
-// ─── Composant interne : tuile KPI ────────────────────────────────────────────
-
-function KpiTile({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div
-      style={{
-        background: accent ? `rgba(56,189,248,0.08)` : 'var(--neutral-50)',
-        border: `1px solid ${accent ? 'rgba(56,189,248,0.22)' : 'var(--neutral-150, var(--neutral-200))'}`,
-        borderRadius: 'var(--radius-md)',
-        padding: 'var(--space-2) var(--space-3)',
-        display: 'grid',
-        gap: 2,
-        textAlign: 'center',
-      }}
-    >
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--neutral-500)',
-          lineHeight: 1.2,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: 'var(--neutral-900)',
-          fontFamily: 'var(--font-mono)',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {value}
-      </span>
     </div>
   )
 }
@@ -142,7 +105,6 @@ function TripCard({
   onAddExpense?: () => void
   onMatch?: () => void
 }) {
-  const badge = STATUS_BADGE[trip.trip_status]
   const consumedPct = trip.consumed_pct ?? 0
   const hasPlannedBudget = trip.planned_budget != null && trip.planned_budget > 0
   const showMatch = trip.pending_match_count > 0
@@ -166,196 +128,171 @@ function TripCard({
     return null
   }, [trip.trip_status, trip.start_date, trip.days_total])
 
+  const budget = trip.planned_budget ?? 0
+  const consumed = trip.total_actual
+  const resteUtile = budget - consumed
+
   return (
     <div
       style={{
-        background: 'var(--neutral-0)',
-        borderRadius: 'var(--radius-card)',
+        background: 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)',
+        borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-card)',
-        border: '1px solid var(--neutral-100)',
+        border: '1px solid rgba(56, 189, 248, 0.25)',
         overflow: 'hidden',
+        padding: 'var(--space-4)',
+        display: 'grid',
+        gap: 'var(--space-4)',
       }}
     >
-      {/* Barre d'accent colorée en haut */}
-      <div style={{ height: 3, background: VOYAGE_ACCENT }} />
-
-      <div style={{ padding: 'var(--space-4)' }}>
-        {/* ── En-tête: emoji + nom + badge + dates ─────────────────────── */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 'var(--space-2)',
-            marginBottom: 'var(--space-2)',
-          }}
-        >
-          <span style={{ fontSize: 22, lineHeight: 1.3, flexShrink: 0 }}>
-            {trip.emoji ?? '✈️'}
+      {/* ── Header: Nom + Status + Dates ─────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
+            <span style={{ fontSize: 20 }}>{trip.emoji ?? '✈️'}</span>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {trip.name}
+            </h3>
+          </div>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-full)',
+            background: trip.trip_status === 'ongoing'
+              ? 'rgba(56,189,248,0.25)'
+              : trip.trip_status === 'future'
+                ? 'rgba(129,140,248,0.25)'
+                : 'rgba(255,255,255,0.12)',
+            color: trip.trip_status === 'ongoing'
+              ? '#38BDF8'
+              : trip.trip_status === 'future'
+                ? '#818CF8'
+                : 'rgba(255,255,255,0.6)',
+            whiteSpace: 'nowrap',
+            display: 'inline-block',
+          }}>
+            {trip.trip_status === 'ongoing' ? 'En cours' : trip.trip_status === 'future' ? 'À venir' : 'Passé'}
           </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Nom + badge sur la même ligne, badge wrap naturellement */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 'var(--space-2)',
-                marginBottom: 3,
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 16,
-                  fontWeight: 800,
-                  color: 'var(--neutral-900)',
-                  lineHeight: 1.2,
-                }}
-              >
-                {trip.name}
-              </p>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.07em',
-                  padding: '2px 7px',
-                  borderRadius: 'var(--radius-full)',
-                  background: badge.bg,
-                  color: badge.color,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {STATUS_LABEL[trip.trip_status]}
-              </span>
-            </div>
-            {/* Dates + contexte sur une ligne */}
-            <p
-              style={{
-                margin: 0,
-                fontSize: 12,
-                color: 'var(--neutral-500)',
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '4px 6px',
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <MapPin size={10} style={{ flexShrink: 0 }} />
-                {dateRange}
-              </span>
-              {contextLine ? (
-                <span style={{ fontWeight: 600, color: 'var(--neutral-600)' }}>
-                  · {contextLine}
-                </span>
-              ) : null}
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+            {dateRange}
+          </span>
+          {contextLine && (
+            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+              {contextLine}
             </p>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* ── Barre budget (seulement si planned_budget renseigné) ─────── */}
-        {hasPlannedBudget ? (
-          <div style={{ marginBottom: 'var(--space-3)' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-                marginBottom: 'var(--space-1)',
-              }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--neutral-500)' }}>
-                Budget
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: consumedPct > 100 ? 'var(--color-error)' : 'var(--neutral-700)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                {`${formatCurrencyFloored(trip.total_actual)} / ${formatCurrencyFloored(trip.planned_budget!)}`}
-                {consumedPct > 0 && ` · ${consumedPct.toFixed(0)}%`}
-              </span>
-            </div>
-            <ProgressBar pct={consumedPct} accent={VOYAGE_ACCENT} />
-          </div>
-        ) : null}
+      {/* ── Central Progress Ring ─────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
+        <TripProgressRing
+          pct={consumedPct}
+          amountText={formatCurrencyFloored(resteUtile)}
+        />
+      </div>
 
-        {/* ── Grille KPI ───────────────────────────────────────────────── */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: hasPlannedBudget ? 'repeat(3, minmax(0,1fr))' : 'repeat(2, minmax(0,1fr))',
-            gap: 'var(--space-2)',
-            marginBottom: 'var(--space-3)',
-          }}
-        >
-          <KpiTile label="Dépensé" value={formatCurrencyFloored(trip.total_actual)} accent />
-          {hasPlannedBudget && trip.remaining != null ? (
-            <KpiTile
-              label="Reste"
-              value={formatCurrencyFloored(Math.max(0, trip.remaining))}
-            />
-          ) : null}
-          {trip.trip_status !== 'future' && trip.avg_per_day > 0 ? (
-            <KpiTile label="Moy/j" value={formatCurrencyFloored(trip.avg_per_day)} />
-          ) : hasPlannedBudget && trip.days_total > 0 ? (
-            <KpiTile
-              label="Budget/j"
-              value={formatCurrencyFloored((trip.planned_budget ?? 0) / trip.days_total)}
-            />
-          ) : null}
-        </div>
-
-        {/* ── Ligne méta: compteurs ─────────────────────────────────────── */}
-        <p
-          style={{
-            margin: '0 0 var(--space-3) 0',
-            fontSize: 11,
-            color: 'var(--neutral-400)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <span>{`${trip.expense_count} dépense${trip.expense_count !== 1 ? 's' : ''}`}</span>
-          {trip.pending_match_count > 0 ? (
+      {/* ── Calculation Line ──────────────────────────────────── */}
+      <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
+          {hasPlannedBudget ? (
             <>
-              <span style={{ color: 'var(--neutral-300)' }}>·</span>
-              <span style={{ color: '#D97706', fontWeight: 600 }}>
-                {`${trip.pending_match_count} à rapprocher`}
-              </span>
+              Consommé <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span> sur <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(budget)}</span>
             </>
-          ) : null}
-          {trip.has_pending_manual && trip.pending_match_count === 0 ? (
+          ) : (
             <>
-              <span style={{ color: 'var(--neutral-300)' }}>·</span>
-              <span style={{ color: 'var(--neutral-400)' }}>saisies en attente</span>
+              Dépensé : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span>
             </>
-          ) : null}
+          )}
         </p>
+        {hasPlannedBudget && (
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+            {consumedPct.toFixed(0)}% consommé
+          </p>
+        )}
+      </div>
 
-        {/* ── CTAs ─────────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {/* Voir détail — navigue vers /budgets (VoyagesFeaturePage) */}
+      {/* ── Ligne méta: compteurs ─────────────────────────────────────── */}
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          color: 'rgba(255,255,255,0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 'var(--space-2)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span>{`${trip.expense_count} dépense${trip.expense_count !== 1 ? 's' : ''}`}</span>
+        {trip.pending_match_count > 0 ? (
+          <>
+            <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+            <span style={{ color: '#FFAB2E', fontWeight: 600 }}>
+              {`${trip.pending_match_count} à rapprocher`}
+            </span>
+          </>
+        ) : null}
+        {trip.has_pending_manual && trip.pending_match_count === 0 ? (
+          <>
+            <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>saisies en attente</span>
+          </>
+        ) : null}
+      </p>
+
+      {/* ── CTAs ──────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+        <button
+          type="button"
+          onClick={onViewDetail}
+          style={{
+            flex: '1 1 auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 5,
+            border: '1px solid rgba(255,255,255,0.25)',
+            background: 'rgba(255,255,255,0.1)',
+            color: '#FFFFFF',
+            borderRadius: 'var(--radius-button)',
+            padding: '8px var(--space-3)',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            transition: 'background 120ms ease',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+          }}
+        >
+          Voir détail
+          <ArrowRight size={12} />
+        </button>
+
+        {onAddExpense ? (
           <button
             type="button"
-            onClick={onViewDetail}
+            onClick={onAddExpense}
             style={{
-              flex: '1 1 auto',
+              flex: '0 0 auto',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 5,
-              border: `1px solid ${VOYAGE_ACCENT}`,
-              background: 'transparent',
-              color: VOYAGE_ACCENT_DARK,
+              border: '1px solid rgba(255,255,255,0.15)',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.9)',
               borderRadius: 'var(--radius-button)',
               padding: '8px var(--space-3)',
               fontSize: 12,
@@ -365,84 +302,49 @@ function TripCard({
               transition: 'background 120ms ease',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(56,189,248,0.08)'
+              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
             }}
           >
-            Voir détail
-            <ArrowRight size={12} />
+            <Plus size={12} />
+            Dépense
           </button>
+        ) : null}
 
-          {/* + Dépense — disponible seulement si callback fourni */}
-          {onAddExpense ? (
-            <button
-              type="button"
-              onClick={onAddExpense}
-              style={{
-                flex: '0 0 auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                border: '1px solid var(--neutral-200)',
-                background: 'var(--neutral-50)',
-                color: 'var(--neutral-700)',
-                borderRadius: 'var(--radius-button)',
-                padding: '8px var(--space-3)',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 120ms ease',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'var(--neutral-100)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'var(--neutral-50)'
-              }}
-            >
-              <Plus size={12} />
-              Dépense
-            </button>
-          ) : null}
-
-          {/* Rapprocher — uniquement si pending_match_count > 0 ET callback fourni */}
-          {showMatch && onMatch ? (
-            <button
-              type="button"
-              onClick={onMatch}
-              style={{
-                flex: '0 0 auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                border: '1px solid rgba(217,119,6,0.4)',
-                background: 'rgba(245,158,11,0.08)',
-                color: '#D97706',
-                borderRadius: 'var(--radius-button)',
-                padding: '8px var(--space-3)',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 120ms ease',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(245,158,11,0.14)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(245,158,11,0.08)'
-              }}
-            >
-              <ArrowRightLeft size={12} />
-              {`Rapprocher (${trip.pending_match_count})`}
-            </button>
-          ) : null}
-        </div>
+        {showMatch && onMatch ? (
+          <button
+            type="button"
+            onClick={onMatch}
+            style={{
+              flex: '0 0 auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              border: '1px solid rgba(255,171,46,0.4)',
+              background: 'rgba(255,171,46,0.12)',
+              color: '#FFAB2E',
+              borderRadius: 'var(--radius-button)',
+              padding: '8px var(--space-3)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'background 120ms ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255,171,46,0.2)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,171,46,0.12)'
+            }}
+          >
+            <ArrowRightLeft size={12} />
+            {`Rapprocher (${trip.pending_match_count})`}
+          </button>
+        ) : null}
       </div>
     </div>
   )

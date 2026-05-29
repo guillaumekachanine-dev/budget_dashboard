@@ -25,6 +25,7 @@ function coerce(raw: Record<string, unknown>): TripExpenseRow {
     is_recurring:         Boolean(raw.is_recurring),
     account_id:           (raw.account_id as string | null) ?? null,
     assignment_method:    raw.assignment_method as TripExpenseAssignmentMethod | undefined,
+    imputation_type:      raw.imputation_type as 'personal' | 'joint' | undefined,
   }
 }
 

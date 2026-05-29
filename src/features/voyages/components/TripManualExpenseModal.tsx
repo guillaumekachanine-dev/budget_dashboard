@@ -145,6 +145,7 @@ export function TripManualExpenseModal({
   const [categoryId, setCategoryId] = useState<string>('')
   const [label,      setLabel]      = useState('')
   const [notes,      setNotes]      = useState('')
+  const [imputationType, setImputationType] = useState<'personal' | 'joint'>('personal')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [success,    setSuccess]    = useState(false)
 
@@ -171,6 +172,7 @@ export function TripManualExpenseModal({
     setCategoryId(voyageCategories[0]?.id ?? voyagesRootCategory?.id ?? '')
     setLabel('')
     setNotes('')
+    setImputationType('personal')
     setSubmitError(null)
     setSuccess(false)
     setTripPickerOpen(false)
@@ -212,6 +214,8 @@ export function TripManualExpenseModal({
         amount,
         label,
         notes: notes.trim() || null,
+        imputationType,
+        personalShareRatio: imputationType === 'joint' ? 0.5 : 1.0,
       })
       setSuccess(true)
       // Ferme après un bref retour visuel
@@ -295,6 +299,64 @@ export function TripManualExpenseModal({
                 required
                 style={{ ...inputStyle, fontFamily: 'var(--font-mono)', minWidth: 0, width: '100%' }}
               />
+            </div>
+          </div>
+
+          {/* Aperçu dynamique de l'imputation */}
+          {parseFloat(amountStr.replace(',', '.')) > 0 && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', marginTop: -6, paddingLeft: 2 }}>
+              {imputationType === 'personal' ? (
+                <span>Imputé : {parseFloat(amountStr.replace(',', '.')).toFixed(2)} €</span>
+              ) : (
+                <span>Imputé : {(parseFloat(amountStr.replace(',', '.')) * 0.5).toFixed(2)} € sur {parseFloat(amountStr.replace(',', '.')).toFixed(2)} €</span>
+              )}
+            </div>
+          )}
+
+          {/* ── Imputation ────────────────────────────────────────────────── */}
+          <div>
+            <label style={labelStyle}>Imputation</label>
+            <div style={{ display: 'flex', background: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => setImputationType('personal')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  borderRadius: 'calc(var(--radius-md) - 2px)',
+                  cursor: 'pointer',
+                  transition: 'all 120ms ease',
+                  border: 'none',
+                  background: imputationType === 'personal' ? 'var(--neutral-0)' : 'transparent',
+                  color: imputationType === 'personal' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                  boxShadow: imputationType === 'personal' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                }}
+              >
+                Personnelle
+              </button>
+              <button
+                type="button"
+                onClick={() => setImputationType('joint')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  borderRadius: 'calc(var(--radius-md) - 2px)',
+                  cursor: 'pointer',
+                  transition: 'all 120ms ease',
+                  border: 'none',
+                  background: imputationType === 'joint' ? 'var(--neutral-0)' : 'transparent',
+                  color: imputationType === 'joint' ? 'var(--neutral-900)' : 'var(--neutral-500)',
+                  boxShadow: imputationType === 'joint' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                }}
+              >
+                Jointe
+              </button>
             </div>
           </div>
 

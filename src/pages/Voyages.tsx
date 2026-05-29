@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Pencil, CheckCircle2, ArrowRightLeft, Plane,
-  ReceiptText, AlertCircle, X,
+  ReceiptText, AlertCircle, X, Link,
 } from 'lucide-react'
 import { useTripCockpit, selectDefaultTrip } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenses } from '@/features/voyages/hooks/useTripExpenses'
@@ -16,6 +16,10 @@ import type { TripCockpitRow } from '@/lib/types'
 import { AmbianceBgScene, tripAmbianceBackground } from '@/features/voyages/components/AmbianceBgScene'
 import { useEffect } from 'react'
 import { useVoyagesData } from '@/features/voyages/hooks/useVoyagesData'
+import { useTransaction } from '@/hooks/useTransactions'
+import { useCategories } from '@/hooks/useCategories'
+import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
+import { TripTransactionRattachementModal } from '@/features/voyages/components/TripTransactionRattachementModal'
 
 // ─── constantes ───────────────────────────────────────────────────────────────
 
@@ -350,6 +354,11 @@ export function Voyages() {
   const [annualBudgetModalOpen, setAnnualBudgetModalOpen] = useState(false)
   const [monthlyAverageModalOpen, setMonthlyAverageModalOpen] = useState(false)
   const [transactionsListModalOpen, setTransactionsListModalOpen] = useState(false)
+  const [rattachementModalOpen, setRattachementModalOpen] = useState(false)
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+
+  const { data: categories = [] } = useCategories()
+  const { data: activeTransaction } = useTransaction(selectedTransactionId)
 
   // ── Données pour la modale Moyen/mois (sous-catégories voyage de l'année) ──
   const { tripsWithStats } = useVoyagesData(selectedYear)
@@ -951,7 +960,7 @@ export function Voyages() {
                       )}
 
                       {/* Action buttons grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
                         <button
                           type="button"
                           onClick={() => setAddExpenseOpen(true)}
@@ -964,14 +973,14 @@ export function Voyages() {
                             color:        '#fff',
                             border:       'none',
                             borderRadius: 'var(--radius-button)',
-                            padding:      '10px var(--space-3)',
-                            fontSize:     13,
+                            padding:      '10px var(--space-1)',
+                            fontSize:     12,
                             fontWeight:   700,
                             cursor:       'pointer',
                             width:        '100%',
                           }}
                         >
-                          <Plus size={14} />
+                          <Plus size={13} />
                           Dépense
                         </button>
                         <button
@@ -986,15 +995,37 @@ export function Voyages() {
                             color:        'var(--neutral-700)',
                             border:       '1px solid var(--neutral-200)',
                             borderRadius: 'var(--radius-button)',
-                            padding:      '10px var(--space-3)',
-                            fontSize:     13,
+                            padding:      '10px var(--space-1)',
+                            fontSize:     12,
                             fontWeight:   600,
                             cursor:       'pointer',
                             width:        '100%',
                           }}
                         >
-                          <ReceiptText size={14} />
+                          <ReceiptText size={13} />
                           Transactions
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRattachementModalOpen(true)}
+                          style={{
+                            display:      'inline-flex',
+                            alignItems:   'center',
+                            justifyContent: 'center',
+                            gap:          'var(--space-1.5)',
+                            background:   'var(--neutral-50)',
+                            color:        'var(--neutral-700)',
+                            border:       '1px solid var(--neutral-200)',
+                            borderRadius: 'var(--radius-button)',
+                            padding:      '10px var(--space-1)',
+                            fontSize:     12,
+                            fontWeight:   600,
+                            cursor:       'pointer',
+                            width:        '100%',
+                          }}
+                        >
+                          <Link size={13} />
+                          Affilier
                         </button>
                       </div>
 
@@ -1128,6 +1159,21 @@ export function Voyages() {
         onClose={() => setMatchSheetOpen(false)}
         tripId={selectedTrip?.trip_id}
         tripName={selectedTrip?.name}
+      />
+
+      {selectedTrip && (
+        <TripTransactionRattachementModal
+          open={rattachementModalOpen}
+          onClose={() => setRattachementModalOpen(false)}
+          tripId={selectedTrip.trip_id}
+          tripName={selectedTrip.name}
+        />
+      )}
+
+      <TransactionDetailsModal
+        transaction={activeTransaction ?? null}
+        categories={categories}
+        onClose={() => setSelectedTransactionId(null)}
       />
 
       {/* Modale détail "Budget annuel" */}
@@ -1507,38 +1553,54 @@ export function Voyages() {
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {[...expenses]
                         .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
-                        .map(expense => (
-                          <div
-                            key={expense.source_id}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '50px minmax(0, 1fr) auto',
-                              gap: 'var(--space-3)',
-                              alignItems: 'center',
-                              padding: '10px 0',
-                              borderBottom: '1px solid var(--neutral-100)',
-                            }}
-                          >
-                            <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                              {fmtDateShort(expense.expense_date)}
-                            </span>
-                            <div style={{ minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {expense.label}
-                              </p>
-                              <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {expense.category_name ? stripVoyageSuffix(expense.category_name) : 'Autre'}
-                                <span style={{ color: 'var(--neutral-200)' }}> · </span>
-                                <span style={{ color: expense.source_type === 'manual' ? '#D97706' : VOYAGE_ACCENT_DARK, fontWeight: 600 }}>
-                                  {expense.source_type === 'manual' ? 'manuel' : 'banque'}
+                        .map(expense => {
+                          const isBank = expense.source_type === 'bank'
+                          return (
+                            <div
+                              key={expense.source_id}
+                              className={isBank ? 'txn-row-clickable' : ''}
+                              onClick={isBank ? () => setSelectedTransactionId(expense.source_id) : undefined}
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '50px minmax(0, 1fr) auto',
+                                gap: 'var(--space-2)',
+                                alignItems: 'center',
+                                padding: '6px var(--space-2)',
+                                margin: '0 -var(--space-2)',
+                                borderBottom: '1px solid var(--neutral-100)',
+                                cursor: isBank ? 'pointer' : 'default',
+                                borderRadius: 'var(--radius-sm)',
+                                transition: 'background 100ms ease',
+                              }}
+                            >
+                              <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                                {fmtDateShort(expense.expense_date)}
+                              </span>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {expense.label}
+                                </p>
+                                <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {expense.category_name ? stripVoyageSuffix(expense.category_name) : 'Autre'}
+                                  <span style={{ color: 'var(--neutral-200)' }}> · </span>
+                                  <span style={{ color: expense.source_type === 'manual' ? '#D97706' : VOYAGE_ACCENT_DARK, fontWeight: 600 }}>
+                                    {expense.source_type === 'manual' ? 'manuel' : 'banque'}
+                                  </span>
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 'var(--space-2)' }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)' }}>
+                                  {formatCurrencyFloored(expense.personal_amount)}
                                 </span>
-                              </p>
+                                {expense.personal_amount !== expense.amount && (
+                                  <span style={{ fontSize: 9, color: 'var(--neutral-400)', marginTop: 2 }}>
+                                    total {formatCurrencyFloored(expense.amount)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', flexShrink: 0, marginLeft: 'var(--space-2)' }}>
-                              {formatCurrencyFloored(expense.amount)}
-                            </span>
-                          </div>
-                        ))}
+                          )
+                        })}
                     </div>
                   )}
                 </div>
@@ -1548,7 +1610,18 @@ export function Voyages() {
         ) : null}
       </AnimatePresence>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .txn-row-clickable {
+          transition: background-color 120ms ease;
+        }
+        .txn-row-clickable:hover {
+          background-color: var(--neutral-100);
+        }
+        .txn-row-clickable:active {
+          background-color: var(--neutral-150);
+        }
+      `}</style>
     </div>
   )
 }

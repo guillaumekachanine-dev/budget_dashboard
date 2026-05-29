@@ -1,9 +1,13 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MapPin, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react'
+import { ArrowLeft, MapPin, ChevronDown, ChevronUp, X, Pencil, Link } from 'lucide-react'
 import { useVoyagesData } from '../hooks/useVoyagesData'
 import type { TripTransaction, TripWithStats } from '../types'
 import { PlanVoyageModal } from './PlanVoyageModal'
+import { useTransaction } from '@/hooks/useTransactions'
+import { useCategories } from '@/hooks/useCategories'
+import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
+import { TripTransactionRattachementModal } from './TripTransactionRattachementModal'
 
 const TRIP_COLORS = [
   '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#14B8A6',
@@ -183,11 +187,13 @@ function TripTransactionsModal({
   title,
   transactions,
   onClose,
+  onOpenTransactionDetails,
 }: {
   open: boolean
   title: string
   transactions: TripTransaction[]
   onClose: () => void
+  onOpenTransactionDetails: (txId: string) => void
 }) {
   useEffect(() => {
     if (!open) return
@@ -273,34 +279,50 @@ function TripTransactionsModal({
                   Aucune opération sur ce périmètre.
                 </p>
               ) : (
-                transactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '74px minmax(0,1fr) auto',
-                      gap: 'var(--space-2)',
-                      alignItems: 'center',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--neutral-100)',
-                    }}
-                  >
-                    <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                      {formatTxDateDayMonthYear(tx.transaction_date)}
-                    </span>
-                    <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-                      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {getTxLabel(tx)}
+                transactions.map((tx) => {
+                  const isBank = !tx.is_manual
+                  return (
+                    <div
+                      key={tx.id}
+                      className={isBank ? 'txn-row-clickable' : ''}
+                      onClick={isBank ? () => onOpenTransactionDetails(tx.id) : undefined}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '74px minmax(0,1fr) auto',
+                        gap: 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: '6px var(--space-2)',
+                        margin: '0 -var(--space-2)',
+                        borderBottom: '1px solid var(--neutral-100)',
+                        cursor: isBank ? 'pointer' : 'default',
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'background 100ms ease',
+                      }}
+                    >
+                      <span style={{ fontSize: 11, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                        {formatTxDateDayMonthYear(tx.transaction_date)}
                       </span>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tx.merchant_name ?? tx.raw_label ?? '—'}
-                      </span>
+                      <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
+                        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {getTxLabel(tx)}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {tx.merchant_name ?? tx.raw_label ?? '—'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+                        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
+                          {formatAmount(Number(tx.amount) * (tx.personal_share_ratio ?? 1.0)).replace(/\s+€/, '€')}
+                        </span>
+                        {(tx.personal_share_ratio ?? 1.0) !== 1.0 && (
+                          <span style={{ fontSize: 9, color: 'var(--neutral-400)', marginTop: 2 }}>
+                            total {formatAmount(Number(tx.amount)).replace(/\s+€/, '€')}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', whiteSpace: 'nowrap' }}>
-                      {formatAmount(Number(tx.amount)).replace(/\s+€/, '€')}
-                    </span>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </motion.div>
@@ -321,6 +343,7 @@ function TripAccordionItem({
   onEditTrip,
   onOpenCategoryTransactions,
   onOpenAllTransactions,
+  onRattachement,
 }: {
   item: TripWithStats
   index: number
@@ -330,6 +353,7 @@ function TripAccordionItem({
   onEditTrip: (trip: TripWithStats) => void
   onOpenCategoryTransactions: (payload: { tripName: string; categoryId: string; categoryName: string; transactions: TripTransaction[] }) => void
   onOpenAllTransactions: (payload: { tripName: string; transactions: TripTransaction[] }) => void
+  onRattachement: (trip: { id: string; name: string }) => void
 }) {
   const color = tripColor(index)
   const ambianceBg = tripAmbianceBackground(item.trip.emoji)
@@ -466,7 +490,7 @@ function TripAccordionItem({
           >
             <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
               {!item.hasData ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-3) 0', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
+                <div style={{ textAlign: 'center', padding: 'var(--space-3) 0 var(--space-2)', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                   <MapPin size={16} style={{ marginBottom: 4, display: 'block', margin: '0 auto 6px' }} />
                   Aucune dépense catégorisée « Voyages » sur cette période.<br />
                   <span style={{ fontSize: 11 }}>Assigne des dépenses manuellement via le détail de transaction.</span>
@@ -502,6 +526,32 @@ function TripAccordionItem({
                   </div>
                 </>
               )}
+
+              {/* Bouton de rattachement toujours visible sous la section détails */}
+              <div style={{ marginTop: 'var(--space-3)' }}>
+                <button
+                  type="button"
+                  onClick={() => onRattachement({ id: item.trip.id, name: item.trip.name })}
+                  style={{
+                    display:      'inline-flex',
+                    alignItems:   'center',
+                    justifyContent: 'center',
+                    gap:          'var(--space-1.5)',
+                    background:   'var(--neutral-50)',
+                    color:        'var(--neutral-700)',
+                    border:       '1px solid var(--neutral-200)',
+                    borderRadius: 'var(--radius-button)',
+                    padding:      '8px var(--space-3)',
+                    fontSize:     12,
+                    fontWeight:   600,
+                    cursor:       'pointer',
+                    width:        '100%',
+                  }}
+                >
+                  <Link size={13} />
+                  Affilier
+                </button>
+              </div>
             </div>
           </motion.div>
         ) : null}
@@ -669,6 +719,11 @@ export function VoyagesFeaturePage({ onBack }: Props) {
     title: '',
     transactions: [],
   })
+  const [rattachementTrip, setRattachementTrip] = useState<{ id: string; name: string } | null>(null)
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+
+  const { data: categories = [] } = useCategories()
+  const { data: activeTransaction } = useTransaction(selectedTransactionId)
 
   const { tripsWithStats, isLoading } = useVoyagesData(year)
 
@@ -834,6 +889,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
                     onEditTrip={(trip) => setTripToEdit(trip)}
                     onOpenCategoryTransactions={handleOpenCategoryTransactions}
                     onOpenAllTransactions={handleOpenAllTransactions}
+                    onRattachement={setRattachementTrip}
                   />
                 ))
               )}
@@ -862,7 +918,35 @@ export function VoyagesFeaturePage({ onBack }: Props) {
         title={transactionsModalState.title}
         transactions={transactionsModalState.transactions}
         onClose={() => setTransactionsModalState((prev) => ({ ...prev, open: false }))}
+        onOpenTransactionDetails={setSelectedTransactionId}
       />
+
+      {rattachementTrip && (
+        <TripTransactionRattachementModal
+          open={true}
+          onClose={() => setRattachementTrip(null)}
+          tripId={rattachementTrip.id}
+          tripName={rattachementTrip.name}
+        />
+      )}
+
+      <TransactionDetailsModal
+        transaction={activeTransaction ?? null}
+        categories={categories}
+        onClose={() => setSelectedTransactionId(null)}
+      />
+
+      <style>{`
+        .txn-row-clickable {
+          transition: background-color 120ms ease;
+        }
+        .txn-row-clickable:hover {
+          background-color: var(--neutral-100);
+        }
+        .txn-row-clickable:active {
+          background-color: var(--neutral-150);
+        }
+      `}</style>
     </>
   )
 }

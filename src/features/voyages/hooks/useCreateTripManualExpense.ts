@@ -10,6 +10,8 @@ export interface CreateTripManualExpensePayload {
   amount: number        // positif, en EUR
   label: string
   notes: string | null
+  imputationType: 'personal' | 'joint'
+  personalShareRatio: number
 }
 
 export function useCreateTripManualExpense() {
@@ -23,20 +25,22 @@ export function useCreateTripManualExpense() {
       if (!payload.label.trim()) throw new Error('Le libellé est requis')
 
       const { data, error } = await budgetDb
-        .from('trip_manual_expenses')
-        .insert({
-          user_id:    user.id,
-          trip_id:    payload.tripId,
-          category_id: payload.categoryId || null,
-          expense_date: payload.date,
-          amount:     payload.amount,
-          label:      payload.label.trim(),
-          notes:      payload.notes?.trim() || null,
-          status:     'pending',
-          matched_transaction_id: null,
-        })
-        .select()
-        .single()
+          .from('trip_manual_expenses')
+          .insert({
+            user_id:    user.id,
+            trip_id:    payload.tripId,
+            category_id: payload.categoryId || null,
+            expense_date: payload.date,
+            amount:     payload.amount,
+            label:      payload.label.trim(),
+            notes:      payload.notes?.trim() || null,
+            status:     'pending',
+            matched_transaction_id: null,
+            imputation_type: payload.imputationType,
+            personal_share_ratio: payload.personalShareRatio,
+          })
+          .select()
+          .single()
 
       if (error) throw new Error(error.message)
       return data

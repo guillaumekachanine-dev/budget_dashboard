@@ -554,6 +554,8 @@ export interface TripManualExpense {
   notes: string | null
   status: 'pending' | 'matched' | 'dismissed'
   matched_transaction_id: string | null
+  imputation_type: 'personal' | 'joint'
+  personal_share_ratio: number
   created_at: string
   updated_at: string
 }
@@ -577,6 +579,8 @@ export interface TripExpenseUnifiedRow {
   manual_expense_id: string | null
   is_recurring: boolean
   account_id: string | null
+  assignment_method?: string
+  imputation_type?: 'personal' | 'joint'
 }
 
 /** Row brut de budget_dashboard.v_trip_match_candidates (champs numériques coercés dans getMatchCandidates.ts). */

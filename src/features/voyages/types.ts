@@ -119,6 +119,7 @@ export interface TripExpenseRow {
   is_recurring:         boolean
   account_id:           string | null
   assignment_method?:   TripExpenseAssignmentMethod
+  imputation_type?:     'personal' | 'joint'
 }
 
 /** Agrégat catégorie pour le breakdown dépenses */

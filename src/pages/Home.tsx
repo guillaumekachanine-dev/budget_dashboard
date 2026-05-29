@@ -59,8 +59,8 @@ const HOME_ACCOUNT_PRESETS: HomeAccountPreset[] = [
 ]
 
 const HOME_SWIPE_PILLS = [
-  { id: 'compte_principal', label: 'Compte courant' },
-  { id: 'budget_voyage', label: 'Budget voyage' },
+  { id: 'compte_principal', label: 'Compte' },
+  { id: 'budget_voyage', label: 'Voyage' },
 ] as const
 const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 
@@ -1728,7 +1728,7 @@ export function Home() {
           marginBottom: 'var(--space-6)',
         }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-3)' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
           <h1
             style={{
               margin: 0,
@@ -1739,43 +1739,38 @@ export function Home() {
               letterSpacing: '-0.02em',
             }}
           >
-            Accueil
+            {isBudgetVoyageTab ? 'Voyage' : 'Accueil'}
           </h1>
-          <div
-            className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            style={{ paddingBottom: '2px' }}
-          >
-            <div style={{ display: 'inline-flex', minWidth: '100%', gap: 'var(--space-2)' }}>
-              {HOME_SWIPE_PILLS.map((pill) => {
-                const isActive = selectedAccountPresetId === pill.id
-                return (
-                  <button
-                    key={pill.id}
-                    type="button"
-                    onClick={() => handleSelectAccountPreset(pill.id)}
-                    aria-pressed={isActive}
-                    style={{
-                      border: `1px solid ${isActive ? '#5B57F5' : 'rgba(255,255,255,0.46)'}`,
-                      background: 'rgba(255,255,255,0.7)',
-                      backdropFilter: 'blur(12px)',
-                      color: isActive ? '#5B57F5' : 'var(--neutral-800)',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '8px var(--space-3)',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
-                    }}
-                  >
-                    {pill.label}
-                  </button>
-                )
-              })}
-            </div>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+            {HOME_SWIPE_PILLS.map((pill) => {
+              const isActive = selectedAccountPresetId === pill.id
+              return (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => handleSelectAccountPreset(pill.id)}
+                  aria-pressed={isActive}
+                  style={{
+                    border: `1px solid ${isActive ? '#5B57F5' : 'rgba(255,255,255,0.46)'}`,
+                    background: 'rgba(255,255,255,0.7)',
+                    backdropFilter: 'blur(12px)',
+                    color: isActive ? '#5B57F5' : 'var(--neutral-800)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '6px var(--space-3)',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
+                  }}
+                >
+                  {pill.label}
+                </button>
+              )
+            })}
           </div>
         </div>
       </header>

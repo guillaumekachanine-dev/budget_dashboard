@@ -242,3 +242,21 @@ export function useDeleteTransaction() {
     },
   })
 }
+
+export function useTransaction(id: string | null) {
+  return useQuery({
+    queryKey: ['transaction', id],
+    queryFn: async () => {
+      if (!id) return null
+      const { data, error } = await budgetDb
+        .from('transactions')
+        .select('*, category:categories(*), account:accounts(*)')
+        .eq('id', id)
+        .single()
+      if (error) throw error
+      return data as Transaction
+    },
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+  })
+}
