@@ -3,6 +3,7 @@ const routeLoaders = {
   '/flux': () => import('@/pages/Flux'),
   '/budgets': () => import('@/pages/Budgets'),
   '/epargne': () => import('@/pages/Epargne'),
+  '/voyages': () => import('@/pages/Voyages'),
   '/login': () => import('@/pages/Login'),
 } as const
 
@@ -24,4 +25,5 @@ export function prefetchPrimaryRoutes() {
   prefetchRoute('/flux')
   prefetchRoute('/budgets')
   prefetchRoute('/epargne')
+  prefetchRoute('/voyages')
 }

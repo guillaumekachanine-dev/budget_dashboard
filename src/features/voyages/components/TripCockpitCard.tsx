@@ -617,10 +617,10 @@ function EmptyState({ onViewDetail }: { onViewDetail?: () => void }) {
 
 export interface TripCockpitCardProps {
   /**
-   * Navigue vers la page de détail voyage (VoyagesFeaturePage dans /budgets).
+   * Navigue vers /voyages/:tripId si tripId fourni, sinon /voyages.
    * Désactivé si non fourni.
    */
-  onViewDetail?: () => void
+  onViewDetail?: (tripId?: string) => void
   /**
    * Ouvre la modale de saisie d'une dépense manuelle.
    * Non affiché si non fourni (feature à venir).
@@ -630,7 +630,8 @@ export interface TripCockpitCardProps {
    * Ouvre le workflow de rapprochement manuel↔bancaire.
    * Non affiché si non fourni (feature à venir).
    */
-  onMatch?: (tripId: string) => void
+  /** tripId + tripName pour pré-filtrer et titrer le sheet de rapprochement */
+  onMatch?: (tripId: string, tripName: string) => void
 }
 
 export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCockpitCardProps) {
@@ -664,9 +665,9 @@ export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCoc
     <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
       <TripCard
         trip={selectedTrip}
-        onViewDetail={onViewDetail}
+        onViewDetail={onViewDetail ? () => onViewDetail(selectedTrip.trip_id) : undefined}
         onAddExpense={onAddExpense ? () => onAddExpense(selectedTrip.trip_id) : undefined}
-        onMatch={onMatch ? () => onMatch(selectedTrip.trip_id) : undefined}
+        onMatch={onMatch ? () => onMatch(selectedTrip.trip_id, selectedTrip.name) : undefined}
       />
       {upcomingTrips.length > 0 ? (
         <UpcomingChips trips={upcomingTrips} currentTripId={selectedTrip.trip_id} />

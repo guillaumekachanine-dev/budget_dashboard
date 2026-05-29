@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Plane, X, ChevronDown, ChevronUp, Loader } from 'lucide-react'
+import { Plane, X, ChevronDown, ChevronUp, Loader, ArrowRight } from 'lucide-react'
 import { QK, STALE } from '@/lib/queryKeys'
 import { getAllTrips } from '@/features/voyages/api/getVoyagesData'
 import { useAssignTripToTransaction } from '@/hooks/useTransactions'
@@ -156,6 +157,7 @@ interface TripPickerSectionProps {
 }
 
 export function TripPickerSection({ transaction }: TripPickerSectionProps) {
+  const navigate = useNavigate()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   // État local optimiste : mis à jour immédiatement après mutation,
@@ -302,36 +304,60 @@ export function TripPickerSection({ transaction }: TripPickerSectionProps) {
 
       {/* ── Voyage actuel (si rattaché) ─────────────────────────────────── */}
       {currentTrip ? (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            padding: 'var(--space-2) var(--space-3)',
-            background: 'rgba(56,189,248,0.07)',
-            border: `1px solid rgba(56,189,248,0.25)`,
-            borderRadius: 'var(--radius-sm)',
-          }}
-        >
-          <span style={{ fontSize: 16, flexShrink: 0 }}>{currentTrip.emoji ?? '✈️'}</span>
-          <div style={{ minWidth: 0 }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                fontWeight: 700,
-                color: 'var(--neutral-900)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {currentTrip.name}
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
-              {fmtRange(currentTrip.start_date, currentTrip.end_date)}
-            </p>
+        <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              background: 'rgba(56,189,248,0.07)',
+              border: `1px solid rgba(56,189,248,0.25)`,
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            <span style={{ fontSize: 16, flexShrink: 0 }}>{currentTrip.emoji ?? '✈️'}</span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: 'var(--neutral-900)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {currentTrip.name}
+              </p>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
+                {fmtRange(currentTrip.start_date, currentTrip.end_date)}
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/voyages/${currentTrip.id}`)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              color: VOYAGE_ACCENT,
+              background: 'transparent',
+              border: `1px solid rgba(56,189,248,0.35)`,
+              borderRadius: 'var(--radius-full)',
+              padding: '3px 10px',
+              cursor: 'pointer',
+              alignSelf: 'flex-start',
+            }}
+          >
+            Voir le voyage
+            <ArrowRight size={10} />
+          </button>
         </div>
       ) : (
         <p

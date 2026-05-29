@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
+import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import {
   getCurrentPeriod,
@@ -1156,6 +1157,9 @@ export function Home() {
   const [showInfosTile, setShowInfosTile] = useState(true)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
+  const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
+  const [matchingTripId,      setMatchingTripId]      = useState<string | null>(null)
+  const [matchingTripName,    setMatchingTripName]    = useState<string | null>(null)
 
   useEffect(() => {
     if (!accountEntries.length) {
@@ -1785,10 +1789,15 @@ export function Home() {
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
           {isBudgetVoyageTab ? (
             <TripCockpitCard
-              onViewDetail={() => navigate('/budgets')}
+              onViewDetail={(tripId) => navigate(tripId ? `/voyages/${tripId}` : '/voyages')}
               onAddExpense={(tripId) => {
                 setTripExpenseInitialId(tripId)
                 setTripExpenseModalOpen(true)
+              }}
+              onMatch={(tripId, tripName) => {
+                setMatchingTripId(tripId)
+                setMatchingTripName(tripName ?? null)
+                setMatchingSheetOpen(true)
               }}
             />
           ) : isCombinedSavingsPage ? (
@@ -2594,6 +2603,17 @@ export function Home() {
           setTripExpenseInitialId(null)
         }}
         initialTripId={tripExpenseInitialId}
+      />
+
+      <TripExpenseMatchingSheet
+        open={matchingSheetOpen}
+        onClose={() => {
+          setMatchingSheetOpen(false)
+          setMatchingTripId(null)
+          setMatchingTripName(null)
+        }}
+        tripId={matchingTripId}
+        tripName={matchingTripName}
       />
     </div>
   )

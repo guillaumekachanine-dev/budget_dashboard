@@ -64,3 +64,78 @@ export interface YearlyVoyagesStats {
   tripCount: number
   tripsWithData: number
 }
+
+/**
+ * Ligne de budget_dashboard.v_trip_match_candidates.
+ * Champs numériques (numeric PostgreSQL) : coercés en number dans getMatchCandidates.
+ */
+export interface MatchCandidateRow {
+  manual_expense_id:    string
+  trip_id:              string
+  user_id:              string
+  expense_date:         string     // YYYY-MM-DD
+  manual_amount:        number
+  manual_label:         string
+  manual_category_id:   string | null
+  manual_category_name: string | null
+
+  candidate_tx_id:  string
+  tx_date:          string     // YYYY-MM-DD
+  tx_amount:        number
+  tx_label:         string | null
+  tx_merchant:      string | null
+  tx_category_id:   string | null
+  tx_category_name: string | null
+
+  amount_delta_pct: number
+  date_delta_days:  number
+  category_match:   boolean
+  confidence_score: number
+}
+
+/**
+ * Ligne de budget_dashboard.v_trip_expenses_unified.
+ * Source unique de vérité : bank (transactions.trip_id) + manual pending.
+ * Les manuelles matched sont déjà exclues par la vue.
+ */
+export interface TripExpenseRow {
+  source_type:          'bank' | 'manual'
+  source_id:            string
+  trip_id:              string
+  user_id:              string
+  expense_date:         string
+  amount:               number
+  personal_amount:      number
+  personal_share_ratio: number
+  category_id:          string | null
+  category_name:        string | null
+  parent_category_id:   string | null
+  parent_category_name: string | null
+  label:                string
+  notes:                string | null
+  manual_expense_id:    string | null
+  is_recurring:         boolean
+  account_id:           string | null
+}
+
+/** Agrégat catégorie pour le breakdown dépenses */
+export interface TripCategoryBreakdownFull {
+  categoryId:         string
+  categoryName:       string
+  parentCategoryName: string | null
+  amount:             number
+  pct:                number
+  count:              number
+}
+
+/** Groupe de candidats pour une dépense manuelle donnée */
+export interface MatchGroup {
+  manualExpenseId:    string
+  tripId:             string
+  expenseDate:        string
+  manualAmount:       number
+  manualLabel:        string
+  manualCategoryId:   string | null
+  manualCategoryName: string | null
+  candidates:         MatchCandidateRow[]
+}

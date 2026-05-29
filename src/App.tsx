@@ -11,6 +11,7 @@ const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: modu
 const Flux = lazy(() => import('@/pages/Flux').then((module) => ({ default: module.Flux })))
 const Budgets = lazy(() => import('@/pages/Budgets').then((module) => ({ default: module.Budgets })))
 const Epargne = lazy(() => import('@/pages/Epargne').then((module) => ({ default: module.Epargne })))
+const Voyages = lazy(() => import('@/pages/Voyages').then((module) => ({ default: module.Voyages })))
 const Login = lazy(() => import('@/pages/Login').then((module) => ({ default: module.Login })))
 const loadAddTransactionModal = () => import('@/components/modals/AddTransactionModal')
 // Lazy-loaded to keep react-hook-form out of the initial bundle (modal is rarely opened on first load)
@@ -103,11 +104,13 @@ export default function App() {
       <main className="app-main">
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            <Route path="/"         element={<Home />} />
-            <Route path="/flux"     element={<Flux />} />
-            <Route path="/activite" element={<Navigate to="/flux" replace />} />
-            <Route path="/budgets"  element={<Budgets />} />
-            <Route path="/epargne"  element={<Epargne />} />
+            <Route path="/"                element={<Home />} />
+            <Route path="/flux"            element={<Flux />} />
+            <Route path="/activite"        element={<Navigate to="/flux" replace />} />
+            <Route path="/budgets"         element={<Budgets />} />
+            <Route path="/epargne"         element={<Epargne />} />
+            <Route path="/voyages"         element={<Voyages />} />
+            <Route path="/voyages/:tripId" element={<Voyages />} />
             {/* Redirections des anciens chemins */}
             <Route path="/stats"    element={<Navigate to="/epargne" replace />} />
             <Route path="/charts"   element={<Navigate to="/epargne" replace />} />

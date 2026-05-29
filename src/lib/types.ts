@@ -558,6 +558,50 @@ export interface TripManualExpense {
   updated_at: string
 }
 
+/** Row brut de budget_dashboard.v_trip_expenses_unified (champs numériques coercés dans getTripExpenses.ts). */
+export interface TripExpenseUnifiedRow {
+  source_type: 'bank' | 'manual'
+  source_id: string
+  trip_id: string
+  user_id: string
+  expense_date: string
+  amount: number
+  personal_amount: number
+  personal_share_ratio: number
+  category_id: string | null
+  category_name: string | null
+  parent_category_id: string | null
+  parent_category_name: string | null
+  label: string
+  notes: string | null
+  manual_expense_id: string | null
+  is_recurring: boolean
+  account_id: string | null
+}
+
+/** Row brut de budget_dashboard.v_trip_match_candidates (champs numériques coercés dans getMatchCandidates.ts). */
+export interface TripMatchCandidateRow {
+  manual_expense_id: string
+  trip_id: string
+  user_id: string
+  expense_date: string
+  manual_amount: number
+  manual_label: string
+  manual_category_id: string | null
+  manual_category_name: string | null
+  candidate_tx_id: string
+  tx_date: string
+  tx_amount: number
+  tx_label: string | null
+  tx_merchant: string | null
+  tx_category_id: string | null
+  tx_category_name: string | null
+  amount_delta_pct: number
+  date_delta_days: number
+  category_match: boolean
+  confidence_score: number
+}
+
 /** Row renvoyé par budget_dashboard.v_trip_cockpit.
  *  Les champs numériques arrivent en string via PostgREST (type Postgres `numeric`).
  *  La coercion est effectuée dans getTripCockpit.ts — ici on documente les types post-coercion.
@@ -646,6 +690,8 @@ export type Database = {
       account_balances: { Row: { account_id: string; current_balance: number }; Relationships: [] }
       v_trip_transactions: { Row: Record<string, unknown>; Relationships: [] }
       v_trip_cockpit: { Row: TripCockpitRow & Record<string, unknown>; Relationships: [] }
+      v_trip_expenses_unified: { Row: TripExpenseUnifiedRow & Record<string, unknown>; Relationships: [] }
+      v_trip_match_candidates: { Row: TripMatchCandidateRow & Record<string, unknown>; Relationships: [] }
     }
     Functions: {
       get_budget_page_payload: {
