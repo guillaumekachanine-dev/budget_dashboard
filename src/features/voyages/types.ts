@@ -93,6 +93,8 @@ export interface MatchCandidateRow {
   confidence_score: number
 }
 
+export type TripExpenseAssignmentMethod = 'explicit' | 'inferred_date_category' | 'manual_pending'
+
 /**
  * Ligne de budget_dashboard.v_trip_expenses_unified.
  * Source unique de vérité : bank (transactions.trip_id) + manual pending.
@@ -116,6 +118,7 @@ export interface TripExpenseRow {
   manual_expense_id:    string | null
   is_recurring:         boolean
   account_id:           string | null
+  assignment_method?:   TripExpenseAssignmentMethod
 }
 
 /** Agrégat catégorie pour le breakdown dépenses */

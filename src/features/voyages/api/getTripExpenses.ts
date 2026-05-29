@@ -1,5 +1,5 @@
 import { budgetDb } from '@/lib/supabaseBudget'
-import type { TripExpenseRow } from '../types'
+import type { TripExpenseRow, TripExpenseAssignmentMethod } from '../types'
 
 function n(v: unknown, fallback = 0): number {
   return v == null ? fallback : Number(v)
@@ -24,6 +24,7 @@ function coerce(raw: Record<string, unknown>): TripExpenseRow {
     manual_expense_id:    (raw.manual_expense_id as string | null) ?? null,
     is_recurring:         Boolean(raw.is_recurring),
     account_id:           (raw.account_id as string | null) ?? null,
+    assignment_method:    raw.assignment_method as TripExpenseAssignmentMethod | undefined,
   }
 }
 
