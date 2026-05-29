@@ -21,7 +21,7 @@ const VOYAGE_SUBCATEGORY_BLUEPRINTS = [
   { key: 'extras', name: 'Extras', emoji: '🛍️', aliases: ['extras', 'extra', 'froustilles', 'froustilles voyage'] },
 ] as const
 
-type Ambiance = 'city_lights' | 'sunset' | 'natural' | 'city_trip'
+type Ambiance = 'city_lights' | 'sunset' | 'natural' | 'city_trip' | 'eastern_europe'
 
 const AMBIANCE_CONFIG: Record<Ambiance, {
   label: string
@@ -62,6 +62,14 @@ const AMBIANCE_CONFIG: Record<Ambiance, {
     pillText: '#F48FB1',
     accentDot: '#E91E63',
     background: 'linear-gradient(185deg, #0A0118 0%, #160834 18%, #2B1060 36%, #6A1F8A 52%, #C0185A 68%, #E64A19 84%, #FF6E00 100%)',
+  },
+  eastern_europe: {
+    label: 'Eastern Europe',
+    emoji: '🏰',
+    pillBg: 'rgba(56,189,248,0.18)',
+    pillText: '#38BDF8',
+    accentDot: '#0284C7',
+    background: 'linear-gradient(180deg, #7DD3FC 0%, #BAE6FD 35%, #FEF08A 75%, #FDE047 100%)',
   },
 }
 
@@ -131,6 +139,7 @@ function resolveAmbianceFromEmoji(emoji: string | null | undefined): Ambiance {
   if (emoji === AMBIANCE_CONFIG.sunset.emoji) return 'sunset'
   if (emoji === AMBIANCE_CONFIG.natural.emoji) return 'natural'
   if (emoji === AMBIANCE_CONFIG.city_trip.emoji) return 'city_trip'
+  if (emoji === AMBIANCE_CONFIG.eastern_europe.emoji) return 'eastern_europe'
   return 'city_lights'
 }
 
@@ -904,6 +913,51 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
                   <div style={{ position:'absolute', bottom:6, left:50, pointerEvents:'none', animation:'ct-ped-l 10s linear infinite 3.5s', width:4, height:17, borderRadius:'3px 3px 0 0', background:'rgba(0,0,0,0.62)' }} />
                   {/* Pedestrian right sidewalk */}
                   <div style={{ position:'absolute', bottom:6, right:85, pointerEvents:'none', animation:'ct-ped-r 9s linear infinite 1.5s', width:5, height:20, borderRadius:'3px 3px 0 0', background:'rgba(0,0,0,0.72)' }} />
+                </>
+              )}
+
+              {ambiance === 'eastern_europe' && (
+                <>
+                  {/* Sun */}
+                  <div style={{
+                    position: 'absolute', top: '10%', left: '15%',
+                    width: 44, height: 44, borderRadius: '50%',
+                    background: 'radial-gradient(circle, #FFFFFF 0%, #FEF08A 70%, transparent 100%)',
+                    boxShadow: '0 0 24px 8px rgba(254,240,138,0.5)',
+                    pointerEvents: 'none'
+                  }} />
+                  
+                  {/* Clouds */}
+                  <div style={{ position: 'absolute', top: '22%', right: '12%', width: 60, height: 12, borderRadius: 6, background: 'rgba(255,255,255,0.4)', filter: 'blur(1px)', pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', top: '12%', right: '38%', width: 80, height: 14, borderRadius: 7, background: 'rgba(255,255,255,0.3)', filter: 'blur(1px)', pointerEvents: 'none' }} />
+
+                  {/* Skyline & Bridge SVG */}
+                  <svg viewBox="0 0 500 120" preserveAspectRatio="none"
+                    style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 120, pointerEvents: 'none' }}>
+                    {/* Hills silhouette */}
+                    <path d="M-10 80 Q60 50 140 60 Q220 70 300 50 Q380 40 460 60 Q495 70 510 60 L510 120 L-10 120 Z" fill="rgba(14, 116, 144, 0.28)"/>
+                    
+                    {/* Old town spires & Parliament style dome */}
+                    <path d="M 120 80 L 135 50 Q 142 30 150 50 L 165 80 Z" fill="rgba(8, 145, 178, 0.45)" />
+                    <rect x="141" y="24" width="3" height="30" fill="rgba(8, 145, 178, 0.45)" />
+
+                    <polygon points="260,80 268,30 276,80" fill="rgba(6, 182, 212, 0.35)" />
+                    <polygon points="278,80 282,16 287,80" fill="rgba(6, 182, 212, 0.35)" />
+                    
+                    <polygon points="410,80 418,20 426,80" fill="rgba(8, 145, 178, 0.4)" />
+                    <polygon points="428,80 433,30 438,80" fill="rgba(8, 145, 178, 0.4)" />
+
+                    {/* River */}
+                    <rect x="-10" y="78" width="520" height="42" fill="#38BDF8" opacity="0.6"/>
+                    <path d="M-10 90 Q120 80 250 92 Q380 104 500 88 L500 120 L-10 120 Z" fill="#0284C7" opacity="0.4"/>
+
+                    {/* Bridge */}
+                    <rect x="-10" y="86" width="520" height="8" fill="rgba(254, 240, 138, 0.9)" />
+                    <path d="M 30 94 Q 55 72 80 94" fill="none" stroke="rgba(254, 240, 138, 0.9)" strokeWidth="4" />
+                    <path d="M 140 94 Q 165 72 190 94" fill="none" stroke="rgba(254, 240, 138, 0.9)" strokeWidth="4" />
+                    <path d="M 250 94 Q 275 72 300 94" fill="none" stroke="rgba(254, 240, 138, 0.9)" strokeWidth="4" />
+                    <path d="M 360 94 Q 385 72 410 94" fill="none" stroke="rgba(254, 240, 138, 0.9)" strokeWidth="4" />
+                  </svg>
                 </>
               )}
 
