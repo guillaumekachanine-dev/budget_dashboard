@@ -921,7 +921,7 @@ function ProgressRing({
 
 function AccountProgressRing({
   pct,
-  size = 120,
+  size = 136,
   amountText,
   label = 'Reste utile',
   onClick,
@@ -978,7 +978,7 @@ function AccountProgressRing({
         ) : null}
       </svg>
       <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box', pointerEvents: 'none' }}>
-        <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+        <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
           {amountText}
         </span>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>

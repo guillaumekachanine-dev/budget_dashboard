@@ -29,12 +29,7 @@ function fmtDateShort(iso: string): string {
   return `${d.getDate()} ${MONTHS_FR[d.getMonth()]}`
 }
 
-function daysUntil(isoDate: string): number {
-  const target = new Date(`${isoDate}T00:00:00`)
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  return Math.max(0, Math.round((target.getTime() - now.getTime()) / 86_400_000))
-}
+
 
 function daysElapsed(isoStart: string): number {
   const start = new Date(`${isoStart}T00:00:00`)
@@ -45,7 +40,7 @@ function daysElapsed(isoStart: string): number {
 
 function TripProgressRing({
   pct,
-  size = 120,
+  size = 136,
   amountText,
   label = 'Reste utile'
 }: {
@@ -83,7 +78,7 @@ function TripProgressRing({
         ) : null}
       </svg>
       <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box' }}>
-        <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+        <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
           {amountText}
         </span>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
@@ -122,10 +117,6 @@ function TripCard({
     if (trip.trip_status === 'ongoing') {
       const elapsed = daysElapsed(trip.start_date)
       return `Jour ${elapsed + 1} / ${trip.days_total}`
-    }
-    if (trip.trip_status === 'future') {
-      const d = daysUntil(trip.start_date)
-      return d === 0 ? 'Départ aujourd\'hui !' : d === 1 ? 'Départ demain' : `Dans ${d} jours`
     }
     return null
   }, [trip.trip_status, trip.start_date, trip.days_total])
