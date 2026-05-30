@@ -20,6 +20,7 @@ export const QK = {
   COMPARED_YTD_FLOWS: 'compared-ytd-flows',
   COMPARED_YTD_FLOWS_KPI_CARDS: 'compared-ytd-flows-kpi-cards',
   DAILY_CASHFLOW_FORECAST: 'daily-cashflow-forecast',
+  FLUX_OPERATIONS: 'flux-operations',
   HOME: 'home',
   HOME_DAILY_BUDGET: 'home-daily-budget',
   MONTHLY_FLOWS_ANALYSIS_CARD: 'monthly-flows-analysis-card',
