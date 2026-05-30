@@ -261,17 +261,70 @@ function DriftCategoryTransactionsModal({
   )
 }
 
+function PlannedOpsItemRow({ item }: { item: PlannedOperationItem }) {
+  const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+  const isIncome = item.flow_type === 'income'
+  const isSavings = item.flow_type === 'savings'
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 0',
+        borderBottom: '1px solid var(--neutral-100)',
+      }}
+    >
+      <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.label}
+          </span>
+          <span style={{
+            fontSize: 9,
+            fontWeight: 700,
+            padding: '1px 5px',
+            borderRadius: 'var(--radius-sm)',
+            textTransform: 'uppercase',
+            background: isIncome ? 'rgba(46,212,122,0.1)' : isSavings ? 'rgba(255,171,46,0.1)' : 'rgba(91,87,245,0.1)',
+            color: isIncome ? 'var(--color-positive)' : isSavings ? 'var(--color-warning)' : 'var(--primary-500)',
+            flexShrink: 0,
+          }}>
+            {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
+          </span>
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
+          {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+        </span>
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 800, color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+        {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
+      </span>
+    </div>
+  )
+}
+
 function PlannedOpsModal({
   open,
   onClose,
-  j3Items,
-  j7OnlyItems,
+  title,
+  dotColor,
+  shadowColor,
+  items,
 }: {
   open: boolean
   onClose: () => void
-  j3Items: PlannedOperationItem[]
-  j7OnlyItems: PlannedOperationItem[]
+  title: string
+  dotColor: string
+  shadowColor: string
+  items: PlannedOperationItem[]
 }) {
+  const total = items.reduce((sum, item) => {
+    const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+    const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
+    return sum + (isOutflow ? amount : -amount)
+  }, 0)
+
   return (
     <BottomSheet
       open={open}
@@ -280,8 +333,9 @@ function PlannedOpsModal({
       header={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: dotColor, boxShadow: `0 0 0 3px ${shadowColor}`, flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Opérations planifiées
+              {title}
             </p>
           </div>
           <button
@@ -295,156 +349,26 @@ function PlannedOpsModal({
         </div>
       }
     >
-      <div style={{ padding: '0 var(--space-5) var(--space-6)', display: 'grid', gap: 'var(--space-6)' }}>
-        {/* Section J+3 */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: 'var(--primary-500)', boxShadow: '0 0 0 3px rgba(91,87,245,0.2)' }} />
-            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Échéance J+3 (sous 3 jours)
-            </h4>
-          </div>
-          {j3Items.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic', paddingLeft: 'var(--space-4)' }}>
-              Aucune opération planifiée.
-            </p>
-          ) : (
-            <div style={{ display: 'grid', gap: 'var(--space-2)', paddingLeft: 'var(--space-4)' }}>
-              {j3Items.map((item) => {
-                const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-                const isIncome = item.flow_type === 'income'
-                const isSavings = item.flow_type === 'savings'
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--neutral-100)',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.label}
-                        </span>
-                        <span style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          padding: '1px 5px',
-                          borderRadius: 'var(--radius-sm)',
-                          textTransform: 'uppercase',
-                          background: isIncome
-                            ? 'rgba(46, 212, 122, 0.1)'
-                            : isSavings
-                              ? 'rgba(255, 171, 46, 0.1)'
-                              : 'rgba(91, 87, 245, 0.1)',
-                          color: isIncome
-                            ? 'var(--color-positive)'
-                            : isSavings
-                              ? 'var(--color-warning)'
-                              : 'var(--primary-500)',
-                          flexShrink: 0
-                        }}>
-                          {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                        {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                      </span>
-                    </div>
-                    <span style={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)',
-                      fontFamily: 'var(--font-mono)',
-                      flexShrink: 0
-                    }}>
-                      {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
-                    </span>
-                  </div>
-                )
-              })}
+      <div style={{ padding: '0 var(--space-5) var(--space-6)', display: 'grid', gap: 'var(--space-3)' }}>
+        {items.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
+            Aucune opération planifiée.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+              {items.map((item) => <PlannedOpsItemRow key={item.id} item={item} />)}
             </div>
-          )}
-        </div>
-
-        {/* Section J+4 à J+7 */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: '#FFAB2E', boxShadow: '0 0 0 3px rgba(255,171,46,0.2)' }} />
-            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--neutral-900)' }}>
-              Échéance J+4 à J+7
-            </h4>
-          </div>
-          {j7OnlyItems.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic', paddingLeft: 'var(--space-4)' }}>
-              Aucune opération planifiée.
-            </p>
-          ) : (
-            <div style={{ display: 'grid', gap: 'var(--space-2)', paddingLeft: 'var(--space-4)' }}>
-              {j7OnlyItems.map((item) => {
-                const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-                const isIncome = item.flow_type === 'income'
-                const isSavings = item.flow_type === 'savings'
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--neutral-100)',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.label}
-                        </span>
-                        <span style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          padding: '1px 5px',
-                          borderRadius: 'var(--radius-sm)',
-                          textTransform: 'uppercase',
-                          background: isIncome
-                            ? 'rgba(46, 212, 122, 0.1)'
-                            : isSavings
-                              ? 'rgba(255, 171, 46, 0.1)'
-                              : 'rgba(91, 87, 245, 0.1)',
-                          color: isIncome
-                            ? 'var(--color-positive)'
-                            : isSavings
-                              ? 'var(--color-warning)'
-                              : 'var(--primary-500)',
-                          flexShrink: 0
-                        }}>
-                          {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-                        {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                      </span>
-                    </div>
-                    <span style={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)',
-                      fontFamily: 'var(--font-mono)',
-                      flexShrink: 0
-                    }}>
-                      {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+            {items.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--neutral-200)' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)' }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: total >= 0 ? 'var(--neutral-900)' : 'var(--color-positive)' }}>
+                  {total >= 0 ? '-' : '+'}{formatCurrencyFloored(Math.abs(total))}
+                </span>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </BottomSheet>
   )
@@ -786,25 +710,29 @@ function TimelineRow({
 function PlannedOpsTimeline({
   j3Count,
   j3Amount,
-  j7Count,
-  j7Amount,
-  onClick,
+  eomCount,
+  eomAmount,
+  daysUntilEom,
+  onClickJ3,
+  onClickEom,
 }: {
   j3Count: number
   j3Amount: number
-  j7Count: number
-  j7Amount: number
-  onClick: () => void
+  eomCount: number
+  eomAmount: number
+  daysUntilEom: number
+  onClickJ3: () => void
+  onClickEom: () => void
 }) {
   const j3Text =
     j3Count <= 0
       ? 'aucune opération'
       : `${j3Count} opé. · ${j3Amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(j3Amount))}`
 
-  const j7Text =
-    j7Count <= 0
+  const eomText =
+    eomCount <= 0
       ? 'aucune opération'
-      : `${j7Count} opé. · ${j7Amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(j7Amount))}`
+      : `${eomCount} opé. · ${eomAmount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(eomAmount))}`
 
   return (
     <div
@@ -837,19 +765,19 @@ function PlannedOpsTimeline({
         value={j3Text}
         dotColor="var(--primary-500)"
         shadowColor="rgba(91, 87, 245, 0.2)"
-        onClick={onClick}
+        onClick={onClickJ3}
         hasOps={j3Count > 0}
       />
 
-      {/* J+7 Step */}
+      {/* Fin de mois Step */}
       <TimelineRow
-        label="J+7"
-        sublabel="Échéance 7 jours"
-        value={j7Text}
+        label={`J+${daysUntilEom}`}
+        sublabel="Échéances fin de mois"
+        value={eomText}
         dotColor="#FFAB2E"
         shadowColor="rgba(255, 171, 46, 0.2)"
-        onClick={onClick}
-        hasOps={j7Count > 0}
+        onClick={onClickEom}
+        hasOps={eomCount > 0}
       />
     </div>
   )
@@ -1322,7 +1250,9 @@ export function Home() {
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
-  const { data: upcomingOps } = useUpcomingPlannedOperations()
+  const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const eomDateStr = toLocalIsoDate(eomDate)
+  const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
@@ -1341,54 +1271,44 @@ export function Home() {
     const items = upcomingOps ?? []
     const plus3Date = new Date(now)
     plus3Date.setDate(now.getDate() + 3)
-    const plus7Date = new Date(now)
-    plus7Date.setDate(now.getDate() + 7)
     const end3 = toLocalIsoDate(plus3Date)
-    const end7 = toLocalIsoDate(plus7Date)
     const localToday = toLocalIsoDate(now)
 
     let count3 = 0
-    let count7 = 0
     let amount3 = 0
-    let amount7 = 0
+    let countEom = 0
+    let amountEom = 0
     const items3: PlannedOperationItem[] = []
-    const items7Only: PlannedOperationItem[] = []
+    const itemsEom: PlannedOperationItem[] = []
 
     for (const item of items) {
       const date = String(item.planned_date ?? '').slice(0, 10)
       if (!date) continue
       if (date < localToday) continue
-      
+
       const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
       const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
 
       if (date <= end3) {
         count3 += 1
-        if (isOutflow) {
-          amount3 += amount
-        } else {
-          amount3 -= amount
-        }
+        if (isOutflow) amount3 += amount
+        else amount3 -= amount
         items3.push(item)
       }
-      if (date <= end7) {
-        count7 += 1
-        if (isOutflow) {
-          amount7 += amount
-        } else {
-          amount7 -= amount
-        }
-        if (date > end3) {
-          items7Only.push(item)
-        }
+
+      if (date <= eomDateStr) {
+        countEom += 1
+        if (isOutflow) amountEom += amount
+        else amountEom -= amount
+        itemsEom.push(item)
       }
     }
 
     return {
       j3: { count: count3, amount: amount3, items: items3 },
-      j7: { count: count7, amount: amount7, items: items3.concat(items7Only), itemsOnly: items7Only },
+      eom: { count: countEom, amount: amountEom, items: itemsEom },
     }
-  }, [upcomingOps, now])
+  }, [upcomingOps, now, eomDateStr])
 
   const driftCategories = useMemo(() => {
     const rows = summaries ?? []
@@ -1465,6 +1385,7 @@ export function Home() {
   const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
+  const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
   const [infosSheetOpen, setInfosSheetOpen] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
@@ -1485,12 +1406,12 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
@@ -1500,11 +1421,12 @@ export function Home() {
         setShowOptimizationsModal(false)
         setShowProgressModal(false)
         setShowPlannedOpsModal(false)
+        setShowPlannedOpsEomModal(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1599,10 +1521,7 @@ export function Home() {
   const animatedResteUtile = useCountUp(resteUtileDisplay)
   const animatedBudgetPerDay = useCountUp(budgetPerDayDisplay)
   const animatedBalance = useCountUp(mainAccountBalanceDisplay)
-  const observedBalanceDisplay = mainAccountBalanceStatus?.observed_balance_amount
-  const deferredCardOutstandingDisplay = mainAccountBalanceStatus?.deferred_card_outstanding_amount
   const observedOperationalBalanceDisplay = mainAccountBalanceStatus?.observed_operational_balance_amount
-  const observedDateDisplay = mainAccountBalanceStatus?.observed_date
   const actualDeltaSinceObservedDisplay = mainAccountBalanceStatus?.actual_delta_since_observed
   const plannedDeltaEomDisplay = mainAccountBalanceStatus?.future_planned_delta_eom
   const projectedBalanceEomDisplay = mainAccountBalanceStatus?.projected_balance_eom
@@ -2451,9 +2370,11 @@ export function Home() {
                 <PlannedOpsTimeline
                   j3Count={upcomingOpsWindows.j3.count}
                   j3Amount={upcomingOpsWindows.j3.amount}
-                  j7Count={upcomingOpsWindows.j7.count}
-                  j7Amount={upcomingOpsWindows.j7.amount}
-                  onClick={() => setShowPlannedOpsModal(true)}
+                  eomCount={upcomingOpsWindows.eom.count}
+                  eomAmount={upcomingOpsWindows.eom.amount}
+                  daysUntilEom={daysRemaining}
+                  onClickJ3={() => setShowPlannedOpsModal(true)}
+                  onClickEom={() => setShowPlannedOpsEomModal(true)}
                 />
               </div>
             </motion.section>
@@ -2750,7 +2671,6 @@ export function Home() {
       <BottomSheet
         open={showHeroBalanceModal}
         onClose={() => setShowHeroBalanceModal(false)}
-        title="Détail du solde"
         zIndex={69}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
@@ -2767,32 +2687,7 @@ export function Home() {
           ) : (
             <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde observé banque</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                  {formatCurrencyFloored(Number(observedBalanceDisplay ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Date d&apos;observation</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                  {observedDateDisplay ? formatDateShort(observedDateDisplay) : '—'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Encours carte différée</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 700,
-                    color: Number(deferredCardOutstandingDisplay ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
-                  }}
-                >
-                  {formatSignedCurrency(Number(deferredCardOutstandingDisplay ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde opérationnel observé</span>
+                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde opérationnel relevé</span>
                 <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
                   {formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
                 </span>
@@ -2830,16 +2725,12 @@ export function Home() {
               </div>
             </div>
           )}
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.4 }}>
-            Le solde estimé est calculé à partir du dernier solde bancaire observé, diminué de l&apos;encours carte différée, puis ajusté avec les mouvements réels enregistrés depuis cette date.
-          </p>
         </div>
       </BottomSheet>
 
       <BottomSheet
         open={showResteUtileModal}
         onClose={() => setShowResteUtileModal(false)}
-        title="Détails du calcul"
         zIndex={70}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
@@ -2849,7 +2740,7 @@ export function Home() {
                 <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
                 Revenus encaissés
               </span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(revenueAmountDisplay)}</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', fontWeight: 700 }}>+{formatCurrencyFloored(revenueAmountDisplay)}</span>
             </div>
             <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
@@ -2884,8 +2775,8 @@ export function Home() {
               }}
             >
               <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total protégé</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-                {formatCurrencyFloored(protectedAmountsTotalDisplay)}
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', fontWeight: 800 }}>
+                -{formatCurrencyFloored(protectedAmountsTotalDisplay)}
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -2900,6 +2791,27 @@ export function Home() {
               <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
               <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
             </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-3)',
+                borderTop: '1px solid var(--neutral-200)',
+                paddingTop: 'var(--space-2)',
+                marginTop: '2px',
+                background: 'color-mix(in oklab, var(--neutral-100) 52%, transparent 48%)',
+                borderRadius: 'var(--radius-sm)',
+                paddingLeft: 'var(--space-1)',
+                paddingRight: 'var(--space-1)',
+                minHeight: 28,
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total consommé</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', fontWeight: 800 }}>
+                -{formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}
+              </span>
+            </div>
           </div>
 
           <div
@@ -2912,7 +2824,7 @@ export function Home() {
               gap: 'var(--space-3)',
             }}
           >
-            <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 Reste utile
               </p>
@@ -2920,7 +2832,7 @@ export function Home() {
                 {formatCurrencyFloored(resteUtileDisplay)}
               </p>
             </div>
-            <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 Budget jour
               </p>
@@ -2990,8 +2902,18 @@ export function Home() {
       <PlannedOpsModal
         open={showPlannedOpsModal}
         onClose={() => setShowPlannedOpsModal(false)}
-        j3Items={upcomingOpsWindows.j3.items}
-        j7OnlyItems={upcomingOpsWindows.j7.itemsOnly}
+        title="Échéances J+3"
+        dotColor="var(--primary-500)"
+        shadowColor="rgba(91,87,245,0.2)"
+        items={upcomingOpsWindows.j3.items}
+      />
+      <PlannedOpsModal
+        open={showPlannedOpsEomModal}
+        onClose={() => setShowPlannedOpsEomModal(false)}
+        title="Échéances fin de mois"
+        dotColor="#FFAB2E"
+        shadowColor="rgba(255,171,46,0.2)"
+        items={upcomingOpsWindows.eom.items}
       />
     </div>
   )

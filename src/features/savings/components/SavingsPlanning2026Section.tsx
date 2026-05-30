@@ -5,6 +5,8 @@ import { StatsSection } from '@/features/stats/components/ui'
 import { useSavingsAnalytics } from '@/features/savings/hooks/useSavingsAnalytics'
 import { useMonthlyBudgetForecast } from '@/features/savings/hooks/useMonthlyBudgetForecast'
 import type { MonthlyBudgetForecastRow } from '@/features/savings/hooks/useMonthlyBudgetForecast'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { PILOTAGE_BUCKET_ORDER } from '@/features/annual-analysis/components/_constants'
 import type { SavingsMonthlyMetric } from '@/features/savings/types'
 import { useSavingsActualsByMonth } from '@/features/savings/hooks/useSavingsActualsByMonth'
 import {
@@ -426,6 +428,12 @@ function PlanningModal({
 }) {
   const data = monthData
   const past = isPastMonth(milestone.id)
+  const [milestoneYear, milestoneMonth] = milestone.id.split('-').map(Number)
+  const { data: budgetPayload } = useBudgetPagePayload({
+    periodYear: milestoneYear,
+    periodMonth: milestoneMonth,
+    monthsBack: 1,
+  })
   const [isEditing, setIsEditing] = useState(false)
   const [isPlannedTransferConfirmed, setIsPlannedTransferConfirmed] = useState(false)
   const [draft, setDraft] = useState<EditablePlanningDraft>(() => createPlanningDraft(data))
@@ -439,19 +447,30 @@ function PlanningModal({
   // Revenus : réels si mois passé et donnée disponible, sinon budget prévisionnel
   const revenus = metric?.income_total ?? forecast?.projected_income ?? data.revenus
 
-  // Budget dépenses de base (hors engagements futurs — ceux-ci s'affichent en ligne séparée)
-  const budgetDepenses = forecast?.projected_non_savings_expenses ?? data.budgetDepenses
+  // Budget dépenses : somme des buckets de pilotage — même source que la page Budgets
+  const pilotageSet = new Set<string>(PILOTAGE_BUCKET_ORDER as readonly string[])
+  const budgetFromPayload = (budgetPayload?.by_bucket ?? [])
+    .filter(r => pilotageSet.has(String(r.budget_bucket ?? '')))
+    .reduce((sum, r) => sum + Number(r.budget_amount ?? 0), 0)
+  const budgetDepenses = budgetFromPayload > 0
+    ? budgetFromPayload
+    : (forecast?.projected_non_savings_expenses ?? data.budgetDepenses)
 
   // Engagements futurs (hors budget standard)
   const forwardAmount = forecast?.forward_commitments_amount ?? 0
+
+  // Dépenses réelles : actual_total_to_date — même source que la page Budgets (mois révolus uniquement)
+  const depensesReelles: number | undefined = past
+    ? (budgetPayload?.summary?.actual_total_to_date ?? data.depensesReelles)
+    : undefined
 
   // Épargne et objectif
   // For closed months, missing actual savings means 0.
   // Never fallback to planned values, otherwise realized savings is overstated.
   const epargneMontant = past ? (actualSavingsAmount ?? 0) : data.epargneMontant
   const objectif = data.objectif
-  const effectiveDepenses = past && data.depensesReelles !== undefined
-    ? data.depensesReelles
+  const effectiveDepenses = past && depensesReelles !== undefined
+    ? depensesReelles
     : budgetDepenses + forwardAmount
   const monthlyBalance = computeMonthlyBalance({
     revenus,
@@ -695,12 +714,12 @@ function PlanningModal({
               />
             )
           )}
-          {past && data.depensesReelles !== undefined && (
+          {past && depensesReelles !== undefined && (
             <FluxRow
               label="Dépenses réelles"
-              value={formatMoney(data.depensesReelles)}
+              value={formatMoney(depensesReelles)}
               valueColor={
-                data.depensesReelles > budgetDepenses
+                depensesReelles > budgetDepenses
                   ? 'var(--color-negative)'
                   : 'var(--neutral-700)'
               }

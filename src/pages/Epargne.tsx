@@ -209,17 +209,18 @@ function PlanningProgressBar({ progress }: { progress: PlanningProgress }) {
           style={{
             height: '100%',
             width: `${safePct}%`,
-            background: 'linear-gradient(90deg, var(--color-warning) 0%, color-mix(in oklab, var(--color-warning) 65%, var(--primary-500) 35%) 100%)',
+            background: '#0E7490',
             transition: 'width 480ms cubic-bezier(0.22, 1, 0.36, 1)',
           }}
         />
       </div>
       <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', columnGap: 'var(--space-3)' }}>
         <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'left', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-          {formatKpiPercent(safePct)}
+          0
         </p>
         <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'center', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-          {formatKpiCurrency(progress.currentAmount)}
+          {formatKpiCurrency(progress.currentAmount)}{' '}
+          <span style={{ color: '#0E7490' }}>({formatKpiPercent(safePct)})</span>
         </p>
         <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
           {formatKpiCurrency(progress.targetAmount)}

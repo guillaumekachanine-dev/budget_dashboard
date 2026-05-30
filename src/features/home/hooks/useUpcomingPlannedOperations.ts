@@ -11,19 +11,19 @@ function toLocalIsoDate(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-export function useUpcomingPlannedOperations() {
+export function useUpcomingPlannedOperations(customEndDateStr?: string) {
   const { user } = useAuth()
   const userId = user?.id ?? null
 
   const now = new Date()
   const todayStr = toLocalIsoDate(now)
-  
-  const plus7 = new Date(now)
-  plus7.setDate(now.getDate() + 7)
-  const end7Str = toLocalIsoDate(plus7)
+
+  const defaultEnd = new Date(now)
+  defaultEnd.setDate(now.getDate() + 7)
+  const endDateStr = customEndDateStr ?? toLocalIsoDate(defaultEnd)
 
   return useQuery<PlannedOperationItem[]>({
-    queryKey: [QK.HOME, 'upcoming-planned-operations', userId, todayStr, end7Str],
+    queryKey: [QK.HOME, 'upcoming-planned-operations', userId, todayStr, endDateStr],
     enabled: Boolean(userId),
     staleTime: STALE.LIVE,
     queryFn: async (): Promise<PlannedOperationItem[]> => {
@@ -40,7 +40,7 @@ export function useUpcomingPlannedOperations() {
         .eq('planned_status', 'planned')
         .eq('is_matched', false)
         .gte('operation_date', todayStr)
-        .lte('operation_date', end7Str)
+        .lte('operation_date', endDateStr)
 
       if (errPlanned) throw errPlanned
 
@@ -52,7 +52,7 @@ export function useUpcomingPlannedOperations() {
         )
         .eq('user_id', userId)
         .gte('transfer_date', todayStr)
-        .lte('transfer_date', end7Str)
+        .lte('transfer_date', endDateStr)
 
       if (errSavings) throw errSavings
 
