@@ -292,12 +292,10 @@ function SavingsBreakdownBar({ currentSummary }: { currentSummary: SavingsCurren
 function SavingsYtdDetailModal({
   transfers,
   totalAmount,
-  count,
   onClose,
 }: {
   transfers: SavingsTransferYtdRow[]
   totalAmount: number
-  count: number
   onClose: () => void
 }) {
   return (
@@ -1009,7 +1007,6 @@ export function Epargne() {
           <SavingsYtdDetailModal
             transfers={savingsTransfersYtd?.transfers ?? []}
             totalAmount={Number(savingsTransfersYtd?.totalAmount ?? 0)}
-            count={Number(savingsTransfersYtd?.count ?? 0)}
             onClose={() => setPlanningKpiModal(null)}
           />
         ) : null}

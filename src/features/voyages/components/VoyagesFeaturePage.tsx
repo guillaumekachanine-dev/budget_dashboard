@@ -3,19 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown } from 'lucide-react'
 import { useVoyagesData } from '../hooks/useVoyagesData'
-import type { TripWithStats } from '../types'
-
-const TRIP_COLORS = [
-  '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#14B8A6',
-  '#F97316', '#8B5CF6', '#06B6D4', '#84CC16', '#EF4444',
-]
 
 const VOYAGES_ACCENT = '#F59E0B'
 const AVAILABLE_YEARS = [2025, 2026] as const
-
-function tripColor(index: number): string {
-  return TRIP_COLORS[index % TRIP_COLORS.length]
-}
 
 function formatAmount(n: number): string {
   return new Intl.NumberFormat('fr-FR', {

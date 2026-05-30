@@ -308,7 +308,8 @@ export function PlanVoyageModal({
         const fallbackSub = voyageSubcategories.find((sub) => {
           const normalizedSub = normalizeToken(sub.label)
           const normalizedName = normalizeToken(categoryName)
-          return normalizedSub === normalizedName || sub.aliases.includes(normalizedName)
+          const aliases = sub.aliases as readonly string[]
+          return normalizedSub === normalizedName || aliases.includes(normalizedName)
         }) ?? null
         const targetSub = directSub ?? fallbackSub
         if (!targetSub) continue
