@@ -81,6 +81,7 @@ export function TransactionDetailsModal({
 }: TransactionDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [tripPickerOpen, setTripPickerOpen] = useState(false)
   
   const [editLabel, setEditLabel] = useState('')
   const [editAmount, setEditAmount] = useState('')
@@ -174,6 +175,7 @@ export function TransactionDetailsModal({
     setEditShareRatio(String(transaction.personal_share_ratio ?? 1))
     setIsEditing(false)
     setShowDeleteConfirm(false)
+    setTripPickerOpen(false)
 
     modalRef.current?.focus()
 
@@ -333,14 +335,18 @@ export function TransactionDetailsModal({
                 boxShadow: 'var(--shadow-lg)',
                 padding: 'var(--space-2) var(--space-5) var(--space-4)',
                 overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <div
                 style={{
+                  flex: 1,
                   minHeight: 0,
                   overflowY: 'auto',
                   display: 'grid',
                   gap: 'var(--space-2)',
+                  paddingBottom: 'var(--space-1)',
                 }}
               >
                 <div
@@ -636,7 +642,11 @@ export function TransactionDetailsModal({
 
                   {/* Section voyage — indépendante du mode édition, toujours accessible */}
                   {!isEditing ? (
-                    <TripPickerSection transaction={transaction} />
+                    <TripPickerSection
+                      transaction={transaction}
+                      pickerOpen={tripPickerOpen}
+                      setPickerOpen={setTripPickerOpen}
+                    />
                   ) : null}
 
                   <div style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
@@ -969,6 +979,112 @@ export function TransactionDetailsModal({
                   </div>
                 ) : null}
               </div>
+
+              {!isEditing && (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    paddingTop: 'var(--space-3)',
+                    borderTop: '1px solid var(--neutral-200)',
+                    flexShrink: 0,
+                    marginTop: 'var(--space-2)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      background: 'var(--color-error)',
+                      color: '#fff',
+                      borderRadius: 'var(--radius-md)',
+                      height: '36px',
+                      padding: '0 var(--space-2)',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: 'var(--shadow-sm)',
+                      transition: 'background var(--transition-fast)',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in oklab, var(--color-error) 85%, black 15%)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--color-error)'}
+                  >
+                    Supprimer
+                  </button>
+
+                  {transaction.flow_type === 'expense' ? (
+                    <button
+                      type="button"
+                      onClick={() => setTripPickerOpen(o => !o)}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        background: 'var(--primary-600)',
+                        color: '#fff',
+                        borderRadius: 'var(--radius-md)',
+                        height: '36px',
+                        padding: '0 var(--space-2)',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'var(--shadow-sm)',
+                        transition: 'background var(--transition-fast)',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-700)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'var(--primary-600)'}
+                    >
+                      Affecter
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                      width: '100%',
+                      border: '1.5px solid var(--neutral-300)',
+                      background: 'var(--neutral-100)',
+                      color: 'var(--neutral-700)',
+                      borderRadius: 'var(--radius-md)',
+                      height: '36px',
+                      padding: '0 var(--space-2)',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: 'var(--shadow-sm)',
+                      transition: 'background var(--transition-fast), border-color var(--transition-fast)',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'var(--neutral-200)'
+                      e.currentTarget.style.borderColor = 'var(--neutral-400)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'var(--neutral-100)'
+                      e.currentTarget.style.borderColor = 'var(--neutral-300)'
+                    }}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         </>
@@ -991,77 +1107,86 @@ export function TransactionDetailsModal({
               backdropFilter: 'blur(2px)',
             }}
           />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          <div
             style={{
               position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
+              inset: 0,
               zIndex: 301,
-              width: 'min(90%, 400px)',
-              background: 'var(--neutral-0)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-              textAlign: 'center',
               display: 'grid',
-              gap: 'var(--space-4)',
+              placeItems: 'center',
+              padding: 'var(--space-4)',
+              pointerEvents: 'none',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-error-light, #fee2e2)', display: 'grid', placeItems: 'center', color: 'var(--color-error)' }}>
-                <AlertCircle size={24} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              style={{
+                width: '100%',
+                maxWidth: 400,
+                background: 'var(--neutral-0)',
+                borderRadius: 'var(--radius-xl)',
+                padding: 'var(--space-6)',
+                boxShadow: 'var(--shadow-xl)',
+                textAlign: 'center',
+                display: 'grid',
+                gap: 'var(--space-4)',
+                pointerEvents: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-error-light, #fee2e2)', display: 'grid', placeItems: 'center', color: 'var(--color-error)' }}>
+                  <AlertCircle size={24} />
+                </div>
               </div>
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>Confirmer la suppression</h3>
-              <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)' }}>Êtes-vous sûr de vouloir supprimer cette opération ? Cette action est irréversible.</p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                style={{
-                  padding: 'var(--space-2)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--neutral-200)',
-                  background: 'var(--neutral-100)',
-                  color: 'var(--neutral-700)',
-                  fontWeight: 'var(--font-weight-semibold)',
-                  cursor: 'pointer',
-                }}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!transaction) return
-                  deleteMutation.mutate(transaction.id, {
-                    onSuccess: () => {
-                      setShowDeleteConfirm(false)
-                      setIsEditing(false)
-                      onClose()
-                    }
-                  })
-                }}
-                style={{
-                  padding: 'var(--space-2)',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  background: 'var(--color-error)',
-                  color: '#fff',
-                  fontWeight: 'var(--font-weight-semibold)',
-                  cursor: 'pointer',
-                }}
-              >
-                Supprimer
-              </button>
-            </div>
-          </motion.div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)' }}>Confirmer la suppression</h3>
+                <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)' }}>Êtes-vous sûr de vouloir supprimer cette opération ? Cette action est irréversible.</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{
+                    padding: 'var(--space-2)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--neutral-200)',
+                    background: 'var(--neutral-100)',
+                    color: 'var(--neutral-700)',
+                    fontWeight: 'var(--font-weight-semibold)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!transaction) return
+                    deleteMutation.mutate(transaction.id, {
+                      onSuccess: () => {
+                        setShowDeleteConfirm(false)
+                        setIsEditing(false)
+                        onClose()
+                      }
+                    })
+                  }}
+                  style={{
+                    padding: 'var(--space-2)',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    background: 'var(--color-error)',
+                    color: '#fff',
+                    fontWeight: 'var(--font-weight-semibold)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

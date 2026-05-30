@@ -1112,20 +1112,20 @@ function OptimizationsTile({
       aria-label="Voir le détail des optimisations"
       style={{
         width: '100%',
-        minHeight: 84,
-        border: isDark ? '1px solid rgba(56, 189, 248, 0.25)' : 'none',
+        minHeight: 64,
+        border: isDark ? '1px solid rgba(91, 87, 245, 0.3)' : '1.5px solid rgba(91, 87, 245, 0.15)',
         background: isDark
           ? 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)'
-          : 'rgba(255,255,255,0.72)',
+          : 'linear-gradient(145deg, rgba(91, 87, 245, 0.08) 0%, rgba(91, 87, 245, 0.02) 100%)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-card)',
         cursor: 'pointer',
         overflow: 'hidden',
-        padding: 'var(--space-4) var(--space-5)',
+        padding: 'var(--space-2) var(--space-3)',
         display: 'flex',
-        alignItems: 'center',
+        flexDirection: 'column',
         justifyContent: 'space-between',
-        gap: 'var(--space-4)',
+        alignItems: 'stretch',
         transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
       }}
       onMouseEnter={(e) => {
@@ -1137,41 +1137,140 @@ function OptimizationsTile({
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
-      <div style={{ display: 'grid', gap: 2, textAlign: 'left' }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            fontWeight: 800,
-            color: isDark ? '#FFFFFF' : 'var(--neutral-900)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Optimisations / dépassements
-        </p>
-        <p
+      <div style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', minWidth: 0 }}>
+        <span
           style={{
             margin: 0,
             fontSize: 11,
-            fontWeight: 600,
-            color: isDark ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-500)',
+            fontWeight: 800,
+            color: isDark ? '#FFFFFF' : 'var(--neutral-800)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
-          Mois en cours
-        </p>
+          Optimisations
+        </span>
       </div>
 
-      <span
-        style={{
-          fontSize: 24,
-          fontWeight: 800,
-          fontFamily: 'var(--font-mono)',
-          color: toneColor,
-          transition: 'color var(--transition-base)',
-        }}
-      >
-        {formattedAmount}
-      </span>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', minWidth: 0, marginTop: 4 }}>
+        <span
+          style={{
+            fontSize: 'clamp(16px, 4.5vw, 19px)',
+            fontWeight: 800,
+            fontFamily: 'var(--font-mono)',
+            color: toneColor,
+            transition: 'color var(--transition-base)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {formattedAmount}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function SavingsGoalTile({
+  goalAmount,
+  reached,
+  onClick,
+}: {
+  goalAmount: number
+  reached: boolean
+  onClick?: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={`Objectif d'épargne: ${formatCurrencyFloored(goalAmount)}`}
+      style={{
+        position: 'relative',
+        width: '100%',
+        minHeight: 64,
+        border: 'none',
+        background:
+          'radial-gradient(120% 90% at 14% -8%, rgba(45, 212, 191, 0.28) 0%, rgba(45, 212, 191, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(20, 184, 166, 0.24) 0%, rgba(20, 184, 166, 0) 62%), linear-gradient(145deg, #083344 0%, #0F4C5C 48%, #0F766E 100%)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-card)',
+        cursor: onClick ? 'pointer' : 'default',
+        overflow: 'hidden',
+        padding: 'var(--space-2) var(--space-3)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        alignItems: 'stretch',
+        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
+      }}
+      onMouseEnter={(e) => {
+        if (onClick) {
+          e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
+          e.currentTarget.style.transform = 'translateY(-1px)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (onClick) {
+          e.currentTarget.style.boxShadow = 'var(--shadow-card)'
+          e.currentTarget.style.transform = 'translateY(0)'
+        }
+      }}
+    >
+      {reached && (
+        <span
+          style={{
+            position: 'absolute',
+            right: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            opacity: 0.16,
+            color: '#2ED47A',
+            zIndex: 0,
+            pointerEvents: 'none',
+          }}
+        >
+          <Check size={64} strokeWidth={3} />
+        </span>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', minWidth: 0, position: 'relative', zIndex: 1 }}>
+        <span
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'rgba(255, 255, 255, 0.82)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          Épargne
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', minWidth: 0, marginTop: 4, position: 'relative', zIndex: 1 }}>
+        <span
+          style={{
+            fontSize: 'clamp(16px, 4.5vw, 19px)',
+            fontWeight: 800,
+            fontFamily: 'var(--font-mono)',
+            color: '#E6FDF9',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {formatCurrencyFloored(goalAmount)}
+        </span>
+      </div>
     </button>
   )
 }
@@ -1195,6 +1294,38 @@ export function Home() {
   const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const eomDateStr = toLocalIsoDate(eomDate)
   const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
+
+  const optimizationsData = useMemo(() => {
+    const operations = driftOperations ?? []
+    return OPTIMIZATION_PRIORITIES_MOCK.map((row) => {
+      const matchingOps = operations.filter((op) => {
+        const catName = op.categoryName ? op.categoryName.toLowerCase() : ''
+        return row.categoryNameMatchers.some((matcher) => catName.includes(matcher.toLowerCase()))
+      })
+
+      const realAmount = matchingOps.reduce((sum, op) => sum + Math.abs(op.budgetAccountingAmount), 0)
+      
+      const consumedAmount = realAmount > 0 ? realAmount : (row.previousYearAmount / 12)
+      const objectiveAmount = row.expectedAnnualAmount / 12
+      const progressPct = objectiveAmount > 0 ? (consumedAmount / objectiveAmount) * 100 : 0
+
+      let barColor = '#5B57F5'
+      if (progressPct > 100) {
+        barColor = '#FC5A5A'
+      } else if (progressPct > 75) {
+        barColor = '#FFAB2E'
+      }
+
+      return {
+        label: row.label,
+        iconKey: row.iconKey,
+        consumedAmount,
+        objectiveAmount,
+        progressPct,
+        barColor,
+      }
+    })
+  }, [driftOperations])
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
@@ -1336,7 +1467,7 @@ export function Home() {
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
   const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
-  const [infosSheetOpen, setInfosSheetOpen] = useState(false)
+  const [infosExpanded, setInfosExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
@@ -1928,7 +2059,7 @@ export function Home() {
           position: 'sticky',
           top: 0,
           zIndex: 120,
-          marginBottom: 'var(--space-6)',
+          marginBottom: 'var(--space-2)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-end',
@@ -2431,8 +2562,21 @@ export function Home() {
             <section
               style={{ padding: sectionHorizontalPadding }}
             >
-              <div style={{ maxWidth: 600, margin: '0 auto' }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  margin: '0 auto',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 'var(--space-3)',
+                }}
+              >
                 <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} theme="dark" />
+                <SavingsGoalTile
+                  goalAmount={savingsMonthlyGoalDisplay}
+                  reached={savingsGoalReached}
+                  onClick={() => setShowSavingsModal(true)}
+                />
               </div>
             </section>
           ) : (
@@ -2445,7 +2589,7 @@ export function Home() {
                     maxWidth: 600,
                     margin: '0 auto',
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                     gap: 'var(--space-3)',
                   }}
                 >
@@ -2459,84 +2603,148 @@ export function Home() {
                     totalOverrunAmount={driftOverrunTotal}
                     onClick={() => setShowDriftsModal(true)}
                   />
-                </div>
-              </section>
-              <section
-                style={{ padding: sectionHorizontalPadding }}
-              >
-                <div style={{ maxWidth: 600, margin: '0 auto' }}>
                   <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
+                  <SavingsGoalTile
+                    goalAmount={savingsMonthlyGoalDisplay}
+                    reached={savingsGoalReached}
+                    onClick={() => setShowSavingsModal(true)}
+                  />
                 </div>
               </section>
             </>
           )}
 
-          {/* ── Module libre Infos — bouton cloche compact ── */}
+          {/* ── Module libre Infos — tuile cloche dépliable ── */}
           <section
             style={{ padding: sectionHorizontalPadding }}
           >
-            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-start' }}>
               <button
                 id="infos-bell-btn"
                 type="button"
-                onClick={() => setInfosSheetOpen(true)}
+                onClick={() => setInfosExpanded(prev => !prev)}
                 aria-label={showSnapshotReminder ? 'Voir les informations disponibles' : 'Aucune information'}
-                aria-haspopup="dialog"
                 style={{
-                  width: 48,
+                  width: infosExpanded ? '100%' : '48px',
                   height: 48,
                   borderRadius: 'var(--radius-xl)',
                   border: showSnapshotReminder
-                    ? '1px solid rgba(255,171,46,0.5)'
-                    : '1px solid var(--neutral-200)',
+                    ? '1.5px solid rgba(91, 87, 245, 0.35)'
+                    : '1.5px solid rgba(91, 87, 245, 0.12)',
                   background: showSnapshotReminder
-                    ? 'rgba(255,171,46,0.12)'
-                    : 'var(--neutral-0)',
-                  boxShadow: showSnapshotReminder
-                    ? '0 0 0 3px rgba(255,171,46,0.15), var(--shadow-card)'
-                    : 'var(--shadow-card)',
-                  display: 'inline-flex',
+                    ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.12) 0%, rgba(139, 92, 246, 0.06) 100%)'
+                    : 'rgba(91, 87, 245, 0.03)',
+                  boxShadow: 'var(--shadow-card)',
+                  display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: infosExpanded ? 'space-between' : 'center',
                   cursor: 'pointer',
-                  transition: 'background 150ms ease, box-shadow 150ms ease, transform 150ms ease',
+                  transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 150ms ease, box-shadow 150ms ease, transform 150ms ease',
                   flexShrink: 0,
                   position: 'relative',
+                  padding: infosExpanded ? '0 var(--space-4)' : 0,
+                  overflow: 'hidden',
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.transform = 'translateY(-1px)'
-                  e.currentTarget.style.boxShadow = showSnapshotReminder
-                    ? '0 0 0 3px rgba(255,171,46,0.2), var(--shadow-lg)'
-                    : 'var(--shadow-lg)'
+                  e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = showSnapshotReminder
-                    ? '0 0 0 3px rgba(255,171,46,0.15), var(--shadow-card)'
-                    : 'var(--shadow-card)'
+                  e.currentTarget.style.boxShadow = 'var(--shadow-card)'
                 }}
               >
-                <Bell
-                  size={20}
-                  color={showSnapshotReminder ? '#FFAB2E' : 'var(--neutral-400)'}
-                  strokeWidth={2.2}
-                  aria-hidden="true"
-                />
-                {/* Pastille active */}
-                {showSnapshotReminder && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: 'absolute',
-                      top: 9,
-                      right: 9,
-                      width: 7,
-                      height: 7,
-                      borderRadius: 'var(--radius-full)',
-                      background: '#FFAB2E',
-                      boxShadow: '0 0 0 2px var(--neutral-0)',
-                    }}
-                  />
+                {!infosExpanded ? (
+                  <>
+                    <Bell
+                      size={20}
+                      color={showSnapshotReminder ? '#5B57F5' : 'rgba(91, 87, 245, 0.5)'}
+                      strokeWidth={2.2}
+                      aria-hidden="true"
+                    />
+                    {showSnapshotReminder && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: '#5B57F5',
+                          border: '2px solid var(--neutral-0)',
+                        }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                      <Bell
+                        size={20}
+                        color={showSnapshotReminder ? '#5B57F5' : 'rgba(91, 87, 245, 0.5)'}
+                        strokeWidth={2.2}
+                      />
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: 'var(--neutral-800)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {showSnapshotReminder
+                          ? 'Snapshot fin de mois prêt : valide tes catégories.'
+                          : 'Aucune info pour le moment.'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+                      {showSnapshotReminder && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/budgets');
+                          }}
+                          style={{
+                            border: 'none',
+                            background: '#5B57F5',
+                            color: '#fff',
+                            borderRadius: 'var(--radius-md)',
+                            height: '28px',
+                            padding: '0 var(--space-3)',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Vérifier
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInfosExpanded(false);
+                        }}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--neutral-500)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 4,
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </button>
             </div>
@@ -2547,115 +2755,73 @@ export function Home() {
   </AnimatePresence>
 </div>
 
-      {/* ── BottomSheet Infos ── */}
-      <BottomSheet
-        open={infosSheetOpen}
-        onClose={() => setInfosSheetOpen(false)}
-        zIndex={65}
-        variant="center"
-        header={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <Bell
-                size={16}
-                color={showSnapshotReminder ? '#FFAB2E' : 'var(--neutral-400)'}
-                strokeWidth={2.2}
-                aria-hidden="true"
-              />
-              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                Informations
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setInfosSheetOpen(false)}
-              aria-label="Fermer"
-              style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-            >
-              <X size={16} />
-            </button>
-          </div>
-        }
-      >
-        <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
-          <div
-            style={{
-              background: 'var(--neutral-900)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-4)',
-              display: 'grid',
-              gap: 'var(--space-3)',
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.88)', lineHeight: 1.45 }}>
-              {showSnapshotReminder
-                ? 'Snapshot fin de mois prêt : valide tes catégories.'
-                : 'Aucune info pour le moment.'}
-            </p>
-            {showSnapshotReminder && (
-              <button
-                type="button"
-                style={{
-                  alignSelf: 'flex-start',
-                  border: 'none',
-                  background: 'rgba(255,255,255,0.14)',
-                  borderRadius: 'var(--radius-md)',
-                  minHeight: 34,
-                  padding: '0 var(--space-4)',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: 'var(--neutral-0)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Vérifier
-              </button>
-            )}
-          </div>
-        </div>
-      </BottomSheet>
-
       <BottomSheet
         open={showOptimizationsModal}
         onClose={() => setShowOptimizationsModal(false)}
-        title="Détails des optimisations"
+        title="Optimisations"
         zIndex={67}
         variant="center"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
-          {OPTIMIZATION_PRIORITIES_MOCK.map((row) => (
-            <article key={`optim-${row.label}`} style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <CategoryIcon iconKey={row.iconKey} label={row.label} size={24} />
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-900)', fontWeight: 700 }}>
-                  {row.label}
-                </p>
+          {optimizationsData.map((row) => (
+            <article
+              key={`optim-${row.label}`}
+              style={{
+                border: '1.5px solid var(--neutral-200)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3)',
+                display: 'grid',
+                gap: 'var(--space-2)',
+                background: 'var(--neutral-0)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 'var(--space-3)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <CategoryIcon iconKey={row.iconKey} label={row.label} size={20} />
+                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--neutral-900)' }}>
+                    {row.label}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--neutral-600)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {formatCurrencyFloored(row.consumedAmount)} / {formatCurrencyFloored(row.objectiveAmount)}
+                </span>
               </div>
-              <div style={{ display: 'grid', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Optimisation YTD</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: row.optimizationYtdAmount != null ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 800 }}>
-                    {row.optimizationYtdAmount != null ? `+${formatCurrencyFloored(row.optimizationYtdAmount)}` : '✕'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant précis attendu (année)</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-                    {formatCurrencyFloored(row.expectedAnnualAmount)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--neutral-600)' }}>Montant N-1</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-                    {formatCurrencyFloored(row.previousYearAmount)}
-                  </span>
-                </div>
+
+              <div
+                style={{
+                  height: 8,
+                  width: '100%',
+                  background: 'var(--neutral-150)',
+                  borderRadius: 'var(--radius-full)',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, Math.max(0, row.progressPct))}%`,
+                    background: row.barColor,
+                    borderRadius: 'var(--radius-full)',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
               </div>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                <span style={{ fontWeight: 700, color: 'var(--neutral-900)' }}>Méthode:</span>{' '}
-                {row.determinationMethod}
-              </p>
             </article>
           ))}
         </div>

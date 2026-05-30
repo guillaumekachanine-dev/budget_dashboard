@@ -301,20 +301,20 @@ function SettingsRow({
         border: '1.5px solid var(--neutral-200)',
         borderRadius: 'var(--radius-md)',
         background: 'var(--neutral-0)',
-        padding: '10px 14px',
+        padding: '4px 12px',
         cursor: interactive ? 'pointer' : 'default',
         textAlign: 'left',
         opacity: disabled ? 0.45 : 1,
-        minHeight: 52,
+        minHeight: 38,
         boxShadow: '0 1px 4px rgba(28,28,58,0.05)',
         transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
       }}
     >
       <span
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
+          width: 26,
+          height: 26,
+          borderRadius: 6,
           background: `color-mix(in srgb, ${accent} 12%, transparent)`,
           border: `1.5px solid color-mix(in srgb, ${accent} 22%, transparent)`,
           display: 'flex',
@@ -378,23 +378,23 @@ function SettingsList({
   onImputabilityToggle,
 }: SettingsListProps) {
   return (
-    <section style={{ margin: '0 var(--space-5)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <section style={{ margin: '0 var(--space-5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <SettingsRow
-        icon={<Tag size={15} strokeWidth={2.2} />}
+        icon={<Tag size={14} strokeWidth={2.2} />}
         label="Catégorie"
         value={categoryLabel}
         accentColor={accentColor}
         onClick={onCategoryClick}
       />
       <SettingsRow
-        icon={<Zap size={15} strokeWidth={2.2} />}
+        icon={<Zap size={14} strokeWidth={2.2} />}
         label="Fixe / Variable"
         value={budgetBehaviorLabel(behavior)}
         accentColor={accentColor}
         onClick={onBehaviorToggle}
       />
       <SettingsRow
-        icon={<Landmark size={15} strokeWidth={2.2} />}
+        icon={<Landmark size={14} strokeWidth={2.2} />}
         label="Compte"
         value={accountMode === 'joint' ? 'Compte joint' : 'Compte perso'}
         accentColor={accentColor}
@@ -402,7 +402,7 @@ function SettingsList({
         disabled={!canUseJoint}
       />
       <SettingsRow
-        icon={<UserCheck size={15} strokeWidth={2.2} />}
+        icon={<UserCheck size={14} strokeWidth={2.2} />}
         label="Imputabilité"
         value={imputability}
         accentColor={accentColor}
@@ -1055,12 +1055,10 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 : { bottom: 0 }),
               zIndex: 101,
               display: 'flex',
-              // Clavier ouvert → contenu depuis le haut ; sinon → centré
-              alignItems: (isMobileViewport && keyboardVisible) ? 'flex-start' : 'center',
+              // Clavier ouvert / fermé → toujours ancré en bas sur mobile
+              alignItems: isMobileViewport ? 'flex-end' : 'center',
               justifyContent: 'center',
-              padding: isMobileViewport
-                ? (keyboardVisible ? 'var(--space-2)' : 'var(--space-6) var(--space-2) var(--space-2)')
-                : 'var(--space-6)',
+              padding: isMobileViewport ? '0' : 'var(--space-6)',
               pointerEvents: 'none',
             }}
           >
@@ -1068,11 +1066,11 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-modal-title"
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="w-[min(500px,100%)] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
+            initial={{ opacity: 0, y: isMobileViewport ? '100%' : 8, scale: isMobileViewport ? 1 : 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: isMobileViewport ? '100%' : 8, scale: isMobileViewport ? 1 : 0.96 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+            className="w-[min(500px,100%)] overflow-hidden bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
             style={{
               maxHeight: modalMaxHeight,
               // Clavier ouvert → 100% du wrapper pour que flex-1 interne scrolle correctement
@@ -1084,6 +1082,10 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   ? 'auto'
                   : 'min(82dvh, 100%)',
               pointerEvents: 'auto',
+              borderTopLeftRadius: 'var(--radius-xl)',
+              borderTopRightRadius: 'var(--radius-xl)',
+              borderBottomLeftRadius: isMobileViewport ? 0 : 'var(--radius-xl)',
+              borderBottomRightRadius: isMobileViewport ? 0 : 'var(--radius-xl)',
             }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -1102,7 +1104,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               <header
                 className="relative overflow-hidden"
                 style={{
-                  minHeight: keyboardVisible ? (isMobileViewport ? 168 : 182) : (isMobileViewport ? 200 : 216),
+                  minHeight: keyboardVisible ? (isMobileViewport ? 116 : 124) : (isMobileViewport ? 136 : 148),
                   paddingTop: 'var(--space-4)',
                   paddingBottom: 'var(--space-2)',
                   background: headerBackgroundColor,
@@ -1110,6 +1112,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                   boxShadow: 'none',
                   display: 'flex',
                   flexDirection: 'column',
+                  gap: 10,
                 }}
               >
                 <h2 id="add-transaction-modal-title" className="sr-only">
@@ -1188,6 +1191,13 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                         setValue('date', event.target.value)
                         clearErrors('date')
                       }}
+                      onClick={(event) => {
+                        try {
+                          event.currentTarget.showPicker()
+                        } catch (err) {
+                          // Fallback for older browsers
+                        }
+                      }}
                       aria-label="Date de l'opération"
                       style={{
                         position: 'absolute',
@@ -1205,7 +1215,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 </div>
 
                 {/* Montant — ancré en bas du header, texte blanc */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <AmountInput
                     cockpit
                     value={amountDisplay}
@@ -1245,15 +1255,16 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                       border: '1.5px solid var(--neutral-200)',
                       borderRadius: 'var(--radius-md)',
                       background: 'var(--neutral-0)',
-                      padding: '10px 14px',
+                      padding: '4px 12px',
+                      minHeight: 38,
                       boxShadow: '0 1px 4px rgba(28,28,58,0.05)',
                     }}
                   >
                     <span
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
+                        width: 26,
+                        height: 26,
+                        borderRadius: 6,
                         background: `color-mix(in srgb, ${typeAccentColor} 12%, transparent)`,
                         border: `1.5px solid color-mix(in srgb, ${typeAccentColor} 22%, transparent)`,
                         display: 'flex',
@@ -1263,7 +1274,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                         color: typeAccentColor,
                       }}
                     >
-                      <AlignLeft size={15} strokeWidth={2.2} />
+                      <AlignLeft size={14} strokeWidth={2.2} />
                     </span>
                     <input
                       ref={descriptionRef}

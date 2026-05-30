@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Plane, X, ChevronDown, ChevronUp, Loader, ArrowRight } from 'lucide-react'
+import { X, ArrowRight } from 'lucide-react'
 import { QK, STALE } from '@/lib/queryKeys'
 import { getAllTrips } from '@/features/voyages/api/getVoyagesData'
 import { useAssignTripToTransaction } from '@/hooks/useTransactions'
@@ -154,11 +154,12 @@ function TripOption({
 
 interface TripPickerSectionProps {
   transaction: Transaction
+  pickerOpen: boolean
+  setPickerOpen: (open: boolean) => void
 }
 
-export function TripPickerSection({ transaction }: TripPickerSectionProps) {
+export function TripPickerSection({ transaction, pickerOpen, setPickerOpen }: TripPickerSectionProps) {
   const navigate = useNavigate()
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   // État local optimiste : mis à jour immédiatement après mutation,
   // en avance sur la re-prop du parent (qui arrive après invalidation + refetch).
@@ -206,6 +207,8 @@ export function TripPickerSection({ transaction }: TripPickerSectionProps) {
     }
   }
 
+  if (!currentTrip && !pickerOpen && !saveError) return null
+
   return (
     <div
       style={{
@@ -216,92 +219,6 @@ export function TripPickerSection({ transaction }: TripPickerSectionProps) {
         gap: 'var(--space-2)',
       }}
     >
-      {/* ── En-tête de section ──────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-medium)',
-            color: 'var(--neutral-600)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-          }}
-        >
-          <Plane size={12} />
-          Voyage
-        </span>
-
-        {isSaving ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--neutral-400)' }}>
-            <Loader size={11} style={{ animation: 'spin 1s linear infinite' }} />
-            Enregistrement…
-          </span>
-        ) : currentTrip ? (
-          // Voyage rattaché → bouton Retirer
-          <button
-            type="button"
-            onClick={() => handleAssign(null)}
-            disabled={isSaving}
-            aria-label={`Retirer le voyage ${currentTrip.name}`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--neutral-500)',
-              border: '1px solid var(--neutral-200)',
-              borderRadius: 'var(--radius-full)',
-              padding: '2px 8px',
-              background: 'transparent',
-              cursor: 'pointer',
-              transition: 'color 100ms ease',
-            }}
-          >
-            <X size={10} />
-            Retirer
-          </button>
-        ) : (
-          // Pas de voyage → toggle picker
-          <button
-            type="button"
-            onClick={() => setPickerOpen(o => !o)}
-            disabled={tripsQuery.isLoading || isSaving}
-            aria-expanded={pickerOpen}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 11,
-              fontWeight: 700,
-              color: VOYAGE_ACCENT,
-              border: `1px solid ${VOYAGE_ACCENT}`,
-              borderRadius: 'var(--radius-full)',
-              padding: '2px 8px',
-              background: 'transparent',
-              cursor: tripsQuery.isLoading ? 'wait' : 'pointer',
-              transition: 'background 100ms ease',
-            }}
-          >
-            {tripsQuery.isLoading ? (
-              <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} />
-            ) : pickerOpen ? (
-              <ChevronUp size={10} />
-            ) : (
-              <ChevronDown size={10} />
-            )}
-            Affecter
-          </button>
-        )}
-      </div>
-
       {/* ── Voyage actuel (si rattaché) ─────────────────────────────────── */}
       {currentTrip ? (
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
@@ -359,36 +276,53 @@ export function TripPickerSection({ transaction }: TripPickerSectionProps) {
             <ArrowRight size={10} />
           </button>
         </div>
-      ) : (
-        <p
-          style={{
-            margin: 0,
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: 'var(--neutral-400)',
-          }}
-        >
-          Aucun voyage rattaché
-        </p>
-      )}
+      ) : null}
 
       {/* ── Picker: liste déroulante de voyages ─────────────────────────── */}
-      {pickerOpen && !currentTrip ? (
+      {pickerOpen ? (
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           {rankedTrips.length === 0 ? (
             <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-2) 0' }}>
               Aucun voyage enregistré
             </p>
           ) : (
-            rankedTrips.map(trip => (
-              <TripOption
-                key={trip.id}
-                trip={trip}
-                isSelected={trip.id === transaction.trip_id}
-                isSaving={isSaving}
-                onSelect={() => handleAssign(trip.id)}
-              />
-            ))
+            <>
+              {currentTrip && (
+                <button
+                  type="button"
+                  onClick={() => handleAssign(null)}
+                  disabled={isSaving}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    background: 'transparent',
+                    border: '1px dashed var(--neutral-300)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: isSaving ? 'wait' : 'pointer',
+                    textAlign: 'left',
+                    color: 'var(--neutral-500)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    transition: 'all 100ms ease',
+                  }}
+                >
+                  <X size={14} />
+                  Retirer l&apos;affectation au voyage
+                </button>
+              )}
+              {rankedTrips.map(trip => (
+                <TripOption
+                  key={trip.id}
+                  trip={trip}
+                  isSelected={trip.id === localTripId}
+                  isSaving={isSaving}
+                  onSelect={() => handleAssign(trip.id === localTripId ? null : trip.id)}
+                />
+              ))}
+            </>
           )}
         </div>
       ) : null}
