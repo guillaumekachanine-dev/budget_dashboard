@@ -22,7 +22,7 @@ interface UseTransactionsOptions {
 // debugSource est exclu de la queryKey pour éviter des clés non-partageables
 function buildQueryKey(filters: TransactionFilters) {
   return [
-    'transactions',
+    QK.TRANSACTIONS,
     {
       accountId: filters.accountId,
       categoryId: filters.categoryId,
@@ -120,6 +120,11 @@ function invalidateTransactionsForAccount(queryClient: ReturnType<typeof useQuer
   })
 }
 
+function refreshFluxOperations(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: [QK.FLUX_OPERATIONS] })
+  void queryClient.refetchQueries({ queryKey: [QK.FLUX_OPERATIONS], type: 'active' })
+}
+
 // Invalide tous les caches analytics dérivés des transactions.
 // N'invalide PAS les tables de config statiques (categories, budget_periods, bucket_map)
 // ni les données 2025 figées (annual-2025-analysis).
@@ -164,6 +169,7 @@ export function useAddTransaction() {
     },
     onSuccess: (_, txn) => {
       invalidateTransactionsForAccount(queryClient, txn.account_id)
+      refreshFluxOperations(queryClient)
       void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
       invalidateAllAnalyticsCaches(queryClient)
     },
@@ -189,6 +195,7 @@ export function useUpdateTransaction() {
       } else {
         void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
+      refreshFluxOperations(queryClient)
       void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
       invalidateAllAnalyticsCaches(queryClient)
     },
@@ -217,6 +224,7 @@ export function useAssignTripToTransaction() {
       } else {
         void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
       }
+      refreshFluxOperations(queryClient)
       void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
       // Vues voyage : le cockpit et les données annuelles dépendent de trip_id
       void queryClient.invalidateQueries({ queryKey: [QK.TRIP_COCKPIT] })
@@ -237,6 +245,7 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       // account_id inconnu après delete — invalidation large inévitable
       void queryClient.invalidateQueries({ queryKey: [QK.TRANSACTIONS] })
+      refreshFluxOperations(queryClient)
       void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
       invalidateAllAnalyticsCaches(queryClient)
     },
