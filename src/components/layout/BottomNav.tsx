@@ -94,8 +94,9 @@ const rootStyle: CSSProperties = {
 const navStyle: CSSProperties = {
   position: 'relative',
   boxSizing: 'border-box',
-  minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom))',
-  paddingBottom: 'var(--safe-bottom)',
+  height: 'var(--bottom-nav-height)',
+  minHeight: 'var(--bottom-nav-height)',
+  paddingBottom: 0,
   background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
   borderTop: 'none',
   boxShadow: 'var(--shadow-lg)',

@@ -150,11 +150,11 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   /* HEADER — hauteur totale du header sticky (safe-top + 44px contenu + 16px padding-bottom) */
   --header-height: calc(var(--safe-top) + 52px);
-  --bottom-nav-visual-height: 44px;
-  --bottom-nav-safe-bottom: var(--safe-bottom);
-  --bottom-nav-total-height: calc(var(--bottom-nav-visual-height) + var(--bottom-nav-safe-bottom));
+  --bottom-nav-visual-height: 52px;
+  --bottom-nav-safe-bottom: 0px;
+  --bottom-nav-total-height: var(--bottom-nav-visual-height);
   --safe-top-offset: var(--safe-top);
-  --safe-bottom-offset: var(--safe-bottom);
+  --safe-bottom-offset: 0px;
   --app-height: 100dvh;
   --bottom-nav-height: var(--bottom-nav-visual-height);
   --nav-base-height: var(--bottom-nav-height);
