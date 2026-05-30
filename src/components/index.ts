@@ -11,6 +11,7 @@ export { BottomNav } from './layout/BottomNav'
 
 // Modals
 export { AddTransactionModal } from './modals/AddTransactionModal'
+export { DetailModal, DetailModalRow, DetailModalSeparator } from './modals/DetailModal'
 
 // Other UI
 export { AccountCard } from './ui/AccountCard'

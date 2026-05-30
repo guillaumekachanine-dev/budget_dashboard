@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import {
+  DetailModal,
+  DetailModalRow,
+  DetailModalSeparator,
+} from '@/components'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import optimisationIcon from '@/assets/icons/app/epargne_optimisation.webp'
@@ -296,85 +301,34 @@ function SavingsYtdDetailModal({
   onClose: () => void
 }) {
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.52)' }}
-      />
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Détail épargne YTD"
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.96, opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-        onClick={(event) => event.stopPropagation()}
-        style={{
-          position: 'fixed',
-          left: 'var(--page-gutter)',
-          right: 'var(--page-gutter)',
-          top: '12vh',
-          bottom: '10vh',
-          zIndex: 91,
-          maxWidth: 780,
-          margin: '0 auto',
-          background: 'var(--neutral-0)',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--neutral-200)',
-          boxShadow: '0 16px 48px rgba(13,13,31,0.24)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'grid', gap: 2 }}>
-            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 800 }}>
-              Détail épargne YTD
-            </h3>
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-              {count} virement{count > 1 ? 's' : ''} • Total {formatKpiCurrency(totalAmount)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', width: 30, height: 30, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-        {transfers.length === 0 ? (
-          <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 'var(--space-5)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>Aucun virement d’épargne réalisé.</p>
-          </div>
-        ) : (
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '86px minmax(0,1.2fr) 120px minmax(0,1fr) minmax(0,1fr)', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--neutral-100)', borderBottom: '1px solid var(--neutral-200)' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Date</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Libellé</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', textAlign: 'right' }}>Montant</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Compte d’origine</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase' }}>Destination</span>
-            </div>
-            {transfers.map((row) => (
-              <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '86px minmax(0,1.2fr) 120px minmax(0,1fr) minmax(0,1fr)', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--neutral-150)', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', fontFamily: 'var(--font-mono)' }}>{row.transactionDate}</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</span>
-                <span style={{ fontSize: 12, color: 'var(--neutral-900)', fontWeight: 800, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatKpiCurrency(row.personalAmount)}</span>
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.sourceAccount}</span>
-                <span style={{ fontSize: 11, color: 'var(--neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.destination}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-    </>
+    <DetailModal
+      open
+      onClose={onClose}
+      title="Transactions réalisées YTD"
+      accentColor="var(--color-warning)"
+    >
+      {transfers.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>
+          Aucun virement d’épargne réalisé.
+        </p>
+      ) : (
+        <>
+          {transfers.map((row) => (
+            <DetailModalRow
+              key={row.id}
+              label={`${row.transactionDate.slice(0, 5)} · Virement ${row.sourceAccount} → ${row.destination}`}
+              value={formatKpiCurrency(row.personalAmount)}
+            />
+          ))}
+          <DetailModalSeparator />
+          <DetailModalRow
+            label="Total"
+            value={formatKpiCurrency(totalAmount)}
+            variant="total"
+          />
+        </>
+      )}
+    </DetailModal>
   )
 }
 

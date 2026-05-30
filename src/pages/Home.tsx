@@ -29,6 +29,11 @@ import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalance
 import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
 import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
 import { formatSignedEuro } from '@/features/stats/components/ui/analyticsFormatters'
+import {
+  DetailModal,
+  DetailModalRow,
+  DetailModalSeparator,
+} from '@/components'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -276,62 +281,17 @@ function DriftCategoryTransactionsModal({
   )
 }
 
-function PlannedOpsItemRow({ item }: { item: PlannedOperationItem }) {
-  const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-  const isIncome = item.flow_type === 'income'
-  const isSavings = item.flow_type === 'savings'
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 0',
-        borderBottom: '1px solid var(--neutral-100)',
-      }}
-    >
-      <div style={{ minWidth: 0, display: 'grid', gap: 1, flex: 1, marginRight: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.label}
-          </span>
-          <span style={{
-            fontSize: 9,
-            fontWeight: 700,
-            padding: '1px 5px',
-            borderRadius: 'var(--radius-sm)',
-            textTransform: 'uppercase',
-            background: isIncome ? 'rgba(46,212,122,0.1)' : isSavings ? 'rgba(255,171,46,0.1)' : 'rgba(91,87,245,0.1)',
-            color: isIncome ? 'var(--color-positive)' : isSavings ? 'var(--color-warning)' : 'var(--primary-500)',
-            flexShrink: 0,
-          }}>
-            {isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'}
-          </span>
-        </div>
-        <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)' }}>
-          {new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-        </span>
-      </div>
-      <span style={{ fontSize: 13, fontWeight: 800, color: isIncome ? 'var(--color-positive)' : 'var(--neutral-900)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-        {isIncome ? '+' : '-'}{formatCurrencyFloored(amount)}
-      </span>
-    </div>
-  )
-}
-
 function PlannedOpsModal({
   open,
   onClose,
   title,
   dotColor,
-  shadowColor,
   items,
 }: {
   open: boolean
   onClose: () => void
   title: string
   dotColor: string
-  shadowColor: string
   items: PlannedOperationItem[]
 }) {
   const total = items.reduce((sum, item) => {
@@ -341,52 +301,45 @@ function PlannedOpsModal({
   }, 0)
 
   return (
-    <BottomSheet
+    <DetailModal
       open={open}
       onClose={onClose}
-      zIndex={200}
-      variant="center"
-      header={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: 'var(--radius-full)', background: dotColor, boxShadow: `0 0 0 3px ${shadowColor}`, flexShrink: 0 }} />
-            <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-              {title}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      }
+      title={title}
+      accentColor={dotColor}
     >
-      <div style={{ padding: '0 var(--space-5) var(--space-6)', display: 'grid', gap: 'var(--space-3)' }}>
-        {items.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
-            Aucune opération planifiée.
-          </p>
-        ) : (
-          <>
-            <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-              {items.map((item) => <PlannedOpsItemRow key={item.id} item={item} />)}
-            </div>
-            {items.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--neutral-200)' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-600)' }}>Total</span>
-                <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: total >= 0 ? 'var(--neutral-900)' : 'var(--color-positive)' }}>
-                  {total >= 0 ? '-' : '+'}{formatCurrencyFloored(Math.abs(total))}
-                </span>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </BottomSheet>
+      {items.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', fontStyle: 'italic' }}>
+          Aucune opération planifiée.
+        </p>
+      ) : (
+        <>
+          {items.map((item) => {
+            const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+            const isIncome = item.flow_type === 'income'
+            const isSavings = item.flow_type === 'savings'
+            const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
+            const dateLabel = new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+            return (
+              <DetailModalRow
+                key={item.id}
+                label={`${item.label} (${flowLabel}, ${dateLabel})`}
+                value={`${isIncome ? '+' : '-'}${formatCurrencyFloored(amount)}`}
+              />
+            )
+          })}
+          {items.length > 1 ? (
+            <>
+              <DetailModalSeparator />
+              <DetailModalRow
+                label="Total"
+                value={`${total >= 0 ? '-' : '+'}${formatCurrencyFloored(Math.abs(total))}`}
+                variant="total"
+              />
+            </>
+          ) : null}
+        </>
+      )}
+    </DetailModal>
   )
 }
 
@@ -411,43 +364,28 @@ function DriftsModal({
   onCategoryClick: (id: string) => void
 }) {
   const [showTop5, setShowTop5] = useState(false)
+  const titleWithTotal = (
+    <span>
+      <span>{'Catégories en dérive '}</span>
+      <span style={{ color: 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>
+        {`+${formatCurrencyFloored(totalOverrunAmount)}`}
+      </span>
+    </span>
+  ) as unknown as string
 
   return (
-    <BottomSheet
+    <DetailModal
       open={open}
       onClose={onClose}
-      zIndex={200}
-      variant="center"
-      header={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <TriangleAlert size={17} color="var(--color-warning)" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                Catégories en dérive
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                {`+${formatCurrencyFloored(totalOverrunAmount)}`}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            style={{ flexShrink: 0, border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-600)', minWidth: 44, minHeight: 44, borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      }
+      title={titleWithTotal}
+      accentColor="var(--color-warning)"
     >
       {loadingSummaries ? (
-        <p style={{ margin: 0, padding: 'var(--space-8) var(--space-5)', textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
+        <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-400)' }}>
           Chargement…
         </p>
       ) : driftRows.length === 0 ? (
-        <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
+        <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)' }}>
           <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
             Budget sous contrôle. Rien à signaler pour le moment.
           </p>
@@ -464,19 +402,21 @@ function DriftsModal({
                 const drift = Number(row.driftPct ?? 0)
                 const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'var(--neutral-500)'
                 return (
-                  <p key={row.id} style={{ margin: 0, fontSize: 12, color: 'var(--neutral-700)', lineHeight: 1.35 }}>
-                    {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)} — `}
-                    <span style={{ color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                  <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.3 }}>
+                      {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                    </span>
+                    <span style={{ fontSize: 12, color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
                     </span>
-                  </p>
+                  </div>
                 )
               })}
             </div>
           ) : null}
         </div>
       ) : (
-        <div style={{ padding: '0 var(--space-5)' }}>
+        <div style={{ display: 'grid', gap: 6 }}>
           {driftRows.map((row) => {
             const overrunAmount = Math.max(0, Number(row.overrunAmount ?? 0))
             return (
@@ -486,39 +426,23 @@ function DriftsModal({
                 onClick={() => onCategoryClick(row.id)}
                 style={{
                   border: 'none',
-                  borderBottom: '1px solid var(--neutral-100)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  minHeight: 44,
-                  padding: '8px 0',
+                  padding: 0,
                   width: '100%',
                   background: 'transparent',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  transition: 'background-color var(--transition-fast)',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--neutral-50)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
               >
-                <span style={{ fontSize: 10, color: 'var(--neutral-400)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 32, textAlign: 'left' }}>
-                  {row.exceedDate ?? '--/--'}
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <CategoryIcon iconKey={row.iconKey} size={18} label={row.name} />
-                </span>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--neutral-800)' }}>
-                  {`${row.name} — ${formatCurrencyFloored(row.spent)}`}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-error)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {`+${formatCurrencyFloored(overrunAmount)}`}
-                </span>
+                <DetailModalRow
+                  label={`${row.exceedDate ?? '--/--'} · ${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                  value={`+${formatCurrencyFloored(overrunAmount)}`}
+                />
               </button>
             )
           })}
         </div>
       )}
-    </BottomSheet>
+    </DetailModal>
   )
 }
 
@@ -1548,6 +1472,18 @@ export function Home() {
   const animatedBudgetPerDay = useCountUp(budgetPerDayDisplay)
   const animatedBalance = useCountUp(mainAccountBalanceDisplay)
   const observedOperationalBalanceDisplay = mainAccountBalanceStatus?.observed_operational_balance_amount
+  const observedDateDayMonthLabel = useMemo(() => {
+    const observedDate = mainAccountBalanceStatus?.observed_date
+    if (!observedDate) return '—'
+    const [yearPart, monthPart, dayPart] = observedDate.split('-')
+    if (!yearPart || !monthPart || !dayPart) return '—'
+    return `${dayPart}/${monthPart}`
+  }, [mainAccountBalanceStatus?.observed_date])
+  const todayDayMonthLabel = useMemo(() => {
+    const day = String(now.getDate()).padStart(2, '0')
+    const monthValue = String(now.getMonth() + 1).padStart(2, '0')
+    return `${day}/${monthValue}`
+  }, [now])
   const actualDeltaSinceObservedDisplay = mainAccountBalanceStatus?.actual_delta_since_observed
   const plannedDeltaEomDisplay = mainAccountBalanceStatus?.future_planned_delta_eom
   const projectedBalanceEomDisplay = mainAccountBalanceStatus?.projected_balance_eom
@@ -2773,183 +2709,146 @@ export function Home() {
         </div>
       </BottomSheet>
 
-      <BottomSheet
-        open={showHeroBalanceModal}
-        onClose={() => setShowHeroBalanceModal(false)}
-        zIndex={69}
-        variant="center"
-      >
-        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
-          {loadingMainAccountBalanceStatus ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-500)', fontSize: 12 }}>Chargement du détail du solde…</p>
-          ) : hasMainAccountBalanceStatusError ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
-              Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
-            </p>
-          ) : hasMissingSnapshot ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-700)', fontSize: 13 }}>
-              Aucun solde bancaire de référence disponible.
-            </p>
-          ) : (
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde opérationnel relevé</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                  {formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Mouvements depuis observation</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 700,
-                    color: Number(actualDeltaSinceObservedDisplay ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
-                  }}
-                >
-                  {formatSignedCurrency(Number(actualDeltaSinceObservedDisplay ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde estimé aujourd&apos;hui</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                  {formatCurrencyFloored(Number(mainAccountBalanceStatus?.estimated_balance_today ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Opérations prévues restantes</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                  {formatCurrencyFloored(Number(plannedDeltaEomDisplay ?? 0))}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>Solde projeté fin de mois</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--neutral-900)' }}>
-                  {formatCurrencyFloored(Number(projectedBalanceEomDisplay ?? 0))}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </BottomSheet>
-
-      <BottomSheet
-        open={showResteUtileModal}
-        onClose={() => setShowResteUtileModal(false)}
-        zIndex={70}
-        variant="center"
-      >
-        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
-          <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-                Revenus encaissés
-              </span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', fontWeight: 700 }}>+{formatCurrencyFloored(revenueAmountDisplay)}</span>
-            </div>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-              Montants protégés
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Socle fixe prévu</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(fixedBudgetAmountDisplay)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Provisions prévues</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(provisionBudgetAmountDisplay)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Épargne prévue</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(plannedSavingsAmountDisplay)}</span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-3)',
-                borderTop: '1px solid var(--neutral-200)',
-                paddingTop: 'var(--space-2)',
-                marginTop: '2px',
-                background: 'color-mix(in oklab, var(--neutral-100) 52%, transparent 48%)',
-                borderRadius: 'var(--radius-sm)',
-                paddingLeft: 'var(--space-1)',
-                paddingRight: 'var(--space-1)',
-                minHeight: 28,
-              }}
-            >
-              <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total protégé</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', fontWeight: 800 }}>
-                -{formatCurrencyFloored(protectedAmountsTotalDisplay)}
-              </span>
-            </div>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: 'var(--neutral-900)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span aria-hidden="true" style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #111827' }} />
-              Déjà consommé
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Variable essentielle consommée</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(variableEssentialConsumedDisplay)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span style={{ fontSize: 12, color: 'var(--neutral-700)' }}>− Discrétionnaire consommé</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', fontWeight: 700 }}>{formatCurrencyFloored(discretionaryConsumedDisplay)}</span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-3)',
-                borderTop: '1px solid var(--neutral-200)',
-                paddingTop: 'var(--space-2)',
-                marginTop: '2px',
-                background: 'color-mix(in oklab, var(--neutral-100) 52%, transparent 48%)',
-                borderRadius: 'var(--radius-sm)',
-                paddingLeft: 'var(--space-1)',
-                paddingRight: 'var(--space-1)',
-                minHeight: 28,
-              }}
-            >
-              <span style={{ fontSize: 12, color: 'var(--neutral-800)', fontWeight: 700 }}>Total consommé</span>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', fontWeight: 800 }}>
-                -{formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}
-              </span>
-            </div>
-          </div>
-
-          <div
-            style={{
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-4)',
-              background: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-500) 88%, #000 12%) 0%, color-mix(in oklab, var(--primary-700) 78%, #000 22%) 100%)',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 'var(--space-3)',
-            }}
+      <AnimatePresence>
+        {showHeroBalanceModal ? (
+          <DetailModal
+            open={showHeroBalanceModal}
+            onClose={() => setShowHeroBalanceModal(false)}
+            title="Solde compte courant"
+            subtitle={`Sur la base du relevé du ${observedDateDayMonthLabel}`}
+            accentColor="var(--primary-500)"
           >
-            <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                Reste utile
+            {loadingMainAccountBalanceStatus ? (
+              <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-500)', fontSize: 12 }}>Chargement du détail du solde…</p>
+            ) : hasMainAccountBalanceStatusError ? (
+              <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
+                Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
               </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFD550', lineHeight: 1.1 }}>
-                {formatCurrencyFloored(resteUtileDisplay)}
+            ) : hasMissingSnapshot ? (
+              <p style={{ margin: 0, textAlign: 'center', color: 'var(--neutral-700)', fontSize: 13 }}>
+                Aucun solde bancaire de référence disponible.
               </p>
+            ) : (
+              <>
+                <DetailModalRow
+                  label="Solde opérationnel relevé"
+                  value={formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
+                />
+                <DetailModalRow
+                  label="Mouvements depuis observation"
+                  value={formatSignedCurrency(Number(actualDeltaSinceObservedDisplay ?? 0))}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.3 }}>
+                    {`Solde estimé le ${todayDayMonthLabel}`}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: '#D4AF37',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCurrencyFloored(Number(mainAccountBalanceStatus?.estimated_balance_today ?? 0))}
+                  </span>
+                </div>
+                <DetailModalSeparator />
+                <DetailModalRow
+                  label="Opérations prévues restantes"
+                  value={formatCurrencyFloored(Number(plannedDeltaEomDisplay ?? 0))}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.3 }}>
+                    Solde projeté fin de mois
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: '#D4AF37',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCurrencyFloored(Number(projectedBalanceEomDisplay ?? 0))}
+                  </span>
+                </div>
+              </>
+            )}
+          </DetailModal>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showResteUtileModal ? (
+          <DetailModal
+            open={showResteUtileModal}
+            onClose={() => setShowResteUtileModal(false)}
+            title="Détails du calcul"
+            accentColor="var(--primary-500)"
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#111827' }}>
+                {'\u25b8'} Revenus encaissés
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', whiteSpace: 'nowrap' }}>
+                {`+${formatCurrencyFloored(revenueAmountDisplay)}`}
+              </span>
             </div>
-            <div style={{ display: 'grid', gap: 2, justifyItems: 'center', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                Budget jour
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-2xl)', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#FFF6DC', lineHeight: 1.1 }}>
-                {formatCurrencyFloored(budgetPerDayDisplay)}
-              </p>
+
+            <div style={{ height: 2 }} />
+
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#111827' }}>
+              {'\u25b8'} Montants protégés
             </div>
-          </div>
-        </div>
-      </BottomSheet>
+            <DetailModalRow label="− Socle fixe prévu" value={formatCurrencyFloored(fixedBudgetAmountDisplay)} />
+            <DetailModalRow label="− Provisions prévues" value={formatCurrencyFloored(provisionBudgetAmountDisplay)} />
+            <DetailModalRow label="− Épargne prévue" value={formatCurrencyFloored(plannedSavingsAmountDisplay)} />
+
+            <div
+              style={{
+                marginTop: 2,
+                border: '1px solid var(--neutral-200)',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(17,24,39,0.03)',
+                padding: '10px 12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#2C2E3D' }}>Total protégé</span>
+                <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap' }}>
+                  {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#111827', marginTop: 2 }}>
+              {'\u25b8'} Déjà consommé
+            </div>
+            <DetailModalRow label="− Variable essentielle consommée" value={formatCurrencyFloored(variableEssentialConsumedDisplay)} />
+            <DetailModalRow label="− Discrétionnaire consommé" value={formatCurrencyFloored(discretionaryConsumedDisplay)} />
+
+            <div
+              style={{
+                marginTop: 2,
+                border: '1px solid var(--neutral-200)',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(17,24,39,0.03)',
+                padding: '10px 12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#2C2E3D' }}>Total consommé</span>
+                <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap' }}>
+                  {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
+                </span>
+              </div>
+            </div>
+          </DetailModal>
+        ) : null}
+      </AnimatePresence>
 
       <BudgetProgressModal
         open={showProgressModal}
@@ -3011,7 +2910,6 @@ export function Home() {
         onClose={() => setShowPlannedOpsModal(false)}
         title="Échéances J+3"
         dotColor="var(--primary-500)"
-        shadowColor="rgba(91,87,245,0.2)"
         items={upcomingOpsWindows.j3.items}
       />
       <PlannedOpsModal
@@ -3019,7 +2917,6 @@ export function Home() {
         onClose={() => setShowPlannedOpsEomModal(false)}
         title="Échéances fin de mois"
         dotColor="#FFAB2E"
-        shadowColor="rgba(255,171,46,0.2)"
         items={upcomingOpsWindows.eom.items}
       />
     </div>

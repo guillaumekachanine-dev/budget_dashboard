@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft, Plus, Pencil, ArrowRightLeft, Plane,
   ReceiptText, AlertCircle, X, Link,
@@ -8,9 +9,9 @@ import {
 import { useTripCockpit, selectDefaultTrip } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenses } from '@/features/voyages/hooks/useTripExpenses'
 import { useMatchCandidates } from '@/features/voyages/hooks/useMatchCandidates'
-import { useUpdateTripBudget } from '@/features/voyages/hooks/useUpdateTripBudget'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
+import { PlanVoyageModal } from '@/features/voyages/components/PlanVoyageModal'
 import { formatCurrencyFloored } from '@/lib/utils'
 import type { TripCockpitRow } from '@/lib/types'
 import { AmbianceBgScene, tripAmbianceBackground } from '@/features/voyages/components/AmbianceBgScene'
@@ -18,6 +19,8 @@ import { useEffect } from 'react'
 import { useVoyagesData } from '@/features/voyages/hooks/useVoyagesData'
 import { useTransaction } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
+import { useAuth } from '@/hooks/useAuth'
+import { budgetDb } from '@/lib/supabaseBudget'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { TripTransactionRattachementModal } from '@/features/voyages/components/TripTransactionRattachementModal'
 
@@ -49,8 +52,18 @@ function fmtDateRange(start: string, end: string): string {
     return `${s.getDate()}–${e.getDate()} ${MONTHS_FR[s.getMonth()]} ${s.getFullYear()}`
   }
   return `${fmtDateShort(start)} → ${fmtDate(end)}`
-}function stripVoyageSuffix(name: string): string {
+}
+
+function stripVoyageSuffix(name: string): string {
   return name.replace(/\s+voyage$/i, '').trim()
+}
+
+function normalizeCategoryLabel(name: string): string {
+  return stripVoyageSuffix(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
 }
 
 const STATUS_BADGE: Record<TripCockpitRow['trip_status'], { label: string; bg: string; color: string }> = {
@@ -186,87 +199,6 @@ function TripRailCard({
 
 
 
-// Inline budget editor
-function BudgetEditor({
-  currentBudget,
-  tripId,
-  onDone,
-}: {
-  currentBudget: number | null
-  tripId: string
-  onDone: () => void
-}) {
-  const [value, setValue] = useState(String(currentBudget ?? ''))
-  const mutation = useUpdateTripBudget()
-
-  async function handleSave() {
-    const n = parseFloat(value.replace(',', '.'))
-    if (isNaN(n) || n < 0) return
-    await mutation.mutateAsync({ tripId, plannedBudget: n })
-    onDone()
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-      <input
-        type="number"
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        placeholder="0"
-        min="0"
-        step="10"
-        style={{
-          flex:         1,
-          background:   'var(--neutral-50)',
-          border:       `1px solid ${VOYAGE_ACCENT}`,
-          borderRadius: 'var(--radius-sm)',
-          padding:      '6px var(--space-2)',
-          fontSize:     14,
-          fontWeight:   700,
-          fontFamily:   'var(--font-mono)',
-          color:        'var(--neutral-900)',
-          outline:      'none',
-          width:        90,
-        }}
-        autoFocus
-      />
-      <span style={{ fontSize: 13, color: 'var(--neutral-500)' }}>€</span>
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={mutation.isPending}
-        style={{
-          background:   VOYAGE_ACCENT_DARK,
-          color:        '#fff',
-          border:       'none',
-          borderRadius: 'var(--radius-sm)',
-          padding:      '6px 12px',
-          fontSize:     12,
-          fontWeight:   700,
-          cursor:       'pointer',
-        }}
-      >
-        {mutation.isPending ? '…' : 'OK'}
-      </button>
-      <button
-        type="button"
-        onClick={onDone}
-        style={{
-          background:   'transparent',
-          border:       '1px solid var(--neutral-200)',
-          borderRadius: 'var(--radius-sm)',
-          padding:      '6px 10px',
-          fontSize:     12,
-          color:        'var(--neutral-500)',
-          cursor:       'pointer',
-        }}
-      >
-        ✕
-      </button>
-    </div>
-  )
-}
-
 // ─── État vide ────────────────────────────────────────────────────────────────
 
 function NoTripsState({ onCreateTrip }: { onCreateTrip: () => void }) {
@@ -318,6 +250,7 @@ function NoTripsState({ onCreateTrip }: { onCreateTrip: () => void }) {
 export function Voyages() {
   const navigate  = useNavigate()
   const { tripId: urlTripId } = useParams<{ tripId?: string }>()
+  const { user } = useAuth()
 
   const {
     allTrips,
@@ -365,7 +298,8 @@ export function Voyages() {
   // ── États UI ─────────────────────────────────────────────────────────────
   const [addExpenseOpen,   setAddExpenseOpen]   = useState(false)
   const [matchSheetOpen,   setMatchSheetOpen]   = useState(false)
-  const [editingBudget,    setEditingBudget]    = useState(false)
+  const [createTripModalOpen, setCreateTripModalOpen] = useState(false)
+  const [editTripModalOpen, setEditTripModalOpen] = useState(false)
   const [annualBudgetModalOpen, setAnnualBudgetModalOpen] = useState(false)
   const [monthlyAverageModalOpen, setMonthlyAverageModalOpen] = useState(false)
   const [transactionsListModalOpen, setTransactionsListModalOpen] = useState(false)
@@ -374,9 +308,112 @@ export function Voyages() {
 
   const { data: categories = [] } = useCategories()
   const { data: activeTransaction } = useTransaction(selectedTransactionId)
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, stripVoyageSuffix(category.name)])),
+    [categories],
+  )
 
   // ── Données pour la modale Moyen/mois (sous-catégories voyage de l'année) ──
   const { tripsWithStats } = useVoyagesData(selectedYear)
+  const selectedTripWithStats = useMemo(
+    () => tripsWithStats.find((item) => item.trip.id === selectedTrip?.trip_id) ?? null,
+    [selectedTrip?.trip_id, tripsWithStats],
+  )
+  const { data: plannedCategoryRows = [] } = useQuery({
+    queryKey: ['voyages-future-planned-category-rows', user?.id ?? null, selectedTrip?.trip_id ?? null, selectedTrip?.name ?? null, selectedTrip?.start_date ?? null, selectedTrip?.end_date ?? null],
+    enabled: Boolean(
+      user?.id
+      && selectedTrip?.trip_status === 'future'
+      && selectedTrip?.name
+      && selectedTrip?.start_date
+      && selectedTrip?.end_date,
+    ),
+    queryFn: async () => {
+      const { data, error } = await budgetDb
+        .from('planned_operations')
+        .select('category_id, planned_amount')
+        .eq('user_id', user!.id)
+        .eq('flow_type', 'expense')
+        .eq('label', selectedTrip!.name)
+        .gte('planned_date', selectedTrip!.start_date)
+        .lte('planned_date', selectedTrip!.end_date)
+      if (error) throw error
+      return (data ?? []) as Array<{ category_id: string | null; planned_amount: number | null }>
+    },
+    staleTime: 60_000,
+  })
+  const expenseBars = useMemo(() => {
+    const mode: 'future' | 'ongoing' | 'default' = selectedTrip?.trip_status === 'future'
+      ? 'future'
+      : selectedTrip?.trip_status === 'ongoing'
+        ? 'ongoing'
+        : 'default'
+
+    const budgetMap = new Map<string, { name: string; amount: number }>()
+    if (mode === 'future' && plannedCategoryRows.length > 0) {
+      for (const row of plannedCategoryRows) {
+        const categoryId = row.category_id ?? ''
+        const categoryName = categoryId ? (categoryNameById.get(categoryId) ?? 'Autre') : 'Autre'
+        const key = normalizeCategoryLabel(categoryName)
+        const amount = Number(row.planned_amount ?? 0)
+        if (!key || !Number.isFinite(amount) || amount <= 0) continue
+        const current = budgetMap.get(key)
+        budgetMap.set(key, { name: stripVoyageSuffix(categoryName), amount: (current?.amount ?? 0) + amount })
+      }
+    } else {
+      for (const row of selectedTripWithStats?.byCategory ?? []) {
+        const key = normalizeCategoryLabel(row.categoryName)
+        const amount = Number(row.amount ?? 0)
+        if (!key || !Number.isFinite(amount) || amount <= 0) continue
+        const current = budgetMap.get(key)
+        budgetMap.set(key, { name: stripVoyageSuffix(row.categoryName), amount: (current?.amount ?? 0) + amount })
+      }
+    }
+
+    const consumedMap = new Map<string, { name: string; amount: number }>()
+    for (const row of categoryBreakdown) {
+      const key = normalizeCategoryLabel(row.categoryName)
+      const amount = Number(row.amount ?? 0)
+      if (!key || !Number.isFinite(amount) || amount <= 0) continue
+      const current = consumedMap.get(key)
+      consumedMap.set(key, { name: stripVoyageSuffix(row.categoryName), amount: (current?.amount ?? 0) + amount })
+    }
+
+    if (mode === 'future') {
+      const rows = [...budgetMap.entries()]
+        .map(([key, value]) => ({ key, name: value.name, budgetAmount: value.amount, consumedAmount: 0 }))
+        .sort((a, b) => b.budgetAmount - a.budgetAmount)
+      return { mode, rows }
+    }
+
+    if (mode === 'ongoing') {
+      const keys = new Set<string>([...budgetMap.keys(), ...consumedMap.keys()])
+      const rows = [...keys]
+        .map((key) => {
+          const budget = budgetMap.get(key)
+          const consumed = consumedMap.get(key)
+          return {
+            key,
+            name: consumed?.name ?? budget?.name ?? key,
+            budgetAmount: Number(budget?.amount ?? 0),
+            consumedAmount: Number(consumed?.amount ?? 0),
+          }
+        })
+        .filter((row) => row.budgetAmount > 0 || row.consumedAmount > 0)
+        .sort((a, b) => b.budgetAmount - a.budgetAmount || b.consumedAmount - a.consumedAmount)
+      return { mode, rows }
+    }
+
+    const rows = categoryBreakdown
+      .map((row) => ({
+        key: row.categoryId,
+        name: stripVoyageSuffix(row.categoryName),
+        budgetAmount: 0,
+        consumedAmount: Number(row.amount ?? 0),
+      }))
+      .sort((a, b) => b.consumedAmount - a.consumedAmount)
+    return { mode, rows }
+  }, [categoryBreakdown, categoryNameById, plannedCategoryRows, selectedTrip?.trip_status, selectedTripWithStats?.byCategory])
 
   const categoryAverages = useMemo(() => {
     const targets = ['Trajet', 'Repas', 'Logement', 'Activités', 'Froustilles']
@@ -523,26 +560,33 @@ export function Voyages() {
             </h1>
           </div>
 
-          {/* Bouton Nouveau voyage → ouvre PlanVoyageModal depuis Budgets pour l'instant */}
+          {/* Bouton Nouveau voyage */}
           <button
             type="button"
-            onClick={() => navigate('/budgets')}
+            onClick={() => setCreateTripModalOpen(true)}
             aria-label="Nouveau voyage"
-            title="Créer un voyage (depuis Budgets)"
+            title="Créer un voyage"
             style={{
-              background:    'rgba(255,255,255,0.18)',
-              border:        '1px solid rgba(255,255,255,0.30)',
-              borderRadius:  'var(--radius-full)',
-              width:         36,
-              height:        36,
-              display:       'flex',
+              background:    '#0E9AAE',
+              border:        'none',
+              borderRadius:  '9999px',
+              height:        32,
+              padding:       '0 14px',
+              display:       'inline-flex',
               alignItems:    'center',
-              justifyContent:'center',
+              justifyContent: 'center',
               cursor:        'pointer',
-              color:         'var(--neutral-0)',
+              color:         '#FFFFFF',
+              fontSize:      14,
+              fontWeight:    700,
+              lineHeight:    1,
+              letterSpacing: '0.01em',
+              boxShadow:     '0 2px 8px rgba(14,154,174,0.28)',
+              marginLeft:    'auto',
+              flexShrink:    0,
             }}
           >
-            <Plus size={16} />
+            Nouveau
           </button>
         </div>
       </header>
@@ -755,41 +799,51 @@ export function Voyages() {
                       </div>
 
                       {/* Right: amount & actions */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', zIndex: 1, flexShrink: 0 }}>
-                        {editingBudget ? (
-                          <BudgetEditor
-                            currentBudget={selectedTrip.planned_budget}
-                            tripId={selectedTrip.trip_id}
-                            onDone={() => setEditingBudget(false)}
-                          />
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setEditingBudget(true)}
-                              aria-label="Modifier le budget"
-                              style={{
-                                width: 22,
-                                height: 22,
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                borderRadius: 'var(--radius-full)',
-                                background: 'rgba(255, 255, 255, 0.15)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#fff',
-                                cursor: 'pointer',
-                                padding: 0,
-                                flexShrink: 0,
-                              }}
-                            >
-                              <Pencil size={11} />
-                            </button>
-                            <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', fontFamily: 'var(--font-mono)' }}>
-                              {selectedTrip.planned_budget != null ? formatCurrencyFloored(selectedTrip.planned_budget) : '—'}
-                            </span>
-                          </>
-                        )}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)',
+                          zIndex: 1,
+                          flexShrink: 0,
+                          background: 'rgba(31, 41, 55, 0.68)',
+                          border: '1px solid rgba(255, 255, 255, 0.18)',
+                          borderRadius: 'var(--radius-full)',
+                          padding: '4px 8px',
+                          backdropFilter: 'blur(2px)',
+                        }}
+                      >
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!selectedTripWithStats) return
+                              setEditTripModalOpen(true)
+                            }}
+                            aria-label="Modifier le budget"
+                            disabled={!selectedTripWithStats}
+                            style={{
+                              width: 22,
+                              height: 22,
+                              border: '1px solid rgba(255, 255, 255, 0.3)',
+                              borderRadius: 'var(--radius-full)',
+                              background: 'rgba(255, 255, 255, 0.15)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#fff',
+                              cursor: selectedTripWithStats ? 'pointer' : 'default',
+                              padding: 0,
+                              flexShrink: 0,
+                              opacity: selectedTripWithStats ? 1 : 0.6,
+                            }}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', fontFamily: 'var(--font-mono)' }}>
+                            {selectedTrip.planned_budget != null ? formatCurrencyFloored(selectedTrip.planned_budget) : '—'}
+                          </span>
+                        </>
                       </div>
                     </div>
 
@@ -899,7 +953,10 @@ export function Voyages() {
                         <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'center' }}>
                           <button
                             type="button"
-                            onClick={() => setEditingBudget(true)}
+                            onClick={() => {
+                              if (!selectedTripWithStats) return
+                              setEditTripModalOpen(true)
+                            }}
                             style={{
                               display:      'inline-flex',
                               alignItems:   'center',
@@ -911,8 +968,10 @@ export function Voyages() {
                               border:       `1px dashed ${VOYAGE_ACCENT}`,
                               borderRadius: 'var(--radius-sm)',
                               padding:      '4px 10px',
-                              cursor:       'pointer',
+                              cursor:       selectedTripWithStats ? 'pointer' : 'default',
+                              opacity:      selectedTripWithStats ? 1 : 0.6,
                             }}
+                            disabled={!selectedTripWithStats}
                           >
                             <Plus size={10} />
                             Définir un budget
@@ -991,18 +1050,26 @@ export function Voyages() {
                       </div>
 
                       {/* Category progress bars */}
-                      {categoryBreakdown.length > 0 ? (
+                      {expenseBars.rows.length > 0 ? (
                         <div style={{ display: 'grid', gap: 'var(--space-2.5)', borderTop: '1px solid var(--neutral-100)', paddingTop: 'var(--space-3)' }}>
                           <p style={{ margin: '0 0 var(--space-1)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--neutral-400)' }}>
                             Par poste de dépense
                           </p>
-                          {categoryBreakdown.map(cat => {
-                            const shortName = stripVoyageSuffix(cat.categoryName)
-                            const maxAmount = categoryBreakdown[0]?.amount ?? 1
-                            const pct = maxAmount > 0 ? (cat.amount / maxAmount) * 100 : 0
+                          {expenseBars.rows.map((cat) => {
+                            const maxAmount = Math.max(
+                              ...expenseBars.rows.map((row) =>
+                                expenseBars.mode === 'future'
+                                  ? row.budgetAmount
+                                  : Math.max(row.budgetAmount, row.consumedAmount),
+                              ),
+                              1,
+                            )
+                            const budgetPct = maxAmount > 0 ? (cat.budgetAmount / maxAmount) * 100 : 0
+                            const consumedPct = maxAmount > 0 ? (cat.consumedAmount / maxAmount) * 100 : 0
+                            const consumedVsBudgetPct = cat.budgetAmount > 0 ? (cat.consumedAmount / cat.budgetAmount) * 100 : 0
                             return (
                               <div
-                                key={cat.categoryId}
+                                key={cat.key}
                                 style={{
                                   display: 'grid',
                                   gridTemplateColumns: '80px 1fr 64px',
@@ -1011,21 +1078,59 @@ export function Voyages() {
                                 }}
                               >
                                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)' }}>
-                                  {shortName}
+                                  {cat.name}
                                 </span>
                                 <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                                  <div
-                                    style={{
-                                      width: `${Math.max(0, Math.min(pct, 100))}%`,
-                                      height: '100%',
-                                      borderRadius: 'var(--radius-full)',
-                                      background: '#F59E0B',
-                                      transition: 'width 0.3s ease',
-                                    }}
-                                  />
+                                  {expenseBars.mode === 'future' ? (
+                                    <div
+                                      style={{
+                                        width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
+                                        height: '100%',
+                                        borderRadius: 'var(--radius-full)',
+                                        background: '#38BDF8',
+                                        transition: 'width 0.3s ease',
+                                      }}
+                                    />
+                                  ) : expenseBars.mode === 'ongoing' ? (
+                                    <div style={{ position: 'relative', height: '100%' }}>
+                                      <div
+                                        style={{
+                                          width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
+                                          height: '100%',
+                                          borderRadius: 'var(--radius-full)',
+                                          background: '#38BDF8',
+                                          transition: 'width 0.3s ease',
+                                        }}
+                                      />
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: 0,
+                                          top: 0,
+                                          width: `${Math.max(0, Math.min(consumedPct, 100))}%`,
+                                          height: '100%',
+                                          borderRadius: 'var(--radius-full)',
+                                          background: '#F59E0B',
+                                          transition: 'width 0.3s ease',
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        width: `${Math.max(0, Math.min(consumedPct, 100))}%`,
+                                        height: '100%',
+                                        borderRadius: 'var(--radius-full)',
+                                        background: '#F59E0B',
+                                        transition: 'width 0.3s ease',
+                                      }}
+                                    />
+                                  )}
                                 </div>
                                 <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-850)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                  {formatCurrencyFloored(cat.amount)}
+                                  {expenseBars.mode === 'ongoing'
+                                    ? `${Math.round(Math.max(0, consumedVsBudgetPct))}%`
+                                    : formatCurrencyFloored(expenseBars.mode === 'future' ? cat.budgetAmount : cat.consumedAmount)}
                                 </span>
                               </div>
                             )
@@ -1101,6 +1206,26 @@ export function Voyages() {
         onClose={() => setMatchSheetOpen(false)}
         tripId={selectedTrip?.trip_id}
         tripName={selectedTrip?.name}
+      />
+
+      {selectedTripWithStats ? (
+        <PlanVoyageModal
+          open={editTripModalOpen}
+          onClose={() => setEditTripModalOpen(false)}
+          mode="edit"
+          tripToEdit={selectedTripWithStats}
+          realizedCategoryBreakdown={categoryBreakdown.map((row) => ({
+            categoryId: row.categoryId,
+            categoryName: row.categoryName,
+            amount: row.amount,
+          }))}
+        />
+      ) : null}
+
+      <PlanVoyageModal
+        open={createTripModalOpen}
+        onClose={() => setCreateTripModalOpen(false)}
+        mode="create"
       />
 
       {selectedTrip && (

@@ -130,6 +130,11 @@ interface Props {
   onClose: () => void
   mode?: 'create' | 'edit'
   tripToEdit?: TripWithStats | null
+  realizedCategoryBreakdown?: Array<{
+    categoryId: string
+    categoryName: string
+    amount: number
+  }>
 }
 
 type SubBudgets = Record<string, string>
@@ -167,7 +172,13 @@ function getSupabaseErrorMessage(error: unknown): string {
   return 'Une erreur est survenue'
 }
 
-export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = null }: Props) {
+export function PlanVoyageModal({
+  open,
+  onClose,
+  mode = 'create',
+  tripToEdit = null,
+  realizedCategoryBreakdown,
+}: Props) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const accountsQuery = useAccounts()
@@ -276,6 +287,44 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     setEndDate(editingTrip.end_date ?? '')
     setSubmitError(null)
 
+    if (isPastTrip) {
+      const sourceRows = (realizedCategoryBreakdown && realizedCategoryBreakdown.length > 0)
+        ? realizedCategoryBreakdown
+        : (tripToEdit?.byCategory ?? []).map((row) => ({
+          categoryId: row.categoryId,
+          categoryName: row.categoryName,
+          amount: row.amount,
+        }))
+      const nextBudgets: SubBudgets = {}
+      const nextJointFlags: SubJointFlags = {}
+
+      for (const row of sourceRows) {
+        const categoryId = String(row.categoryId ?? '')
+        const categoryName = String(row.categoryName ?? '')
+        const amount = Number(row.amount ?? 0)
+        if (!Number.isFinite(amount) || amount <= 0) continue
+
+        const directSub = categoryId ? voyageSubcategoryById.get(categoryId) : null
+        const fallbackSub = voyageSubcategories.find((sub) => {
+          const normalizedSub = normalizeToken(sub.label)
+          const normalizedName = normalizeToken(categoryName)
+          return normalizedSub === normalizedName || sub.aliases.includes(normalizedName)
+        }) ?? null
+        const targetSub = directSub ?? fallbackSub
+        if (!targetSub) continue
+
+        const accumulatedAmount = (Number(nextBudgets[targetSub.key] ?? '0') || 0) + amount
+        nextBudgets[targetSub.key] = normalizeWholeEuroInput(String(accumulatedAmount))
+        nextJointFlags[targetSub.key] = false
+      }
+
+      setSubBudgets(nextBudgets)
+      setSubJointFlags(nextJointFlags)
+      setTripNotes('')
+      setIsLoadingPrefill(false)
+      return
+    }
+
     let cancelled = false
     const loadPlannedOperations = async () => {
       setIsLoadingPrefill(true)
@@ -336,7 +385,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
     return () => {
       cancelled = true
     }
-  }, [editingTrip, isEditMode, isPastTrip, open, user?.id, voyageSubcategoryById, voyageSubcategoryIds])
+  }, [editingTrip, isEditMode, isPastTrip, open, realizedCategoryBreakdown, tripToEdit?.byCategory, user?.id, voyageSubcategories, voyageSubcategoryById, voyageSubcategoryIds])
 
   const duration = useMemo(() => dateDiffDays(startDate, endDate), [startDate, endDate])
   const personalImputedBudget = useMemo(
@@ -390,7 +439,7 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
         0,
       )
       const nextPlannedBudget = isEditMode && isPastTrip
-        ? editingTrip?.planned_budget ?? null
+        ? (computedPlannedBudget > 0 ? computedPlannedBudget : editingTrip?.planned_budget ?? null)
         : (computedPlannedBudget > 0 ? computedPlannedBudget : null)
 
       if (isEditMode && editingTrip) {
@@ -407,6 +456,14 @@ export function PlanVoyageModal({ open, onClose, mode = 'create', tripToEdit = n
           .eq('id', editingTrip.id)
           .eq('user_id', user.id)
         if (updateTripErr) throw updateTripErr
+
+        if (isPastTrip) {
+          void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
+          void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_TRANSACTIONS] })
+          resetForm()
+          onClose()
+          return
+        }
 
         const oldCategoryIds = voyageSubcategoryIds
         const { data: existingPlannedRows, error: existingPlannedErr } = oldCategoryIds.length > 0
