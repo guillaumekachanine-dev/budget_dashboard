@@ -478,14 +478,17 @@ export function Voyages() {
           top:           0,
           zIndex:        100,
           background:    `linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)`,
-          paddingTop:    'var(--safe-top)',
+          height:        'var(--header-height)',
           paddingRight:  PAGE_GUTTER,
           paddingBottom: 'var(--space-2)',
           paddingLeft:   PAGE_GUTTER,
           boxSizing:     'border-box',
+          display:       'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
         }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44 }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44, width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <button
               type="button"

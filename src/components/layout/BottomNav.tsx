@@ -116,10 +116,10 @@ const navRowStyle: CSSProperties = {
 const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: 'calc(var(--bottom-nav-height) / 2)',
+  top: '50%',
   width: 40,
   height: 40,
-  transform: 'translate(-50%, calc(-50% - 3px))',
+  transform: 'translate(-50%, -50%)',
   borderRadius: 'var(--radius-full)',
   border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
   background: 'var(--neutral-0)',
@@ -160,8 +160,8 @@ export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps)
         style={{
           ...fabBaseStyle,
           transform: fabHovered || isAddMenuOpen
-            ? 'translate(-50%, calc(-50% - 3px)) scale(1.07)'
-            : 'translate(-50%, calc(-50% - 3px)) scale(1)',
+            ? 'translate(-50%, -50%) scale(1.07)'
+            : 'translate(-50%, -50%) scale(1)',
         }}
       >
         <Plus

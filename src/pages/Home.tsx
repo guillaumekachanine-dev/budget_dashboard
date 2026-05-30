@@ -2038,7 +2038,7 @@ export function Home() {
     >
       <header
         style={{
-          paddingTop: 'var(--safe-top)',
+          height: 'var(--header-height)',
           paddingRight: 'var(--page-gutter)',
           paddingBottom: 'var(--space-2)',
           paddingLeft: 'var(--page-gutter)',
@@ -2049,9 +2049,12 @@ export function Home() {
           top: 0,
           zIndex: 120,
           marginBottom: 'var(--space-6)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
         }}
       >
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44 }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 44, width: '100%' }}>
           <h1
             style={{
               margin: 0,

@@ -42,7 +42,7 @@ export function PageHeader({
     <>
       <header
         style={{
-          paddingTop: 'var(--safe-top)',
+          height: 'var(--header-height)',
           paddingRight: 'var(--page-gutter)',
           paddingBottom: 'var(--space-2)',
           paddingLeft: 'var(--page-gutter)',
@@ -55,6 +55,9 @@ export function PageHeader({
           isolation: 'isolate',
           overflow: 'visible',
           marginBottom: headerSubtitle ? 0 : 'var(--space-6)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
         }}
       >
         <div
@@ -66,6 +69,7 @@ export function PageHeader({
             alignItems: 'center',
             justifyContent: 'flex-start',
             minHeight: 44,
+            width: '100%',
             transform: `translateY(${contentOffsetY}px)`,
           }}
         >
