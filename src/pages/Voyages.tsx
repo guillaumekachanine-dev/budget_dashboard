@@ -478,7 +478,7 @@ export function Voyages() {
           top:           0,
           zIndex:        100,
           background:    `linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)`,
-          paddingTop:    'calc(var(--safe-top) + 10px)',
+          paddingTop:    'var(--safe-top)',
           paddingRight:  PAGE_GUTTER,
           paddingBottom: 'var(--space-4)',
           paddingLeft:   PAGE_GUTTER,
@@ -549,7 +549,7 @@ export function Voyages() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        style={{ flex: 1, padding: `var(--space-2) 0 120px` }}
+        style={{ flex: 1, padding: `var(--space-2) 0 var(--space-4)` }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
 

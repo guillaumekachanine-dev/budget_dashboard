@@ -2038,7 +2038,7 @@ export function Home() {
     >
       <header
         style={{
-          paddingTop: 'calc(var(--safe-top) + 10px)',
+          paddingTop: 'var(--safe-top)',
           paddingRight: 'var(--page-gutter)',
           paddingBottom: 'var(--space-4)',
           paddingLeft: 'var(--page-gutter)',
