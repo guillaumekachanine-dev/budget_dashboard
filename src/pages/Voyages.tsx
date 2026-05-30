@@ -480,7 +480,7 @@ export function Voyages() {
           background:    `linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)`,
           paddingTop:    'var(--safe-top)',
           paddingRight:  PAGE_GUTTER,
-          paddingBottom: 'var(--space-4)',
+          paddingBottom: 'var(--space-2)',
           paddingLeft:   PAGE_GUTTER,
           boxSizing:     'border-box',
         }}

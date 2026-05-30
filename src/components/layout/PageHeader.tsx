@@ -44,7 +44,7 @@ export function PageHeader({
         style={{
           paddingTop: 'var(--safe-top)',
           paddingRight: 'var(--page-gutter)',
-          paddingBottom: 'var(--space-4)',
+          paddingBottom: 'var(--space-2)',
           paddingLeft: 'var(--page-gutter)',
           boxSizing: 'border-box',
           background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',

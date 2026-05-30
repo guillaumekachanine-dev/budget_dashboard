@@ -45,10 +45,10 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 2,
+            gap: 1,
             height: '100%',
             minWidth: 64,
-            padding: '6px 10px 4px',
+            padding: '2px 8px 1px',
             opacity: isActive ? 1 : 0.52,
             transition: 'opacity 200ms ease',
           }}
@@ -61,11 +61,11 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
               transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
-            <Icon size={22} strokeWidth={isActive ? 2.4 : 1.9} />
+            <Icon size={19} strokeWidth={isActive ? 2.4 : 1.9} />
           </span>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: isActive ? 700 : 600,
               color: 'var(--neutral-0)',
               letterSpacing: '0.01em',
@@ -116,9 +116,9 @@ const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
   top: 'calc(var(--bottom-nav-height) / 2)',
-  width: 44,
-  height: 44,
-  transform: 'translate(-50%, calc(-50% - 5px))',
+  width: 40,
+  height: 40,
+  transform: 'translate(-50%, calc(-50% - 3px))',
   borderRadius: 'var(--radius-full)',
   border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
   background: 'var(--neutral-0)',
@@ -159,8 +159,8 @@ export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps)
         style={{
           ...fabBaseStyle,
           transform: fabHovered || isAddMenuOpen
-            ? 'translate(-50%, calc(-50% - 5px)) scale(1.07)'
-            : 'translate(-50%, calc(-50% - 5px)) scale(1)',
+            ? 'translate(-50%, calc(-50% - 3px)) scale(1.07)'
+            : 'translate(-50%, calc(-50% - 3px)) scale(1)',
         }}
       >
         <Plus

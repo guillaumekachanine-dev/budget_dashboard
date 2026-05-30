@@ -2040,7 +2040,7 @@ export function Home() {
         style={{
           paddingTop: 'var(--safe-top)',
           paddingRight: 'var(--page-gutter)',
-          paddingBottom: 'var(--space-4)',
+          paddingBottom: 'var(--space-2)',
           paddingLeft: 'var(--page-gutter)',
           boxSizing: 'border-box',
           background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
@@ -2079,7 +2079,7 @@ export function Home() {
                     backdropFilter: 'blur(12px)',
                     color: isActive ? '#5B57F5' : 'var(--neutral-800)',
                     borderRadius: 'var(--radius-full)',
-                    padding: '6px var(--space-3)',
+                    padding: '4px var(--space-3)',
                     fontSize: 13,
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
