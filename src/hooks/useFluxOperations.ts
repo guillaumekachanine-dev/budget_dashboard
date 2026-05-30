@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
+import { QK } from '@/lib/queryKeys'
 import type { BudgetBehavior, FlowType, PlannedOperationBudgetImpact, PlannedOperationRecurrenceFrequency, PlannedOperationStatus } from '@/lib/types'
 
 export type FluxOperationKind = 'actual' | 'planned_occurrence'
@@ -64,7 +65,7 @@ export interface FluxOperationFilters {
 }
 
 function buildQueryKey(filters: FluxOperationFilters) {
-  return ['flux-operations', filters] as const
+  return [QK.FLUX_OPERATIONS, filters] as const
 }
 
 const PAGE_SIZE = 1000
@@ -116,6 +117,7 @@ export function useFluxOperations(filters: FluxOperationFilters) {
     queryKey: buildQueryKey(filters),
     queryFn: () => fetchFluxOperations(filters),
     enabled: Boolean(filters.userId),
-    staleTime: 2 * 60_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 }
