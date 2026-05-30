@@ -96,16 +96,18 @@ const navStyle: CSSProperties = {
   boxSizing: 'border-box',
   minHeight: 'calc(var(--bottom-nav-height) + var(--safe-bottom))',
   paddingBottom: 'var(--safe-bottom)',
-  paddingLeft: 'var(--safe-left)',
-  paddingRight: 'var(--safe-right)',
-  background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+  background: 'transparent',
   borderTop: 'none',
-  boxShadow: 'var(--shadow-lg)',
+  boxShadow: 'none',
 }
 
 const navRowStyle: CSSProperties = {
   minHeight: 'var(--bottom-nav-height)',
   height: 'var(--bottom-nav-height)',
+  paddingLeft: 'var(--safe-left)',
+  paddingRight: 'var(--safe-right)',
+  background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 100%)',
+  boxShadow: 'var(--shadow-lg)',
   display: 'grid',
   gridTemplateColumns: '1fr 1fr 72px 1fr 1fr',
   alignItems: 'center',
