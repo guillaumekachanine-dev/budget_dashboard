@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Bell, Check, ChevronRight, TriangleAlert, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Bell, Check, ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
@@ -69,9 +69,23 @@ const HOME_SWIPE_PILLS = [
 const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 
 // Swipe constants (module-level pour stabilité des dépendances)
-const SWIPE_TAB_IDS = HOME_SWIPE_PILLS.map((p) => p.id)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
+
+const slideVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 80 : -80,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -80 : 80,
+    opacity: 0,
+  }),
+}
 
 function mapPresetIdToDisplayed(presetId: string): string {
   if (presetId === 'per') {
@@ -200,6 +214,7 @@ function DriftCategoryTransactionsModal({
       open={open}
       onClose={onClose}
       zIndex={220}
+      variant="center"
       header={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
@@ -330,6 +345,7 @@ function PlannedOpsModal({
       open={open}
       onClose={onClose}
       zIndex={200}
+      variant="center"
       header={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -401,6 +417,7 @@ function DriftsModal({
       open={open}
       onClose={onClose}
       zIndex={200}
+      variant="center"
       header={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -1003,6 +1020,7 @@ function BudgetProgressModal({
       onClose={onClose}
       title="Progression des budgets"
       zIndex={200}
+      variant="center"
     >
       <div style={{ padding: 'var(--space-3) var(--space-5) var(--space-5)', display: 'grid', gap: 'var(--space-2)' }}>
         {modalBlockRings.map((block) => (
@@ -1376,6 +1394,14 @@ export function Home() {
   }, [accounts])
 
   const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(null)
+  const prevTabRef = useRef<string | null>(null)
+  const currentTab = selectedAccountPresetId ?? 'compte_principal'
+  const direction = prevTabRef.current === 'compte_principal' && currentTab === 'budget_voyage' ? 1 : -1
+
+  useEffect(() => {
+    prevTabRef.current = currentTab
+  }, [currentTab])
+
   const [selectedDriftCategoryId, setSelectedDriftCategoryId] = useState<string | null>(null)
   const [showDriftCategoryModal, setShowDriftCategoryModal] = useState(false)
   const [showDriftsModal, setShowDriftsModal] = useState(false)
@@ -1616,16 +1642,15 @@ export function Home() {
       const target = e.target as HTMLElement
       if (target.closest('[data-swipe-ignore]')) return
 
-      const currentId = selectedAccountPresetId ?? SWIPE_TAB_IDS[0]
-      const currentIdx = SWIPE_TAB_IDS.indexOf(currentId as (typeof SWIPE_TAB_IDS)[number])
-      const len = SWIPE_TAB_IDS.length
-      // swipe gauche → onglet suivant, swipe droite → onglet précédent (circulaire)
-      const nextIdx = deltaX < 0
-        ? (currentIdx + 1) % len
-        : (currentIdx - 1 + len) % len
-      handleSelectAccountPreset(SWIPE_TAB_IDS[nextIdx] as string)
+      if (deltaX < 0) {
+        // swipe gauche → onglet Voyage
+        handleSelectAccountPreset('budget_voyage')
+      } else {
+        // swipe droite → onglet Compte
+        handleSelectAccountPreset('compte_principal')
+      }
     },
-    [selectedAccountPresetId, handleSelectAccountPreset],
+    [handleSelectAccountPreset],
   )
 
   const heroMetrics = useMemo(
@@ -1986,322 +2011,411 @@ export function Home() {
           >
             {isBudgetVoyageTab ? 'Voyage' : 'Accueil'}
           </h1>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-            {HOME_SWIPE_PILLS.map((pill) => {
-              const isActive = selectedAccountPresetId === pill.id
-              return (
-                <button
-                  key={pill.id}
-                  type="button"
-                  onClick={() => handleSelectAccountPreset(pill.id)}
-                  aria-pressed={isActive}
-                  style={{
-                    border: `1px solid ${isActive ? '#5B57F5' : 'rgba(255,255,255,0.46)'}`,
-                    background: 'rgba(255,255,255,0.7)',
-                    backdropFilter: 'blur(12px)',
-                    color: isActive ? '#5B57F5' : 'var(--neutral-800)',
-                    borderRadius: 'var(--radius-full)',
-                    padding: '4px var(--space-3)',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
-                  }}
-                >
-                  {pill.label}
-                </button>
-              )
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {HOME_SWIPE_PILLS.map((pill) => {
+                const isActive = selectedAccountPresetId === pill.id || (!selectedAccountPresetId && pill.id === 'compte_principal')
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => handleSelectAccountPreset(pill.id)}
+                    aria-pressed={isActive}
+                    style={{
+                      border: `1px solid ${isActive ? '#5B57F5' : 'rgba(255,255,255,0.46)'}`,
+                      background: 'rgba(255,255,255,0.7)',
+                      backdropFilter: 'blur(12px)',
+                      color: isActive ? '#5B57F5' : 'var(--neutral-800)',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '4px var(--space-3)',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'color 150ms ease, border-color 150ms ease, transform 150ms ease',
+                    }}
+                  >
+                    {pill.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       </header>
 
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        style={{ padding: sectionHorizontalPadding }}
-      >
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          {isBudgetVoyageTab ? (
-            <TripCockpitCard
-              onViewDetail={(tripId) => navigate(tripId ? `/voyages/${tripId}` : '/voyages')}
-              onAddExpense={(tripId) => {
-                setTripExpenseInitialId(tripId)
-                setTripExpenseModalOpen(true)
-              }}
-              onMatch={(tripId, tripName) => {
-                setMatchingTripId(tripId)
-                setMatchingTripName(tripName ?? null)
-                setMatchingSheetOpen(true)
-              }}
-            />
-          ) : isCombinedSavingsPage ? (
-            <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
-              {combinedSavingsSections.map((section) => (
-                <div key={section.id} style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
-                  <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: `color-mix(in oklab, ${section.color} 58%, var(--neutral-900) 42%)` }}>
-                      {formatCurrencyFloored(section.balance)}
-                    </p>
-                    {section.ceiling !== null && section.ceilingPct !== null ? (
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatCurrencyFloored(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div style={{ background: section.color, color: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-lg)', display: 'grid' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-                      {section.metrics.map((metric) => (
-                        <div key={metric.key} style={{ background: `color-mix(in oklab, ${section.color} 12%, var(--neutral-0) 88%)`, borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', border: `1px solid color-mix(in oklab, ${section.color} 28%, var(--neutral-0) 72%)`, display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 10, fontWeight: 'var(--font-weight-semibold)', textTransform: 'uppercase', color: 'var(--neutral-700)', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {metric.label}
-                          </p>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {metric.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <>
-              {isMainCheckingAccount ? (
-                <div
+      <div style={{ overflow: 'hidden', width: '100%' }}>
+        <AnimatePresence mode="wait" initial={false} custom={direction}>
+          <motion.div
+            key={isBudgetVoyageTab ? 'voyage' : 'compte'}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: 'tween', duration: 0.26, ease: [0.22, 1, 0.36, 1] },
+              opacity: { duration: 0.22 },
+            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%' }}
+          >
+            <section style={{ padding: sectionHorizontalPadding }}>
+              <div style={{ maxWidth: 600, margin: '0 auto', position: 'relative' }}>
+                {/* Left Swipe Arrow */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectAccountPreset('compte_principal')}
+                  disabled={selectedAccountPresetId === 'compte_principal' || !selectedAccountPresetId}
                   style={{
-                    background: 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)',
-                    borderRadius: 'var(--radius-xl)',
-                    boxShadow: 'var(--shadow-card)',
-                    border: '1px solid rgba(56, 189, 248, 0.25)',
-                    overflow: 'hidden',
-                    padding: 'var(--space-4)',
-                    display: 'grid',
-                    gap: 'var(--space-4)',
+                    position: 'absolute',
+                    left: 6,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 10,
+                    border: 'none',
+                    background: 'rgba(255, 255, 255, 0.18)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    color: '#FFFFFF',
+                    opacity: selectedAccountPresetId === 'budget_voyage' ? 0.75 : 0.08,
+                    pointerEvents: selectedAccountPresetId === 'budget_voyage' ? 'auto' : 'none',
+                    transition: 'opacity var(--transition-fast), background var(--transition-fast)',
+                    cursor: selectedAccountPresetId === 'budget_voyage' ? 'pointer' : 'default',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  }}
+                  onMouseEnter={e => {
+                    if (selectedAccountPresetId === 'budget_voyage') {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.28)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)'
                   }}
                 >
-                  {/* ── Header: Nom + Date ─────────────────────── */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
-                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          Compte principal
-                        </h3>
+                  <ChevronLeft size={16} />
+                </button>
+
+                {/* Right Swipe Arrow */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectAccountPreset('budget_voyage')}
+                  disabled={selectedAccountPresetId === 'budget_voyage'}
+                  style={{
+                    position: 'absolute',
+                    right: 6,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 10,
+                    border: 'none',
+                    background: 'rgba(255, 255, 255, 0.18)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    color: '#FFFFFF',
+                    opacity: selectedAccountPresetId === 'compte_principal' || !selectedAccountPresetId ? 0.75 : 0.08,
+                    pointerEvents: selectedAccountPresetId === 'compte_principal' || !selectedAccountPresetId ? 'auto' : 'none',
+                    transition: 'opacity var(--transition-fast), background var(--transition-fast)',
+                    cursor: selectedAccountPresetId === 'compte_principal' || !selectedAccountPresetId ? 'pointer' : 'default',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 'var(--radius-full)',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  }}
+                  onMouseEnter={e => {
+                    if (selectedAccountPresetId !== 'budget_voyage') {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.28)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)'
+                  }}
+                >
+                  <ChevronRight size={16} />
+                </button>
+
+                {isBudgetVoyageTab ? (
+                  <TripCockpitCard
+                    onViewDetail={(tripId) => navigate(tripId ? `/voyages/${tripId}` : '/voyages')}
+                    onAddExpense={(tripId) => {
+                      setTripExpenseInitialId(tripId)
+                      setTripExpenseModalOpen(true)
+                    }}
+                    onMatch={(tripId, tripName) => {
+                      setMatchingTripId(tripId)
+                      setMatchingTripName(tripName ?? null)
+                      setMatchingSheetOpen(true)
+                    }}
+                  />
+                ) : isCombinedSavingsPage ? (
+                  <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+                    {combinedSavingsSections.map((section) => (
+                      <div key={section.id} style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-700)', textAlign: 'center' }}>{section.title}</p>
+                        <div style={{ display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-kpi)', fontWeight: 'var(--font-weight-extrabold)', lineHeight: 'var(--line-height-tight)', fontFamily: 'var(--font-mono)', color: `color-mix(in oklab, ${section.color} 58%, var(--neutral-900) 42%)` }}>
+                            {formatCurrencyFloored(section.balance)}
+                          </p>
+                          {section.ceiling !== null && section.ceilingPct !== null ? (
+                            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                              {`Plafond ${formatCurrencyFloored(section.ceiling)} · ${section.ceilingPct.toFixed(0)}%`}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div style={{ background: section.color, color: 'var(--neutral-0)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-lg)', display: 'grid' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                            {section.metrics.map((metric) => (
+                              <div key={metric.key} style={{ background: `color-mix(in oklab, ${section.color} 12%, var(--neutral-0) 88%)`, borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', border: `1px solid color-mix(in oklab, ${section.color} 28%, var(--neutral-0) 72%)`, display: 'grid', gap: 'var(--space-1)', justifyItems: 'center', textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 10, fontWeight: 'var(--font-weight-semibold)', textTransform: 'uppercase', color: 'var(--neutral-700)', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {metric.label}
+                                </p>
+                                <p style={{ margin: 0, fontSize: 13, fontWeight: 'var(--font-weight-bold)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {metric.value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.95)' }}>
-                        {todayShortDateLabel}
-                      </span>
-                    </div>
+                    ))}
                   </div>
+                ) : (
+                  <>
+                    {isMainCheckingAccount ? (
+                      <div
+                        style={{
+                          background: 'radial-gradient(120% 90% at 14% -8%, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(91, 87, 245, 0.3) 0%, rgba(91, 87, 245, 0) 62%), linear-gradient(145deg, #0B132B 0%, #1C2541 47%, #3A506B 100%)',
+                          borderRadius: 'var(--radius-xl)',
+                          boxShadow: 'var(--shadow-card)',
+                          border: '1px solid rgba(56, 189, 248, 0.25)',
+                          overflow: 'hidden',
+                          padding: 'var(--space-4)',
+                          display: 'grid',
+                          gap: 'var(--space-4)',
+                        }}
+                      >
+                        {/* ── Header: Nom + Date ─────────────────────── */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
+                              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                Compte principal
+                              </h3>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.95)' }}>
+                              {todayShortDateLabel}
+                            </span>
+                          </div>
+                        </div>
 
-                  {/* ── Central Progress Ring ─────────────────────────────── */}
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
-                    <AccountProgressRing
-                      pct={overallConsumedPct}
-                      amountText={formatCurrencyFloored(animatedResteUtile)}
-                      onClick={() => setShowResteUtileModal(true)}
-                    />
-                  </div>
+                        {/* ── Central Progress Ring ─────────────────────────────── */}
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
+                          <AccountProgressRing
+                            pct={overallConsumedPct}
+                            amountText={formatCurrencyFloored(animatedResteUtile)}
+                            onClick={() => setShowResteUtileModal(true)}
+                          />
+                        </div>
 
-                  {/* ── Calculation Line ──────────────────────────────────── */}
-                  <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
-                      Budget / jour : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(animatedBudgetPerDay)}</span>
-                    </p>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
-                      {overallConsumedPct.toFixed(0)}% consommé
-                    </p>
-                  </div>
+                        {/* ── Calculation Line ──────────────────────────────────── */}
+                        <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
+                            Budget / jour : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(animatedBudgetPerDay)}</span>
+                          </p>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                            {overallConsumedPct.toFixed(0)}% consommé
+                          </p>
+                        </div>
 
-                  {/* ── CTAs ──────────────────────────────────────────────── */}
-                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowHeroBalanceModal(true)}
-                      aria-label="Voir le détail du solde bancaire du compte principal"
-                      style={{
-                        flex: '1 1 auto',
-                        display: 'inline-flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 1,
-                        border: '1px solid rgba(255,255,255,0.25)',
-                        background: 'rgba(255,255,255,0.1)',
-                        color: '#FFFFFF',
-                        borderRadius: 'var(--radius-button)',
-                        padding: '4px var(--space-3)',
-                        minHeight: 40,
-                        cursor: 'pointer',
-                        transition: 'background 120ms ease',
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-                      }}
-                    >
-                      <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                        Solde estimé
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
-                        {formatCurrencyFloored(animatedBalance)}
-                      </span>
-                    </button>
+                        {/* ── CTAs ──────────────────────────────────────────────── */}
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowHeroBalanceModal(true)}
+                            aria-label="Voir le détail du solde bancaire du compte principal"
+                            style={{
+                              flex: '1 1 auto',
+                              display: 'inline-flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
+                              border: '1px solid rgba(255,255,255,0.25)',
+                              background: 'rgba(255,255,255,0.1)',
+                              color: '#FFFFFF',
+                              borderRadius: 'var(--radius-button)',
+                              padding: '4px var(--space-3)',
+                              minHeight: 40,
+                              cursor: 'pointer',
+                              transition: 'background 120ms ease',
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                            }}
+                          >
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                              Solde estimé
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                              {formatCurrencyFloored(animatedBalance)}
+                            </span>
+                          </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowDriftsModal(true)}
-                      aria-label="Voir le détail des dérives"
-                      style={{
-                        flex: '1 1 auto',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 'var(--space-2)',
-                        border: driftRows.length > 0 ? '1px solid rgba(252,90,90,0.4)' : '1px solid rgba(255,255,255,0.25)',
-                        background: driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.1)',
-                        color: driftRows.length > 0 ? '#FC5A5A' : 'rgba(255,255,255,0.9)',
-                        borderRadius: 'var(--radius-button)',
-                        padding: '4px var(--space-3)',
-                        minHeight: 40,
-                        cursor: 'pointer',
-                        transition: 'background 120ms ease',
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.2)' : 'rgba(255,255,255,0.18)'
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.08)'
-                      }}
-                    >
-                      {driftRows.length > 0 ? (
-                        <>
-                          <TriangleAlert size={15} color="#FC5A5A" />
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>
-                            {`${driftRows.length} dérive${driftRows.length > 1 ? 's' : ''}`}
-                          </span>
-                        </>
-                      ) : (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
-                          Aucune dérive
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gap: 'var(--space-1)',
-                      justifyItems: 'center',
-                      textAlign: 'center',
-                      marginBottom: 'var(--space-2)',
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 'var(--font-size-kpi)',
-                        fontWeight: 'var(--font-weight-extrabold)',
-                        lineHeight: 'var(--line-height-tight)',
-                        fontFamily: 'var(--font-mono)',
-                        color: heroAmountColor,
-                      }}
-                    >
-                      {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
-                    </p>
-                    {isSavingsBooklet && savingsBookletCeiling ? (
-                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
-                        {`Plafond ${formatCurrencyFloored(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div
-                    style={{
-                      background: heroPrimaryColor,
-                      color: 'var(--neutral-0)',
-                      borderRadius: 'var(--radius-lg)',
-                      padding: 'var(--space-6)',
-                      boxShadow: 'var(--shadow-lg)',
-                      display: 'grid',
-                    }}
-                  >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
-                      {displayedHeroMetrics.map((metric) => (
+                          <button
+                            type="button"
+                            onClick={() => setShowDriftsModal(true)}
+                            aria-label="Voir le détail des dérives"
+                            style={{
+                              flex: '1 1 auto',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 'var(--space-2)',
+                              border: driftRows.length > 0 ? '1px solid rgba(252,90,90,0.4)' : '1px solid rgba(255,255,255,0.25)',
+                              background: driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.1)',
+                              color: driftRows.length > 0 ? '#FC5A5A' : 'rgba(255,255,255,0.9)',
+                              borderRadius: 'var(--radius-button)',
+                              padding: '4px var(--space-3)',
+                              minHeight: 40,
+                              cursor: 'pointer',
+                              transition: 'background 120ms ease',
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.2)' : 'rgba(255,255,255,0.18)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = driftRows.length > 0 ? 'rgba(252,90,90,0.12)' : 'rgba(255,255,255,0.08)'
+                            }}
+                          >
+                            {driftRows.length > 0 ? (
+                              <>
+                                <TriangleAlert size={15} color="#FC5A5A" />
+                                <span style={{ fontSize: 12, fontWeight: 700 }}>
+                                  {`${driftRows.length} dérive${driftRows.length > 1 ? 's' : ''}`}
+                                </span>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
+                                Aucune dérive
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
                         <div
-                          key={metric.key}
                           style={{
-                            background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
-                            borderRadius: 'var(--radius-md)',
-                            padding: 'var(--space-3)',
-                            border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
                             display: 'grid',
                             gap: 'var(--space-1)',
                             justifyItems: 'center',
                             textAlign: 'center',
+                            marginBottom: 'var(--space-2)',
                           }}
                         >
                           <p
                             style={{
                               margin: 0,
-                              fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
-                              fontWeight: 'var(--font-weight-semibold)',
-                              textTransform: 'uppercase',
-                              color: 'var(--neutral-700)',
-                              letterSpacing: '0.06em',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {metric.label}
-                          </p>
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
-                              fontWeight: 'var(--font-weight-bold)',
-                              color: 'var(--neutral-900)',
+                              fontSize: 'var(--font-size-kpi)',
+                              fontWeight: 'var(--font-weight-extrabold)',
+                              lineHeight: 'var(--line-height-tight)',
                               fontFamily: 'var(--font-mono)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
+                              color: heroAmountColor,
                             }}
                           >
-                            {metric.value}
+                            {formatCurrencyFloored(selectedAccount?.current_balance ?? 0)}
                           </p>
+                          {isSavingsBooklet && savingsBookletCeiling ? (
+                            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--neutral-600)' }}>
+                              {`Plafond ${formatCurrencyFloored(savingsBookletCeiling)} · ${savingsCeilingPct.toFixed(0)}%`}
+                            </p>
+                          ) : null}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </motion.section>
+
+                        <div
+                          style={{
+                            background: heroPrimaryColor,
+                            color: 'var(--neutral-0)',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: 'var(--space-6)',
+                            boxShadow: 'var(--shadow-lg)',
+                            display: 'grid',
+                          }}
+                        >
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                            {displayedHeroMetrics.map((metric) => (
+                              <div
+                                key={metric.key}
+                                style={{
+                                  background: `color-mix(in oklab, ${heroPrimaryColor} 12%, var(--neutral-0) 88%)`,
+                                  borderRadius: 'var(--radius-md)',
+                                  padding: 'var(--space-3)',
+                                  border: `1px solid color-mix(in oklab, ${heroPrimaryColor} 28%, var(--neutral-0) 72%)`,
+                                  display: 'grid',
+                                  gap: 'var(--space-1)',
+                                  justifyItems: 'center',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: isProjectionSavingsAccount || isPER || isPEA ? 10 : 9,
+                                    fontWeight: 'var(--font-weight-semibold)',
+                                    textTransform: 'uppercase',
+                                    color: 'var(--neutral-700)',
+                                    letterSpacing: '0.06em',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
+                                  {metric.label}
+                                </p>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: isProjectionSavingsAccount || isPER || isPEA ? 13 : 11,
+                                    fontWeight: 'var(--font-weight-bold)',
+                                    color: 'var(--neutral-900)',
+                                    fontFamily: 'var(--font-mono)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
+                                  {metric.value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
 
       {!isCombinedSavingsPage && !isBudgetVoyageTab ? (
         <>
           {!isMainCheckingAccount ? (
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.12 }}
+            <section
               style={{ padding: sectionHorizontalPadding }}
             >
               <div
@@ -2356,14 +2470,11 @@ export function Home() {
                   onClick={() => setShowProgressModal(true)}
                 />
               </div>
-            </motion.section>
+            </section>
           ) : null}
 
           {isMainCheckingAccount ? (
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.16 }}
+            <section
               style={{ padding: sectionHorizontalPadding }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 var(--space-2)' }}>
@@ -2377,26 +2488,20 @@ export function Home() {
                   onClickEom={() => setShowPlannedOpsEomModal(true)}
                 />
               </div>
-            </motion.section>
+            </section>
           ) : null}
 
           {isMainCheckingAccount ? (
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.18 }}
+            <section
               style={{ padding: sectionHorizontalPadding }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto' }}>
                 <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} theme="dark" />
               </div>
-            </motion.section>
+            </section>
           ) : (
             <>
-              <motion.section
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.18 }}
+              <section
                 style={{ padding: sectionHorizontalPadding }}
               >
                 <div
@@ -2419,25 +2524,19 @@ export function Home() {
                     onClick={() => setShowDriftsModal(true)}
                   />
                 </div>
-              </motion.section>
-              <motion.section
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.22 }}
+              </section>
+              <section
                 style={{ padding: sectionHorizontalPadding }}
               >
                 <div style={{ maxWidth: 600, margin: '0 auto' }}>
                   <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
                 </div>
-              </motion.section>
+              </section>
             </>
           )}
 
           {/* ── Module libre Infos — bouton cloche compact ── */}
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22 }}
+          <section
             style={{ padding: sectionHorizontalPadding }}
           >
             <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-end' }}>
@@ -2505,15 +2604,19 @@ export function Home() {
                 )}
               </button>
             </div>
-          </motion.section>
+          </section>
         </>
       ) : null}
+    </motion.div>
+  </AnimatePresence>
+</div>
 
       {/* ── BottomSheet Infos ── */}
       <BottomSheet
         open={infosSheetOpen}
         onClose={() => setInfosSheetOpen(false)}
         zIndex={65}
+        variant="center"
         header={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -2582,6 +2685,7 @@ export function Home() {
         onClose={() => setShowOptimizationsModal(false)}
         title="Détails des optimisations"
         zIndex={67}
+        variant="center"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
           {OPTIMIZATION_PRIORITIES_MOCK.map((row) => (
@@ -2626,6 +2730,7 @@ export function Home() {
         onClose={() => setShowSavingsModal(false)}
         title="Épargne"
         zIndex={68}
+        variant="center"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
@@ -2672,6 +2777,7 @@ export function Home() {
         open={showHeroBalanceModal}
         onClose={() => setShowHeroBalanceModal(false)}
         zIndex={69}
+        variant="center"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
           {loadingMainAccountBalanceStatus ? (
@@ -2732,6 +2838,7 @@ export function Home() {
         open={showResteUtileModal}
         onClose={() => setShowResteUtileModal(false)}
         zIndex={70}
+        variant="center"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
           <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)', background: 'var(--neutral-50)' }}>
