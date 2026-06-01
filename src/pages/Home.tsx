@@ -12,7 +12,9 @@ import {
   getDaysRemainingInMonth,
   getCategoryColor,
   formatCurrencyFloored,
+  categoryColorFromName,
 } from '@/lib/utils'
+import { RadialEnvelopeChart, type CombinedDatum } from '@/features/budget/components/RadialEnvelopeChart'
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
 import type { AccountWithBalance } from '@/lib/types'
 import type { PlannedOperationItem } from '@/features/home/types'
@@ -1626,6 +1628,29 @@ export function Home() {
     return Math.max(0, Math.min(100, consumed))
   }, [dailyPayload])
 
+  const heroRadialData = useMemo<CombinedDatum[]>(() => {
+    const cats = dailyPayload?.by_category ?? []
+    const parentMap = new Map<string, { id: string; name: string; realAmount: number; budgetAmount: number }>()
+    for (const cat of cats) {
+      const parentId = cat.parent_category_id ?? cat.category_id
+      const parentName = cat.parent_category_name ?? cat.category_name
+      if (!parentId || !parentName) continue
+      const norm = parentName.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      if (norm.includes('epargne')) continue
+      const existing = parentMap.get(parentId)
+      if (existing) {
+        existing.realAmount += Number(cat.actual_amount ?? 0)
+        existing.budgetAmount += Number(cat.budget_amount ?? 0)
+      } else {
+        parentMap.set(parentId, { id: parentId, name: parentName, realAmount: Number(cat.actual_amount ?? 0), budgetAmount: Number(cat.budget_amount ?? 0) })
+      }
+    }
+    return [...parentMap.values()]
+      .filter((d) => d.budgetAmount > 0 || d.realAmount > 0)
+      .map((d) => ({ ...d, color: categoryColorFromName(d.name) }))
+      .sort((a, b) => b.budgetAmount - a.budgetAmount)
+  }, [dailyPayload?.by_category])
+
   const monthlyBlockProgress = useMemo<MonthlyBlockProgressItem[]>(() => {
     return EXPENSE_BUCKET_IDS.map((id) => {
       const monthlyBudget = Number(
@@ -2266,9 +2291,9 @@ export function Home() {
                           boxShadow: 'var(--shadow-card)',
                           border: '1px solid rgba(56, 189, 248, 0.25)',
                           overflow: 'hidden',
-                          padding: 'var(--space-4)',
+                          padding: 'var(--space-3) var(--space-4) var(--space-4)',
                           display: 'grid',
-                          gap: 'var(--space-4)',
+                          gap: 'var(--space-3)',
                         }}
                       >
                         {/* ── Header: Nom + Date ─────────────────────── */}
@@ -2287,23 +2312,30 @@ export function Home() {
                           </div>
                         </div>
 
-                        {/* ── Central Progress Ring ─────────────────────────────── */}
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
-                          <AccountProgressRing
-                            pct={overallConsumedPct}
-                            amountText={formatCurrencyFloored(animatedResteUtile)}
-                            onClick={() => setShowResteUtileModal(true)}
+                        {/* ── Radial Envelope Chart ─────────────────────────────── */}
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                          <RadialEnvelopeChart
+                            data={heroRadialData}
+                            realTotal={heroRadialData.reduce((s, d) => s + d.realAmount, 0)}
+                            budgetTotal={heroRadialData.reduce((s, d) => s + d.budgetAmount, 0)}
+                            selectedId={null}
+                            onEntryClick={() => {}}
+                            onCenterClick={() => setShowResteUtileModal(true)}
+                            size={200}
+                            centerContent={
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+                                <span style={{ display: 'block', fontSize: 'clamp(14px, 4vw, 18px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                                  {formatCurrencyFloored(animatedResteUtile)}
+                                </span>
+                                <span style={{ display: 'block', fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3, lineHeight: 1 }}>
+                                  Reste utile
+                                </span>
+                                <span style={{ display: 'block', fontSize: 8, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginTop: 5, lineHeight: 1 }}>
+                                  {formatCurrencyFloored(animatedBudgetPerDay)}/jour
+                                </span>
+                              </div>
+                            }
                           />
-                        </div>
-
-                        {/* ── Calculation Line ──────────────────────────────────── */}
-                        <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
-                            Budget / jour : <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(animatedBudgetPerDay)}</span>
-                          </p>
-                          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
-                            {overallConsumedPct.toFixed(0)}% consommé
-                          </p>
                         </div>
 
                         {/* ── CTAs ──────────────────────────────────────────────── */}

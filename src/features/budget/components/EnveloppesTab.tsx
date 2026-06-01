@@ -69,13 +69,6 @@ function formatTxDate(dateStr: string): string {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
 }
 
-function extractPiePayload(slice: unknown): PieDatum | null {
-  const s = slice as Record<string, unknown> | null
-  if (!s) return null
-  const payload = (s.payload ?? s) as Record<string, unknown>
-  if (!payload.id && !payload.name) return null
-  return payload as unknown as PieDatum
-}
 
 const CATEGORY_DISPLAY_ORDER = [
   'achats divers', 'alimentation', 'voyages', 'sorties',
@@ -144,6 +137,14 @@ function sortPieByBucketOrder(a: PieDatum, b: PieDatum): number {
   const bRank = PILOTAGE_BUCKET_ORDER_MAP.get(b.id) ?? 999
   if (aRank !== bRank) return aRank - bRank
   return a.name.localeCompare(b.name, 'fr')
+}
+
+function extractPiePayload(slice: unknown): PieDatum | null {
+  const s = slice as Record<string, unknown> | null
+  if (!s) return null
+  const payload = (s.payload ?? s) as Record<string, unknown>
+  if (!payload.id && !payload.name) return null
+  return payload as unknown as PieDatum
 }
 
 // ─── sub-components ───────────────────────────────────────────────────────────
