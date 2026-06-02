@@ -668,7 +668,7 @@ function MirrorTimelineTile({
         overflow: 'visible',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, width: '100%' }}>
         <div style={{ width: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, overflow: 'visible' }}>
           <div
             aria-hidden="true"
@@ -2933,7 +2933,7 @@ export function Home() {
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   columnGap: 'var(--space-4)',
-                  rowGap: 'var(--space-3)',
+                  rowGap: 'var(--space-4)',
                   position: 'relative',
                   paddingLeft: 16,
                   paddingRight: 16,
@@ -2995,7 +2995,7 @@ export function Home() {
                     margin: '0 auto',
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                    gap: 'var(--space-3)',
+                    gap: 'var(--space-4)',
                   }}
                 >
                   <SavingsTile
