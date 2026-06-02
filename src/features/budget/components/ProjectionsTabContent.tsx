@@ -19,6 +19,7 @@ import { QK, STALE } from '@/lib/queryKeys'
 import type { BudgetRevenueAnalytics, BudgetRevenueTransaction } from '@/features/budget/types'
 import { useBudgetRevenueSources2026, type RevenuSource2026 } from '@/features/budget/hooks/useBudgetRevenueSources2026'
 import { useMonthlyTrajectoryData, type TrajectoryOperation } from '@/features/projections/hooks/useMonthlyTrajectoryData'
+import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
 import {
   REVENUE_SCENARIO_2_SALARY_MONTHS,
   REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
@@ -451,10 +452,12 @@ function RevenueSection2026({
   revenueData,
   ytdMonths,
   year,
+  userId,
 }: {
   revenueData: BudgetRevenueAnalytics | null
   ytdMonths: number
   year: number
+  userId?: string
 }) {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [showRevenueTransactionsModal, setShowRevenueTransactionsModal] = useState(false)
@@ -462,6 +465,33 @@ function RevenueSection2026({
   const [revenueDisplayMode, setRevenueDisplayMode] = useState<RevenueDisplayMode>('real_ytd')
   const [showRevenueDisplayPicker, setShowRevenueDisplayPicker] = useState(false)
   const { data: rawSources } = useBudgetRevenueSources2026(year)
+  const { data: plannedIncomeOccurrences = [] } = usePlannedOperationsForFlow({
+    userId,
+    startDate: `${year}-01-01`,
+    endDate: `${year}-12-31`,
+    includePast: false,
+    includeFuture: true,
+    flowType: 'income',
+    mode: 'general',
+    enabled: Boolean(userId),
+  })
+  const futurePlannedIncomeTotal = plannedIncomeOccurrences.reduce(
+    (sum, op) => sum + Number(op.planned_personal_amount ?? op.planned_amount ?? 0),
+    0,
+  )
+  const hasFuturePlannedIncome = futurePlannedIncomeTotal > 0
+
+  const plannedIncomeByMonth = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const op of plannedIncomeOccurrences) {
+      const dateStr = op.planned_date
+      if (!dateStr) continue
+      const month = parseInt(dateStr.slice(5, 7), 10)
+      if (!Number.isFinite(month) || month < 1 || month > 12) continue
+      map.set(month, (map.get(month) ?? 0) + Number(op.planned_personal_amount ?? op.planned_amount ?? 0))
+    }
+    return map
+  }, [plannedIncomeOccurrences])
 
   const revenueScenarioConfig: RevenueScenarioConfig = {
     guaranteedMonthlyIncome: REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME,
@@ -477,7 +507,9 @@ function RevenueSection2026({
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith(`${year}-`)) ?? []
   const remainingMonths = Math.max(0, 12 - ytdMonths)
   const ytdRevenue2026 = series2026.reduce((sum, row) => sum + Number(row.revenue_amount ?? 0), 0)
-  const projectedScenario1 = getRevenueScenario1ProjectedAnnualTotal(ytdRevenue2026, ytdMonths, revenueScenarioConfig)
+  const projectedScenario1 = hasFuturePlannedIncome
+    ? ytdRevenue2026 + futurePlannedIncomeTotal
+    : getRevenueScenario1ProjectedAnnualTotal(ytdRevenue2026, ytdMonths, revenueScenarioConfig)
   const projectedScenario2 = getRevenueScenario2ProjectedAnnualTotal(ytdRevenue2026, revenueScenarioConfig)
   const assuredStartMonthLabel = MONTH_LABELS_SHORT[Math.max(0, Math.min(11, ytdMonths))] ?? 'juin'
   const assuredPeriodLabel = `${assuredStartMonthLabel.toLowerCase()}-déc. (${remainingMonths} mois)`
@@ -602,17 +634,23 @@ function RevenueSection2026({
         const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
         const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
         if (month < ytdMonths) return { monthLabel, actual, projected: null }
-        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
-        return { monthLabel, actual: null, projected: guaranteedMonthlyIncome }
+        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? (hasFuturePlannedIncome ? (plannedIncomeByMonth.get(month) ?? guaranteedMonthlyIncome) : guaranteedMonthlyIncome) }
+        const plannedMonthAmount = hasFuturePlannedIncome ? (plannedIncomeByMonth.get(month) ?? guaranteedMonthlyIncome) : guaranteedMonthlyIncome
+        return { monthLabel, actual: null, projected: plannedMonthAmount }
       })
       return {
-        title: 'Scenario #1 : chômage full year',
+        title: hasFuturePlannedIncome ? 'Scenario #1 : revenus planifiés' : 'Scenario #1 : chômage full year',
         accentColor: SCENARIO_1_COLOR,
-        lines: [
-          { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
-          { label: 'revenus assurés', value: `${fmt(guaranteedMonthlyIncome)}/mois (Chômage)` },
-          { label: 'période concernée', value: assuredPeriodLabel },
-        ],
+        lines: hasFuturePlannedIncome
+          ? [
+              { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
+              { label: 'revenus planifiés futurs', value: fmt(futurePlannedIncomeTotal) },
+            ]
+          : [
+              { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
+              { label: 'revenus assurés', value: `${fmt(guaranteedMonthlyIncome)}/mois (Chômage)` },
+              { label: 'période concernée', value: assuredPeriodLabel },
+            ],
         totalLabel: 'Projection #1',
         totalValue: fmt(projectedScenario1),
         chartPoints,
@@ -654,6 +692,8 @@ function RevenueSection2026({
   }, [
     activeRevenueKpiModal,
     assuredPeriodLabel,
+    futurePlannedIncomeTotal,
+    hasFuturePlannedIncome,
     projectedScenario1,
     projectedScenario2,
     series2026,
@@ -2184,7 +2224,7 @@ export function ProjectionsTabContent() {
           <>
             {/* ── Revenue 2026 KPIs + histogram — revenus mode only ── */}
             {annualMode === 'revenus' && (
-              <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} year={currentYear} />
+              <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} year={currentYear} userId={user?.id} />
             )}
             {annualMode === 'depenses' && (
               <ExpenseSection2026

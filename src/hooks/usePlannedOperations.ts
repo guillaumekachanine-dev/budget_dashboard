@@ -230,6 +230,7 @@ export function useAddPlannedOperation() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [QK.PLANNED_OPERATIONS] })
+      void queryClient.invalidateQueries({ queryKey: ['planned-operations-flow'] })
       void queryClient.invalidateQueries({ queryKey: [QK.HOME_DAILY_BUDGET] })
       void queryClient.invalidateQueries({ queryKey: [QK.DAILY_CASHFLOW_FORECAST] })
       void queryClient.invalidateQueries({ queryKey: [QK.BUDGET_PAYLOAD] })
