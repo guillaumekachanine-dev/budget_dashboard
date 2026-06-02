@@ -280,7 +280,6 @@ export function OptimizationsModal({ data, formatCurrencyFloored }: Optimization
 
   // Show 1 card per slide, limit to 8 total cards
   const displayData = data.slice(0, 8)
-  const cardsPerSlide = 1
   const totalSlides = displayData.length
 
   const canGoPrev = currentSlide > 0
