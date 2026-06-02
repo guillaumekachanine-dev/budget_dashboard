@@ -19,7 +19,7 @@ import {
 } from '@/lib/utils'
 import { RadialEnvelopeChart, type CombinedDatum } from '@/features/budget/components/RadialEnvelopeChart'
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
-import type { AccountWithBalance } from '@/lib/types'
+import type { AccountWithBalance, Category } from '@/lib/types'
 import type { PlannedOperationItem } from '@/features/home/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
@@ -150,9 +150,9 @@ function formatSignedCurrency(value: number): string {
   return `${sign}${formatCurrencyFloored(Math.abs(value))}`
 }
 
-function renderOperationSummary(count: number, amount: number): string {
+function renderOperationSummary(count: number): string {
   if (count <= 0) return 'Aucune'
-  return `${amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(amount))}`
+  return `${count} opé.`
 }
 
 
@@ -565,7 +565,7 @@ function DriftsTile({
 
 function MirrorTimelineTile({
   title,
-  sublabel: _sublabel,
+  sublabel,
   value,
   valueEmphasis,
   dotColor,
@@ -582,6 +582,7 @@ function MirrorTimelineTile({
   onClick?: () => void
   ariaLabel: string
 }) {
+  void sublabel
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -608,7 +609,7 @@ function MirrorTimelineTile({
         overflow: 'visible',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
         <div style={{ width: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, overflow: 'visible' }}>
           <div
             aria-hidden="true"
@@ -630,7 +631,7 @@ function MirrorTimelineTile({
         </div>
 
         {/* Single-line: bold title — value */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
           <span
             style={{
               fontSize: 13,
@@ -643,7 +644,7 @@ function MirrorTimelineTile({
           >
             {title}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
+          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
           <span
             style={{
               fontSize: 12,
@@ -667,7 +668,7 @@ function MirrorTimelineTile({
 
 function TimelineRow({
   label,
-  sublabel: _sublabel,
+  sublabel,
   value,
   dotColor,
   shadowColor,
@@ -682,6 +683,7 @@ function TimelineRow({
   onClick: () => void
   hasOps: boolean
 }) {
+  void sublabel
   const [hovered, setHovered] = useState(false)
   return (
     <button
@@ -706,7 +708,7 @@ function TimelineRow({
         outline: 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', minWidth: 0, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
         {/* Dot — vertically centered */}
         <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
           <div
@@ -726,7 +728,7 @@ function TimelineRow({
         </div>
 
         {/* Text Area — single line */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
           <span
             style={{
               fontSize: 13,
@@ -739,7 +741,7 @@ function TimelineRow({
           >
             {label}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
+          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
           <span
             style={{
               fontSize: 12,
@@ -1137,15 +1139,15 @@ function SavingsGoalTile({
   onClick?: () => void
 }) {
   return (
-    <MirrorTimelineTile
-      title="Épargne"
-      sublabel="mensuelle"
-      value={scheduleValue}
-      valueEmphasis={scheduleAriaLabel !== 'Aucun versement'}
-      dotColor={HOME_HERO_ACCENT_DOT}
-      shadowColor={HOME_HERO_ACCENT_SHADOW}
-      onClick={onClick}
-      ariaLabel={`Épargne mensuelle prévue: ${scheduleAriaLabel}`}
+      <MirrorTimelineTile
+        title="Épargne"
+        sublabel="mensuelle"
+        value={scheduleValue}
+        valueEmphasis={false}
+        dotColor={HOME_HERO_ACCENT_DOT}
+        shadowColor={HOME_HERO_ACCENT_SHADOW}
+        onClick={onClick}
+        ariaLabel={`Épargne mensuelle prévue: ${scheduleAriaLabel}`}
     />
   )
 }
@@ -1172,7 +1174,7 @@ function QuickSearchTile({
   onSelectCategory: () => void
   onSelectPeriod: () => void
   onSearch: () => void
-  categories: any[]
+  categories: Category[]
 }) {
   const getSelectionText = () => {
     if (!selection) return 'Recherche'
@@ -2863,11 +2865,11 @@ export function Home() {
                 <TimelineRow
                   label="J+3"
                   sublabel="échéances"
-                  value={renderOperationSummary(upcomingOpsWindows.j3.count, upcomingOpsWindows.j3.amount)}
+                  value={renderOperationSummary(upcomingOpsWindows.j3.count)}
                   dotColor={HOME_HERO_ACCENT_DOT}
                   shadowColor={HOME_HERO_ACCENT_SHADOW}
                   onClick={() => setShowPlannedOpsModal(true)}
-                  hasOps={upcomingOpsWindows.j3.count > 0}
+                  hasOps={false}
                 />
                 <DriftsTile
                   count={driftRows.length}
@@ -2879,11 +2881,11 @@ export function Home() {
                 <TimelineRow
                   label={`J+${daysRemaining}`}
                   sublabel="fin de mois"
-                  value={renderOperationSummary(upcomingOpsWindows.eom.count, upcomingOpsWindows.eom.amount)}
+                  value={renderOperationSummary(upcomingOpsWindows.eom.count)}
                   dotColor={HOME_HERO_ACCENT_DOT}
                   shadowColor={HOME_HERO_ACCENT_SHADOW}
                   onClick={() => setShowPlannedOpsEomModal(true)}
-                  hasOps={upcomingOpsWindows.eom.count > 0}
+                  hasOps={false}
                 />
                 <SavingsGoalTile
                   scheduleValue={savingsPlannedTransferLabel}
@@ -3364,8 +3366,8 @@ export function Home() {
         title="Échéances fin de mois"
         dotColor="#FFAB2E"
         items={upcomingOpsWindows.eom.items}
-        maxHeight="min(56dvh, 360px)"
-        contentMaxHeight="min(34dvh, 180px)"
+        maxHeight="min(78dvh, 576px)"
+        contentMaxHeight="min(56dvh, 336px)"
       />
 
       {/* Mini Modale de sélection de la Catégorie / Socle */}

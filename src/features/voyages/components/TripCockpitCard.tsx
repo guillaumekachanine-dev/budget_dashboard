@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 import { ArrowRightLeft, ArrowRight, Plane, ShoppingBag } from 'lucide-react'
 import { useTripExpenses } from '../hooks/useTripExpenses'
 import type { TripExpenseRow } from '../types'
@@ -13,8 +13,8 @@ const MONTHS_FR = [
   'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
 ]
 
-const VOYAGE_ACCENT = '#38BDF8'  // --bucket-voyage
-const VOYAGE_ACCENT_DARK = '#0284C7'
+const VOYAGE_ACCENT = '#D7B25C'
+const VOYAGE_ACCENT_DARK = '#8A5A12'
 
 // ─── Utilitaires locaux ───────────────────────────────────────────────────────
 
@@ -50,13 +50,140 @@ function TripProgressRing({
   const circumference = 2 * Math.PI * r
   const progress = Math.max(0, Math.min(1, pct / 100))
   const dashOffset = circumference * (1 - progress)
+  const orbitRadius = r + 8
+  const orbitCircumference = 2 * Math.PI * orbitRadius
+  const orbitSegment = orbitCircumference * 0.24
+  const travelerId = useId().replace(/:/g, '')
+  const orbitGlowId = `${travelerId}-orbit-glow`
+  const orbitGradientId = `${travelerId}-orbit-gradient`
+  const travelerGradientId = `${travelerId}-traveler-gradient`
+  const burstGlowId = `${travelerId}-burst-glow`
+  const animationClass = `trip-orbit-${travelerId}`
 
-  const trackColor = 'rgba(255, 255, 255, 0.12)'
-  const arcColor = pct > 100 ? '#FC5A5A' : '#FB923C'
+  const trackColor = 'rgba(255, 248, 228, 0.18)'
+  const arcColor = pct > 100 ? '#FC5A5A' : '#F3B24F'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
+      <style>{`
+        .${animationClass}-orbit {
+          transform-origin: ${cx}px ${cy}px;
+          animation: ${animationClass}-spin 3.55s linear infinite;
+          opacity: 0;
+        }
+
+        .${animationClass}-trail-glow {
+          animation: ${animationClass}-trail 3.55s ease-out infinite;
+        }
+
+        .${animationClass}-trail-core {
+          animation: ${animationClass}-trail-core 3.55s ease-out infinite;
+        }
+
+        .${animationClass}-traveler {
+          transform-origin: ${cx}px ${cy}px;
+          animation:
+            ${animationClass}-traveler-fill 0.28s linear infinite,
+            ${animationClass}-traveler-pop 3.55s ease-out infinite;
+        }
+
+        .${animationClass}-sparkles {
+          transform-origin: ${cx}px ${cy - orbitRadius}px;
+          animation: ${animationClass}-burst 3.55s ease-out infinite;
+          opacity: 0;
+        }
+
+        .${animationClass}-sparkles circle,
+        .${animationClass}-sparkles path {
+          animation: ${animationClass}-spark-fade 3.55s ease-out infinite;
+        }
+
+        @keyframes ${animationClass}-spin {
+          0% { transform: rotate(-90deg); opacity: 0; }
+          3% { opacity: 1; }
+          24% { transform: rotate(270deg); opacity: 1; }
+          29% { transform: rotate(270deg); opacity: 0; }
+          100% { transform: rotate(270deg); opacity: 0; }
+        }
+
+        @keyframes ${animationClass}-trail {
+          0% { opacity: 0; }
+          4% { opacity: 0.95; }
+          20% { opacity: 0.88; }
+          28% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+
+        @keyframes ${animationClass}-trail-core {
+          0% { opacity: 0; }
+          4% { opacity: 0.92; }
+          20% { opacity: 0.84; }
+          28% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+
+        @keyframes ${animationClass}-traveler-fill {
+          0% { fill: #ff2d55; }
+          16% { fill: #ff7a00; }
+          32% { fill: #ffd500; }
+          48% { fill: #33d17a; }
+          64% { fill: #00c2ff; }
+          82% { fill: #4f6bff; }
+          100% { fill: #c45cff; }
+        }
+
+        @keyframes ${animationClass}-traveler-pop {
+          0% { opacity: 0; transform: scale(0.7); }
+          4% { opacity: 1; transform: scale(1); }
+          21% { opacity: 1; transform: scale(1.02); }
+          27% { opacity: 0; transform: scale(0.72); }
+          100% { opacity: 0; transform: scale(0.72); }
+        }
+
+        @keyframes ${animationClass}-burst {
+          0%, 21% { opacity: 0; transform: scale(0.45); }
+          24% { opacity: 0.95; transform: scale(0.72); }
+          30% { opacity: 0; transform: scale(1.35); }
+          100% { opacity: 0; transform: scale(1.35); }
+        }
+
+        @keyframes ${animationClass}-spark-fade {
+          0%, 22% { opacity: 0; }
+          25% { opacity: 1; }
+          31% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+      `}</style>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ display: 'block', transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <defs>
+          <filter id={orbitGlowId} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4.8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id={burstGlowId} x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2.4" result="spark-blur" />
+            <feMerge>
+              <feMergeNode in="spark-blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id={orbitGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fff6d5" />
+            <stop offset="18%" stopColor="#ffd36e" />
+            <stop offset="38%" stopColor="#ff9f43" />
+            <stop offset="56%" stopColor="#fff1bf" />
+            <stop offset="76%" stopColor="#ffb347" />
+            <stop offset="100%" stopColor="#fff8e7" />
+          </linearGradient>
+          <radialGradient id={travelerGradientId} cx="50%" cy="50%" r="65%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.96" />
+            <stop offset="46%" stopColor="#fff2c7" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#ffad3d" stopOpacity="0.32" />
+          </radialGradient>
+        </defs>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke={trackColor} strokeWidth={sw} />
         {progress > 0 ? (
           <circle
@@ -70,6 +197,47 @@ function TripProgressRing({
             style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
           />
         ) : null}
+        <g className={`${animationClass}-orbit`}>
+          <circle
+            className={`${animationClass}-trail-glow`}
+            cx={cx}
+            cy={cy}
+            r={orbitRadius}
+            fill="none"
+            stroke={`url(#${orbitGradientId})`}
+            strokeWidth={5.5}
+            strokeDasharray={`${orbitSegment} ${orbitCircumference}`}
+            strokeLinecap="round"
+            filter={`url(#${orbitGlowId})`}
+          />
+          <circle
+            className={`${animationClass}-trail-core`}
+            cx={cx}
+            cy={cy}
+            r={orbitRadius}
+            fill="none"
+            stroke={`url(#${orbitGradientId})`}
+            strokeWidth={2.4}
+            strokeDasharray={`${orbitSegment * 0.88} ${orbitCircumference}`}
+            strokeLinecap="round"
+          />
+          <circle
+            className={`${animationClass}-traveler`}
+            cx={cx}
+            cy={cy - orbitRadius}
+            r={4.8}
+            fill={`url(#${travelerGradientId})`}
+            filter={`url(#${orbitGlowId})`}
+          />
+        </g>
+        <g className={`${animationClass}-sparkles`} filter={`url(#${burstGlowId})`}>
+          <circle cx={cx} cy={cy - orbitRadius} r={1.7} fill="#ffffff" />
+          <circle cx={cx - 7} cy={cy - orbitRadius - 2} r={1.4} fill="#ffd86b" />
+          <circle cx={cx + 8} cy={cy - orbitRadius - 1} r={1.5} fill="#ffbd59" />
+          <circle cx={cx - 4} cy={cy - orbitRadius - 8} r={1.2} fill="#ff9640" />
+          <circle cx={cx + 4} cy={cy - orbitRadius - 9} r={1.1} fill="#fff2c5" />
+          <path d={`M ${cx - 10} ${cy - orbitRadius + 2} l -4 3 M ${cx + 10} ${cy - orbitRadius + 1} l 4 3 M ${cx - 2} ${cy - orbitRadius - 11} l -1 -4 M ${cx + 3} ${cy - orbitRadius - 10} l 2 -4`} stroke="#fff6cc" strokeWidth="1.2" strokeLinecap="round" />
+        </g>
       </svg>
       <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box' }}>
         <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
@@ -119,10 +287,10 @@ function TripCard({
   return (
     <div
       style={{
-        background: 'radial-gradient(120% 90% at 14% -8%, rgba(251, 146, 60, 0.25) 0%, rgba(251, 146, 60, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(244, 63, 94, 0.15) 0%, rgba(244, 63, 94, 0) 62%), linear-gradient(145deg, #171210 0%, #241D1A 47%, #3E2F2A 100%)',
+        background: 'radial-gradient(122% 96% at 16% -10%, rgba(255, 242, 191, 0.72) 0%, rgba(255, 242, 191, 0) 52%), radial-gradient(96% 88% at 100% 100%, rgba(255, 176, 72, 0.34) 0%, rgba(255, 176, 72, 0) 60%), linear-gradient(145deg, #6D6A66 0%, #B9B6B1 46%, #ECE7DF 100%)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-card)',
-        border: '1px solid rgba(251, 146, 60, 0.2)',
+        border: '1px solid rgba(255, 206, 112, 0.34)',
         overflow: 'hidden',
         padding: 'var(--space-4)',
         display: 'grid',
@@ -133,16 +301,16 @@ function TripCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
         {/* 1. Nom seul — sans émoji ni pastille statut */}
         <div style={{ minWidth: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFDF8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 1px 6px rgba(92, 62, 8, 0.16)' }}>
             {trip.name}
           </h3>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255, 252, 244, 0.92)' }}>
             {dateRange}
           </span>
           {contextLine && (
-            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(108, 76, 23, 0.66)' }}>
               {contextLine}
             </p>
           )}
@@ -150,7 +318,31 @@ function TripCard({
       </div>
 
       {/* ── Central Progress Ring ───────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          padding: 'var(--space-2) 0',
+          position: 'relative',
+          isolation: 'isolate',
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: '50% auto auto 50%',
+            width: 196,
+            height: 136,
+            transform: 'translate(-50%, -50%)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'linear-gradient(90deg, rgba(0, 43, 127, 0.14) 0%, rgba(0, 43, 127, 0.14) 33.333%, rgba(252, 209, 22, 0.14) 33.333%, rgba(252, 209, 22, 0.14) 66.666%, rgba(206, 17, 38, 0.14) 66.666%, rgba(206, 17, 38, 0.14) 100%)',
+            boxShadow: '0 14px 34px rgba(255, 196, 76, 0.08)',
+            filter: 'blur(0.4px) saturate(0.84)',
+            opacity: 0.42,
+            zIndex: 0,
+          }}
+        />
         <TripProgressRing
           pct={consumedPct}
           amountText={formatCurrencyFloored(resteUtile)}
@@ -159,7 +351,7 @@ function TripCard({
 
       {/* ── 2. Ligne consommation unifiée ─────────────────────────────── */}
       <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFDF8', textShadow: '0 1px 5px rgba(92, 62, 8, 0.14)' }}>
           {hasPlannedBudget ? (
             <>
               {'Consommé : '}
@@ -174,7 +366,7 @@ function TripCard({
           )}
         </p>
         {hasPlannedBudget && (
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(108, 76, 23, 0.72)' }}>
             {consumedPct.toFixed(0)}% consommé
           </p>
         )}
@@ -192,9 +384,9 @@ function TripCard({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 5,
-              border: '1px solid color-mix(in oklab, var(--color-warning) 48%, rgba(255,255,255,0.22) 52%)',
-              background: 'color-mix(in oklab, var(--color-warning) 8%, rgba(255,255,255,0.04) 92%)',
-              color: 'rgba(255,255,255,0.94)',
+              border: '1px solid rgba(193, 135, 40, 0.28)',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255, 214, 130, 0.18) 100%)',
+              color: '#6D450B',
               borderRadius: 'var(--radius-button)',
               padding: '8px var(--space-3)',
               minHeight: 40,
@@ -205,12 +397,12 @@ function TripCard({
               transition: 'background 120ms ease, border-color 120ms ease',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'color-mix(in oklab, var(--color-warning) 13%, rgba(255,255,255,0.05) 87%)'
-              e.currentTarget.style.borderColor = 'color-mix(in oklab, var(--color-warning) 62%, rgba(255,255,255,0.24) 38%)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255, 214, 130, 0.26) 100%)'
+              e.currentTarget.style.borderColor = 'rgba(193, 135, 40, 0.4)'
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'color-mix(in oklab, var(--color-warning) 8%, rgba(255,255,255,0.04) 92%)'
-              e.currentTarget.style.borderColor = 'color-mix(in oklab, var(--color-warning) 48%, rgba(255,255,255,0.22) 52%)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255, 214, 130, 0.18) 100%)'
+              e.currentTarget.style.borderColor = 'rgba(193, 135, 40, 0.28)'
             }}
           >
             + dépense
@@ -226,9 +418,9 @@ function TripCard({
             alignItems: 'center',
             justifyContent: 'center',
             gap: 5,
-            border: '1px solid rgba(255,255,255,0.25)',
-            background: 'rgba(255,255,255,0.1)',
-            color: '#FFFFFF',
+            border: '1px solid rgba(255, 252, 244, 0.38)',
+            background: 'rgba(255,255,255,0.16)',
+            color: '#5F430E',
             borderRadius: 'var(--radius-button)',
             padding: '8px var(--space-3)',
             minHeight: 40,
@@ -239,10 +431,10 @@ function TripCard({
             transition: 'background 120ms ease',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+            e.currentTarget.style.background = 'rgba(255,255,255,0.24)'
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+            e.currentTarget.style.background = 'rgba(255,255,255,0.16)'
           }}
         >
           Voir détails
@@ -259,9 +451,9 @@ function TripCard({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 5,
-              border: '1px solid rgba(255,171,46,0.4)',
-              background: 'rgba(255,171,46,0.12)',
-              color: '#FFAB2E',
+              border: '1px solid rgba(204, 140, 36, 0.38)',
+              background: 'linear-gradient(135deg, rgba(255, 219, 142, 0.22) 0%, rgba(255, 177, 70, 0.16) 100%)',
+              color: '#9A5D00',
               borderRadius: 'var(--radius-button)',
               padding: '8px var(--space-3)',
               minHeight: 40,
@@ -272,10 +464,10 @@ function TripCard({
               transition: 'background 120ms ease',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255,171,46,0.2)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 219, 142, 0.3) 0%, rgba(255, 177, 70, 0.24) 100%)'
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(255,171,46,0.12)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 219, 142, 0.22) 0%, rgba(255, 177, 70, 0.16) 100%)'
             }}
           >
             <ArrowRightLeft size={12} />
