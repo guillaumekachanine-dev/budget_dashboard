@@ -398,7 +398,6 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                       gap: 10,
                       padding: '7px 10px',
                       borderRadius: 12,
-                      border: 'none',
                       background: isSel
                         ? `rgba(${hexToRgb(seg.color)}, 0.10)`
                         : 'rgba(255,255,255,0)',

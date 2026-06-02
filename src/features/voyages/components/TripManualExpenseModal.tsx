@@ -88,7 +88,6 @@ export function TripManualExpenseModal({
   const glassSelBg     = isLight ? 'rgba(210, 180, 110, 0.18)' : 'rgba(255, 255, 255, 0.05)'
   const glassSelBdr    = isLight ? 'rgba(190, 155, 80, 0.35)' : 'rgba(255, 255, 255, 0.1)'
   const glassDivider   = isLight ? 'rgba(190, 160, 90, 0.20)' : 'rgba(255, 255, 255, 0.1)'
-  const glassAccentTxt = isLight ? '#8B5E14' : '#38BDF8'
   const glassActiveBg  = isLight ? 'rgba(200, 165, 80, 0.22)' : 'rgba(255, 255, 255, 0.12)'
   const glassCloseBg   = isLight ? 'rgba(220, 200, 155, 0.45)' : 'rgba(255, 255, 255, 0.1)'
   const glassCloseBdr  = isLight ? 'rgba(185, 155, 80, 0.30)' : 'rgba(255, 255, 255, 0.12)'
