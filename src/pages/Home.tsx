@@ -30,6 +30,9 @@ import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperat
 import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
 import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
 import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
+import { useAuth } from '@/hooks/useAuth'
+import { useSavingsTransfersYtd } from '@/features/savings/hooks/useSavingsTransfersYtd'
+import { useSavingsObjective2026Details } from '@/features/savings/hooks/useSavingsObjective2026Details'
 import { formatSignedEuro } from '@/features/stats/components/ui/analyticsFormatters'
 import {
   DetailModal,
@@ -1219,6 +1222,9 @@ export function Home() {
   const navigate = useNavigate()
   const { year, month } = getCurrentPeriod()
   const now = new Date()
+  const { user } = useAuth()
+  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, year)
+  const objective2026Details = useSavingsObjective2026Details(user?.id)
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
@@ -1597,12 +1603,20 @@ export function Home() {
 
   const savingsMonthlyGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
   const savingsMonthlySavedDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
-  const savingsYtdDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
-  const savingsAnnualGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0) * 12
+  const savingsYtdDisplay = Number(savingsTransfersYtd?.totalAmount ?? 0)
+  const savingsAnnualGoalDisplay = useMemo(() => {
+    const dbObjective = objective2026Details.totalUpdatedObjective
+    if (dbObjective > 0) return dbObjective
+    return Number(dailyPayload?.budgets.savings_budget_amount ?? 0) * 12
+  }, [objective2026Details.totalUpdatedObjective, dailyPayload?.budgets.savings_budget_amount])
   const savingsProgressPct = useMemo(() => {
     if (savingsMonthlyGoalDisplay <= 0) return 0
     return Math.max(0, Math.min(100, (savingsMonthlySavedDisplay / savingsMonthlyGoalDisplay) * 100))
   }, [savingsMonthlyGoalDisplay, savingsMonthlySavedDisplay])
+  const savingsYtdProgressPct = useMemo(() => {
+    if (savingsAnnualGoalDisplay <= 0) return 0
+    return Math.max(0, Math.min(100, (savingsYtdDisplay / savingsAnnualGoalDisplay) * 100))
+  }, [savingsYtdDisplay, savingsAnnualGoalDisplay])
   const savingsGoalReached = savingsProgressPct >= 100
   const savingsTileStatus: SavingsTileStatus = useMemo(() => {
     if (savingsGoalReached) return 'validated'
@@ -2261,7 +2275,7 @@ export function Home() {
                                 <span style={{ display: 'block', fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3, lineHeight: 1 }}>
                                   Reste utile
                                 </span>
-                                <span style={{ display: 'block', fontSize: 8, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginTop: 5, lineHeight: 1 }}>
+                                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#FFD550', fontFamily: 'var(--font-mono)', marginTop: 5, lineHeight: 1 }}>
                                   {formatCurrencyFloored(animatedBudgetPerDay)}/jour
                                 </span>
                               </div>
@@ -2489,7 +2503,7 @@ export function Home() {
                       <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,244,221,0.92)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                         Budget/jour
                       </p>
-                      <p style={{ margin: 0, fontSize: 'clamp(20px, 5.2vw, 26px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFF8EC', lineHeight: 1.05, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                      <p style={{ margin: 0, fontSize: 'clamp(20px, 5.2vw, 26px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFD550', lineHeight: 1.05, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                         {formatCurrencyFloored(budgetPerDayDisplay)}
                       </p>
                     </div>
@@ -2797,42 +2811,100 @@ export function Home() {
         zIndex={68}
         variant="center"
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gap: 4 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Objectif mensuel
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
-              </p>
+        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
+          {/* Ligne 1 : Élément graphique progression YTD vs Annuelle */}
+          <div style={{
+            background: 'var(--neutral-50)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-4)',
+            border: '1px solid var(--neutral-150)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+            boxShadow: 'var(--shadow-card)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Progression Annuelle YTD
+              </span>
+              <span style={{ fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--primary-500)', fontFamily: 'var(--font-mono)' }}>
+                {savingsYtdProgressPct.toFixed(0)}%
+              </span>
             </div>
-            <div style={{ display: 'grid', gap: 4 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Progression
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                {`${savingsProgressPct.toFixed(0)}%`}
-              </p>
+
+            {/* Barre de progression graphique */}
+            <div style={{
+              height: 10,
+              background: 'var(--neutral-200)',
+              borderRadius: 'var(--radius-full)',
+              overflow: 'hidden',
+              position: 'relative',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${savingsYtdProgressPct}%`,
+                background: 'linear-gradient(90deg, #5B57F5 0%, #2ED47A 100%)',
+                borderRadius: 'var(--radius-full)',
+                transition: 'width 0.8s cubic-bezier(0.22, 1, 0.36, 1)',
+              }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+              <span style={{ fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                {formatCurrencyFloored(savingsYtdDisplay)}
+              </span>
+              <span style={{ color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                sur {formatCurrencyFloored(savingsAnnualGoalDisplay)}
+              </span>
             </div>
           </div>
-          <div style={{ height: 1, background: 'var(--neutral-200)' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+
+          {/* Séparateur subtil */}
+          <div style={{ height: 1, background: 'var(--neutral-150)', margin: '0 var(--space-1)' }} />
+
+          {/* Ligne 2 : Objectif mensuel avec picto check ou croix */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'var(--neutral-0)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-4)',
+            border: '1px solid var(--neutral-150)',
+            boxShadow: 'var(--shadow-card)',
+          }}>
             <div style={{ display: 'grid', gap: 4 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Épargné 2026 YTD
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                {formatCurrencyFloored(savingsYtdDisplay)}
-              </p>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Objectif Mensuel ({savingsMonthLabel})
+              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span style={{ fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
+                  {formatCurrencyFloored(savingsMonthlySavedDisplay)}
+                </span>
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
+                  / {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
+                </span>
+              </div>
             </div>
-            <div style={{ display: 'grid', gap: 4 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Objectif annuel
-              </p>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                {formatCurrencyFloored(savingsAnnualGoalDisplay)}
-              </p>
+
+            {/* Picto dynamique croix ou check */}
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 'var(--radius-full)',
+              background: savingsGoalReached ? 'rgba(46, 212, 122, 0.12)' : 'rgba(252, 90, 90, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: savingsGoalReached ? '0 0 12px rgba(46, 212, 122, 0.08)' : '0 0 12px rgba(252, 90, 90, 0.08)',
+              transition: 'transform 0.2s ease',
+            }}>
+              {savingsGoalReached ? (
+                <Check size={20} color="var(--color-positive)" strokeWidth={3} />
+              ) : (
+                <X size={20} color="var(--color-negative)" strokeWidth={3} />
+              )}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown } from 'lucide-react'
 import { useVoyagesData } from '../hooks/useVoyagesData'
+import { TripDetailsModal } from './TripDetailsModal'
 
 const VOYAGES_ACCENT = '#F59E0B'
 const AVAILABLE_YEARS = [2025, 2026] as const
@@ -37,11 +38,11 @@ function CategoryBar({
       <span style={{ fontSize: 11, color: 'var(--neutral-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>
         {name}
       </span>
-      <div style={{ height: 7, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
+      <div style={{ height: 7, borderRadius: 'var(--radius-sm)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
         <div style={{
           width: `${Math.max(4, Math.min(pct, 100))}%`,
           height: '100%',
-          borderRadius: 'var(--radius-full)',
+          borderRadius: 'var(--radius-sm)',
           background: color,
         }} />
       </div>
@@ -121,14 +122,14 @@ function VoyagesKpiCards({
   ] as const
 
   return (
-    <div style={{ marginBottom: 'var(--space-4)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
+    <div style={{ marginBottom: 'var(--space-6)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
       {cards.map((card) => (
         <div
           key={card.key}
           style={{
             background: card.background,
             border: card.border,
-            borderRadius: 'var(--radius-xl)',
+            borderRadius: 'var(--radius-sm)',
             padding: 'var(--space-2) var(--space-3)',
             minHeight: 64,
             display: 'grid',
@@ -269,6 +270,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState<number>(currentYear >= 2026 ? 2026 : 2025)
   const { tripsWithStats, isLoading } = useVoyagesData(year)
+  const [selectedTripIdForModal, setSelectedTripIdForModal] = useState<string | null>(null)
 
   const annualTripCount = tripsWithStats.length
   const annualBudget = useMemo(() => {
@@ -326,7 +328,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
         transition={{ duration: 0.28 }}
         style={{ padding: '0 var(--space-6)', maxWidth: 600, margin: '0 auto' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', gap: 'var(--space-2)' }}>
           <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <button
               type="button"
@@ -368,7 +370,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
               gap: 5,
               border: 'none',
               background: '#0097A7',
-              borderRadius: 'var(--radius-full)',
+              borderRadius: 'var(--radius-sm)',
               padding: '6px 12px',
               cursor: 'pointer',
               fontSize: 12,
@@ -406,8 +408,8 @@ export function VoyagesFeaturePage({ onBack }: Props) {
         ) : null}
 
         {!isLoading ? (
-          <div style={{ background: '#E7E7EA', borderRadius: 'var(--radius-2xl)', border: '1px solid #D4D4D8', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
-            <div style={{ background: '#F2D8CE', borderRadius: 'var(--radius-xl)', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+          <div style={{ background: '#E7E7EA', borderRadius: 'var(--radius-sm)', border: '1px solid #D4D4D8', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ background: '#F2D8CE', borderRadius: 'var(--radius-sm)', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
               <p style={{ margin: 0, fontSize: 31/2, fontWeight: 800, color: '#1F2937' }}>
                 Répartition par voyage
               </p>
@@ -427,6 +429,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
                   amount={row.amount}
                   pct={maxTripRepartitionAmount > 0 ? (row.amount / maxTripRepartitionAmount) * 100 : 0}
                   color={index === 0 ? '#F3B11A' : '#43AFE0'}
+                  onClick={() => setSelectedTripIdForModal(row.id)}
                 />
               ))
             )}
@@ -435,6 +438,12 @@ export function VoyagesFeaturePage({ onBack }: Props) {
 
         <div style={{ height: 'var(--space-6)' }} />
       </motion.div>
+
+      <TripDetailsModal
+        tripId={selectedTripIdForModal}
+        isOpen={Boolean(selectedTripIdForModal)}
+        onClose={() => setSelectedTripIdForModal(null)}
+      />
     </>
   )
 }

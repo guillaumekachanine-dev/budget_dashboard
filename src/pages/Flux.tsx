@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useDeferredValue, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Search, ArrowUp, Settings2, X, RotateCcw } from 'lucide-react'
+import { ChevronDown, Search, ArrowUp, Settings2, X, RotateCcw, Repeat, Plus } from 'lucide-react'
 import { useFluxOperations, type FluxOperation } from '@/hooks/useFluxOperations'
 import { useCategories } from '@/hooks/useCategories'
 import { useAuth } from '@/hooks/useAuth'
@@ -17,20 +17,8 @@ import type {
   Transaction,
 } from '@/lib/types'
 import { lockDocumentScroll } from '@/lib/scrollLock'
-import planifierOperationIcon from '@/assets/icons/app/planifier_operation.webp'
-import fluxPlanifieIcon from '@/assets/icons/app/flux_planifie.webp'
-
 type FlowFilter = 'all' | 'income' | 'expense' | 'transfer' | 'savings' | 'planned'
 type PeriodFilter = 'day' | 'week' | 'month' | 'year_2026' | 'year_2025' | 'all'
-type PlannedModalityFilter = 'all' | 'done' | 'upcoming'
-type PlannedTypeFilter = 'all' | 'recurring' | 'one_time'
-type FluxTabId = 'actuel' | 'planifie'
-
-type FluxTabConfig = { id: FluxTabId; label: string; iconSrc: string }
-const FLUX_TABS: FluxTabConfig[] = [
-  { id: 'actuel', label: 'Flux actuels', iconSrc: fluxActuelIcon },
-  { id: 'planifie', label: 'Planifié', iconSrc: fluxPlanifieIcon },
-]
 
 const HEADER_CATEGORY_ORDER = [
   'alimentation',
@@ -110,18 +98,7 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
   { value: 'all', label: 'Toutes' },
 ]
 
-const PLANNED_TYPE_OPTIONS: Array<{ value: PlannedTypeFilter; label: string }> = [
-  { value: 'all', label: 'Toutes' },
-  { value: 'recurring', label: 'Fixes récurrentes' },
-  { value: 'one_time', label: 'Ponctuelles' },
-]
 
-const PLANNED_PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
-  { value: 'week', label: 'Semaine' },
-  { value: 'month', label: 'Mois' },
-  { value: 'year_2026', label: '2026' },
-  { value: 'all', label: 'Toutes' },
-]
 
 function startOfIsoDay(d: Date): string {
   // Important: do not use toISOString() for business calendar filters.
@@ -358,6 +335,7 @@ export function Flux() {
   const [includeFutureFixed, setIncludeFutureFixed] = useState(false)
   const [detailsOperation, setDetailsOperation] = useState<FluxOperation | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [showOnlyFixedRecurring, setShowOnlyFixedRecurring] = useState(false)
 
   const [draftFlow, setDraftFlow] = useState<FlowFilter>('expense')
   const [draftPeriod, setDraftPeriod] = useState<PeriodFilter>('month')
@@ -367,12 +345,6 @@ export function Flux() {
   const [draftSelectedCategoryId, setDraftSelectedCategoryId] = useState<string | null>(null)
   const [showParametersCategoryModal, setShowParametersCategoryModal] = useState(false)
   const [showPlannedOperationModal, setShowPlannedOperationModal] = useState(false)
-  const [plannedModalityFilter, setPlannedModalityFilter] = useState<PlannedModalityFilter>('all')
-  const [plannedTypeFilter, setPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
-  const [draftPlannedTypeFilter, setDraftPlannedTypeFilter] = useState<PlannedTypeFilter>('all')
-  const [activeTabId, setActiveTabId] = useState<FluxTabId>('actuel')
-  const activeTab = FLUX_TABS.find((t) => t.id === activeTabId) ?? FLUX_TABS[0]
-
   const activeFlowTypeForCategory = showAdvancedSheet ? draftFlow : flow
   const categoryFlowType = activeFlowTypeForCategory === 'income'
     ? 'income'
@@ -380,7 +352,6 @@ export function Flux() {
       ? 'savings'
       : 'expense'
   const { data: flowCategories } = useCategories(categoryFlowType)
-  const { data: allCategoriesData } = useCategories()
 
   const rootCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id === null), [flowCategories])
   const subCategories = useMemo(() => (flowCategories ?? []).filter((c) => c.parent_id !== null), [flowCategories])
@@ -397,11 +368,10 @@ export function Flux() {
       .filter((category): category is (typeof rootCategories)[number] => category !== null)
   }, [rootCategories])
 
-  const isPlannedMode = activeTabId === 'planifie'
   const realizedRange = useMemo(() => periodToRange(period), [period])
   const queryRange = useMemo(
-    () => (includeFutureFixed ? periodToFullRange(period) : realizedRange),
-    [includeFutureFixed, period, realizedRange],
+    () => (includeFutureFixed || showOnlyFixedRecurring ? periodToFullRange(period) : realizedRange),
+    [includeFutureFixed, showOnlyFixedRecurring, period, realizedRange],
   )
   const flowTypeFilter: FlowType | undefined = flow === 'all' || flow === 'planned' ? undefined : (flow as FlowType)
 
@@ -428,49 +398,30 @@ export function Flux() {
 
   const visibleOperations = useMemo(
     () => operations.filter((operation) => {
+      if (showOnlyFixedRecurring) {
+        return operation.operation_kind === 'planned_occurrence' &&
+               operation.budget_behavior === 'fixed' &&
+               Boolean(operation.is_recurring)
+      }
       if (isRealizedFluxOperation(operation, today)) return true
       if (includeFutureFixed && isFutureFixedPlannedOperation(operation, today)) return true
       return false
     }),
-    [includeFutureFixed, operations, today],
+    [includeFutureFixed, showOnlyFixedRecurring, operations, today],
   )
 
   const filtered = useMemo(() => {
     let list = visibleOperations
 
+    if (showOnlyFixedRecurring) {
+      return list
+    }
+
     if (excludeRecurring) list = list.filter((operation) => !operation.is_recurring)
     if (flow === 'planned') list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
 
-    if (isPlannedMode) {
-      list = list.filter((operation) => operation.operation_kind === 'planned_occurrence')
-      if (plannedModalityFilter === 'done') list = list.filter((operation) => operation.planned_status === 'paid' || operation.planned_status === 'matched')
-      if (plannedModalityFilter === 'upcoming') list = list.filter((operation) => operation.planned_status === 'planned')
-      if (plannedTypeFilter === 'recurring') list = list.filter((operation) => Boolean(operation.is_recurring))
-      if (plannedTypeFilter === 'one_time') list = list.filter((operation) => !operation.is_recurring)
-    }
-
     return list
-  }, [visibleOperations, excludeRecurring, flow, isPlannedMode, plannedModalityFilter, plannedTypeFilter])
-
-  // Planned mode: unique parent category names present in the loaded planned operations
-  const plannedParentCategoryNames = useMemo((): Set<string> | null => {
-    if (!isPlannedMode) return null
-    const names = new Set<string>()
-    for (const op of filtered) {
-      if (op.operation_kind !== 'planned_occurrence') continue
-      const name = op.parent_category_name ?? op.category_name
-      if (name) names.add(name.toLowerCase())
-    }
-    return names
-  }, [filtered, isPlannedMode])
-
-  // Root categories restricted to those with planned operations (all flow types)
-  const plannedModalRootCategories = useMemo(() => {
-    if (!plannedParentCategoryNames || !allCategoriesData) return null
-    return allCategoriesData.filter(
-      (c) => c.parent_id === null && plannedParentCategoryNames.has(c.name.toLowerCase()),
-    )
-  }, [allCategoriesData, plannedParentCategoryNames])
+  }, [visibleOperations, excludeRecurring, flow, showOnlyFixedRecurring])
 
   const generalMergedRows = useMemo(
     () => filtered.map((operation) => ({ id: operation.id, dateKey: toDateKey(operation.operation_date), operation })),
@@ -499,27 +450,11 @@ export function Flux() {
   useEffect(() => {
     setSelectedParentCategoryId(null)
     setSelectedCategoryId(null)
-    if (flow === 'planned') {
-      setPlannedModalityFilter('all')
-    }
   }, [flow])
-
-  useEffect(() => {
-    if (flow !== 'planned') return
-    if (period === 'month' || period === 'year_2026' || period === 'year_2025') return
-    setPeriod('month')
-  }, [flow, period])
 
   useEffect(() => {
     if (!showAdvancedSheet) return
   }, [showAdvancedSheet])
-
-  useEffect(() => {
-    if (draftFlow !== 'planned') return
-    if (draftPeriod !== 'month' && draftPeriod !== 'year_2026' && draftPeriod !== 'year_2025') {
-      setDraftPeriod('month')
-    }
-  }, [draftFlow, draftPeriod])
 
   const anySheetOpen = showHeaderCategorySheet || showAdvancedSheet || showParametersCategoryModal
 
@@ -591,7 +526,6 @@ export function Flux() {
     setIncludeFutureFixed(draftIncludeFutureFixed)
     setSelectedParentCategoryId(draftSelectedParentCategoryId)
     setSelectedCategoryId(draftSelectedCategoryId)
-    setPlannedTypeFilter(draftPlannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
@@ -603,7 +537,6 @@ export function Flux() {
     setDraftIncludeFutureFixed(includeFutureFixed)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
-    setDraftPlannedTypeFilter(plannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(false)
   }
@@ -615,7 +548,6 @@ export function Flux() {
     setDraftIncludeFutureFixed(includeFutureFixed)
     setDraftSelectedParentCategoryId(selectedParentCategoryId)
     setDraftSelectedCategoryId(selectedCategoryId)
-    setDraftPlannedTypeFilter(plannedTypeFilter)
     setShowParametersCategoryModal(false)
     setShowAdvancedSheet(true)
   }
@@ -627,7 +559,6 @@ export function Flux() {
     setDraftIncludeFutureFixed(false)
     setDraftSelectedParentCategoryId(null)
     setDraftSelectedCategoryId(null)
-    setDraftPlannedTypeFilter('all')
   }
 
   const handleOpenDetailsOperation = useCallback((operation: FluxOperation) => {
@@ -779,37 +710,11 @@ export function Flux() {
         actionIcon={
           selectedCategoryId || selectedParentCategoryId
             ? <CategoryIcon iconKey={selectedCategoryIconKey} label={selectedCategoryLabel} size={30} />
-            : <img src={activeTab.iconSrc} alt="" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
+            : <img src={fluxActuelIcon} alt="" width={36} height={36} style={{ display: 'block', objectFit: 'contain' }} aria-hidden="true" />
         }
         actionAriaLabel="Choisir une catégorie"
         onActionClick={() => setShowHeaderCategorySheet((current) => !current)}
       />
-
-      {/* ── Tab navigation circulaire ── */}
-      {(() => {
-        const currentIdx = FLUX_TABS.findIndex((t) => t.id === activeTabId)
-        const prevTab = FLUX_TABS[(currentIdx - 1 + FLUX_TABS.length) % FLUX_TABS.length]
-        const nextTab = FLUX_TABS[(currentIdx + 1) % FLUX_TABS.length]
-        const triangleBase = { width: 0, height: 0, flexShrink: 0 } as const
-        const triLeft = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '7px solid var(--neutral-350, #c4c4d4)' }
-        const triRight = { ...triangleBase, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '7px solid var(--neutral-350, #c4c4d4)' }
-        const btnBase = { border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', minHeight: 'var(--touch-target-min)' } as const
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', paddingLeft: 'var(--page-gutter)', paddingRight: 'var(--page-gutter)', marginTop: '-8px' }}>
-            <button type="button" onClick={() => setActiveTabId(prevTab.id)} aria-label={`Aller à ${prevTab.label}`} style={btnBase}>
-              <div style={triLeft} />
-              <img src={prevTab.iconSrc} alt={prevTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
-            </button>
-            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em', textAlign: 'center' }}>
-              {activeTab.label}
-            </h2>
-            <button type="button" onClick={() => setActiveTabId(nextTab.id)} aria-label={`Aller à ${nextTab.label}`} style={btnBase}>
-              <img src={nextTab.iconSrc} alt={nextTab.label} width={22} height={22} loading="lazy" decoding="async" style={{ objectFit: 'contain', opacity: 0.7 }} />
-              <div style={triRight} />
-            </button>
-          </div>
-        )
-      })()}
 
       {/* ── Hero compact : montant uniquement ── */}
       <motion.section
@@ -842,49 +747,146 @@ export function Flux() {
         <button
           type="button"
           aria-label="Ouvrir les paramètres"
-          onClick={openParametersModal}
+          onClick={showOnlyFixedRecurring ? undefined : openParametersModal}
+          disabled={showOnlyFixedRecurring}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
+            justifyContent: 'center',
+            width: 114,
+            height: 30,
             gap: 6,
             border: 'none',
-            background: 'var(--color-warning)',
+            background: showOnlyFixedRecurring ? 'var(--neutral-200)' : 'var(--color-warning)',
             borderRadius: 'var(--radius-full)',
-            padding: '6px 14px 6px 10px',
-            cursor: 'pointer',
+            cursor: showOnlyFixedRecurring ? 'not-allowed' : 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            color: 'var(--neutral-0)',
-            boxShadow: '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
+            color: showOnlyFixedRecurring ? 'var(--neutral-400)' : 'var(--neutral-0)',
+            boxShadow: showOnlyFixedRecurring ? 'none' : '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
+            opacity: showOnlyFixedRecurring ? 0.75 : 1,
+            transition: 'all var(--transition-base)',
+            whiteSpace: 'nowrap',
           }}
         >
           <Settings2 size={13} strokeWidth={2.2} />
           Paramètres
         </button>
-        {isPlannedMode ? (
+
+        <div
+          style={{
+            position: 'relative',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 114,
+            height: 30,
+            border: showOnlyFixedRecurring ? 'none' : '1px solid color-mix(in oklab, var(--cat-abonnements) 25%, var(--neutral-300) 75%)',
+            background: showOnlyFixedRecurring
+              ? 'var(--cat-abonnements)'
+              : 'color-mix(in oklab, var(--cat-abonnements) 8%, var(--neutral-50) 92%)',
+            borderRadius: 'var(--radius-full)',
+            boxShadow: showOnlyFixedRecurring ? '0 2px 8px color-mix(in oklab, var(--cat-abonnements) 40%, transparent 60%)' : 'none',
+            transition: 'all var(--transition-base)',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Icône Répéter à gauche */}
           <button
             type="button"
-            aria-label="Nouvelle opération planifiée"
-            onClick={() => setShowPlannedOperationModal(true)}
+            aria-label="Afficher uniquement les opérations récurrentes fixes"
+            onClick={() => setShowOnlyFixedRecurring((prev) => !prev)}
             style={{
+              position: 'absolute',
+              left: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'center',
               border: 'none',
-              background: '#0097A7',
-              borderRadius: 'var(--radius-full)',
-              padding: '6px 14px 6px 10px',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: showOnlyFixedRecurring
+                ? 'var(--neutral-0)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 75%, var(--neutral-700) 25%)',
+              padding: 0,
+              width: 20,
+              height: 20,
+            }}
+          >
+            <Repeat size={13} strokeWidth={2.2} />
+          </button>
+
+          {/* Texte centré */}
+          <button
+            type="button"
+            onClick={() => setShowOnlyFixedRecurring((prev) => !prev)}
+            style={{
+              border: 'none',
+              background: 'transparent',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
-              color: 'var(--neutral-0)',
-              boxShadow: '0 2px 8px rgba(0, 151, 167, 0.38)',
+              color: showOnlyFixedRecurring
+                ? 'var(--neutral-0)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 75%, var(--neutral-700) 25%)',
+              padding: 0,
+              height: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <img src={planifierOperationIcon} alt="" width={13} height={13} style={{ display: 'block', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} aria-hidden="true" />
-            Planifier
+            Fixes
           </button>
-        ) : null}
+
+          {/* Bouton Plus à droite */}
+          <button
+            type="button"
+            aria-label="Planifier une nouvelle opération"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPlannedOperationModal(true);
+            }}
+            style={{
+              position: 'absolute',
+              right: 6,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 'var(--radius-full)',
+              background: showOnlyFixedRecurring
+                ? 'rgba(255, 255, 255, 0.2)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 15%, var(--neutral-200) 85%)',
+              border: 'none',
+              cursor: 'pointer',
+              color: showOnlyFixedRecurring
+                ? 'var(--neutral-0)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 75%, var(--neutral-700) 25%)',
+              padding: 0,
+              transition: 'background 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = showOnlyFixedRecurring
+                ? 'rgba(255, 255, 255, 0.35)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 28%, var(--neutral-300) 72%)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = showOnlyFixedRecurring
+                ? 'rgba(255, 255, 255, 0.2)'
+                : 'color-mix(in oklab, var(--cat-abonnements) 15%, var(--neutral-200) 85%)';
+            }}
+          >
+            <Plus size={12} strokeWidth={2.5} />
+          </button>
+        </div>
+
+
       </div>
 
       <section>
@@ -1175,104 +1177,74 @@ export function Flux() {
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Type d'opérations</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
                 </div>
-                {isPlannedMode ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                    {PLANNED_TYPE_OPTIONS.map((option) => {
-                      const isSelected = draftPlannedTypeFilter === option.value
-                      const isOverridingDefault = isSelected && option.value !== 'all'
-                      return (
-                        <button
-                          key={`planned-type-${option.value}`}
-                          type="button"
-                          onClick={() => setDraftPlannedTypeFilter(option.value)}
-                          style={{
-                            padding: '7px 4px',
-                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
-                            borderRadius: 'var(--radius-sm)',
-                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
-                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
-                            fontSize: 11,
-                            fontWeight: isSelected ? 700 : 500,
-                            cursor: 'pointer',
-                            transition: 'all var(--transition-base)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                    {FLOW_OPTIONS.map((option) => {
-                      const isSelected = draftFlow === option.value
-                      const isOverridingDefault = isSelected && option.value !== 'all'
-                      return (
-                        <button
-                          key={`type-${option.value}`}
-                          type="button"
-                          onClick={() => setDraftFlow(option.value)}
-                          style={{
-                            padding: '7px 4px',
-                            border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
-                            borderRadius: 'var(--radius-sm)',
-                            background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
-                            color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
-                            fontSize: 11,
-                            fontWeight: isSelected ? 700 : 500,
-                            cursor: 'pointer',
-                            transition: 'all var(--transition-base)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setDraftIncludeFutureFixed((current) => !current)}
-                      style={{
-                        padding: '7px 4px',
-                        border: draftIncludeFutureFixed ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
-                        borderRadius: 'var(--radius-sm)',
-                        background: draftIncludeFutureFixed
-                          ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
-                          : 'var(--neutral-50)',
-                        color: draftIncludeFutureFixed ? 'var(--primary-600)' : 'var(--neutral-800)',
-                        fontSize: 11,
-                        fontWeight: draftIncludeFutureFixed ? 700 : 500,
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-base)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Fixes à venir
-                    </button>
-                    <p
-                      style={{
-                        gridColumn: '1 / -1',
-                        margin: 0,
-                        fontSize: 10,
-                        fontWeight: 500,
-                        color: 'var(--neutral-500)',
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      Ajoute les opérations fixes planifiées non encore réalisées sur la période sélectionnée.
-                    </p>
-                  </div>
-                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                  {FLOW_OPTIONS.map((option) => {
+                    const isSelected = draftFlow === option.value
+                    const isOverridingDefault = isSelected && option.value !== 'all'
+                    return (
+                      <button
+                        key={`type-${option.value}`}
+                        type="button"
+                        onClick={() => setDraftFlow(option.value)}
+                        style={{
+                          padding: '7px 4px',
+                          border: isOverridingDefault ? '2px solid var(--primary-600)' : isSelected ? '2px solid var(--neutral-300)' : '1px solid var(--neutral-200)',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isOverridingDefault ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)' : isSelected ? 'var(--neutral-100)' : 'var(--neutral-50)',
+                          color: isOverridingDefault ? 'var(--primary-600)' : 'var(--neutral-800)',
+                          fontSize: 11,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer',
+                          transition: 'all var(--transition-base)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setDraftIncludeFutureFixed((current) => !current)}
+                    style={{
+                      padding: '7px 4px',
+                      border: draftIncludeFutureFixed ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: draftIncludeFutureFixed
+                        ? 'color-mix(in oklab, var(--primary-600) 12%, var(--neutral-0) 88%)'
+                        : 'var(--neutral-50)',
+                      color: draftIncludeFutureFixed ? 'var(--primary-600)' : 'var(--neutral-800)',
+                      fontSize: 11,
+                      fontWeight: draftIncludeFutureFixed ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-base)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Fixes à venir
+                  </button>
+                  <p
+                    style={{
+                      gridColumn: '1 / -1',
+                      margin: 0,
+                      fontSize: 10,
+                      fontWeight: 500,
+                      color: 'var(--neutral-500)',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    Ajoute les opérations fixes planifiées non encore réalisées sur la période sélectionnée.
+                  </p>
+                </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)' }}>Période</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--neutral-200)' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                  {(isPlannedMode ? PLANNED_PERIOD_OPTIONS : PERIOD_OPTIONS).map((option) => {
+                  {PERIOD_OPTIONS.map((option) => {
                     const isSelected = draftPeriod === option.value
-                    const isOverridingDefault = isSelected && option.value !== (isPlannedMode ? 'month' : 'month')
+                    const isOverridingDefault = isSelected && option.value !== 'month'
                     return (
                       <button
                         key={`period-${option.value}`}
@@ -1427,10 +1399,7 @@ export function Flux() {
                     }}
                   >
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-                      {(isPlannedMode && plannedModalRootCategories && plannedModalRootCategories.length > 0
-                        ? plannedModalRootCategories
-                        : orderedHeaderRootCategories.slice(0, 11)
-                      ).map((category) => {
+                      {orderedHeaderRootCategories.slice(0, 11).map((category) => {
                         const isSelected = draftSelectedParentCategoryId === category.id && draftSelectedCategoryId == null
                         const displayName = headerCategoryLabel(category.name) === 'Famille/enfant' ? 'Famille\nenfant' : headerCategoryLabel(category.name)
                         return (

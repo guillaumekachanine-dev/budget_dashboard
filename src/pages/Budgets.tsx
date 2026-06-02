@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -670,7 +670,6 @@ export function Budgets() {
   const isGracePeriod = nowDay <= 3
   const defaultPeriodYear = isGracePeriod ? (nowMonth === 0 ? nowYear - 1 : nowYear) : nowYear
   const defaultPeriodMonth = isGracePeriod ? (nowMonth === 0 ? 12 : nowMonth) : nowMonth + 1
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
@@ -3610,30 +3609,6 @@ export function Budgets() {
       {isCategoryMode ? (
         isVoyagesCategoryMode ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-6)', maxWidth: 600, margin: '0 auto var(--space-2)' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/voyages')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: 'var(--primary-600)',
-                  background: 'transparent',
-                  border: '1px solid var(--primary-200)',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '4px 12px',
-                  cursor: 'pointer',
-                }}
-              >
-                Page Voyages complète
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                  <path d="M2 5h6M5 2l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            </div>
             <Suspense fallback={<div style={{ minHeight: 400 }} />}>
               <VoyagesFeaturePage
                 onBack={handleReturnToEnveloppes}

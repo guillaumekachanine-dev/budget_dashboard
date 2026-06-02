@@ -5,7 +5,6 @@ import { useCategories } from '@/hooks/useCategories'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { Annual2026BlockMetrics } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
 import type { MetricsScopeSelection } from '@/features/annual-analysis/components/Annual2026BlockMetrics'
-import { MonthlyFlowsAnalysisCard } from '@/features/annual-analysis/components/Annual2026MonthlyTable'
 import { useCategoryRolling12mStats } from '@/features/budget/hooks/useCategoryRolling12mStats'
 import { categoryColorFromName } from '@/lib/utils'
 import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
@@ -15,8 +14,6 @@ import budgetsPeriodIcon from '@/assets/icons/app/budgets_period.webp'
 const ALL_CAT_ID = 'all_categories'
 const MONTHS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const MONTHS_FR_SHORT = ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
-const DISPLAY_MODES = ['Métriques', 'Historique', 'Flux mensuels'] as const
-type DisplayModeIdx = 0 | 1 | 2
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +29,6 @@ export function ProjectionsTab() {
   const [selectedCatId, setSelectedCatId] = useState<string>(ALL_CAT_ID)
   const [year, setYear] = useState(currentYear)
   const [month, setMonth] = useState(currentMonth)
-  const [displayMode, setDisplayMode] = useState<DisplayModeIdx>(0)
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [showMonthModal, setShowMonthModal] = useState(false)
@@ -59,7 +55,6 @@ export function ProjectionsTab() {
   const period = MONTHS_FR_FULL[month - 1]
   const monthLabel = `${MONTHS_FR_FULL[month - 1]} ${String(year).slice(2)}`
   const catLabel = selectedCategory?.name ?? 'Toutes catégories'
-  const modeName = DISPLAY_MODES[displayMode]
 
   function isMonthDisabled(y: number, m: number) {
     return y === currentYear && m > currentMonth
@@ -132,89 +127,16 @@ export function ProjectionsTab() {
         </button>
       </div>
 
-      {/* ── section title (icon + mode name) ── */}
-      <div style={{ padding: '0 var(--page-gutter)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        {selectedCategory ? (
-          <CategoryIcon iconKey={selectedCategory.icon_key} label={selectedCategory.name} size={22} />
-        ) : (
-          <span style={{ fontSize: 18, lineHeight: 1 }}>📊</span>
-        )}
-        <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
-          {modeName}
-        </h3>
-      </div>
-
-      {/* ── fixed-height content section ── */}
-      <div style={{ height: 300, overflow: 'hidden', position: 'relative' }}>
-        {displayMode === 0 && (
-          <div style={{ padding: '0 var(--space-4)', height: '100%', overflow: 'hidden' }}>
-            <Annual2026BlockMetrics
-              hideParameterRow
-              scopeSelection={scopeSelection}
-              visualAccentColor={accentColor}
-              period={period}
-              displayMode="tableau"
-              rollingStats={rollingStats}
-            />
-          </div>
-        )}
-        {displayMode === 1 && (
-          <Annual2026BlockMetrics
-            hideParameterRow
-            scopeSelection={scopeSelection}
-            visualAccentColor={accentColor}
-            period={period}
-            displayMode="graphique"
-            rollingStats={rollingStats}
-          />
-        )}
-        {displayMode === 2 && (
-          <div style={{ padding: '0 var(--space-4)', height: '100%', overflow: 'hidden' }}>
-            <MonthlyFlowsAnalysisCard
-              year={year}
-              forcedView="table"
-              showInternalViewToggle={false}
-              variant="embedded"
-              scopeSelection={scopeSelection}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ── dot navigator ── */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
-        {DISPLAY_MODES.map((_, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => setDisplayMode(idx as DisplayModeIdx)}
-            aria-label={`Afficher ${DISPLAY_MODES[idx]}`}
-            style={{
-              minWidth: 'var(--touch-target-min)',
-              minHeight: 'var(--touch-target-min)',
-              borderRadius: 'var(--radius-full)',
-              border: 'none',
-              padding: 0,
-              background: 'transparent',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all var(--transition-base)',
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                width: idx === displayMode ? 14 : 8,
-                height: idx === displayMode ? 14 : 8,
-                borderRadius: 'var(--radius-full)',
-                background: idx === displayMode ? 'var(--primary-500)' : 'var(--neutral-300)',
-                transition: 'all var(--transition-base)',
-              }}
-            />
-          </button>
-        ))}
+      {/* ── centered content section (only the 6 KPI cards) ── */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: 'var(--space-4) var(--page-gutter)', width: '100%', boxSizing: 'border-box' }}>
+        <Annual2026BlockMetrics
+          hideParameterRow
+          scopeSelection={scopeSelection}
+          visualAccentColor={accentColor}
+          period={period}
+          displayMode="tableau"
+          rollingStats={rollingStats}
+        />
       </div>
 
       {/* ── category picker modal ── */}
@@ -267,7 +189,7 @@ export function ProjectionsTab() {
               {/* "Toutes" row */}
               <button
                 type="button"
-                onClick={() => { setSelectedCatId(ALL_CAT_ID); setDisplayMode(0); setShowCatModal(false) }}
+                onClick={() => { setSelectedCatId(ALL_CAT_ID); setShowCatModal(false) }}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -297,7 +219,7 @@ export function ProjectionsTab() {
                       type="button"
                       whileHover={{ scale: 1.07 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => { setSelectedCatId(cat.id); setDisplayMode(0); setShowCatModal(false) }}
+                      onClick={() => { setSelectedCatId(cat.id); setShowCatModal(false) }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',

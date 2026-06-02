@@ -1322,7 +1322,7 @@ export function Annual2026BlockMetrics({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             style={{
-              maxWidth: compactMobile ? 300 : 340,
+              maxWidth: '100%',
               margin: '0 auto',
               width: '100%',
             }}
