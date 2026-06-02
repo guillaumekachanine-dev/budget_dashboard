@@ -4,7 +4,6 @@ import { ArrowUp, Bell, Check, ChevronLeft, ChevronRight, X } from 'lucide-react
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
-import { TripExpenseBarsSection } from '@/features/voyages/components/TripExpenseBarsSection'
 import { TripBudgetOverlay } from '@/features/voyages/components/TripBudgetOverlay'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
@@ -156,15 +155,6 @@ function renderOperationSummary(count: number, amount: number): string {
   return `${amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(amount))}`
 }
 
-function renderDateAmountSummary(dateLabel: string, amountLabel: string): ReactNode {
-  return (
-    <>
-      <span style={{ fontWeight: 500 }}>{dateLabel}</span>
-      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' - '}</span>
-      <span style={{ fontWeight: 800 }}>{amountLabel}</span>
-    </>
-  )
-}
 
 function renderDriftSummary(count: number, totalOverrunAmount: number): string {
   if (count === 0) return 'Aucune'
@@ -575,7 +565,7 @@ function DriftsTile({
 
 function MirrorTimelineTile({
   title,
-  sublabel,
+  sublabel: _sublabel,
   value,
   valueEmphasis,
   dotColor,
@@ -677,7 +667,7 @@ function MirrorTimelineTile({
 
 function TimelineRow({
   label,
-  sublabel,
+  sublabel: _sublabel,
   value,
   dotColor,
   shadowColor,
@@ -693,8 +683,6 @@ function TimelineRow({
   hasOps: boolean
 }) {
   const [hovered, setHovered] = useState(false)
-  const isJ3 = sublabel === 'échéances'
-
   return (
     <button
       type="button"
