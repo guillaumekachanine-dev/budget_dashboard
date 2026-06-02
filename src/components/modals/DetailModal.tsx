@@ -11,11 +11,6 @@ type DetailModalProps = {
   children: ReactNode
 }
 
-type DetailModalRowProps = {
-  label: string
-  value: string
-  variant?: 'default' | 'total'
-}
 
 export function DetailModal({
   open,
@@ -118,20 +113,28 @@ export function DetailModal({
   )
 }
 
+type DetailModalRowProps = {
+  label: string
+  value: string
+  variant?: 'default' | 'total'
+  glass?: boolean
+}
+
 export function DetailModalRow({
   label,
   value,
   variant = 'default',
+  glass = false,
 }: DetailModalRowProps) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.3 }}>{label}</span>
+      <span style={{ fontSize: 11, color: glass ? 'rgba(255, 255, 255, 0.55)' : 'var(--neutral-600)', lineHeight: 1.3 }}>{label}</span>
       <span
         style={{
           fontSize: 12,
           fontWeight: variant === 'total' ? 800 : 600,
           fontFamily: 'var(--font-mono)',
-          color: 'var(--neutral-900)',
+          color: glass ? '#FFFFFF' : 'var(--neutral-900)',
           whiteSpace: 'nowrap',
         }}
       >
@@ -141,6 +144,6 @@ export function DetailModalRow({
   )
 }
 
-export function DetailModalSeparator() {
-  return <div style={{ borderTop: '1px dashed var(--neutral-200)', margin: '2px 0' }} />
+export function DetailModalSeparator({ glass = false }: { glass?: boolean }) {
+  return <div style={{ borderTop: glass ? '1px dashed rgba(255, 255, 255, 0.15)' : '1px dashed var(--neutral-200)', margin: '2px 0' }} />
 }

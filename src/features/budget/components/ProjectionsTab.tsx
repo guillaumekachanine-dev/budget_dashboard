@@ -136,6 +136,7 @@ export function ProjectionsTab() {
           period={period}
           displayMode="tableau"
           rollingStats={rollingStats}
+          variant="quickSearch"
         />
       </div>
 

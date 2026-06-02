@@ -6,6 +6,7 @@ interface BottomSheetProps {
   open: boolean
   onClose: () => void
   title?: string
+  subtitle?: string
   /** Custom header replaces the default title+close row */
   header?: ReactNode
   children: ReactNode
@@ -28,6 +29,7 @@ export function BottomSheet({
   open,
   onClose,
   title,
+  subtitle,
   header,
   children,
   maxHeight = '85dvh',
@@ -46,7 +48,7 @@ export function BottomSheet({
     }
   }
 
-  const hasHeader = title != null || header != null
+  const hasHeader = title != null || header != null || subtitle != null
 
   const backdropStyle: React.CSSProperties = {
     position: 'fixed',
@@ -181,15 +183,32 @@ export function BottomSheet({
                 }}
               >
                 {header ?? (
-                  <p style={{
-                    margin: 0,
-                    fontSize: 'var(--font-size-md)',
-                    fontWeight: 800,
-                    color: isGlass ? 'rgba(255,255,255,0.88)' : 'var(--neutral-900)',
-                    letterSpacing: isGlass ? '-0.01em' : undefined,
-                  }}>
-                    {title}
-                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                    <p style={{
+                      margin: 0,
+                      fontSize: 'var(--font-size-md)',
+                      fontWeight: 800,
+                      color: isGlass ? 'rgba(255,255,255,0.88)' : 'var(--neutral-900)',
+                      letterSpacing: isGlass ? '-0.01em' : undefined,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {title}
+                    </p>
+                    {subtitle && (
+                      <p style={{
+                        margin: '2px 0 0',
+                        fontSize: 'var(--font-size-xs)',
+                        color: isGlass ? 'rgba(255,255,255,0.48)' : 'var(--neutral-500)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {subtitle}
+                      </p>
+                    )}
+                  </div>
                 )}
                 {!header ? (
                   <button

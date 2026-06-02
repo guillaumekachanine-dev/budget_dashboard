@@ -5,11 +5,11 @@ interface SavingsProgressModalProps {
   savingsYtdDisplay: number
   savingsAnnualGoalDisplay: number
   savingsYtdProgressPct: number
-  savingsMonthlySavedDisplay: number
   savingsMonthlyGoalDisplay: number
   savingsGoalReached: boolean
   savingsMonthLabel: string
   formatCurrencyFloored: (n: number) => string
+  onClose: () => void
 }
 
 // Cubic-bezier sine-wave approximation: numPeriods × 200 SVG units wide.
@@ -30,11 +30,11 @@ export function SavingsProgressModal({
   savingsYtdDisplay,
   savingsAnnualGoalDisplay,
   savingsYtdProgressPct,
-  savingsMonthlySavedDisplay,
   savingsMonthlyGoalDisplay,
   savingsGoalReached,
   savingsMonthLabel,
   formatCurrencyFloored,
+  onClose,
 }: SavingsProgressModalProps) {
   const progress = Math.max(0, Math.min(100, savingsYtdProgressPct))
 
@@ -49,11 +49,6 @@ export function SavingsProgressModal({
   const wave1Path = buildWavePath(waveY, AMP, 2)
   // Wave 2: 3 periods (0→600), animated from x=-100 to x=-300 (same seamless distance)
   const wave2Path = buildWavePath(waveY, AMP * 0.55, 3)
-
-  const monthlyPct =
-    savingsMonthlyGoalDisplay > 0
-      ? Math.min(100, (savingsMonthlySavedDisplay / savingsMonthlyGoalDisplay) * 100)
-      : 0
 
   return (
     <div style={{ padding: '16px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -76,6 +71,32 @@ export function SavingsProgressModal({
           position: 'absolute', inset: 0, pointerEvents: 'none',
           background: 'radial-gradient(ellipse 70% 55% at 50% 95%, rgba(255,171,46,0.09) 0%, transparent 70%)',
         }} />
+
+        {/* ── Close button — top-right corner of the card ── */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer"
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            zIndex: 10,
+            border: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(255,255,255,0.08)',
+            color: 'rgba(255,255,255,0.65)',
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <X size={13} strokeWidth={2} />
+        </button>
 
         {/* Liquid Wave SVG — 172×172 render, 200×200 viewBox */}
         <svg
@@ -177,115 +198,55 @@ export function SavingsProgressModal({
           </text>
         </svg>
 
-        {/* Caption */}
+        {/* ── Caption: "Objectif épargne {month}" ── */}
         <p style={{
           margin: 0,
           fontSize: 10,
           fontWeight: 700,
-          color: 'rgba(255,255,255,0.28)',
+          color: 'rgba(255,255,255,0.52)',
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
+          whiteSpace: 'nowrap',
         }}>
-          Progression annuelle 2026
+          Objectif épargne {savingsMonthLabel}
         </p>
-      </div>
 
-      {/* ── Monthly Objective Card ────────────────────────────────── */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0F0D27 0%, #181535 100%)',
-        borderRadius: 16,
-        padding: '18px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.32)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        {/* Corner glow */}
+        {/* ── Monthly amount with watermark icon behind ── */}
         <div style={{
-          position: 'absolute', top: 0, right: 0, pointerEvents: 'none',
-          width: 140, height: 140,
-          background: savingsGoalReached
-            ? 'radial-gradient(circle at top right, rgba(46,212,122,0.09) 0%, transparent 65%)'
-            : 'radial-gradient(circle at top right, rgba(252,90,90,0.07) 0%, transparent 65%)',
-        }} />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 800,
-            color: 'rgba(255,255,255,0.32)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}>
-            Objectif {savingsMonthLabel}
-          </span>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-            <span style={{
-              fontSize: 22,
-              fontWeight: 800,
-              color: savingsGoalReached ? '#2ED47A' : '#FFFFFF',
-              fontFamily: "'Nunito Variable', sans-serif",
-              transition: 'color 0.4s ease',
-            }}>
-              {formatCurrencyFloored(savingsMonthlySavedDisplay)}
-            </span>
-            <span style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'rgba(255,255,255,0.28)',
-              fontFamily: "'Nunito Variable', sans-serif",
-            }}>
-              / {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
-            </span>
-          </div>
-
-          {/* Mini progress track */}
-          <div style={{
-            width: 100,
-            height: 3,
-            background: 'rgba(255,255,255,0.08)',
-            borderRadius: 999,
-            overflow: 'hidden',
-            marginTop: 2,
-          }}>
-            <div style={{
-              width: `${monthlyPct}%`,
-              height: '100%',
-              borderRadius: 999,
-              background: savingsGoalReached
-                ? 'linear-gradient(90deg, #2ED47A, #7BFFB8)'
-                : 'linear-gradient(90deg, #FFAB2E, #FFCA60)',
-              transition: 'width 0.9s cubic-bezier(0.22, 1, 0.36, 1)',
-            }} />
-          </div>
-        </div>
-
-        {/* Status orb */}
-        <div style={{
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          flexShrink: 0,
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: savingsGoalReached
-            ? 'rgba(46,212,122,0.12)'
-            : 'rgba(252,90,90,0.12)',
-          border: `1.5px solid ${savingsGoalReached ? 'rgba(46,212,122,0.38)' : 'rgba(252,90,90,0.38)'}`,
-          boxShadow: savingsGoalReached
-            ? '0 0 22px rgba(46,212,122,0.18)'
-            : '0 0 22px rgba(252,90,90,0.18)',
+          marginTop: -8,
         }}>
-          {savingsGoalReached
-            ? <Check size={22} color="#2ED47A" strokeWidth={2.5} />
-            : <X size={22} color="#FC5A5A" strokeWidth={2.5} />
-          }
+          {/* Watermark icon centred behind the amount */}
+          <div style={{
+            position: 'absolute',
+            opacity: 0.28,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            {savingsGoalReached
+              ? <Check size={44} color="#2ED47A" strokeWidth={2.5} />
+              : <X size={44} color="#FC5A5A" strokeWidth={2.5} />
+            }
+          </div>
+          {/* Amount / fallback text */}
+          <div style={{
+            fontSize: 17,
+            fontWeight: 700,
+            color: savingsGoalReached ? '#2ED47A' : 'rgba(255,255,255,0.82)',
+            letterSpacing: '-0.01em',
+            position: 'relative',
+            zIndex: 1,
+          }}>
+            {savingsMonthlyGoalDisplay > 0
+              ? formatCurrencyFloored(savingsMonthlyGoalDisplay)
+              : <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.48)', letterSpacing: 0 }}>Pas d&apos;épargne</span>
+            }
+          </div>
         </div>
       </div>
     </div>

@@ -44,7 +44,7 @@ import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import enveloppesMensuellesIcon from '@/assets/icons/app/metriques_budgets.webp'
 import projectionsAnnuellesIcon from '@/assets/icons/app/budgets_projections.webp'
-import rechercheRapideIcon from '@/assets/icons/app/budgets_metriques.webp'
+
 import analyticsIcon from '@/assets/icons/app/analytics.webp'
 
 // Lazy-loaded tabs & heavy sub-components — only fetched when the user activates
@@ -64,9 +64,7 @@ const VoyagesFeaturePage = lazy(() =>
 const EnveloppesTab = lazy(() =>
   import('@/features/budget/components/EnveloppesTab').then(m => ({ default: m.EnveloppesTab }))
 )
-const ProjectionsTab = lazy(() =>
-  import('@/features/budget/components/ProjectionsTab').then(m => ({ default: m.ProjectionsTab }))
-)
+
 const ProjectionsTabContent = lazy(() =>
   import('@/features/budget/components/ProjectionsTabContent').then(m => ({ default: m.ProjectionsTabContent }))
 )
@@ -104,7 +102,7 @@ const ALL_CATEGORIES_SCOPE_ID = 'all_categories' as const
 type BlockPageId = BudgetBlockId | typeof REVENUE_BLOCK_PAGE_ID
 const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 
-type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'metriques'
+type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics'
 type EnveloppesViewMode = 'categories' | 'socles'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
 const QUICK_SEARCH_CONTENT_MAX_WIDTH = 760
@@ -2470,19 +2468,15 @@ export function Budgets() {
   }, [dataDisplayMode, selectedBlockPage])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
-        title={isDetailMode ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
-        titleBefore={budgetsTabId === 'metriques' || isDetailMode ? (
+        title={isDetailMode ? 'Budgets' : activeBudgetsTab.label}
+        titleBefore={isDetailMode ? (
           <button
             type="button"
             aria-label="Retour"
             onClick={() => {
-              if (isDetailMode) {
-                handleHeaderTitleReset?.()
-                return
-              }
-              setBudgetsTabId('enveloppes')
+              handleHeaderTitleReset?.()
             }}
             style={{
               width: 30,
@@ -2557,7 +2551,7 @@ export function Budgets() {
         )}
         actionAriaLabel="Choisir un onglet budgets"
         onActionClick={() => setShowBudgetsTabModal((prev) => !prev)}
-        rightSlot={budgetsTabId !== 'metriques' && budgetsTabId !== 'analytics' ? (
+        rightSlot={budgetsTabId !== 'analytics' ? (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             {isDetailMode && !isCategoryMode && !isExpenseBlockPage && (
               <button
@@ -2596,24 +2590,6 @@ export function Budgets() {
                 {headerPeriodLabel}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setBudgetsTabId('metriques')}
-              aria-label="Aller à la recherche rapide"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                padding: 0,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 'var(--touch-target-min)',
-                minWidth: 'var(--touch-target-min)',
-              }}
-            >
-              <img src={rechercheRapideIcon} alt="Recherche rapide" width={32} height={32} style={{ display: 'block', objectFit: 'contain' }} />
-            </button>
           </div>
         ) : undefined}
       />
@@ -5125,10 +5101,7 @@ export function Budgets() {
         <Suspense fallback={<div style={{ minHeight: 400 }} />}>
           <BudgetsAnalyticsTab />
         </Suspense>
-      ) : budgetsTabId === 'metriques' ? (
-        <Suspense fallback={<div style={{ minHeight: 400 }} />}>
-          <ProjectionsTab />
-        </Suspense>
+
       ) : budgetsTabId === 'projections' ? (
         <Suspense fallback={<div style={{ minHeight: 400 }} />}>
           <ProjectionsTabContent />

@@ -45,10 +45,12 @@ function CandidateCard({
   candidate,
   onMatch,
   isBusy,
+  glass = false,
 }: {
   candidate: MatchCandidateRow
   onMatch:   () => void
   isBusy:    boolean
+  glass?:    boolean
 }) {
   const reasons = useMemo(() => scoreReasons(candidate), [candidate])
   const color   = scoreColor(candidate.confidence_score)
@@ -57,9 +59,9 @@ function CandidateCard({
   return (
     <div
       style={{
-        border:       '1px solid var(--neutral-150, var(--neutral-200))',
+        border:       glass ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid var(--neutral-150, var(--neutral-200))',
         borderRadius: 'var(--radius-md)',
-        background:   'var(--neutral-0)',
+        background:   glass ? 'rgba(255, 255, 255, 0.05)' : 'var(--neutral-0)',
         overflow:     'hidden',
       }}
     >
@@ -81,7 +83,7 @@ function CandidateCard({
                 margin:        0,
                 fontSize:      14,
                 fontWeight:    700,
-                color:         'var(--neutral-900)',
+                color:         glass ? '#FFFFFF' : 'var(--neutral-900)',
                 overflow:      'hidden',
                 textOverflow:  'ellipsis',
                 whiteSpace:    'nowrap',
@@ -89,7 +91,7 @@ function CandidateCard({
             >
               {txLabel}
             </p>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--neutral-500)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: glass ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-500)' }}>
               {fmtDate(candidate.tx_date)}
               {candidate.tx_category_name ? ` · ${candidate.tx_category_name}` : ''}
             </p>
@@ -101,7 +103,7 @@ function CandidateCard({
                 margin:     0,
                 fontSize:   15,
                 fontWeight: 800,
-                color:      'var(--neutral-900)',
+                color:      glass ? '#FFFFFF' : 'var(--neutral-900)',
                 fontFamily: 'var(--font-mono)',
               }}
             >
@@ -138,9 +140,9 @@ function CandidateCard({
                   fontWeight:      600,
                   padding:         '2px 6px',
                   borderRadius:    'var(--radius-full)',
-                  background:      `${color}18`,
-                  color,
-                  border:          `1px solid ${color}30`,
+                  background:      glass ? 'rgba(56, 189, 248, 0.15)' : `${color}18`,
+                  color:           glass ? '#38BDF8' : color,
+                  border:          `1px solid ${glass ? 'rgba(56, 189, 248, 0.25)' : `${color}30`}`,
                   whiteSpace:      'nowrap',
                 }}
               >
@@ -156,7 +158,7 @@ function CandidateCard({
             style={{
               margin:     '0 0 var(--space-2)',
               fontSize:   11,
-              color:      'var(--neutral-400)',
+              color:      glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)',
             }}
           >
             {candidate.amount_delta_pct > 5
@@ -185,8 +187,12 @@ function CandidateCard({
             fontWeight:     700,
             borderRadius:   'var(--radius-button)',
             border:         `1px solid ${VOYAGE_ACCENT}`,
-            background:     isBusy ? 'var(--neutral-100)' : `rgba(56,189,248,0.08)`,
-            color:          isBusy ? 'var(--neutral-400)' : VOYAGE_ACCENT_DARK,
+            background:     isBusy
+              ? (glass ? 'rgba(255, 255, 255, 0.06)' : 'var(--neutral-100)')
+              : (glass ? 'rgba(56, 189, 248, 0.12)' : 'rgba(56,189,248,0.08)'),
+            color:          isBusy
+              ? (glass ? 'rgba(255, 255, 255, 0.3)' : 'var(--neutral-400)')
+              : VOYAGE_ACCENT_DARK,
             cursor:         isBusy ? 'wait' : 'pointer',
             transition:     'background 120ms ease',
           }}
@@ -210,11 +216,13 @@ function ExpenseGroup({
   busyManualId,
   onMatch,
   onDismiss,
+  glass = false,
 }: {
   group:         MatchGroup
   busyManualId:  string | null
   onMatch:       (manualId: string, txId: string, tripId: string) => void
   onDismiss:     (manualId: string) => void
+  glass?:        boolean
 }) {
   const isBusy = busyManualId === group.manualExpenseId
 
@@ -223,8 +231,8 @@ function ExpenseGroup({
       {/* Dépense manuelle (source) */}
       <div
         style={{
-          background:   'rgba(56,189,248,0.07)',
-          border:       `1px solid rgba(56,189,248,0.22)`,
+          background:   glass ? 'rgba(56, 189, 248, 0.12)' : 'rgba(56,189,248,0.07)',
+          border:       `1px solid ${glass ? 'rgba(56, 189, 248, 0.25)' : 'rgba(56,189,248,0.22)'}`,
           borderRadius: 'var(--radius-md)',
           padding:      'var(--space-3)',
           display:      'flex',
@@ -234,10 +242,10 @@ function ExpenseGroup({
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: glass ? '#FFFFFF' : 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {group.manualLabel}
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--neutral-500)' }}>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: glass ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-500)' }}>
             Saisie manuelle · {fmtDate(group.expenseDate)}
             {group.manualCategoryName ? ` · ${group.manualCategoryName}` : ''}
           </p>
@@ -247,7 +255,7 @@ function ExpenseGroup({
             margin:     0,
             fontSize:   15,
             fontWeight: 800,
-            color:      'var(--neutral-900)',
+            color:      glass ? '#FFFFFF' : 'var(--neutral-900)',
             fontFamily: 'var(--font-mono)',
             flexShrink: 0,
           }}
@@ -258,7 +266,7 @@ function ExpenseGroup({
 
       {/* Liste des candidats */}
       {group.candidates.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-2) 0' }}>
+        <p style={{ margin: 0, fontSize: 12, color: glass ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-400)', textAlign: 'center', padding: 'var(--space-2) 0' }}>
           Aucune transaction bancaire correspondante trouvée.
         </p>
       ) : (
@@ -268,6 +276,7 @@ function ExpenseGroup({
               key={c.candidate_tx_id}
               candidate={c}
               isBusy={isBusy}
+              glass={glass}
               onMatch={() => onMatch(group.manualExpenseId, c.candidate_tx_id, group.tripId)}
             />
           ))}
@@ -286,9 +295,9 @@ function ExpenseGroup({
             gap:            4,
             fontSize:       11,
             fontWeight:     600,
-            color:          'var(--neutral-400)',
+            color:          glass ? 'rgba(255, 255, 255, 0.6)' : 'var(--neutral-400)',
             background:     'transparent',
-            border:         '1px solid var(--neutral-200)',
+            border:         `1px solid ${glass ? 'rgba(255, 255, 255, 0.15)' : 'var(--neutral-200)'}`,
             borderRadius:   'var(--radius-full)',
             padding:        '4px 10px',
             cursor:         isBusy ? 'wait' : 'pointer',
@@ -310,6 +319,9 @@ interface TripExpenseMatchingSheetProps {
   /** Si fourni, filtre les candidats sur ce voyage */
   tripId?:   string | null
   tripName?: string | null
+  glass?:    boolean
+  glassBackground?: string
+  glassBorder?: string
 }
 
 export function TripExpenseMatchingSheet({
@@ -317,6 +329,9 @@ export function TripExpenseMatchingSheet({
   onClose,
   tripId,
   tripName,
+  glass = false,
+  glassBackground,
+  glassBorder,
 }: TripExpenseMatchingSheetProps) {
   const { groups, totalPending, isLoading, error } = useMatchCandidates(tripId ?? undefined)
 
@@ -366,10 +381,14 @@ export function TripExpenseMatchingSheet({
       onClose={onClose}
       maxHeight="92dvh"
       zIndex={260}
+      variant={glass ? "center" : "sheet"}
+      glass={glass}
+      glassBackground={glassBackground}
+      glassBorder={glassBorder}
       header={
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1 }}>
           <ArrowRightLeft size={16} color={VOYAGE_ACCENT_DARK} style={{ flexShrink: 0 }} />
-          <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: glass ? 'rgba(255, 255, 255, 0.88)' : 'var(--neutral-900)' }}>
             {headerTitle}
           </p>
         </div>
@@ -394,10 +413,10 @@ export function TripExpenseMatchingSheet({
           <div style={{ textAlign: 'center', padding: 'var(--space-8) 0', display: 'grid', gap: 'var(--space-3)' }}>
             <CheckCircle2 size={36} color="var(--color-success)" style={{ margin: '0 auto' }} />
             <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--neutral-800)' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: glass ? '#FFFFFF' : 'var(--neutral-800)' }}>
                 Tout est à jour !
               </p>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--neutral-400)', lineHeight: 1.5 }}>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: glass ? 'rgba(255, 255, 255, 0.5)' : 'var(--neutral-400)', lineHeight: 1.5 }}>
                 Aucune dépense manuelle en attente de rapprochement.
               </p>
             </div>
@@ -405,7 +424,7 @@ export function TripExpenseMatchingSheet({
         ) : (
           /* Groupes de candidats */
           <>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--neutral-500)', lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: 12, color: glass ? 'rgba(255, 255, 255, 0.6)' : 'var(--neutral-500)', lineHeight: 1.5 }}>
               Chaque dépense saisie manuellement est rapprochée avec une transaction bancaire importée.
               Une fois rapprochée, elle ne sera plus comptée en double dans le cockpit.
             </p>
@@ -415,6 +434,7 @@ export function TripExpenseMatchingSheet({
                 key={group.manualExpenseId}
                 group={group}
                 busyManualId={isBusy ? busyManualId : null}
+                glass={glass}
                 onMatch={handleMatch}
                 onDismiss={handleDismiss}
               />

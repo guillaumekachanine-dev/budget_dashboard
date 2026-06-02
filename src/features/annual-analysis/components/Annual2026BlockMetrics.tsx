@@ -35,6 +35,7 @@ interface Annual2026BlockMetricsProps {
   rollingStats?: CategoryRolling12mStats[]
   excludeCurrentMonthFromHistory?: boolean
   hideBudgetLineInHistoryTooltip?: boolean
+  variant?: 'default' | 'quickSearch'
 }
 
 interface CategoryRow {
@@ -495,6 +496,7 @@ export function Annual2026BlockMetrics({
   rollingStats = [],
   excludeCurrentMonthFromHistory = false,
   hideBudgetLineInHistoryTooltip = false,
+  variant = 'default',
 }: Annual2026BlockMetricsProps) {
   const [analysisType, setAnalysisType] = useState<'bloc' | 'catégorie'>('bloc')
   const [selectedBlock, setSelectedBlock] = useState<string>(STRICT_EXPENSE_BUCKETS[0] as string)
@@ -1103,6 +1105,8 @@ export function Annual2026BlockMetrics({
           tone="champagne"
           title="Rang"
           value={metricsState.rank}
+          subValue={variant === 'quickSearch' ? 'position budgétaire' : undefined}
+          variant={variant}
         />
       ),
     },
@@ -1112,8 +1116,10 @@ export function Annual2026BlockMetrics({
       node: (
         <KpiMiniCard
           tone="honey"
-          title={isYtdPeriod ? 'Part moyenne YTD du budget' : 'Part du budget'}
+          title={isYtdPeriod ? (variant === 'quickSearch' ? 'Part YTD' : 'Part moyenne YTD du budget') : 'Part budget'}
           value={formatPercentNoSign(partValuePct)}
+          subValue={variant === 'quickSearch' ? (isYtdPeriod ? 'part moyenne YTD' : 'part du budget global') : undefined}
+          variant={variant}
         />
       ),
     },
@@ -1123,9 +1129,11 @@ export function Annual2026BlockMetrics({
       node: (
         <KpiMiniCard
           tone="champagne"
-          title={`Consommé ${dynamicPeriodLabel}`}
+          title={variant === 'quickSearch' ? 'Consommé' : `Consommé ${dynamicPeriodLabel}`}
           value={fmtCurrencyCompact(metricsState.actualAmount)}
+          subValue={variant === 'quickSearch' ? `réel sur ${dynamicPeriodLabel.toLowerCase()}` : undefined}
           enlarged={isAllCategoriesKpiScope}
+          variant={variant}
         />
       ),
     },
@@ -1135,9 +1143,11 @@ export function Annual2026BlockMetrics({
       node: (
         <KpiMiniCard
           tone="honey"
-          title={`Budget ${dynamicPeriodLabel}`}
+          title={variant === 'quickSearch' ? 'Budget' : `Budget ${dynamicPeriodLabel}`}
           value={fmtCurrencyCompact(metricsState.budgetAmount)}
+          subValue={variant === 'quickSearch' ? `cible sur ${dynamicPeriodLabel.toLowerCase()}` : undefined}
           enlarged={isAllCategoriesKpiScope}
+          variant={variant}
         />
       ),
     },
@@ -1147,12 +1157,14 @@ export function Annual2026BlockMetrics({
       node: (
         <KpiMiniCard
           tone="amber"
-          title={isYtdPeriod ? 'Ecart moyen YTD' : `Ecart ${dynamicPeriodLabel}`}
+          title={variant === 'quickSearch' ? 'Écart' : (isYtdPeriod ? 'Ecart moyen YTD' : `Ecart ${dynamicPeriodLabel}`)}
           value={metricsState.deltaPctRaw == null ? '—' : fmtPercentCompact(metricsState.deltaPct)}
           valueColor={deltaPercentTone}
           secondaryInlineValue={deltaAmountSigned}
           secondaryInlineColor={deltaAmountTone}
+          subValue={variant === 'quickSearch' ? (isYtdPeriod ? 'écart moyen YTD' : `écart sur ${dynamicPeriodLabel.toLowerCase()}`) : undefined}
           enlarged={isAllCategoriesKpiScope}
+          variant={variant}
         />
       ),
     },
@@ -1164,9 +1176,11 @@ export function Annual2026BlockMetrics({
           tone="honey"
           asButton
           onClick={() => setIsProjectionModalOpen(true)}
-          title="Projection fin 2026"
+          title={variant === 'quickSearch' ? 'Projection' : 'Projection fin 2026'}
           value={fmtCurrencyCompact(ytdProjection.projectedTotal)}
+          subValue={variant === 'quickSearch' ? 'estimé fin 2026' : undefined}
           enlarged={isAllCategoriesKpiScope}
+          variant={variant}
         />
       ),
     },
@@ -1331,8 +1345,8 @@ export function Annual2026BlockMetrics({
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gridAutoRows: compactMobile ? 80 : 88,
-                gap: compactMobile ? 6 : 8,
+                gridAutoRows: variant === 'quickSearch' ? (compactMobile ? 128 : 138) : (compactMobile ? 80 : 88),
+                gap: variant === 'quickSearch' ? 10 : (compactMobile ? 6 : 8),
               }}
             >
               {visibleKpiCards.map((card) => (
@@ -1440,6 +1454,7 @@ function KpiMiniCard({
   asButton = false,
   enlarged = false,
   onClick,
+  variant = 'default',
 }: {
   tone: KpiGoldTone
   title: string
@@ -1452,10 +1467,107 @@ function KpiMiniCard({
   asButton?: boolean
   enlarged?: boolean
   onClick?: () => void
+  variant?: 'default' | 'quickSearch'
 }) {
   const cardTone = KPI_GOLD_CAMAIEU[tone]
   const resolvedValueColor = valueColor !== 'var(--neutral-900)' ? valueColor : cardTone.valueColor
   const resolvedSecondaryColor = secondaryInlineColor !== 'var(--neutral-700)' ? secondaryInlineColor : cardTone.valueColor
+
+  if (variant === 'quickSearch') {
+    const cardBg = 'radial-gradient(120% 90% at 14% -8%, rgba(251, 191, 36, 0.35) 0%, rgba(251, 191, 36, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(249, 115, 22, 0.24) 0%, rgba(249, 115, 22, 0) 62%), linear-gradient(145deg, #16120B 0%, #251D10 47%, #3A2D17 100%)'
+    const cardBorder = 'rgba(251, 191, 36, 0.18)'
+    const textMain = '#FFFFFF'
+    const textMuted = 'rgba(255, 255, 255, 0.72)'
+    const textDim = 'rgba(251, 191, 36, 0.9)'
+    const borderTopHighlight = '#F59E0B'
+
+    const quickSearchContent = (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', justifyContent: 'space-between', boxSizing: 'border-box' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, background: borderTopHighlight }} />
+        
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 2 }}>
+          <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: textDim }}>
+            {title}
+          </span>
+          {asButton && (
+            <div
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronDown size={12} strokeWidth={2.5} color="rgba(255, 255, 255, 0.8)" />
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, justifyContent: 'center' }}>
+          {secondaryInlineValue ? (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+              <p style={{ margin: 0, fontSize: enlarged ? 28 : 26, lineHeight: 1, fontWeight: 700, color: textMain, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                {value}
+              </p>
+              <p style={{ margin: 0, fontSize: enlarged ? 13 : 12, lineHeight: 1, fontWeight: 700, color: valueColor !== 'var(--neutral-900)' ? valueColor : textMuted, fontFamily: 'var(--font-mono)' }}>
+                {secondaryInlineValue}
+              </p>
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: enlarged ? 28 : 26, lineHeight: 1, fontWeight: 700, color: valueColor !== 'var(--neutral-900)' ? valueColor : textMain, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+              {value}
+            </p>
+          )}
+        </div>
+
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 500, color: textMuted, lineHeight: 1.25, whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {subValue}
+        </p>
+      </div>
+    )
+
+    const cardStyle: CSSProperties = {
+      position: 'relative',
+      border: `1px solid ${cardBorder}`,
+      borderRadius: 'var(--radius-xl)',
+      background: cardBg,
+      padding: '14px 12px 11px',
+      textAlign: 'left',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      width: '100%',
+      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+      overflow: 'hidden',
+      boxSizing: 'border-box',
+    }
+
+    if (asButton) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          style={{
+            ...cardStyle,
+            cursor: 'pointer',
+          }}
+        >
+          {quickSearchContent}
+        </button>
+      )
+    }
+
+    return (
+      <div style={cardStyle}>
+        {quickSearchContent}
+      </div>
+    )
+  }
 
   const baseStyle: CSSProperties = {
     borderRadius: 'var(--radius-lg)',
