@@ -13,6 +13,12 @@ interface BottomSheetProps {
   /** zIndex for backdrop; sheet will be zIndex+1 */
   zIndex?: number
   variant?: 'sheet' | 'center'
+  /** Apply frosted-glass effect to the sheet (center variant only) */
+  glass?: boolean
+  /** Override glass background color — e.g. 'rgba(25,14,5,0.52)' for warm tint */
+  glassBackground?: string
+  /** Override glass border color — e.g. 'rgba(255,171,46,0.14)' for amber accent */
+  glassBorder?: string
 }
 
 const SWIPE_CLOSE_THRESHOLD_Y = 72
@@ -27,6 +33,9 @@ export function BottomSheet({
   maxHeight = '85dvh',
   zIndex = 200,
   variant = 'sheet',
+  glass = false,
+  glassBackground,
+  glassBorder,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const isCenter = variant === 'center'
@@ -48,6 +57,8 @@ export function BottomSheet({
     WebkitBackdropFilter: 'blur(3px)',
   }
 
+  const isGlass = glass && isCenter
+
   const sheetStyle: React.CSSProperties = isCenter
     ? {
         position: 'fixed',
@@ -56,9 +67,16 @@ export function BottomSheet({
         zIndex: zIndex + 1,
         width: 'calc(100% - 32px)',
         maxWidth: 480,
-        background: 'var(--neutral-0)',
+        background: isGlass
+          ? (glassBackground ?? 'rgba(10, 12, 30, 0.52)')
+          : 'var(--neutral-0)',
+        backdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
+        WebkitBackdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
         borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-xl)',
+        border: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.1)'}` : undefined,
+        boxShadow: isGlass
+          ? `0 8px 48px rgba(0,0,0,0.55), inset 0 1px 0 ${glassBorder ?? 'rgba(255,255,255,0.08)'}, inset 0 -1px 0 rgba(255,255,255,0.03)`
+          : 'var(--shadow-xl)',
         maxHeight: '90dvh',
         display: 'flex',
         flexDirection: 'column',
@@ -154,7 +172,7 @@ export function BottomSheet({
               <div
                 style={{
                   padding: 'var(--space-3) var(--space-5) var(--space-3)',
-                  borderBottom: '1px solid var(--neutral-150)',
+                  borderBottom: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.08)'}` : '1px solid var(--neutral-150)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -163,7 +181,13 @@ export function BottomSheet({
                 }}
               >
                 {header ?? (
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: 'var(--font-size-md)',
+                    fontWeight: 800,
+                    color: isGlass ? 'rgba(255,255,255,0.88)' : 'var(--neutral-900)',
+                    letterSpacing: isGlass ? '-0.01em' : undefined,
+                  }}>
                     {title}
                   </p>
                 )}
@@ -174,9 +198,9 @@ export function BottomSheet({
                     aria-label="Fermer"
                     style={{
                       flexShrink: 0,
-                      border: 'none',
-                      background: 'var(--neutral-100)',
-                      color: 'var(--neutral-600)',
+                      border: isGlass ? '1px solid rgba(255,255,255,0.12)' : 'none',
+                      background: isGlass ? 'rgba(255,255,255,0.1)' : 'var(--neutral-100)',
+                      color: isGlass ? 'rgba(255,255,255,0.75)' : 'var(--neutral-600)',
                       minWidth: 44,
                       minHeight: 44,
                       borderRadius: 'var(--radius-full)',

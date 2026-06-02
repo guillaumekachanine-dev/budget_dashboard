@@ -39,6 +39,8 @@ import {
   DetailModalRow,
   DetailModalSeparator,
 } from '@/components'
+import { SavingsProgressModal } from '@/components/modals/SavingsProgressModal'
+import { OptimizationsModal } from '@/components/modals/OptimizationsModal'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -567,8 +569,7 @@ function TimelineRow({
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        alignItems: 'flex-start',
         background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
         border: 'none',
         padding: '12px 16px',
@@ -583,9 +584,9 @@ function TimelineRow({
         outline: 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', minWidth: 0, flex: 1 }}>
-        {/* Dot container */}
-        <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-4)', minWidth: 0 }}>
+        {/* Dot — vertically centered with first line */}
+        <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, paddingTop: 3 }}>
           <div
             style={{
               width: 12,
@@ -600,30 +601,43 @@ function TimelineRow({
         </div>
 
         {/* Labels */}
-        <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+          {/* Title + chevron inline, constrained to left half */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <span
               style={{
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 800,
                 color: 'var(--neutral-900)',
                 fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap',
               }}
             >
               {label}
             </span>
             <span
               style={{
-                fontSize: 11,
-                fontWeight: 600,
+                fontSize: 10,
+                fontWeight: 700,
                 color: 'var(--neutral-500)',
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                letterSpacing: '0.06em',
+                whiteSpace: 'nowrap',
               }}
             >
               {sublabel}
             </span>
+            <ChevronRight
+              size={13}
+              style={{
+                color: hovered ? 'var(--neutral-700)' : 'var(--neutral-400)',
+                transition: 'color 0.2s ease, transform 0.2s ease',
+                transform: hovered ? 'translateX(2px)' : 'translateX(0)',
+                flexShrink: 0,
+              }}
+            />
           </div>
+
           <span
             style={{
               fontSize: 13,
@@ -635,19 +649,6 @@ function TimelineRow({
             {value}
           </span>
         </div>
-      </div>
-
-      {/* Action/chevron indicator */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          color: hovered ? 'var(--neutral-800)' : 'var(--neutral-400)',
-          transition: 'color 0.2s ease, transform 0.2s ease',
-          transform: hovered ? 'translateX(2px)' : 'translateX(0)',
-        }}
-      >
-        <ChevronRight size={18} />
       </div>
     </button>
   )
@@ -686,7 +687,7 @@ function PlannedOpsTimeline({
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        paddingLeft: 'var(--space-6)',
+        paddingLeft: 16,
         gap: 'var(--space-3)',
       }}
     >
@@ -694,7 +695,7 @@ function PlannedOpsTimeline({
       <div
         style={{
           position: 'absolute',
-          left: 21,
+          left: 22,
           top: 24,
           bottom: 24,
           width: 2,
@@ -707,7 +708,7 @@ function PlannedOpsTimeline({
       {/* J+3 Step */}
       <TimelineRow
         label="J+3"
-        sublabel="Échéance 3 jours"
+        sublabel="échéances"
         value={j3Text}
         dotColor="var(--primary-500)"
         shadowColor="rgba(91, 87, 245, 0.2)"
@@ -718,7 +719,7 @@ function PlannedOpsTimeline({
       {/* Fin de mois Step */}
       <TimelineRow
         label={`J+${daysUntilEom}`}
-        sublabel="Échéances fin de mois"
+        sublabel="fin de mois"
         value={eomText}
         dotColor="#FFAB2E"
         shadowColor="rgba(255, 171, 46, 0.2)"
@@ -2521,7 +2522,7 @@ export function Home() {
             <section
               style={{ padding: sectionHorizontalPadding }}
             >
-              <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 var(--space-2)' }}>
+              <div style={{ maxWidth: 600, margin: '0 auto' }}>
                 <PlannedOpsTimeline
                   j3Count={upcomingOpsWindows.j3.count}
                   j3Amount={upcomingOpsWindows.j3.amount}
@@ -2738,70 +2739,12 @@ export function Home() {
         title="Optimisations"
         zIndex={67}
         variant="center"
+        glass
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
-          {optimizationsData.map((row) => (
-            <article
-              key={`optim-${row.label}`}
-              style={{
-                border: '1.5px solid var(--neutral-200)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-3)',
-                display: 'grid',
-                gap: 'var(--space-2)',
-                background: 'var(--neutral-0)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-3)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <CategoryIcon iconKey={row.iconKey} label={row.label} size={20} />
-                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--neutral-900)' }}>
-                    {row.label}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: 'var(--neutral-600)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {formatCurrencyFloored(row.consumedAmount)} / {formatCurrencyFloored(row.objectiveAmount)}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  height: 8,
-                  width: '100%',
-                  background: 'var(--neutral-150)',
-                  borderRadius: 'var(--radius-full)',
-                  overflow: 'hidden',
-                  position: 'relative',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${Math.min(100, Math.max(0, row.progressPct))}%`,
-                    background: row.barColor,
-                    borderRadius: 'var(--radius-full)',
-                    transition: 'width 0.3s ease',
-                  }}
-                />
-              </div>
-            </article>
-          ))}
-        </div>
+        <OptimizationsModal
+          data={optimizationsData}
+          formatCurrencyFloored={formatCurrencyFloored}
+        />
       </BottomSheet>
 
       <BottomSheet
@@ -2810,104 +2753,20 @@ export function Home() {
         title="Épargne"
         zIndex={68}
         variant="center"
+        glass
+        glassBackground="rgba(22, 12, 4, 0.54)"
+        glassBorder="rgba(255, 171, 46, 0.15)"
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          {/* Ligne 1 : Élément graphique progression YTD vs Annuelle */}
-          <div style={{
-            background: 'var(--neutral-50)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--space-4)',
-            border: '1px solid var(--neutral-150)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-3)',
-            boxShadow: 'var(--shadow-card)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Progression Annuelle YTD
-              </span>
-              <span style={{ fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'var(--primary-500)', fontFamily: 'var(--font-mono)' }}>
-                {savingsYtdProgressPct.toFixed(0)}%
-              </span>
-            </div>
-
-            {/* Barre de progression graphique */}
-            <div style={{
-              height: 10,
-              background: 'var(--neutral-200)',
-              borderRadius: 'var(--radius-full)',
-              overflow: 'hidden',
-              position: 'relative',
-              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)',
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${savingsYtdProgressPct}%`,
-                background: 'linear-gradient(90deg, #5B57F5 0%, #2ED47A 100%)',
-                borderRadius: 'var(--radius-full)',
-                transition: 'width 0.8s cubic-bezier(0.22, 1, 0.36, 1)',
-              }} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-              <span style={{ fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                {formatCurrencyFloored(savingsYtdDisplay)}
-              </span>
-              <span style={{ color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                sur {formatCurrencyFloored(savingsAnnualGoalDisplay)}
-              </span>
-            </div>
-          </div>
-
-          {/* Séparateur subtil */}
-          <div style={{ height: 1, background: 'var(--neutral-150)', margin: '0 var(--space-1)' }} />
-
-          {/* Ligne 2 : Objectif mensuel avec picto check ou croix */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'var(--neutral-0)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--space-4)',
-            border: '1px solid var(--neutral-150)',
-            boxShadow: 'var(--shadow-card)',
-          }}>
-            <div style={{ display: 'grid', gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Objectif Mensuel ({savingsMonthLabel})
-              </span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                <span style={{ fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>
-                  {formatCurrencyFloored(savingsMonthlySavedDisplay)}
-                </span>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)' }}>
-                  / {formatCurrencyFloored(savingsMonthlyGoalDisplay)}
-                </span>
-              </div>
-            </div>
-
-            {/* Picto dynamique croix ou check */}
-            <div style={{
-              width: 38,
-              height: 38,
-              borderRadius: 'var(--radius-full)',
-              background: savingsGoalReached ? 'rgba(46, 212, 122, 0.12)' : 'rgba(252, 90, 90, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: savingsGoalReached ? '0 0 12px rgba(46, 212, 122, 0.08)' : '0 0 12px rgba(252, 90, 90, 0.08)',
-              transition: 'transform 0.2s ease',
-            }}>
-              {savingsGoalReached ? (
-                <Check size={20} color="var(--color-positive)" strokeWidth={3} />
-              ) : (
-                <X size={20} color="var(--color-negative)" strokeWidth={3} />
-              )}
-            </div>
-          </div>
-        </div>
+        <SavingsProgressModal
+          savingsYtdDisplay={savingsYtdDisplay}
+          savingsAnnualGoalDisplay={savingsAnnualGoalDisplay}
+          savingsYtdProgressPct={savingsYtdProgressPct}
+          savingsMonthlySavedDisplay={savingsMonthlySavedDisplay}
+          savingsMonthlyGoalDisplay={savingsMonthlyGoalDisplay}
+          savingsGoalReached={savingsGoalReached}
+          savingsMonthLabel={savingsMonthLabel}
+          formatCurrencyFloored={formatCurrencyFloored}
+        />
       </BottomSheet>
 
       <AnimatePresence>

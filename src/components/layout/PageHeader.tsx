@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 type PageHeaderProps = {
   title: string
+  titleBefore?: ReactNode
   titleAriaLabel?: string
   onTitleClick?: () => void
   titleAfter?: ReactNode
@@ -19,6 +20,7 @@ type PageHeaderProps = {
 
 export function PageHeader({
   title,
+  titleBefore,
   titleAriaLabel,
   onTitleClick,
   titleAfter,
@@ -74,6 +76,7 @@ export function PageHeader({
           }}
         >
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {titleBefore ?? null}
             <h1
               style={{
                 margin: 0,

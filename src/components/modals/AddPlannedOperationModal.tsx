@@ -40,8 +40,8 @@ type FormValues = {
   budgetImpact: PlannedOperationBudgetImpact
   isRecurringMonthly: boolean
   recurrenceStartDate: string
+  hasRecurrenceEndDate: boolean
   recurrenceEndDate: string
-  merchant: string
 }
 
 type FormErrors = Partial<Record<'date' | 'amount' | 'label' | 'accountId' | 'personalShareRatio' | 'recurrenceEndDate' | 'submit', string>>
@@ -84,8 +84,8 @@ function createDefaultFormValues(): FormValues {
     budgetImpact: 'already_budgeted',
     isRecurringMonthly: false,
     recurrenceStartDate: '',
+    hasRecurrenceEndDate: false,
     recurrenceEndDate: '',
-    merchant: '',
   }
 }
 
@@ -173,7 +173,7 @@ function SettingsRow({
       type="button"
       onClick={interactive ? onClick : undefined}
       disabled={!interactive}
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left"
+      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--space-3)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-1)] text-left"
       style={{
         cursor: interactive ? 'pointer' : 'default',
         opacity: disabled ? 0.6 : 1,
@@ -250,12 +250,20 @@ function RecurrenceDateRow({
   value,
   onChange,
   onClear,
+  enabled = true,
+  checked,
+  checkboxDisabled = false,
+  onCheckedChange,
   isMobileViewport,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   onClear?: () => void
+  enabled?: boolean
+  checked?: boolean
+  checkboxDisabled?: boolean
+  onCheckedChange?: (checked: boolean) => void
   isMobileViewport: boolean
 }) {
   const fontSize = isMobileViewport ? 'var(--font-size-sm)' : 'var(--font-size-base)'
@@ -266,15 +274,42 @@ function RecurrenceDateRow({
         gridTemplateColumns: 'minmax(0,1fr) auto',
         alignItems: 'center',
         gap: 'var(--space-3)',
-        padding: 'var(--space-2) var(--space-3)',
+        padding: 'var(--space-1) var(--space-3)',
         borderTop: '1px solid var(--neutral-200)',
       }}
     >
-      <span style={{ fontSize, fontWeight: 'var(--font-weight-medium)', color: 'var(--neutral-600)', lineHeight: 'var(--line-height-tight)' }}>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 'var(--space-2)',
+          fontSize,
+          fontWeight: 'var(--font-weight-medium)',
+          color: enabled ? 'var(--neutral-600)' : 'var(--neutral-400)',
+          lineHeight: 'var(--line-height-tight)',
+        }}
+      >
         {label}
+        {onCheckedChange ? (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onCheckedChange(event.target.checked)}
+            disabled={checkboxDisabled}
+            aria-label={`Activer ${label.toLowerCase()}`}
+            style={{
+              width: 14,
+              height: 14,
+              margin: 0,
+              accentColor: 'var(--primary-500)',
+              cursor: checkboxDisabled ? 'not-allowed' : 'pointer',
+              opacity: checkboxDisabled ? 0.55 : 1,
+            }}
+          />
+        ) : null}
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        {value && onClear ? (
+        {enabled && value && onClear ? (
           <button
             type="button"
             aria-label="Effacer la date"
@@ -298,18 +333,20 @@ function RecurrenceDateRow({
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          disabled={!enabled}
           style={{
             border: 'none',
             background: 'transparent',
             fontFamily: 'inherit',
             fontSize,
             fontWeight: 700,
-            color: value ? 'var(--neutral-900)' : 'var(--neutral-400)',
-            cursor: 'pointer',
+            color: !enabled ? 'var(--neutral-400)' : value ? 'var(--neutral-900)' : 'var(--neutral-400)',
+            cursor: enabled ? 'pointer' : 'not-allowed',
             outline: 'none',
             padding: 0,
             textAlign: 'right',
             minWidth: 0,
+            opacity: enabled ? 1 : 0.7,
           }}
         />
       </div>
@@ -332,7 +369,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     if (typeof window === 'undefined') return true
     return window.matchMedia('(max-width: 768px)').matches
   })
-  const [keyboardVisible, setKeyboardVisible] = useState(false)
 
   const amountRef = useRef<HTMLInputElement | null>(null)
   const labelRef = useRef<HTMLInputElement | null>(null)
@@ -466,8 +502,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     )
   }, [values])
 
-  const shouldHideFooter = isMobileViewport && (amountFocused || keyboardVisible)
-
   const focusLabelInput = useCallback(() => {
     amountRef.current?.blur()
     window.setTimeout(() => {
@@ -477,6 +511,19 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
 
   const closeLabelInput = useCallback(() => {
     labelRef.current?.blur()
+  }, [])
+
+  const openDatePicker = useCallback(() => {
+    const input = dateRef.current
+    if (!input) return
+
+    if ('showPicker' in input && typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+
+    input.focus()
+    input.click()
   }, [])
 
   const closeAndReset = useCallback(() => {
@@ -503,28 +550,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     media.addEventListener('change', onChange)
     return () => media.removeEventListener('change', onChange)
   }, [])
-
-  useEffect(() => {
-    if (!open || !isMobileViewport || typeof window === 'undefined') {
-      setKeyboardVisible(false)
-      return
-    }
-    const viewport = window.visualViewport
-    if (!viewport) return
-
-    const updateKeyboardState = () => {
-      const keyboardDelta = window.innerHeight - viewport.height
-      setKeyboardVisible(keyboardDelta > 140)
-    }
-
-    updateKeyboardState()
-    viewport.addEventListener('resize', updateKeyboardState)
-    viewport.addEventListener('scroll', updateKeyboardState)
-    return () => {
-      viewport.removeEventListener('resize', updateKeyboardState)
-      viewport.removeEventListener('scroll', updateKeyboardState)
-    }
-  }, [isMobileViewport, open])
 
   useEffect(() => {
     if (!accounts?.length || values.accountId) return
@@ -681,6 +706,21 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
     setValues((current) => ({ ...current, budgetImpact: next }))
   }
 
+  const handleRecurrenceStartDateChange = (nextValue: string) => {
+    setValues((current) => ({
+      ...current,
+      isRecurringMonthly: Boolean(nextValue),
+      recurrenceStartDate: nextValue,
+      hasRecurrenceEndDate: nextValue ? current.hasRecurrenceEndDate : false,
+      recurrenceEndDate: nextValue ? current.recurrenceEndDate : '',
+    }))
+    setErrors((current) => {
+      const next = { ...current }
+      delete next.recurrenceEndDate
+      return next
+    })
+  }
+
   const validate = (): boolean => {
     const nextErrors: FormErrors = {}
 
@@ -705,7 +745,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       nextErrors.personalShareRatio = 'La part personnelle doit être entre 0 et 1.'
     }
 
-    if (values.isRecurringMonthly && values.recurrenceEndDate && values.recurrenceStartDate) {
+    if (values.isRecurringMonthly && values.hasRecurrenceEndDate && values.recurrenceEndDate && values.recurrenceStartDate) {
       if (values.recurrenceEndDate < values.recurrenceStartDate) {
         nextErrors.recurrenceEndDate = 'La date de fin doit être après la date de début.'
       }
@@ -730,7 +770,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       : null
     const recurringDay = recurringDayRaw != null && Number.isFinite(recurringDayRaw) ? recurringDayRaw : null
     const recurrenceStartDate = effectiveStartDate
-    const recurrenceEndDate = values.isRecurringMonthly
+    const recurrenceEndDate = values.isRecurringMonthly && values.hasRecurrenceEndDate
       ? (values.recurrenceEndDate || null)
       : null
 
@@ -740,7 +780,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
       category_id: values.flowType === 'transfer'
         ? null
         : (values.subCategoryId || values.categoryId || null),
-      merchant_name: values.merchant.trim() || null,
+      merchant_name: null,
       label: values.label.trim(),
       planned_date: values.date,
       planned_amount: parsedAmount,
@@ -792,10 +832,10 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
             exit={{ y: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[500px] overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
-            style={{ zIndex: 141, maxHeight: '81dvh' }}
+            style={{ zIndex: 141, maxHeight: isMobileViewport ? 'calc(100dvh - var(--space-3))' : '81dvh' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex max-h-[81dvh] flex-col">
+            <div className="flex flex-col overflow-hidden" style={{ maxHeight: isMobileViewport ? 'calc(100dvh - var(--space-3))' : '81dvh' }}>
               <header
                 className="relative overflow-hidden px-[var(--space-6)]"
                 style={{
@@ -821,9 +861,12 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                   <X size={isMobileViewport ? 18 : 20} />
                 </button>
 
-                <div
-                  className="absolute left-1/2 -translate-x-1/2 text-[var(--neutral-0)]"
-                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40 }}
+                <button
+                  type="button"
+                  className="absolute left-1/2 inline-flex -translate-x-1/2 items-center justify-center border-none bg-transparent p-0 text-[var(--neutral-0)]"
+                  style={{ top: 'calc(var(--space-5) + 4px)', zIndex: 40, width: 'max-content' }}
+                  aria-label="Date de l'opération planifiée"
+                  onClick={openDatePicker}
                 >
                   <span
                     className="block text-center text-[var(--font-size-2xl)] font-[var(--font-weight-extrabold)]"
@@ -840,20 +883,24 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                       setValues((current) => ({ ...current, date: event.target.value }))
                       clearFieldError('date')
                     }}
-                    aria-label="Date de l'opération planifiée"
                     style={{
                       position: 'absolute',
-                      inset: 0,
+                      width: 1,
+                      height: 1,
+                      padding: 0,
+                      margin: -1,
+                      overflow: 'hidden',
+                      clip: 'rect(0 0 0 0)',
+                      whiteSpace: 'nowrap',
+                      border: 0,
                       opacity: 0.001,
-                      width: '100%',
-                      height: '100%',
-                      cursor: 'pointer',
-                      zIndex: 41,
+                      pointerEvents: 'none',
                       WebkitAppearance: 'none',
                       appearance: 'none',
                     }}
+                    tabIndex={-1}
                   />
-                </div>
+                </button>
 
                 <div className="absolute left-1/2 -translate-x-1/2" style={{ top: isMobileViewport ? 60 : 74 }}>
                   <FlowTypePill
@@ -893,7 +940,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 
               </header>
 
-              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-4)] pt-0" style={{ position: 'relative', zIndex: 20 }}>
+              <div className="modal-main-scroll flex-1 overflow-y-auto pb-[var(--space-2)] pt-0" style={{ position: 'relative', zIndex: 20 }}>
                 <section className="relative z-[2] px-[var(--space-6)]" style={{ marginTop: isMobileViewport ? '-14px' : '-4px' }} aria-labelledby="planned-amount-input-label">
                   <p id="planned-amount-input-label" className="sr-only">
                     Montant planifié
@@ -968,19 +1015,9 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     }}
                   />
                   <FieldError message={errors.label} />
-                  <Input
-                    id="planned-operation-merchant"
-                    type="text"
-                    value={values.merchant}
-                    onChange={(event) => setValues((current) => ({ ...current, merchant: event.target.value }))}
-                    placeholder="marchand (optionnel)"
-                    aria-label="Marchand"
-                    className="mt-[var(--space-2)] rounded-[var(--radius-md)] border-transparent px-[var(--space-4)] py-[var(--space-3)] text-center placeholder:text-[var(--neutral-500)] placeholder:opacity-100 focus:border-transparent"
-                    style={{ minHeight: isMobileViewport ? 36 : 44 }}
-                  />
                 </div>
 
-                <div className="mt-[var(--space-3)]">
+                <div className="mt-[var(--space-2)]">
                   <section className="mx-[var(--space-6)]">
                     <div className="divide-y divide-[var(--neutral-200)] border-t border-[var(--neutral-200)]">
                       <SettingsRow
@@ -1028,62 +1065,61 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         compactMobile={isMobileViewport}
                         onClick={handleShareRatioToggle}
                       />
-                      <SettingsRow
-                        label="Récurrent mensuel"
-                        value={values.isRecurringMonthly ? 'Oui' : 'Non'}
-                        compactMobile={isMobileViewport}
-                        onClick={() => {
-                          setValues((current) => {
-                            const next = !current.isRecurringMonthly
-                            return {
+                      <div style={{ background: 'var(--neutral-50)' }}>
+                        <RecurrenceDateRow
+                          label="Date de début"
+                          value={values.recurrenceStartDate}
+                          onChange={handleRecurrenceStartDateChange}
+                          onClear={() => handleRecurrenceStartDateChange('')}
+                          isMobileViewport={isMobileViewport}
+                        />
+                        <RecurrenceDateRow
+                          label="Date de fin"
+                          value={values.recurrenceEndDate}
+                          enabled={values.hasRecurrenceEndDate}
+                          checked={values.hasRecurrenceEndDate}
+                          checkboxDisabled={!values.recurrenceStartDate}
+                          onCheckedChange={(checked) => {
+                            setValues((current) => ({
                               ...current,
-                              isRecurringMonthly: next,
-                              recurrenceStartDate: next && !current.recurrenceStartDate
-                                ? current.date
-                                : current.recurrenceStartDate,
-                            }
-                          })
-                        }}
-                      />
-                      <AnimatePresence>
-                        {values.isRecurringMonthly && (
-                          <motion.div
-                            key="recurrence-dates"
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
-                            style={{ overflow: 'hidden' }}
-                          >
-                            <div style={{ background: 'var(--neutral-50)' }}>
-                              <RecurrenceDateRow
-                                label="Début de la récurrence"
-                                value={values.recurrenceStartDate}
-                                onChange={(v) => setValues((current) => ({ ...current, recurrenceStartDate: v }))}
-                                isMobileViewport={isMobileViewport}
-                              />
-                              <RecurrenceDateRow
-                                label="Fin de la récurrence"
-                                value={values.recurrenceEndDate}
-                                onChange={(v) => {
-                                  setValues((current) => ({ ...current, recurrenceEndDate: v }))
-                                  setErrors((current) => { const n = { ...current }; delete n.recurrenceEndDate; return n })
-                                }}
-                                onClear={() => {
-                                  setValues((current) => ({ ...current, recurrenceEndDate: '' }))
-                                  setErrors((current) => { const n = { ...current }; delete n.recurrenceEndDate; return n })
-                                }}
-                                isMobileViewport={isMobileViewport}
-                              />
-                              {errors.recurrenceEndDate ? (
-                                <p style={{ margin: 0, padding: '0 var(--space-3) var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }} role="alert">
-                                  {errors.recurrenceEndDate}
-                                </p>
-                              ) : null}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                              isRecurringMonthly: Boolean(current.recurrenceStartDate),
+                              hasRecurrenceEndDate: checked,
+                              recurrenceEndDate: checked ? current.recurrenceEndDate : '',
+                            }))
+                            setErrors((current) => {
+                              const next = { ...current }
+                              delete next.recurrenceEndDate
+                              return next
+                            })
+                          }}
+                          onChange={(v) => {
+                            setValues((current) => ({
+                              ...current,
+                              isRecurringMonthly: Boolean(current.recurrenceStartDate || v),
+                              recurrenceEndDate: v,
+                            }))
+                            setErrors((current) => {
+                              const next = { ...current }
+                              delete next.recurrenceEndDate
+                              return next
+                            })
+                          }}
+                          onClear={() => {
+                            setValues((current) => ({ ...current, recurrenceEndDate: '' }))
+                            setErrors((current) => {
+                              const next = { ...current }
+                              delete next.recurrenceEndDate
+                              return next
+                            })
+                          }}
+                          isMobileViewport={isMobileViewport}
+                        />
+                        {errors.recurrenceEndDate ? (
+                          <p style={{ margin: 0, padding: '0 var(--space-3) var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }} role="alert">
+                            {errors.recurrenceEndDate}
+                          </p>
+                        ) : null}
+                      </div>
                       {values.flowType === 'expense' || values.flowType === 'savings' ? (
                         <SettingsRow
                           label="Impact budget"
@@ -1115,8 +1151,13 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                 </div>
               </div>
 
-              {!shouldHideFooter ? (
-                <footer className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]" style={{ paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)', paddingBottom: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)' }}>
+              <footer
+                className="shrink-0 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] px-[var(--space-6)]"
+                style={{
+                  paddingTop: isMobileViewport ? 'var(--space-1)' : 'var(--space-2)',
+                  paddingBottom: `calc(${isMobileViewport ? 'var(--space-2)' : 'var(--space-2)'} + env(safe-area-inset-bottom))`,
+                }}
+              >
                   <div className="flex items-center justify-between gap-[var(--space-3)]">
                     <Button type="button" variant="outline" size="sm" className="rounded-[var(--radius-md)]" style={{ height: isMobileViewport ? 34 : 38, minHeight: isMobileViewport ? 34 : 38 }} onClick={closeAndReset}>
                       Annuler
@@ -1135,7 +1176,6 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     </Button>
                   </div>
                 </footer>
-              ) : null}
             </div>
           </motion.section>
 

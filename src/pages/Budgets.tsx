@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -107,11 +107,75 @@ const REVENUE_HISTORY_Y_AXIS_MAX = 15000
 type BudgetsTabId = 'enveloppes' | 'projections' | 'analytics' | 'metriques'
 type EnveloppesViewMode = 'categories' | 'socles'
 type BudgetsTabConfig = { id: BudgetsTabId; label: string; iconSrc: string }
+const QUICK_SEARCH_CONTENT_MAX_WIDTH = 760
+const QUICK_SEARCH_OUTER_GAP = 'var(--space-5)'
+const QUICK_SEARCH_CARD_GAP = 'var(--space-4)'
 const BUDGETS_TABS: BudgetsTabConfig[] = [
   { id: 'enveloppes', label: 'Enveloppes', iconSrc: enveloppesMensuellesIcon },
   { id: 'projections', label: 'Projections', iconSrc: projectionsAnnuellesIcon },
   { id: 'analytics', label: 'Analytics', iconSrc: analyticsIcon },
 ]
+
+function buildQuickSearchHeroPanel(accent: string): CSSProperties {
+  return {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 'var(--radius-2xl)',
+    border: '1px solid color-mix(in oklab, var(--neutral-0) 72%, rgba(255,255,255,0.18) 28%)',
+    background: `linear-gradient(140deg, color-mix(in oklab, ${accent} 68%, #0d1020 32%) 0%, color-mix(in oklab, ${accent} 26%, #faf7f2 74%) 100%)`,
+    boxShadow: '0 22px 60px rgba(17,24,39,0.16)',
+    isolation: 'isolate',
+  }
+}
+
+function buildQuickSearchMetricPanel(accent: string): CSSProperties {
+  return {
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 112,
+    borderRadius: 'var(--radius-xl)',
+    border: '1px solid color-mix(in oklab, white 18%, transparent 82%)',
+    background: `linear-gradient(155deg, color-mix(in oklab, ${accent} 78%, #111827 22%) 0%, color-mix(in oklab, ${accent} 48%, #fcfaf7 52%) 100%)`,
+    padding: 'var(--space-3)',
+    display: 'grid',
+    alignContent: 'space-between',
+    gap: 'var(--space-3)',
+    boxShadow: '0 18px 34px rgba(17,24,39,0.14)',
+  }
+}
+
+function buildQuickSearchSoftPanel(accent: string): CSSProperties {
+  return {
+    position: 'relative',
+    overflow: 'hidden',
+    border: '1px solid color-mix(in oklab, var(--neutral-900) 8%, white 92%)',
+    borderRadius: 'var(--radius-2xl)',
+    background: `linear-gradient(160deg, color-mix(in oklab, ${accent} 12%, #fffdf8 88%) 0%, color-mix(in oklab, ${accent} 3%, #f3efe8 97%) 100%)`,
+    boxShadow: '0 18px 44px rgba(15,23,42,0.10)',
+  }
+}
+
+function buildQuickSearchRailButton(accent: string): CSSProperties {
+  return {
+    border: '1px solid color-mix(in oklab, white 20%, transparent 80%)',
+    background: `linear-gradient(135deg, color-mix(in oklab, ${accent} 12%, #fffdf8 88%) 0%, color-mix(in oklab, ${accent} 4%, #f4efe7 96%) 100%)`,
+    borderRadius: 'var(--radius-xl)',
+    boxShadow: '0 14px 30px rgba(15,23,42,0.08)',
+    transition: 'transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast)',
+  }
+}
+
+function buildQuickSearchChartStage(accent: string): CSSProperties {
+  return {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 'var(--radius-2xl)',
+    border: '1px solid color-mix(in oklab, var(--neutral-900) 8%, white 92%)',
+    background: `linear-gradient(165deg, color-mix(in oklab, ${accent} 9%, #fffdfa 91%) 0%, color-mix(in oklab, ${accent} 20%, #f4efe8 80%) 100%)`,
+    boxShadow: '0 24px 48px rgba(15,23,42,0.10)',
+    isolation: 'isolate',
+  }
+}
 
 interface BudgetBlockLineItem {
   id: string
@@ -1980,6 +2044,20 @@ export function Budgets() {
     const rank = new Map<BudgetBlockId, number>(BLOCK_LIST_ORDER.map((id, index) => [id, index]))
     return [...blockRows].sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99))
   }, [blockRows])
+  const quickSearchBlockOptions = useMemo(() => [
+    ...blockRowsForList.map((row) => ({
+      id: row.id as BlockPageId,
+      label: `Socle ${row.label}`,
+      iconSrc: BLOCK_ICON_SRC[row.id],
+      amount: row.actualAmount,
+    })),
+    {
+      id: REVENUE_BLOCK_PAGE_ID as BlockPageId,
+      label: 'Socle revenus',
+      iconSrc: blockRevenusIcon,
+      amount: Number(revenueAnalytics?.selectedMonthRevenue ?? 0),
+    },
+  ], [blockRowsForList, revenueAnalytics?.selectedMonthRevenue])
   const revenueHistoryRows = useMemo(
     () => [...(revenueAnalytics?.monthlySeries ?? [])].sort((a, b) => b.month_start.localeCompare(a.month_start)),
     [revenueAnalytics],
@@ -2395,6 +2473,37 @@ export function Budgets() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: (isCategoryMode || isBlockMode) ? 'var(--space-6)' : (budgetsTabId === 'enveloppes' || budgetsTabId === 'metriques' || budgetsTabId === 'projections' || budgetsTabId === 'analytics') ? 'var(--space-2)' : 'var(--space-5)' }}>
       <PageHeader
         title={isDetailMode ? 'Budgets' : budgetsTabId === 'metriques' ? 'Recherche rapide' : activeBudgetsTab.label}
+        titleBefore={budgetsTabId === 'metriques' || isDetailMode ? (
+          <button
+            type="button"
+            aria-label="Retour"
+            onClick={() => {
+              if (isDetailMode) {
+                handleHeaderTitleReset?.()
+                return
+              }
+              setBudgetsTabId('enveloppes')
+            }}
+            style={{
+              width: 30,
+              height: 30,
+              minWidth: 30,
+              minHeight: 30,
+              borderRadius: 'var(--radius-full)',
+              border: '1.5px solid rgba(255,255,255,0.92)',
+              background: 'transparent',
+              color: 'var(--neutral-0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <ArrowLeft size={15} />
+          </button>
+        ) : undefined}
         titleAriaLabel={isDetailMode ? 'Réinitialiser sur toutes catégories et période actuelle' : undefined}
         onTitleClick={isDetailMode ? handleHeaderTitleReset : undefined}
         contentOffsetY={4}
@@ -2769,7 +2878,6 @@ export function Budgets() {
                     <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', lineHeight: 1.1, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'capitalize' }}>
                       {ytdSlideViewLabel[selectedYtdSlideView]}
                     </span>
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showYtdSlideViewMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
                   </button>
                   <button
                     type="button"
@@ -2837,7 +2945,6 @@ export function Budgets() {
                         {slideThreePeriod}
                       </span>
                     )}
-                    <ChevronDown size={14} color="var(--neutral-500)" style={{ position: 'absolute', right: 8, top: '50%', transform: `translateY(-50%) rotate(${showSlideThreePeriodMenu ? 180 : 0}deg)`, transition: 'transform var(--transition-fast)' }} />
                   </button>
                 </div>
                 {(showYtdSlideViewMenu || showSlideThreePeriodMenu) ? (
@@ -2951,8 +3058,8 @@ export function Budgets() {
 
       {isExpenseBlockPage && selectedBlockPage ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div style={{ maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+            <div style={{ display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
@@ -2989,20 +3096,27 @@ export function Budgets() {
                 </span>
               </div>
 
-              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+              <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                <div style={buildQuickSearchMetricPanel('#7D1D3F')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', top: -28, right: -18, width: 84, height: 84, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', filter: 'blur(4px)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Consommé</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
                     {formatCurrencyFloored(selectedBlockPage.actualAmount).replace(/\s+€/, '€')}
                   </span>
                 </div>
-                <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}</span>
+                <div style={buildQuickSearchMetricPanel('#B86B0A')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', bottom: -16, right: -12, width: 92, height: 92, borderRadius: '50%', background: 'rgba(255,255,255,0.12)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Budget</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
+                    {formatCurrencyFloored(selectedBlockPage.budgetAmount).replace(/\s+€/, '€')}
+                  </span>
                 </div>
-                <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(selectedBlockPage.budgetAmount - selectedBlockPage.actualAmount).replace(/\s+€/, '€')}</span>
+                <div style={buildQuickSearchMetricPanel('#0A6B7A')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', inset: 'auto auto 10px -12px', width: 54, height: 54, borderRadius: 'var(--radius-full)', border: '1px solid rgba(255,255,255,0.28)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Reste</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
+                    {formatCurrencyFloored(selectedBlockPage.budgetAmount - selectedBlockPage.actualAmount).replace(/\s+€/, '€')}
+                  </span>
                 </div>
               </div>
             </div>
@@ -3011,60 +3125,56 @@ export function Budgets() {
       ) : null}
 
       {isExpenseBlockPage && selectedBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220, position: 'relative' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={blockPageHistory}
-                barCategoryGap="18%"
-                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
-                onClick={(data) => {
-                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
-                  if (!payload) { setClickedBlockBar(null); return }
-                  setClickedBlockBar((prev) =>
-                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
-                  )
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <ReferenceLine y={Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0))} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
-                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                    const item = payload
-                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
-                  }} />
-                  {blockPageHistory.map((entry, i) => <Cell key={`block-history-${i}`} fill={selectedBlockPage.color} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            {clickedBlockBar && (
-              <BarClickBubble
-                data={clickedBlockBar.payload}
-                sixMonthAverage={blockPageSixMonthAverage}
-                sixMonthGapPct={blockPageSixMonthGapPct}
-                chartX={clickedBlockBar.chartX}
-                onClose={() => setClickedBlockBar(null)}
-              />
-            )}
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+          <div style={{ ...buildQuickSearchChartStage(selectedBlockPage.color), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Tempo</span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>12 derniers mois</span>
+            </div>
+            <div style={{ height: 220, position: 'relative' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={blockPageHistory}
+                  barCategoryGap="18%"
+                  margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                  onClick={(data) => {
+                    const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                    if (!payload) { setClickedBlockBar(null); return }
+                    setClickedBlockBar((prev) =>
+                      prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                    )
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
+                  <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                  <ReferenceLine y={Math.max(0, Number(selectedBlockPage.budgetAmount ?? 0))} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                  <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                    <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                      const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                      const item = payload
+                      if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                      return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
+                    }} />
+                    {blockPageHistory.map((entry, i) => <Cell key={`block-history-${i}`} fill={selectedBlockPage.color} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              {clickedBlockBar && (
+                <BarClickBubble
+                  data={clickedBlockBar.payload}
+                  sixMonthAverage={blockPageSixMonthAverage}
+                  sixMonthGapPct={blockPageSixMonthGapPct}
+                  chartX={clickedBlockBar.chartX}
+                  onClose={() => setClickedBlockBar(null)}
+                />
+              )}
+            </div>
+            <span aria-hidden="true" style={{ position: 'absolute', top: -34, right: -18, width: 124, height: 124, borderRadius: '50%', background: 'color-mix(in oklab, white 30%, transparent 70%)', filter: 'blur(14px)' }} />
           </div>
 
-          <div
-            style={{
-              height: 336,
-              border: '1px solid var(--neutral-200)',
-              borderRadius: 'var(--radius-xl)',
-              background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
-              padding: 'var(--space-3)',
-              display: 'grid',
-              gridTemplateRows: 'auto 1fr',
-              gap: 'var(--space-2)',
-            }}
-          >
+          <div style={{ ...buildQuickSearchSoftPanel(selectedBlockPage.color), height: 336, padding: 'var(--space-3)', display: 'grid', gridTemplateRows: 'auto 1fr', gap: 'var(--space-3)' }}>
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: blockListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
               <span>Répartition par sous-catégories</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
@@ -3095,14 +3205,13 @@ export function Budgets() {
                         trend: 'equal',
                       })}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '3px 2px',
+                        ...buildQuickSearchRailButton(selectedBlockPage.color),
+                        padding: '10px 12px',
                         cursor: 'pointer',
                         display: 'grid',
                         gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
                         alignItems: 'center',
-                        gap: 'var(--space-2)',
+                        gap: 'var(--space-3)',
                         textAlign: 'left',
                       }}
                     >
@@ -3139,8 +3248,8 @@ export function Budgets() {
 
       {isRevenueBlockPage ? (
         <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div style={{ maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+            <div style={{ display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
@@ -3174,22 +3283,25 @@ export function Budgets() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Mois en cours</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+              <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                <div style={buildQuickSearchMetricPanel('var(--color-success)')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', top: -24, right: -14, width: 82, height: 82, borderRadius: '50%', background: 'rgba(255,255,255,0.14)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Mois en cours</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
                     {formatCurrencyFloored(revenueAnalytics?.selectedMonthRevenue ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne 25-26</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
+                <div style={buildQuickSearchMetricPanel('var(--viz-b)')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', bottom: -18, left: -10, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.12)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Moyenne 25-26</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
                     {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenue2025_2026 ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--neutral-200)', background: 'var(--neutral-0)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 700, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-800)' }}>
+                <div style={buildQuickSearchMetricPanel('var(--primary-600)')}>
+                  <span aria-hidden="true" style={{ position: 'absolute', inset: 'auto 12px 12px auto', width: 48, height: 48, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.24)' }} />
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Moyenne (6M)</span>
+                  <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
                     {formatCurrencyFloored(revenueAnalytics?.avgMonthlyRevenueLast6M ?? 0).replace(/\s+€/, '€')}
                   </span>
                 </div>
@@ -3200,11 +3312,14 @@ export function Budgets() {
       ) : null}
 
       {isRevenueBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
-              {revenueActiveSlideTitle}
-            </p>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-5)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+          <div style={{ ...buildQuickSearchChartStage(revenuePageColor), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
+                {revenueActiveSlideTitle}
+              </p>
+              <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Flux</span>
+            </div>
             <div style={{ height: 220, minHeight: 220, overflow: 'hidden' }}>
               <div
                 style={{
@@ -3351,10 +3466,11 @@ export function Budgets() {
                       )) : (
                         <p style={{ margin: 0, padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-500)' }}>—</p>
                       )}
-                    </div>
-                  </div>
                 </div>
               </div>
+            </div>
+            <span aria-hidden="true" style={{ position: 'absolute', top: -32, right: -18, width: 126, height: 126, borderRadius: '50%', background: 'color-mix(in oklab, white 26%, transparent 74%)', filter: 'blur(14px)' }} />
+          </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-2)' }}>
               {Array.from({ length: revenueGraphSlideCount }).map((_, idx) => (
@@ -3617,8 +3733,8 @@ export function Budgets() {
           </>
         ) : (
           <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ padding: '0 var(--space-6)' }}>
-            <div style={{ maxWidth: 600, margin: '0 auto', display: 'grid', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+              <div style={{ display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                   <div style={{ minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <button
@@ -3655,20 +3771,27 @@ export function Budgets() {
                   </span>
                 </div>
 
-                <div style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-2)' }}>
-                  <div style={{ background: '#7D1D3F', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Consommé</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>
+                <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                  <div style={buildQuickSearchMetricPanel('#7D1D3F')}>
+                    <span aria-hidden="true" style={{ position: 'absolute', top: -28, right: -18, width: 84, height: 84, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', filter: 'blur(4px)' }} />
+                    <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Consommé</span>
+                    <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
                       {formatCurrencyFloored(categoryCurrentPeriodAmount).replace(/\s+€/, '€')}
                     </span>
                   </div>
-                  <div style={{ background: '#B86B0A', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Budget</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}</span>
+                  <div style={buildQuickSearchMetricPanel('#B86B0A')}>
+                    <span aria-hidden="true" style={{ position: 'absolute', bottom: -16, right: -12, width: 92, height: 92, borderRadius: '50%', background: 'rgba(255,255,255,0.12)' }} />
+                    <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Budget</span>
+                    <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
+                      {formatCurrencyFloored(categoryMonthlyBudget).replace(/\s+€/, '€')}
+                    </span>
                   </div>
-                  <div style={{ background: '#0A6B7A', border: '2px solid #D4A017', borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', minHeight: 48, display: 'grid', justifyItems: 'center', alignContent: 'center', textAlign: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700, whiteSpace: 'nowrap' }}>Reste</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)', whiteSpace: 'nowrap' }}>{formatCurrencyFloored(categoryMonthlyBudget - categoryCurrentPeriodAmount).replace(/\s+€/, '€')}</span>
+                  <div style={buildQuickSearchMetricPanel('#0A6B7A')}>
+                    <span aria-hidden="true" style={{ position: 'absolute', inset: 'auto auto 10px -12px', width: 54, height: 54, borderRadius: 'var(--radius-full)', border: '1px solid rgba(255,255,255,0.28)' }} />
+                    <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', fontWeight: 800, whiteSpace: 'nowrap' }}>Reste</span>
+                    <span style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 0.95, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--neutral-0)' }}>
+                      {formatCurrencyFloored(categoryMonthlyBudget - categoryCurrentPeriodAmount).replace(/\s+€/, '€')}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -3678,60 +3801,56 @@ export function Budgets() {
       ) : null}
 
       {isCategoryMode && !isVoyagesCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 'var(--space-3)', padding: '0 var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-          <div style={{ height: 220, position: 'relative' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={monthlyHistory}
-                barCategoryGap="18%"
-                margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
-                onClick={(data) => {
-                  const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
-                  if (!payload) { setClickedCatBar(null); return }
-                  setClickedCatBar((prev) =>
-                    prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
-                  )
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
-                <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                  <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                    const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                    const item = payload
-                    if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                    return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
-                  }} />
-                  {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={categoryColorFromName(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            {clickedCatBar && (
-              <BarClickBubble
-                data={clickedCatBar.payload}
-                sixMonthAverage={sixMonthAverageAmount}
-                sixMonthGapPct={sixMonthAverageGapPct}
-                chartX={clickedCatBar.chartX}
-                onClose={() => setClickedCatBar(null)}
-              />
-            )}
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+          <div style={{ ...buildQuickSearchChartStage(categoryColorFromName(selectedCatInfo?.name)), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Cadence</span>
+              <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>Budget vs réel</span>
+            </div>
+            <div style={{ height: 220, position: 'relative' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={monthlyHistory}
+                  barCategoryGap="18%"
+                  margin={{ top: 8, right: 44, left: -8, bottom: 4 }}
+                  onClick={(data) => {
+                    const payload = data?.activePayload?.[0]?.payload as MonthlyBucket | undefined
+                    if (!payload) { setClickedCatBar(null); return }
+                    setClickedCatBar((prev) =>
+                      prev?.payload.monthStart === payload.monthStart ? null : { payload, chartX: data.chartX ?? 0 },
+                    )
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
+                  <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                  <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                  <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                    <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                      const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                      const item = payload
+                      if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                      return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
+                    }} />
+                    {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill={categoryColorFromName(selectedCatInfo?.name)} fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              {clickedCatBar && (
+                <BarClickBubble
+                  data={clickedCatBar.payload}
+                  sixMonthAverage={sixMonthAverageAmount}
+                  sixMonthGapPct={sixMonthAverageGapPct}
+                  chartX={clickedCatBar.chartX}
+                  onClose={() => setClickedCatBar(null)}
+                />
+              )}
+            </div>
+            <span aria-hidden="true" style={{ position: 'absolute', bottom: -42, left: -14, width: 138, height: 138, borderRadius: '50%', background: 'color-mix(in oklab, white 28%, transparent 72%)', filter: 'blur(14px)' }} />
           </div>
 
-          <div
-            style={{
-              height: 336,
-              border: '1px solid var(--neutral-200)',
-              borderRadius: 'var(--radius-xl)',
-              background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
-              padding: 'var(--space-3)',
-              display: 'grid',
-              gridTemplateRows: 'auto 1fr',
-              gap: 'var(--space-2)',
-            }}
-          >
+          <div style={{ ...buildQuickSearchSoftPanel(categoryColorFromName(selectedCatInfo?.name)), height: 336, padding: 'var(--space-3)', display: 'grid', gridTemplateRows: 'auto 1fr', gap: 'var(--space-3)' }}>
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700, background: categoryListHeaderBackground, borderRadius: 'var(--radius-md)', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
               <span>Répartition par sous-catégories</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.72, whiteSpace: 'nowrap' }}>{formatMonthYearShort(selectedPeriodMonth, selectedPeriodYear)}</span>
@@ -3753,14 +3872,13 @@ export function Budgets() {
                       type="button"
                       onClick={() => setSelectedSubCategory(source)}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '3px 2px',
+                        ...buildQuickSearchRailButton(accent),
+                        padding: '10px 12px',
                         cursor: 'pointer',
                         display: 'grid',
                         gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
                         alignItems: 'center',
-                        gap: 'var(--space-2)',
+                        gap: 'var(--space-3)',
                         textAlign: 'left',
                       }}
                     >
@@ -3794,12 +3912,12 @@ export function Budgets() {
           </div>
         </motion.section>
       ) : isRootMode ? (
-      <motion.section ref={topSectionRef} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: '6px', justifyItems: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 600, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
+      <motion.section ref={topSectionRef} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ display: 'grid', gap: QUICK_SEARCH_CARD_GAP, justifyItems: 'center' }}>
+        <div style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={() => { if (isDragging) endSwipe() }}>
           <div style={{ display: 'flex', width: `${slideCount * 100}%`, transform: `translateX(-${(100 / slideCount) * activeSlide}%)`, transition: 'transform 300ms ease' }}>
-            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
+            <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
               {selectedCat === 'all' ? (
-                <div ref={categoryDonutRef} style={{ position: 'relative', height: 336 }}>
+                <div ref={categoryDonutRef} style={{ ...buildQuickSearchHeroPanel('var(--primary-500)'), height: 336, padding: 'var(--space-3)' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="46%" innerRadius={80} outerRadius={124} startAngle={90} endAngle={-270} paddingAngle={2} stroke="var(--neutral-0)" strokeWidth={1} onClick={(slice: unknown) => {
@@ -3842,6 +3960,8 @@ export function Budgets() {
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
+                  <span aria-hidden="true" style={{ position: 'absolute', inset: '18px auto auto 18px', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Cartographie</span>
+                  <span aria-hidden="true" style={{ position: 'absolute', top: -36, right: -8, width: 124, height: 124, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', filter: 'blur(12px)' }} />
                   <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                       <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
@@ -3886,18 +4006,7 @@ export function Budgets() {
                   ) : null}
                 </div>
               ) : (
-                <div
-                  style={{
-                    height: 336,
-                    border: '1px solid var(--neutral-200)',
-                    borderRadius: 'var(--radius-xl)',
-                    background: 'color-mix(in oklab, var(--neutral-0) 92%, var(--neutral-100) 8%)',
-                    padding: 'var(--space-3)',
-                    display: 'grid',
-                    alignContent: 'start',
-                    gap: 'var(--space-2)',
-                  }}
-                >
+                <div style={{ ...buildQuickSearchSoftPanel(categoryColorFromName(selectedCatInfo?.name)), height: 336, padding: 'var(--space-3)', display: 'grid', alignContent: 'start', gap: 'var(--space-3)' }}>
                   {categoryBarRows.length === 0 ? (
                     <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-400)', fontSize: 'var(--font-size-sm)' }}>
                       Aucune sous-catégorie active sur cette période
@@ -3914,14 +4023,13 @@ export function Budgets() {
                           type="button"
                           onClick={() => setSelectedSubCategory(source)}
                           style={{
-                            border: 'none',
-                            background: 'transparent',
-                            padding: '3px 2px',
+                            ...buildQuickSearchRailButton(accent),
+                            padding: '10px 12px',
                             cursor: 'pointer',
                             display: 'grid',
                             gridTemplateColumns: 'minmax(0,122px) minmax(0,1fr)',
                             alignItems: 'center',
-                            gap: 'var(--space-2)',
+                            gap: 'var(--space-3)',
                             textAlign: 'left',
                           }}
                         >
@@ -3956,8 +4064,8 @@ export function Budgets() {
             </div>
 
             {showExtendedSlides ? (
-              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-                <div ref={blockDonutRef} style={{ position: 'relative', height: 336 }}>
+              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+                <div ref={blockDonutRef} style={{ ...buildQuickSearchHeroPanel('var(--viz-b)'), height: 336, padding: 'var(--space-3)' }}>
                   {blockPieData.length === 0 ? (
                     <div style={{ height: '100%', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--neutral-300)', background: 'var(--neutral-50)', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--neutral-500)', fontSize: 'var(--font-size-sm)', padding: 'var(--space-6)' }}>
                       Aucune répartition disponible pour cette période.
@@ -4017,6 +4125,8 @@ export function Budgets() {
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
+                      <span aria-hidden="true" style={{ position: 'absolute', inset: '18px auto auto 18px', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Structure</span>
+                      <span aria-hidden="true" style={{ position: 'absolute', bottom: -22, right: -18, width: 138, height: 138, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', filter: 'blur(10px)' }} />
                       <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)', width: 146, height: 146, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-1)' }}>
                           <span style={{ fontSize: 'clamp(18px, 5.5vw, 28px)', fontWeight: 700, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', lineHeight: 1.05 }}>
@@ -4064,27 +4174,34 @@ export function Budgets() {
                 </div>
               </div>
             ) : (
-              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-1)' }}>
-                <div style={{ height: 332 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
-                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
-                      <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
-                      <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
-                        <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
-                          const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
-                          const item = payload
-                          if (!item || item.isCurrent || x == null || y == null || width == null) return null
-                          return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
-                        }} />
-                        {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+                <div style={{ ...buildQuickSearchChartStage('var(--primary-500)'), height: 332, padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Perspective</span>
+                    <span style={{ fontSize: 11, color: 'var(--neutral-600)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>6M glissants</span>
+                  </div>
+                  <div style={{ minHeight: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyHistory} barCategoryGap="18%" margin={{ top: 8, right: 30, left: 6, bottom: 4 }}>
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--neutral-500)' }} />
+                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--neutral-500)' }} tickFormatter={(value) => formatCurrencyFloored(Number(value))} width={68} />
+                        <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(67,97,238,0.08)' }} />
+                        <ReferenceLine y={historyBudgetTarget} stroke="var(--color-warning)" strokeWidth={2} strokeDasharray="4 4" label={{ value: 'Budget mensuel', position: 'right', fill: 'var(--neutral-600)', fontSize: 11 }} />
+                        <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={46}>
+                          <LabelList dataKey="amount" position="top" offset={8} content={(props: unknown) => {
+                            const { x, y, width, payload } = (props ?? {}) as LabelListContentProps
+                            const item = payload
+                            if (!item || item.isCurrent || x == null || y == null || width == null) return null
+                            return <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fill="var(--neutral-900)" fontSize={12} fontWeight={700}>{formatCurrencyFloored(item.amount)}</text>
+                          }} />
+                          {monthlyHistory.map((entry, i) => <Cell key={`history-${i}`} fill="var(--primary-500)" fillOpacity={entry.isCurrent ? 1 : 0.62} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <span aria-hidden="true" style={{ position: 'absolute', inset: 'auto auto -34px -12px', width: 132, height: 132, borderRadius: '50%', background: 'color-mix(in oklab, white 24%, transparent 76%)', filter: 'blur(14px)' }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-3)', padding: '0 var(--space-2)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 'var(--space-4)', padding: '0 var(--space-1)' }}>
                   <div style={{ display: 'grid', gap: 2 }}>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Montant moyen mensuel
@@ -4106,8 +4223,8 @@ export function Budgets() {
             )}
 
             {showExtendedSlides ? (
-              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: 'var(--space-2)' }}>
-                <section style={{ padding: '0 var(--space-5)' }}>
+              <div style={{ width: `${100 / slideCount}%`, flexShrink: 0, display: 'grid', gap: QUICK_SEARCH_CARD_GAP }}>
+                <section style={{ padding: '0 var(--space-4)' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
                     {slideThreeSelectedScopeMeta.iconType === 'block' ? (
                       <img
@@ -4134,7 +4251,7 @@ export function Budgets() {
                 </section>
                 <Suspense fallback={<div style={{ minHeight: 240 }} />}>
                 {selectedYtdSlideView === 'kpi' ? (
-                  <div style={{ padding: isCompactMobile ? '0 var(--space-2)' : '0 var(--space-4)' }}>
+                  <div style={{ padding: isCompactMobile ? '0 var(--space-1)' : '0 var(--space-3)' }}>
                     <Annual2026BlockMetrics
                       hideParameterRow
                       scopeSelection={slideThreeScopeSelection}
@@ -4156,7 +4273,7 @@ export function Budgets() {
                     rollingStats={categoryRolling12mStats}
                   />
                 ) : (
-                  <div style={{ padding: '0 var(--space-5)', marginTop: 'var(--space-2)' }}>
+                  <div style={{ padding: '0 var(--space-4)', marginTop: 'var(--space-3)' }}>
                     <MonthlyFlowsAnalysisCard
                       year={2026}
                       forcedView={selectedYtdSlideView === 'monthly_flows_chart' ? 'chart' : 'table'}
@@ -4277,9 +4394,23 @@ export function Budgets() {
             </motion.section>
           ) : activeSlide === 1 && blockRows.length > 0 ? (
             <motion.section key="slide1-list" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }} style={{ display: 'grid', gap: 'var(--space-6)', padding: '0 var(--space-5)' }}>
-              <h3 ref={blocksSectionTitleRef} style={{ margin: '0 0 0 0', fontSize: 'var(--font-size-lg)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)' }}>
-                Répartition par blocs
-              </h3>
+              <div
+                ref={blocksSectionTitleRef}
+                style={{
+                  ...buildQuickSearchSoftPanel('var(--viz-b)'),
+                  padding: 'var(--space-4)',
+                  display: 'grid',
+                  gap: 'var(--space-2)',
+                }}
+              >
+                <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Atlas</span>
+                <h3 style={{ margin: 0, fontSize: 'var(--font-size-xl)', color: 'var(--neutral-900)', fontWeight: 800, lineHeight: 1 }}>
+                  Répartition par blocs
+                </h3>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)', lineHeight: 1.4 }}>
+                  Chaque socle devient un panneau plus lisible, plus ample, avec sa consommation et sa réserve en un regard.
+                </p>
+              </div>
               <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
 		              {blockRowsForList.map((row) => {
 		                const budgetAmount = Number(row.budgetAmount ?? 0)
@@ -4310,7 +4441,7 @@ export function Budgets() {
                         setSelectedBlockPage(row.id)
                         scrollViewportToTop()
                       }}
-                      style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 'var(--space-5)', minWidth: 0, width: '100%', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                      style={{ ...buildQuickSearchRailButton(BLOCK_PROGRESS_COLORS[row.id]), display: 'grid', gridTemplateColumns: '56px 1fr', gap: 'var(--space-5)', minWidth: 0, width: '100%', padding: '20px 20px 18px', cursor: 'pointer', textAlign: 'left' }}
                     >
 		                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
 		                      <span aria-hidden="true" style={{ width: 56, height: 56, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -4326,9 +4457,9 @@ export function Budgets() {
 	                      </span>
 	                    </div>
 
-                    <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ display: 'grid', gap: 'var(--space-3)', minWidth: 0 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           {`Socle ${row.label.toLowerCase()}`}
                         </p>
                         <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 'var(--font-weight-bold)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
@@ -4368,23 +4499,16 @@ export function Budgets() {
                       scrollViewportToTop()
                     }}
                     style={{
+                      ...buildQuickSearchRailButton('var(--color-success)'),
                       marginTop: 'var(--space-3)',
-                      paddingTop: 'var(--space-6)',
-                      borderTop: '1px solid var(--neutral-300)',
                       display: 'grid',
                       gridTemplateColumns: '56px 1fr',
                       gap: 'var(--space-5)',
                       minWidth: 0,
                       width: '100%',
-                      borderLeft: 'none',
-                      borderRight: 'none',
-                      borderBottom: 'none',
-                      background: 'transparent',
                       cursor: 'pointer',
                       textAlign: 'left',
-                      paddingLeft: 0,
-                      paddingRight: 0,
-                      paddingBottom: 0,
+                      padding: '20px 20px 18px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
@@ -4401,7 +4525,7 @@ export function Budgets() {
                       </span>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <div style={{ display: 'grid', gap: 'var(--space-3)', minWidth: 0 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-4)', alignItems: 'center' }}>
                         <p style={{ margin: 0, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)', color: 'var(--neutral-800)', fontWeight: 'var(--font-weight-bold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Socle revenus</span>
@@ -4766,16 +4890,11 @@ export function Budgets() {
                               background: 'transparent',
                               padding: '3px 2px',
                               display: 'flex',
-                              flexDirection: 'column',
                               alignItems: 'center',
-                              gap: 2,
                               cursor: 'pointer',
                               opacity: selectedAll ? 1 : 0.92,
                             }}
                           >
-                            <div style={{ border: selectedAll ? '2px solid var(--primary-500)' : '2px solid transparent', borderRadius: 'var(--radius-lg)', padding: 2 }}>
-                              <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={32} />
-                            </div>
                             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.05, textAlign: 'center' }}>
                               Toutes
                             </span>
@@ -4867,7 +4986,7 @@ export function Budgets() {
 
               <div style={{ overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 'var(--space-3) var(--space-2)' }}>
+                  <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -4877,45 +4996,112 @@ export function Budgets() {
                       }}
                       style={{
                         border: 'none',
-                        background: 'transparent',
-                        padding: '6px 4px',
-                        display: 'flex',
-                        flexDirection: 'column',
+                        background: selectedCat === 'all' ? 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)' : 'transparent',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: 'var(--space-2) var(--space-3)',
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0,1fr)',
                         alignItems: 'center',
-                        gap: 5,
+                        gap: 0,
                         cursor: 'pointer',
+                        textAlign: 'left',
                       }}
                     >
-                      <CategoryIcon iconKey="toutes_categories" label="Toutes catégories" size={34} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>
-                        Toutes
+                      <span style={{ minWidth: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', lineHeight: 1.2 }}>
+                        Toutes catégories
                       </span>
                     </button>
 
-                    {rootNavigableCategories.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => {
-                          scrollViewportToTop()
-                          setSelectedCat(cat.id)
-                          setShowCatSheet(false)
-                        }}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          padding: '6px 4px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 5,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={34} />
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-700)', maxWidth: '100%', whiteSpace: 'pre-line', lineHeight: 1.15, textAlign: 'center' }}>{formatCategoryModalLabel(cat.name)}</span>
-                      </button>
-                    ))}
+                    {rootNavigableCategories.map((cat) => {
+                      const isSelected = selectedCat === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            scrollViewportToTop()
+                            setSelectedCat(cat.id)
+                            setShowCatSheet(false)
+                          }}
+                          style={{
+                            border: 'none',
+                            background: isSelected ? 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)' : 'transparent',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: 'var(--space-2) var(--space-3)',
+                            display: 'grid',
+                            gridTemplateColumns: '40px minmax(0,1fr)',
+                            alignItems: 'center',
+                            gap: 'var(--space-3)',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <CategoryIcon iconKey={cat.icon_key} label={cat.name} size={30} />
+                          </span>
+                          <span style={{ minWidth: 0, fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', lineHeight: 1.2 }}>
+                            {cat.name}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ height: 1, background: 'var(--neutral-200)' }} />
+
+                  <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                    <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Blocs
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 'var(--space-3)' }}>
+                      {quickSearchBlockOptions.map((option) => {
+                        const isSelected = selectedBlockPageId === option.id
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              scrollViewportToTop()
+                              setSelectedBlockPage(option.id)
+                              setShowCatSheet(false)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: isSelected ? 'color-mix(in oklab, var(--primary-500) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                              borderRadius: 'var(--radius-lg)',
+                              padding: 'var(--space-3) var(--space-2)',
+                              display: 'grid',
+                              justifyItems: 'center',
+                              alignContent: 'start',
+                              gap: 'var(--space-2)',
+                              cursor: 'pointer',
+                              textAlign: 'center',
+                              minHeight: 120,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 'var(--radius-md)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: isSelected ? 'color-mix(in oklab, var(--primary-500) 12%, var(--neutral-0) 88%)' : 'transparent',
+                              }}
+                            >
+                              <img src={option.iconSrc} alt="" aria-hidden="true" width={32} height={32} loading="lazy" decoding="async" style={{ display: 'block', objectFit: 'contain' }} />
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-800)', lineHeight: 1.15 }}>
+                              {option.label}
+                            </span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--neutral-500)', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+                              {formatCurrencyFloored(option.amount)}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
