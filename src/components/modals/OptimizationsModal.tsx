@@ -90,7 +90,7 @@ function GaugeCard({
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        height: 280,
+        aspectRatio: '1 / 1',
       }}
     >
       {/* Animated ambient corner glow */}
@@ -278,10 +278,10 @@ interface OptimizationsModalProps {
 export function OptimizationsModal({ data, formatCurrencyFloored }: OptimizationsModalProps) {
   const [currentSlide, setCurrentSlide] = useState(0)
 
-  // Show max 2 cards per slide, limit to 5 total cards
-  const displayData = data.slice(0, 5)
-  const cardsPerSlide = 2
-  const totalSlides = Math.ceil(displayData.length / cardsPerSlide)
+  // Show 1 card per slide, limit to 8 total cards
+  const displayData = data.slice(0, 8)
+  const cardsPerSlide = 1
+  const totalSlides = displayData.length
 
   const canGoPrev = currentSlide > 0
   const canGoNext = currentSlide < totalSlides - 1
@@ -294,10 +294,9 @@ export function OptimizationsModal({ data, formatCurrencyFloored }: Optimization
     if (canGoNext) setCurrentSlide(currentSlide + 1)
   }
 
-  // Get the current slide's cards
-  const startIdx = currentSlide * cardsPerSlide
-  const endIdx = Math.min(startIdx + cardsPerSlide, displayData.length)
-  const currentCards = displayData.slice(startIdx, endIdx)
+  // Get the current slide's card
+  const startIdx = currentSlide
+  const currentCards = displayData.slice(startIdx, startIdx + 1)
 
   return (
     <div style={{
@@ -347,7 +346,7 @@ export function OptimizationsModal({ data, formatCurrencyFloored }: Optimization
         <div style={{
           flex: 1,
           display: 'grid',
-          gridTemplateColumns: cardsPerSlide === 1 ? '1fr' : '1fr 1fr',
+          gridTemplateColumns: '1fr',
           gap: 12,
           overflow: 'hidden',
         }}>

@@ -44,6 +44,8 @@ import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrent
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
 import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
 import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
+import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
 import { useAuth } from '@/hooks/useAuth'
 import { useSavingsTransfersYtd } from '@/features/savings/hooks/useSavingsTransfersYtd'
@@ -250,47 +252,6 @@ const MAIN_CHECKING_ACCOUNT_ID = 'bcffa4d1-92b0-4feb-a492-51ea328cfce2'
 
 type SavingsTileStatus = 'validated' | 'pending' | 'alert'
 
-type OptimizationPriorityMock = {
-  label: string
-  iconKey: string
-  optimizationYtdAmount: number | null
-  expectedAnnualAmount: number
-  previousYearAmount: number
-  determinationMethod: string
-  categoryNameMatchers: string[]
-}
-
-
-
-const OPTIMIZATION_PRIORITIES_MOCK: OptimizationPriorityMock[] = [
-  {
-    label: "Retraits d'espèces",
-    iconKey: 'achats_divers_retrait_d_especes',
-    optimizationYtdAmount: 145,
-    expectedAnnualAmount: 420,
-    previousYearAmount: 85,
-    determinationMethod: 'Écart entre moyenne mobile 6 mois et cible hebdomadaire plafonnée.',
-    categoryNameMatchers: ["retrait d'especes", 'retrait especes', 'retrait'],
-  },
-  {
-    label: 'Petits achats alimentaires',
-    iconKey: 'alimentation_petits_achats_alimentaires',
-    optimizationYtdAmount: null,
-    expectedAnnualAmount: 360,
-    previousYearAmount: 210,
-    determinationMethod: 'Réduction visée par regroupement des achats et suppression des doublons de panier.',
-    categoryNameMatchers: ['petits achats alimentaires', 'alimentation'],
-  },
-  {
-    label: 'Café / bars',
-    iconKey: 'sorties_cafe_bars',
-    optimizationYtdAmount: 92,
-    expectedAnnualAmount: 300,
-    previousYearAmount: 70,
-    determinationMethod: 'Comparaison N vs N-1 ajustée du nombre de sorties mensuelles observées.',
-    categoryNameMatchers: ['cafe', 'bars', 'bar'],
-  },
-]
 
 function DriftCategoryTransactionsModal({
   open,
@@ -1561,6 +1522,8 @@ export function Home() {
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
+  const { data: optimizationCapacity } = useOptimizationCapacity(year)
+  const budgetPayloadForOptimizations = useBudgetPagePayload({ periodYear: year, periodMonth: month, monthsBack: 1 })
   const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const eomDateStr = toLocalIsoDate(eomDate)
   const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
@@ -1642,36 +1605,52 @@ export function Home() {
 
 
   const optimizationsData = useMemo(() => {
-    const operations = driftOperations ?? []
-    return OPTIMIZATION_PRIORITIES_MOCK.map((row) => {
-      const matchingOps = operations.filter((op) => {
-        const catName = op.categoryName ? op.categoryName.toLowerCase() : ''
-        return row.categoryNameMatchers.some((matcher) => catName.includes(matcher.toLowerCase()))
-      })
+    const levers = optimizationCapacity?.optimization_levers ?? []
 
-      const realAmount = matchingOps.reduce((sum, op) => sum + Math.abs(op.budgetAccountingAmount), 0)
-      
-      const consumedAmount = realAmount > 0 ? realAmount : (row.previousYearAmount / 12)
-      const objectiveAmount = row.expectedAnnualAmount / 12
-      const progressPct = objectiveAmount > 0 ? (consumedAmount / objectiveAmount) * 100 : 0
+    // Build lookup: normalized category name → actual spending this month
+    const normalize = (v: string | null | undefined) =>
+      (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+    const actualByCategory = new Map<string, number>()
+    for (const row of budgetPayloadForOptimizations.data?.by_category ?? []) {
+      const key = normalize(row.category_name)
+      if (key) actualByCategory.set(key, Number(row.actual_amount ?? 0))
+    }
+
+    return levers.map((lever) => {
+      const avg = Math.max(0, Number(lever.avg_monthly_amount_6m ?? 0))
+      const gain = Math.max(0, Number(lever.realistic_monthly_gain ?? 0))
+      // "Cible opti." = avg monthly spend minus the realistic monthly savings
+      const cibleOpti = Math.max(0, avg - gain)
+
+      const n = normalize(lever.category_name)
+      // Actual spending this month for this category
+      const consumedAmount = actualByCategory.get(n) ?? 0
+
+      const progressPct = cibleOpti > 0 ? Math.min(110, (consumedAmount / cibleOpti) * 100) : 0
+
+      let iconKey = n.replace(/\s+/g, '_')
+      if (n.includes('retrait') && n.includes('espece')) iconKey = 'achats_divers_retrait_d_especes'
+      else if (n.includes('petits achats alimentaires')) iconKey = 'alimentation_petits_achats_alimentaires'
+      else if (n.includes('cafe') && n.includes('bar')) iconKey = 'sorties_cafe_bars'
+      else if (n.includes('restaurant')) iconKey = 'sorties_restaurant'
+      else if (n.includes('courses')) iconKey = 'alimentation_courses'
+      else if (n.includes('e-commerce')) iconKey = 'achats_divers_e_commerce'
+      else if (n.includes('vetement')) iconKey = 'achats_divers_vetements'
 
       let barColor = '#5B57F5'
-      if (progressPct > 100) {
-        barColor = '#FC5A5A'
-      } else if (progressPct > 75) {
-        barColor = '#FFAB2E'
-      }
+      if (progressPct >= 75) barColor = '#FFAB2E'
+      if (progressPct >= 100) barColor = '#FC5A5A'
 
       return {
-        label: row.label,
-        iconKey: row.iconKey,
-        consumedAmount,
-        objectiveAmount,
+        label: lever.category_name ?? '—',
+        iconKey,
+        consumedAmount,      // consommé à date ce mois-ci
+        objectiveAmount: cibleOpti, // cible opti.
         progressPct,
         barColor,
       }
     })
-  }, [driftOperations])
+  }, [optimizationCapacity, budgetPayloadForOptimizations.data])
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
