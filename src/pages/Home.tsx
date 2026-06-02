@@ -1342,27 +1342,18 @@ function QuickSearchTile({
           padding: '0 var(--space-3)',
           borderRadius: 'var(--radius-xl)',
           border: '2px solid transparent',
-          background: `${hasSelection
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
-            : 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%)'
-          } padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box`,
+          background: 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          boxShadow: hasSelection
-            ? '0 2px 8px rgba(91, 87, 245, 0.1)'
-            : 'none',
+          boxShadow: 'none',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-1px)'
-          e.currentTarget.style.background = hasSelection
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.22) 0%, rgba(91, 87, 245, 0.12) 100%)'
-            : 'var(--neutral-150)'
+          e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.background = hasSelection
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
-            : 'var(--neutral-100)'
+          e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
@@ -1438,27 +1429,18 @@ function QuickSearchTile({
           padding: '0 var(--space-3)',
           borderRadius: 'var(--radius-xl)',
           border: '2px solid transparent',
-          background: `${hasPeriod
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
-            : 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%)'
-          } padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box`,
+          background: 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          boxShadow: hasPeriod
-            ? '0 2px 8px rgba(91, 87, 245, 0.1)'
-            : 'none',
+          boxShadow: 'none',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-1px)'
-          e.currentTarget.style.background = hasPeriod
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.22) 0%, rgba(91, 87, 245, 0.12) 100%)'
-            : 'var(--neutral-150)'
+          e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.background = hasPeriod
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
-            : 'var(--neutral-100)'
+          e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
         }}
       >
         <span
