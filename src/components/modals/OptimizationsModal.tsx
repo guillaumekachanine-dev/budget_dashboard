@@ -54,10 +54,12 @@ function GaugeCard({
   row,
   idx,
   formatCurrencyFloored,
+  slideIndex,
 }: {
   row: OptimizationRow
   idx: number
   formatCurrencyFloored: (n: number) => string
+  slideIndex: number
 }) {
   const p     = Math.min(1, Math.max(0, row.progressPct / 100))
   const color = statusColor(row.progressPct)
@@ -65,59 +67,71 @@ function GaugeCard({
   const gid   = `og-grad-${idx}`
   const glid  = `og-glow-${idx}`
 
-  const entryDelay = 0.05 + idx * 0.1
+  const entryDelay = 0.05 + (idx % 2) * 0.1
   const fillDelay  = entryDelay + 0.2
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: entryDelay, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      key={`card-${slideIndex}-${idx}`}
+      initial={{ opacity: 0, scale: 0.92, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.88, y: -8 }}
+      transition={{
+        delay: entryDelay,
+        duration: 0.5,
+        ease: [0.23, 0.86, 0.39, 0.96],
+      }}
       style={{
         background: 'linear-gradient(140deg, #0B1120 0%, #111A2E 55%, #0D1628 100%)',
         borderRadius: 16,
         overflow: 'hidden',
         border: '1px solid rgba(255,255,255,0.07)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
+        height: 280,
       }}
     >
-      {/* Ambient corner glow */}
-      <div style={{
-        position: 'absolute', top: -20, right: -20,
-        width: 90, height: 90, borderRadius: '50%',
-        background: `radial-gradient(circle, ${color}16 0%, transparent 70%)`,
-        pointerEvents: 'none',
-      }} />
+      {/* Animated ambient corner glow */}
+      <motion.div
+        style={{
+          position: 'absolute', top: -20, right: -20,
+          width: 90, height: 90, borderRadius: '50%',
+          background: `radial-gradient(circle, ${color}20 0%, transparent 70%)`,
+          pointerEvents: 'none',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: fillDelay, duration: 0.6 }}
+      />
 
       {/* ── Header: icon + label + % badge ─────────────────────── */}
       <div style={{
-        padding: '10px 10px 0',
-        display: 'flex', alignItems: 'center', gap: 7,
+        padding: '12px 12px 0',
+        display: 'flex', alignItems: 'center', gap: 8,
       }}>
 
         {/* Icon with pronounced vignette */}
         <div style={{
           position: 'relative',
-          width: 38, height: 38,
-          borderRadius: 11, overflow: 'hidden',
+          width: 40, height: 40,
+          borderRadius: 12, overflow: 'hidden',
           flexShrink: 0,
         }}>
-          <CategoryIcon iconKey={row.iconKey} label={row.label} size={38} />
+          <CategoryIcon iconKey={row.iconKey} label={row.label} size={40} />
           <div style={{
             position: 'absolute', inset: 0,
             background: `radial-gradient(circle at 50% 50%, transparent 20%, rgba(7,10,28,0.6) 65%, rgba(5,7,22,0.92) 100%)`,
-            borderRadius: 11,
+            borderRadius: 12,
             pointerEvents: 'none',
           }} />
         </div>
 
         {/* Category name */}
         <span style={{
-          fontSize: 10, fontWeight: 800,
-          color: 'rgba(255,255,255,0.75)',
+          fontSize: 11, fontWeight: 800,
+          color: 'rgba(255,255,255,0.8)',
           letterSpacing: '-0.01em',
           flex: 1, minWidth: 0,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -126,18 +140,24 @@ function GaugeCard({
         </span>
 
         {/* Status % pill */}
-        <span style={{
-          fontSize: 9, fontWeight: 800, color,
-          background: `${color}18`, border: `1px solid ${color}40`,
-          borderRadius: 999, padding: '2px 5px',
-          letterSpacing: '0.03em', flexShrink: 0,
-        }}>
+        <motion.span
+          style={{
+            fontSize: 10, fontWeight: 800, color,
+            background: `${color}18`, border: `1px solid ${color}40`,
+            borderRadius: 999, padding: '3px 7px',
+            letterSpacing: '0.03em', flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: fillDelay + 0.15, duration: 0.4 }}
+        >
           {row.progressPct.toFixed(0)}%
-        </span>
+        </motion.span>
       </div>
 
       {/* ── SVG Arc Gauge ────────────────────────────────────────── */}
-      <svg viewBox={`0 0 ${G.w} ${G.h}`} style={{ width: '100%', display: 'block' }} aria-hidden>
+      <svg viewBox={`0 0 ${G.w} ${G.h}`} style={{ width: '100%', display: 'block', flex: 1 }} aria-hidden>
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%"   stopColor="#2ED47A" />
@@ -164,18 +184,23 @@ function GaugeCard({
           stroke={`url(#${gid})`}
           strokeWidth={G.sw}
           strokeLinecap="round"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: fillDelay, duration: 0.65, ease: 'easeOut' }}
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ delay: fillDelay, duration: 0.8, ease: 'easeOut' }}
         />
 
         {/* Tick marks */}
         {TICKS.map((t) => {
           const pt = arcPoint(t)
           return (
-            <circle key={t} cx={pt.x} cy={pt.y}
+            <motion.circle
+              key={t}
+              cx={pt.x} cy={pt.y}
               r={t === 1.0 ? 2.5 : 1.5}
               fill={t >= 1.0 ? '#FC5A5A55' : t >= 0.75 ? '#FFAB2E55' : 'rgba(255,255,255,0.16)'}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: fillDelay + 0.3, duration: 0.3 }}
             />
           )
         })}
@@ -188,30 +213,39 @@ function GaugeCard({
           filter={`url(#${glid})`}
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: fillDelay + 0.45, duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+          transition={{ delay: fillDelay + 0.45, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
         />
         <motion.circle
           cx={dot.x} cy={dot.y} r={3}
           fill="rgba(255,255,255,0.95)"
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: fillDelay + 0.5, duration: 0.25, ease: [0.34, 1.56, 0.64, 1] }}
+          transition={{ delay: fillDelay + 0.5, duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
         />
 
         {/* Centre percentage text */}
-        <text x={G.cx} y={G.cy - 20} textAnchor="middle"
+        <motion.text
+          x={G.cx} y={G.cy - 20} textAnchor="middle"
           fill={color} fontSize={16} fontWeight={800}
           fontFamily="'Nunito Variable', sans-serif"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: fillDelay + 0.2, duration: 0.4 }}
         >
           {row.progressPct.toFixed(0)}%
-        </text>
+        </motion.text>
       </svg>
 
       {/* ── Footer ───────────────────────────────────────────────── */}
-      <div style={{ padding: '0 10px 12px', marginTop: -4 }}>
+      <motion.div
+        style={{ padding: '8px 12px 14px', marginTop: 'auto' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: fillDelay + 0.1, duration: 0.4 }}
+      >
         <p style={{
-          margin: '0 0 3px',
-          fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.7)',
+          margin: '0 0 4px',
+          fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.75)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           letterSpacing: '-0.01em',
         }}>
@@ -219,16 +253,18 @@ function GaugeCard({
         </p>
         <p style={{
           margin: 0,
-          fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.28)',
+          fontSize: 9.5, fontWeight: 700, color: 'rgba(255,255,255,0.35)',
           fontFamily: "'Nunito Variable', sans-serif",
         }}>
           <span style={{ color, fontWeight: 800 }}>
             {formatCurrencyFloored(row.consumedAmount)}
           </span>
-          {' '}/{' '}
+          <span style={{ color: 'rgba(255,255,255,0.2)' }}>
+            {' '}/{' '}
+          </span>
           {formatCurrencyFloored(row.objectiveAmount)}
         </p>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
@@ -265,10 +301,10 @@ export function OptimizationsModal({ data, formatCurrencyFloored }: Optimization
 
   return (
     <div style={{
-      padding: '14px 14px 18px',
+      padding: '16px 14px 20px',
       display: 'flex',
       flexDirection: 'column',
-      gap: 12,
+      gap: 16,
     }}>
       {/* Carousel Container */}
       <div style={{
@@ -278,153 +314,121 @@ export function OptimizationsModal({ data, formatCurrencyFloored }: Optimization
         gap: 12,
       }}>
         {/* Left Arrow */}
-        <button
+        <motion.button
           onClick={handlePrev}
           disabled={!canGoPrev}
           aria-label="Slide précédent"
+          whileHover={canGoPrev ? { scale: 1.08 } : {}}
+          whileTap={canGoPrev ? { scale: 0.94 } : {}}
           style={{
             flexShrink: 0,
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             borderRadius: '50%',
-            border: `1px solid ${canGoPrev ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)'}`,
+            border: `1.5px solid ${canGoPrev ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)'}`,
             background: canGoPrev
-              ? 'rgba(255,255,255,0.08)'
+              ? 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%)'
               : 'rgba(255,255,255,0.02)',
             color: canGoPrev
-              ? 'rgba(255,255,255,0.6)'
-              : 'rgba(255,255,255,0.2)',
+              ? 'rgba(255,255,255,0.7)'
+              : 'rgba(255,255,255,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: canGoPrev ? 'pointer' : 'not-allowed',
             transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (canGoPrev) {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
-              e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = canGoPrev
-              ? 'rgba(255,255,255,0.08)'
-              : 'rgba(255,255,255,0.02)'
-            e.currentTarget.style.color = canGoPrev
-              ? 'rgba(255,255,255,0.6)'
-              : 'rgba(255,255,255,0.2)'
+            backdropFilter: 'blur(8px)',
           }}
         >
-          <ChevronLeft size={18} strokeWidth={2.5} />
-        </button>
+          <ChevronLeft size={20} strokeWidth={2.5} />
+        </motion.button>
 
         {/* Cards Grid */}
         <div style={{
           flex: 1,
           display: 'grid',
           gridTemplateColumns: cardsPerSlide === 1 ? '1fr' : '1fr 1fr',
-          gap: 10,
-          minHeight: 260,
+          gap: 12,
           overflow: 'hidden',
         }}>
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {currentCards.map((row, i) => (
-              <motion.div
-                key={`${currentSlide}-${i}`}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-              >
-                <GaugeCard
-                  row={row}
-                  idx={startIdx + i}
-                  formatCurrencyFloored={formatCurrencyFloored}
-                />
-              </motion.div>
+              <GaugeCard
+                key={`${currentSlide}-${startIdx + i}`}
+                row={row}
+                idx={startIdx + i}
+                formatCurrencyFloored={formatCurrencyFloored}
+                slideIndex={currentSlide}
+              />
             ))}
           </AnimatePresence>
         </div>
 
         {/* Right Arrow */}
-        <button
+        <motion.button
           onClick={handleNext}
           disabled={!canGoNext}
           aria-label="Slide suivant"
+          whileHover={canGoNext ? { scale: 1.08 } : {}}
+          whileTap={canGoNext ? { scale: 0.94 } : {}}
           style={{
             flexShrink: 0,
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             borderRadius: '50%',
-            border: `1px solid ${canGoNext ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)'}`,
+            border: `1.5px solid ${canGoNext ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)'}`,
             background: canGoNext
-              ? 'rgba(255,255,255,0.08)'
+              ? 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%)'
               : 'rgba(255,255,255,0.02)',
             color: canGoNext
-              ? 'rgba(255,255,255,0.6)'
-              : 'rgba(255,255,255,0.2)',
+              ? 'rgba(255,255,255,0.7)'
+              : 'rgba(255,255,255,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: canGoNext ? 'pointer' : 'not-allowed',
             transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (canGoNext) {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
-              e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = canGoNext
-              ? 'rgba(255,255,255,0.08)'
-              : 'rgba(255,255,255,0.02)'
-            e.currentTarget.style.color = canGoNext
-              ? 'rgba(255,255,255,0.6)'
-              : 'rgba(255,255,255,0.2)'
+            backdropFilter: 'blur(8px)',
           }}
         >
-          <ChevronRight size={18} strokeWidth={2.5} />
-        </button>
+          <ChevronRight size={20} strokeWidth={2.5} />
+        </motion.button>
       </div>
 
       {/* Slide Indicators */}
       {totalSlides > 1 && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 6,
-          marginTop: 4,
-        }}>
+        <motion.div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 8,
+            marginTop: 2,
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+        >
           {Array.from({ length: totalSlides }).map((_, i) => (
-            <button
+            <motion.button
               key={i}
               onClick={() => setCurrentSlide(i)}
               aria-label={`Aller au slide ${i + 1}`}
+              whileHover={{ scale: 1.15 }}
+              whileTap={{ scale: 0.9 }}
               style={{
-                width: currentSlide === i ? 8 : 6,
-                height: 6,
+                width: currentSlide === i ? 10 : 7,
+                height: 7,
                 borderRadius: '50%',
                 border: 'none',
                 background: currentSlide === i
-                  ? 'rgba(255,255,255,0.7)'
-                  : 'rgba(255,255,255,0.2)',
+                  ? 'rgba(255,255,255,0.8)'
+                  : 'rgba(255,255,255,0.25)',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (currentSlide !== i) {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.4)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = currentSlide === i
-                  ? 'rgba(255,255,255,0.7)'
-                  : 'rgba(255,255,255,0.2)'
+                transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
             />
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   )
