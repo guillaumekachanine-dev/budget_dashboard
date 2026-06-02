@@ -31,6 +31,7 @@ import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationC
 import { getBudgetLinesForPeriod } from '@/features/budget/api/getBudgetLinesForPeriod'
 import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useAuth } from '@/hooks/useAuth'
+import { useCanonicalPeriod, generateOptimizationPeriodOptions } from '@/lib/period'
 
 type StatsTabId = 'epargne' | 'planning_2026' | 'performance' | 'optimisation'
 type StatsTabConfig = {
@@ -71,39 +72,9 @@ type PlanningProgress = {
   progressionPct: number
 }
 
-type OptimizationPeriodId =
-  | '2026-05'
-  | '2026-06'
-  | '2026-07'
-  | '2026-08'
-  | '2026-09'
-  | '2026-10'
-  | '2026-11'
-  | '2026-12'
-  | '2026-full'
-
-type OptimizationPeriodOption = {
-  id: OptimizationPeriodId
-  label: string
-  shortLabel: string
-  mode: 'month' | 'year'
-}
-
 const PLANNED_SAVINGS_2026 = 9800
-const OPTIMIZATION_YEAR = 2026
 const OPTIMIZATION_ANNUAL_GAIN_MONTHS = 6
 const PLANNED_SAVINGS_PCT_2026 = 17.8
-const OPTIMIZATION_PERIOD_OPTIONS: OptimizationPeriodOption[] = [
-  { id: '2026-05', label: 'Mai 2026', shortLabel: 'Mai 26', mode: 'month' },
-  { id: '2026-06', label: 'Juin 2026', shortLabel: 'Juin 26', mode: 'month' },
-  { id: '2026-07', label: 'Juillet 2026', shortLabel: 'Juil 26', mode: 'month' },
-  { id: '2026-08', label: 'Août 2026', shortLabel: 'Août 26', mode: 'month' },
-  { id: '2026-09', label: 'Septembre 2026', shortLabel: 'Sep 26', mode: 'month' },
-  { id: '2026-10', label: 'Octobre 2026', shortLabel: 'Oct 26', mode: 'month' },
-  { id: '2026-11', label: 'Novembre 2026', shortLabel: 'Nov 26', mode: 'month' },
-  { id: '2026-12', label: 'Décembre 2026', shortLabel: 'Déc 26', mode: 'month' },
-  { id: '2026-full', label: 'année 2026', shortLabel: '2026', mode: 'year' },
-]
 
 function formatKpiCurrency(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'
@@ -444,7 +415,11 @@ function performanceToggleBtnStyle(active: boolean): React.CSSProperties {
 }
 
 export function Epargne() {
-  const currentYear = new Date().getFullYear()
+  const { currentYear, currentMonthKey, lastClosedMonth } = useCanonicalPeriod()
+  const optimizationPeriodOptions = useMemo(
+    () => generateOptimizationPeriodOptions(currentYear, lastClosedMonth),
+    [currentYear, lastClosedMonth],
+  )
   const { user } = useAuth()
   const {
     snapshot,
@@ -455,26 +430,36 @@ export function Epargne() {
     resetSelectedPeriodToDefault,
   } = useStatsReferenceData()
   const annual2026 = useAnnual2026Analysis()
-  const optimizationCapacity = useOptimizationCapacity(OPTIMIZATION_YEAR)
+  const optimizationCapacity = useOptimizationCapacity(currentYear)
   const savingsAnalytics = useSavingsAnalytics(currentYear)
   const savingsEvolution = useSavingsEvolutionFiveYears()
-  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, 2026)
+  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, currentYear)
   const objective2026Details = useSavingsObjective2026Details(user?.id)
 
   const [activeTabId, setActiveTabId] = useState<StatsTabId>('epargne')
   const [planningKpiModal, setPlanningKpiModal] = useState<'ytd' | 'objective' | null>(null)
-  const [optimizationPeriodId, setOptimizationPeriodId] = useState<OptimizationPeriodId>('2026-05')
+  const [optimizationPeriodId, setOptimizationPeriodId] = useState<string>(currentMonthKey)
   const [showTabModal, setShowTabModal] = useState(false)
   const [performanceViewMode, setPerformanceViewMode] = useState<PerformanceViewMode>('performance')
   const hasAppliedDefaultPeriodRef = useRef(false)
+  const hasManualOptimizationPeriodSelection = useRef(false)
+
+  // Quand le mois bascule automatiquement (PWA en veille), resynchronise
+  // la période des Optimisations vers le nouveau mois courant —
+  // uniquement si l'utilisateur n'a pas fait de sélection manuelle.
+  useEffect(() => {
+    if (!hasManualOptimizationPeriodSelection.current) {
+      setOptimizationPeriodId(currentMonthKey)
+    }
+  }, [currentMonthKey])
 
   const activeTab = useMemo(
     () => STATS_TABS.find((tab) => tab.id === activeTabId) ?? STATS_TABS[0],
     [activeTabId],
   )
   const optimizationPeriod = useMemo(
-    () => OPTIMIZATION_PERIOD_OPTIONS.find((option) => option.id === optimizationPeriodId) ?? OPTIMIZATION_PERIOD_OPTIONS[0],
-    [optimizationPeriodId],
+    () => optimizationPeriodOptions.find((option) => option.id === optimizationPeriodId) ?? optimizationPeriodOptions[0]!,
+    [optimizationPeriodId, optimizationPeriodOptions],
   )
   const optimizationSelectedMonth = useMemo<number | null>(() => {
     if (optimizationPeriod.mode !== 'month') return null
@@ -485,11 +470,11 @@ export function Epargne() {
   }, [optimizationPeriod.id, optimizationPeriod.mode])
 
   const { data: optimizationBudgetLines } = useQuery({
-    queryKey: ['optimization-period-budget-lines', OPTIMIZATION_YEAR, optimizationSelectedMonth],
+    queryKey: ['optimization-period-budget-lines', currentYear, optimizationSelectedMonth],
     enabled: optimizationSelectedMonth != null,
     queryFn: async () => {
       if (optimizationSelectedMonth == null) return []
-      const result = await getBudgetLinesForPeriod({ year: OPTIMIZATION_YEAR, month: optimizationSelectedMonth })
+      const result = await getBudgetLinesForPeriod({ year: currentYear, month: optimizationSelectedMonth })
       return result.categoryLines
     },
     staleTime: 1000 * 60 * 10,
@@ -511,7 +496,7 @@ export function Epargne() {
     return byCategory
   }, [optimizationBudgetLines])
   const optimizationBudgetPayloadQuery = useBudgetPagePayload({
-    periodYear: OPTIMIZATION_YEAR,
+    periodYear: currentYear,
     periodMonth: optimizationSelectedMonth ?? 12,
     monthsBack: 6,
   })
@@ -865,12 +850,13 @@ export function Epargne() {
                 <button
                   type="button"
                   onClick={() => {
-                    const currentIdx = OPTIMIZATION_PERIOD_OPTIONS.findIndex((o) => o.id === optimizationPeriodId)
+                    hasManualOptimizationPeriodSelection.current = true
+                    const currentIdx = optimizationPeriodOptions.findIndex((o) => o.id === optimizationPeriodId)
                     if (currentIdx > 0) {
-                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[currentIdx - 1].id)
+                      setOptimizationPeriodId(optimizationPeriodOptions[currentIdx - 1].id)
                     }
                   }}
-                  disabled={optimizationPeriodId === OPTIMIZATION_PERIOD_OPTIONS[0].id}
+                  disabled={optimizationPeriodId === optimizationPeriodOptions[0].id}
                   aria-label="Période précédente"
                   style={{
                     border: 'none',
@@ -880,8 +866,8 @@ export function Epargne() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[0].id ? 'pointer' : 'not-allowed',
-                    opacity: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[0].id ? 1 : 0.5,
+                    cursor: optimizationPeriodId !== optimizationPeriodOptions[0].id ? 'pointer' : 'not-allowed',
+                    opacity: optimizationPeriodId !== optimizationPeriodOptions[0].id ? 1 : 0.5,
                   }}
                 >
                   <span
@@ -912,12 +898,13 @@ export function Epargne() {
                 <button
                   type="button"
                   onClick={() => {
-                    const currentIdx = OPTIMIZATION_PERIOD_OPTIONS.findIndex((o) => o.id === optimizationPeriodId)
-                    if (currentIdx < OPTIMIZATION_PERIOD_OPTIONS.length - 1) {
-                      setOptimizationPeriodId(OPTIMIZATION_PERIOD_OPTIONS[currentIdx + 1].id)
+                    hasManualOptimizationPeriodSelection.current = true
+                    const currentIdx = optimizationPeriodOptions.findIndex((o) => o.id === optimizationPeriodId)
+                    if (currentIdx < optimizationPeriodOptions.length - 1) {
+                      setOptimizationPeriodId(optimizationPeriodOptions[currentIdx + 1].id)
                     }
                   }}
-                  disabled={optimizationPeriodId === OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id}
+                  disabled={optimizationPeriodId === optimizationPeriodOptions[optimizationPeriodOptions.length - 1].id}
                   aria-label="Période suivante"
                   style={{
                     border: 'none',
@@ -927,8 +914,8 @@ export function Epargne() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id ? 'pointer' : 'not-allowed',
-                    opacity: optimizationPeriodId !== OPTIMIZATION_PERIOD_OPTIONS[OPTIMIZATION_PERIOD_OPTIONS.length - 1].id ? 1 : 0.5,
+                    cursor: optimizationPeriodId !== optimizationPeriodOptions[optimizationPeriodOptions.length - 1].id ? 'pointer' : 'not-allowed',
+                    opacity: optimizationPeriodId !== optimizationPeriodOptions[optimizationPeriodOptions.length - 1].id ? 1 : 0.5,
                   }}
                 >
                   <span
@@ -950,7 +937,7 @@ export function Epargne() {
               monthlyBudgetByCategory={optimizationMonthlyBudgetByCategory}
               monthlyActualByCategory={optimizationMonthlyActualByCategory}
               selectedMonth={optimizationSelectedMonth}
-              selectedYear={OPTIMIZATION_YEAR}
+              selectedYear={currentYear}
               annualHorizon={annualHorizon}
             />
           </div>

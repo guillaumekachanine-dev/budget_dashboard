@@ -9,14 +9,15 @@ export interface RevenuSource2026 {
   value: number
 }
 
-async function fetchRevenueSources2026(userId: string): Promise<RevenuSource2026[]> {
+async function fetchRevenueSources2026(userId: string, year: number): Promise<RevenuSource2026[]> {
   const { data, error } = await budgetDb
     .from('v_budget_transactions_enriched')
     .select('mapped_category_name,mapped_parent_category_name,pilotage_amount')
     .eq('user_id', userId)
     .eq('mapped_budget_bucket', 'revenu')
     .gt('pilotage_amount', 0)
-    .gte('transaction_date', '2026-01-01')
+    .gte('transaction_date', `${year}-01-01`)
+    .lte('transaction_date', `${year}-12-31`)
 
   if (error) throw new Error(`useBudgetRevenueSources2026: ${error.message}`)
 
@@ -42,13 +43,14 @@ async function fetchRevenueSources2026(userId: string): Promise<RevenuSource2026
     .map((s, i) => ({ ...s, id: `${s.name}-${i}` }))
 }
 
-export function useBudgetRevenueSources2026() {
+// Nom historique conservé temporairement : le hook est désormais paramétrable par année.
+export function useBudgetRevenueSources2026(year: number) {
   const { user, loading: authLoading } = useAuth()
   const userId = user?.id ?? null
 
   const query = useQuery({
-    queryKey: ['budget-revenue-sources-2026', userId],
-    queryFn: () => fetchRevenueSources2026(userId!),
+    queryKey: ['budget-revenue-sources-2026', userId, year],
+    queryFn: () => fetchRevenueSources2026(userId!, year),
     enabled: !!userId && !authLoading,
     staleTime: 5 * 60_000,
   })

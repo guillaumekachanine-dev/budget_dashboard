@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useCanonicalPeriod, generateMonthMilestones } from '@/lib/period'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Pencil, X } from 'lucide-react'
 import { StatsSection } from '@/features/stats/components/ui'
@@ -60,28 +61,6 @@ type ForwardCommitmentDisplay = {
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-
-function getCurrentMonthId(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
-const CURRENT_MONTH_ID = getCurrentMonthId()
-
-const MONTH_MILESTONES_2026: SavingsMonthMilestone[] = [
-  { id: '2026-01', shortLabel: 'Jan', fullLabel: 'Janvier 2026' },
-  { id: '2026-02', shortLabel: 'Fév', fullLabel: 'Février 2026' },
-  { id: '2026-03', shortLabel: 'Mar', fullLabel: 'Mars 2026' },
-  { id: '2026-04', shortLabel: 'Avr', fullLabel: 'Avril 2026' },
-  { id: '2026-05', shortLabel: 'Mai', fullLabel: 'Mai 2026' },
-  { id: '2026-06', shortLabel: 'Juin', fullLabel: 'Juin 2026' },
-  { id: '2026-07', shortLabel: 'Juil', fullLabel: 'Juillet 2026' },
-  { id: '2026-08', shortLabel: 'Août', fullLabel: 'Août 2026' },
-  { id: '2026-09', shortLabel: 'Sep', fullLabel: 'Septembre 2026' },
-  { id: '2026-10', shortLabel: 'Oct', fullLabel: 'Octobre 2026' },
-  { id: '2026-11', shortLabel: 'Nov', fullLabel: 'Novembre 2026' },
-  { id: '2026-12', shortLabel: 'Déc', fullLabel: 'Décembre 2026' },
-]
 
 /** Données placeholder — à brancher sur Supabase */
 const PLANNING_DATA: Record<string, MonthPlanningData> = {
@@ -189,8 +168,8 @@ const PLANNING_DATA: Record<string, MonthPlanningData> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isPastMonth(id: string): boolean {
-  return id < CURRENT_MONTH_ID
+function isPastMonth(id: string, currentMonthKey: string): boolean {
+  return id < currentMonthKey
 }
 
 /** '2026-05' → 5 */
@@ -415,6 +394,7 @@ function PlanningModal({
   annualGlobalObjective,
   onSave,
   forwardCommitments,
+  currentMonthKey,
 }: {
   milestone: SavingsMonthMilestone
   onClose: () => void
@@ -426,9 +406,10 @@ function PlanningModal({
   annualGlobalObjective: number
   onSave: (nextData: MonthPlanningData) => void
   forwardCommitments: ForwardCommitmentDisplay[]
+  currentMonthKey: string
 }) {
   const data = monthData
-  const past = isPastMonth(milestone.id)
+  const past = isPastMonth(milestone.id, currentMonthKey)
   const [milestoneYear, milestoneMonth] = milestone.id.split('-').map(Number)
   const { data: budgetPayload } = useBudgetPagePayload({
     periodYear: milestoneYear,
@@ -1005,6 +986,8 @@ function PlanningModal({
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function SavingsPlanning2026Section() {
+  const { currentYear, currentMonthKey } = useCanonicalPeriod()
+
   const [activeMilestone, setActiveMilestone] = useState<SavingsMonthMilestone | null>(null)
   const [planningDataByMonth, setPlanningDataByMonth] = useState<Record<string, MonthPlanningData>>(
     () => Object.fromEntries(
@@ -1018,17 +1001,19 @@ export function SavingsPlanning2026Section() {
     ),
   )
 
-  const { data: analyticsData } = useSavingsAnalytics(2026)
-  const { data: forecastRows } = useMonthlyBudgetForecast(2026)
+  const monthMilestones = useMemo(() => generateMonthMilestones(currentYear), [currentYear])
+
+  const { data: analyticsData } = useSavingsAnalytics(currentYear)
+  const { data: forecastRows } = useMonthlyBudgetForecast(currentYear)
   const { user } = useAuth()
   const { data: accounts = [] } = useAccounts()
-  const { byMonth: savingsActualsByMonth } = useSavingsActualsByMonth(user?.id, 2026)
-  const { data: persistedPlanningRows = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
+  const { byMonth: savingsActualsByMonth } = useSavingsActualsByMonth(user?.id, currentYear)
+  const { data: persistedPlanningRows = [] } = useSavingsPlanningMonthDetails(user?.id, currentYear)
   const upsertPlanningMonthDetails = useUpsertSavingsPlanningMonthDetails()
   const { data: upcomingPlannedOperations = [] } = usePlannedOperationsForFlow({
     userId: user?.id,
-    startDate: '2026-01-01',
-    endDate: '2026-12-31',
+    startDate: `${currentYear}-01-01`,
+    endDate: `${currentYear}-12-31`,
     includePast: false,
     includeFuture: true,
     flowType: 'expense',
@@ -1199,9 +1184,9 @@ export function SavingsPlanning2026Section() {
               }}
             />
 
-            {MONTH_MILESTONES_2026.map((month, index) => {
+            {monthMilestones.map((month, index) => {
               const isLeftSide = index % 2 === 0
-              const past       = isPastMonth(month.id)
+              const past       = isPastMonth(month.id, currentMonthKey)
               const monthNum   = monthNumFromId(month.id)
               const metric     = metricsMap.get(monthNum)
               const forecast   = forecastMap.get(monthNum)
@@ -1287,7 +1272,7 @@ export function SavingsPlanning2026Section() {
                     alignItems: 'center',
                     gap: 3,
                   }}>
-                    {month.fullLabel.replace(' 2026', '')}
+                    {month.fullLabel.replace(` ${currentYear}`, '')}
                     {hasForwardCommitments && (
                       <span
                         aria-label="Engagements futurs"
@@ -1460,6 +1445,7 @@ export function SavingsPlanning2026Section() {
                 accountNames={accountNames}
                 annualGlobalObjective={annualGlobalObjective}
                 forwardCommitments={forwardCommitmentsByMonth.get(activeMilestone.id) ?? []}
+                currentMonthKey={currentMonthKey}
                 onSave={(nextData) => {
                   const monthId = activeMilestone.id
                   setPlanningDataByMonth((prev) => ({

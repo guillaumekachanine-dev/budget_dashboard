@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { QK, STALE } from '@/lib/queryKeys'
+import { getCanonicalPeriod } from '@/lib/period'
 
 export type SavingsPlanningMonthDetailsRow = {
   id: string
@@ -56,7 +57,7 @@ function normalize(row: Record<string, unknown>): SavingsPlanningMonthDetailsRow
   }
 }
 
-export function useSavingsPlanningMonthDetails(userId?: string, year = 2026) {
+export function useSavingsPlanningMonthDetails(userId?: string, year = getCanonicalPeriod().currentYear) {
   return useQuery({
     queryKey: [QK.SAVINGS, 'planning-month-details', year, userId],
     enabled: Boolean(userId),
@@ -93,9 +94,13 @@ export function useUpsertSavingsPlanningMonthDetails() {
       return normalize(data as Record<string, unknown>)
     },
     onSuccess: (savedRow) => {
+      // Invalide la query précise (clé complète) pour forcer le refetch immédiat.
       void queryClient.invalidateQueries({
         queryKey: [QK.SAVINGS, 'planning-month-details', savedRow.period_year, savedRow.user_id],
       })
+      // Invalide les caches dérivés qui agrègent les données de planning.
+      void queryClient.invalidateQueries({ queryKey: [QK.SAVINGS_ANALYTICS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.SAVINGS_CURRENT_SUMMARY] })
     },
   })
 }

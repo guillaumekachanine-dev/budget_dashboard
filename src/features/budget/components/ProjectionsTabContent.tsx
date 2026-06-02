@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCanonicalPeriod } from '@/lib/period'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDownToLine, X } from 'lucide-react'
@@ -27,13 +28,14 @@ import {
   getRevenueScenario1ProjectedAnnualTotal,
   getRevenueScenario2ProjectedAnnualTotal,
   getRevenueScenario2ProjectedMonthAmount,
+  type RevenueScenarioConfig,
 } from '@/features/projections/utils/revenueScenarioProjection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AnnualDisplayMode = 'depenses' | 'revenus'
 type ProjectionPeriodMode = 'annual' | 'month'
-type ProjectionPeriodValue = 'year-2026' | '2026-06' | '2026-07' | '2026-08' | '2026-09' | '2026-10' | '2026-11' | '2026-12'
+type ProjectionPeriodValue = string
 type MonthlyChartView = 'curves' | 'table'
 type ExpenseSlide = 0 | 1
 type ExpenseKpiModalKey = 'ytd' | 'gap' | 'projection' | null
@@ -70,18 +72,9 @@ const REV_GREENS = ['#0C5D39', '#167A4B', '#1F955B', '#2DB26E', '#4BC684', '#6FD
 const SCENARIO_1_COLOR = '#D58A83'
 const SCENARIO_2_COLOR = '#15A9A1'
 const MONTHS_FR_FULL_PROJ = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-const MONTHLY_PROJECTION_MONTHS_2026 = [6, 7, 8, 9, 10, 11, 12] as const
 const PROJECTIONS_GRAPH_SECTION_HEIGHT = 354
 // Total height of the chart card (padding×2=24 + chart=354 + toggle-margin=8 + toggle=38)
 const PROJECTIONS_GRAPH_CARD_HEIGHT = 424
-const MIN_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[0]
-const MAX_PROJECTION_MONTH_2026 = MONTHLY_PROJECTION_MONTHS_2026[MONTHLY_PROJECTION_MONTHS_2026.length - 1]
-
-function getDefaultProjectionPeriodValue(): ProjectionPeriodValue {
-  const currentMonth = new Date().getMonth() + 1
-  const clampedMonth = Math.max(MIN_PROJECTION_MONTH_2026, Math.min(MAX_PROJECTION_MONTH_2026, currentMonth))
-  return `2026-${String(clampedMonth).padStart(2, '0')}` as ProjectionPeriodValue
-}
 
 /** Map known revenue-source names to semantic colours. Falls back to the green palette. */
 function resolveSourceColor(name: string, fallbackIndex: number): string {
@@ -141,6 +134,8 @@ interface RevenueKpiModalConfig {
   totalLabel: string
   totalValue: string
   chartPoints?: ScenarioMonthPoint[]
+  guaranteedMonthlyIncome?: number
+  salaryAndPrimeMonthlyIncome?: number
 }
 
 function capitalizeFirst(text: string): string {
@@ -269,9 +264,13 @@ function RevenueTransactionsYtdModal({
 function ScenarioRevenueChart({
   points,
   accentColor,
+  guaranteedMonthlyIncome,
+  salaryAndPrimeMonthlyIncome,
 }: {
   points: ScenarioMonthPoint[]
   accentColor: string
+  guaranteedMonthlyIncome: number
+  salaryAndPrimeMonthlyIncome: number
 }) {
   const gradId = `srev-act-${accentColor.replace('#', '')}`
   const gradProjId = `srev-proj-${accentColor.replace('#', '')}`
@@ -303,8 +302,8 @@ function ScenarioRevenueChart({
           tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
           width={36}
         />
-        <ReferenceLine y={3338} stroke="var(--neutral-400)" strokeDasharray="4 3" strokeWidth={1} />
-        <ReferenceLine y={6500} stroke={accentColor} strokeDasharray="4 3" strokeWidth={1} opacity={0.55} />
+        <ReferenceLine y={guaranteedMonthlyIncome} stroke="var(--neutral-400)" strokeDasharray="4 3" strokeWidth={1} />
+        <ReferenceLine y={salaryAndPrimeMonthlyIncome} stroke={accentColor} strokeDasharray="4 3" strokeWidth={1} opacity={0.55} />
         <Area
           type="monotone"
           dataKey="actual"
@@ -405,7 +404,12 @@ function RevenueKpiDetailModal({
 
           {config.chartPoints && config.chartPoints.length > 0 ? (
             <div style={{ margin: '4px 0 2px', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-              <ScenarioRevenueChart points={config.chartPoints} accentColor={config.accentColor} />
+              <ScenarioRevenueChart
+                points={config.chartPoints}
+                accentColor={config.accentColor}
+                guaranteedMonthlyIncome={config.guaranteedMonthlyIncome ?? REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME}
+                salaryAndPrimeMonthlyIncome={config.salaryAndPrimeMonthlyIncome ?? REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME}
+              />
             </div>
           ) : null}
 
@@ -446,22 +450,35 @@ function RevenueKpiDetailModal({
 function RevenueSection2026({
   revenueData,
   ytdMonths,
+  year,
 }: {
   revenueData: BudgetRevenueAnalytics | null
   ytdMonths: number
+  year: number
 }) {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [showRevenueTransactionsModal, setShowRevenueTransactionsModal] = useState(false)
   const [activeRevenueKpiModal, setActiveRevenueKpiModal] = useState<RevenueKpiModalKey>(null)
   const [revenueDisplayMode, setRevenueDisplayMode] = useState<RevenueDisplayMode>('real_ytd')
   const [showRevenueDisplayPicker, setShowRevenueDisplayPicker] = useState(false)
-  const { data: rawSources } = useBudgetRevenueSources2026()
+  const { data: rawSources } = useBudgetRevenueSources2026(year)
 
-  const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
+  const revenueScenarioConfig: RevenueScenarioConfig = {
+    guaranteedMonthlyIncome: REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME,
+    salaryAndPrimeMonthlyIncome: REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME,
+    unemploymentMonths: REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
+    salaryMonths: REVENUE_SCENARIO_2_SALARY_MONTHS,
+  }
+  const guaranteedMonthlyIncome = revenueScenarioConfig.guaranteedMonthlyIncome ?? REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME
+  const salaryAndPrimeMonthlyIncome = revenueScenarioConfig.salaryAndPrimeMonthlyIncome ?? REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME
+  const unemploymentMonths = revenueScenarioConfig.unemploymentMonths ?? REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS
+  const salaryMonths = revenueScenarioConfig.salaryMonths ?? REVENUE_SCENARIO_2_SALARY_MONTHS
+
+  const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith(`${year}-`)) ?? []
   const remainingMonths = Math.max(0, 12 - ytdMonths)
   const ytdRevenue2026 = series2026.reduce((sum, row) => sum + Number(row.revenue_amount ?? 0), 0)
-  const projectedScenario1 = getRevenueScenario1ProjectedAnnualTotal(ytdRevenue2026, ytdMonths)
-  const projectedScenario2 = getRevenueScenario2ProjectedAnnualTotal(ytdRevenue2026)
+  const projectedScenario1 = getRevenueScenario1ProjectedAnnualTotal(ytdRevenue2026, ytdMonths, revenueScenarioConfig)
+  const projectedScenario2 = getRevenueScenario2ProjectedAnnualTotal(ytdRevenue2026, revenueScenarioConfig)
   const assuredStartMonthLabel = MONTH_LABELS_SHORT[Math.max(0, Math.min(11, ytdMonths))] ?? 'juin'
   const assuredPeriodLabel = `${assuredStartMonthLabel.toLowerCase()}-déc. (${remainingMonths} mois)`
   // ── Donut data (2026 only) ────────────────────────────────────────────────
@@ -472,7 +489,7 @@ function RevenueSection2026({
       addProjectedAmountToSources(
         baseSources,
         ['chômage', 'chomage', 'indemnité', 'indemnite'],
-        REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME * remainingMonths,
+        guaranteedMonthlyIncome * remainingMonths,
         'Indemnités chômage',
       )
     }
@@ -481,13 +498,13 @@ function RevenueSection2026({
       addProjectedAmountToSources(
         baseSources,
         ['chômage', 'chomage', 'indemnité', 'indemnite'],
-        REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME * REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
+        guaranteedMonthlyIncome * unemploymentMonths,
         'Indemnités chômage',
       )
       addProjectedAmountToSources(
         baseSources,
         ['salaire', 'prime'],
-        REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME * REVENUE_SCENARIO_2_SALARY_MONTHS,
+        salaryAndPrimeMonthlyIncome * salaryMonths,
         'Salaire + primes',
       )
     }
@@ -527,7 +544,7 @@ function RevenueSection2026({
   const allTransactions2026 = useMemo(
     () =>
       (revenueData?.allTransactions ?? [])
-        .filter((tx) => tx.transaction_date.startsWith('2026-'))
+        .filter((tx) => tx.transaction_date.startsWith(`${year}-`))
         .sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)),
     [revenueData],
   )
@@ -585,20 +602,22 @@ function RevenueSection2026({
         const seriesRow = series2026.find((r) => parseInt(r.month_start.slice(5, 7), 10) === month)
         const actual = seriesRow ? Number(seriesRow.revenue_amount ?? 0) : null
         if (month < ytdMonths) return { monthLabel, actual, projected: null }
-        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME }
-        return { monthLabel, actual: null, projected: REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME }
+        if (month === ytdMonths) return { monthLabel, actual, projected: actual ?? guaranteedMonthlyIncome }
+        return { monthLabel, actual: null, projected: guaranteedMonthlyIncome }
       })
       return {
         title: 'Scenario #1 : chômage full year',
         accentColor: SCENARIO_1_COLOR,
         lines: [
           { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
-          { label: 'revenus assurés', value: `${fmt(REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME)}/mois (Chômage)` },
+          { label: 'revenus assurés', value: `${fmt(guaranteedMonthlyIncome)}/mois (Chômage)` },
           { label: 'période concernée', value: assuredPeriodLabel },
         ],
         totalLabel: 'Projection #1',
         totalValue: fmt(projectedScenario1),
         chartPoints,
+        guaranteedMonthlyIncome,
+        salaryAndPrimeMonthlyIncome,
       }
     }
 
@@ -614,6 +633,7 @@ function RevenueSection2026({
           month,
           ytdMonths,
           actualMonthAmount: actual,
+          config: revenueScenarioConfig,
         }),
       }
     })
@@ -622,12 +642,14 @@ function RevenueSection2026({
       accentColor: SCENARIO_2_COLOR,
       lines: [
         { label: 'revenus 2026 YTD', value: fmt(ytdRevenue2026) },
-        { label: 'indemnités chômage', value: `${fmt(REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME)} × ${REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS}(juin-sept.)` },
-        { label: 'salaire + primes', value: `${fmt(REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME)} × ${REVENUE_SCENARIO_2_SALARY_MONTHS} (oct.-déc.)` },
+        { label: 'indemnités chômage', value: `${fmt(guaranteedMonthlyIncome)} × ${unemploymentMonths}(juin-sept.)` },
+        { label: 'salaire + primes', value: `${fmt(salaryAndPrimeMonthlyIncome)} × ${salaryMonths} (oct.-déc.)` },
       ],
       totalLabel: 'Projection #2',
       totalValue: fmt(projectedScenario2),
       chartPoints: chartPoints2,
+      guaranteedMonthlyIncome,
+      salaryAndPrimeMonthlyIncome,
     }
   }, [
     activeRevenueKpiModal,
@@ -1599,54 +1621,68 @@ function ExpenseSection2026({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ProjectionsTabContent() {
+  const period = useCanonicalPeriod()
+  const currentYear = period.currentYear
+  const currentMonth = period.currentMonth
+
   const [annualMode, setAnnualMode] = useState<AnnualDisplayMode>('depenses')
   const [showMonthlyExpenses, setShowMonthlyExpenses] = useState(true)
   const [showMonthlyCashflow, setShowMonthlyCashflow] = useState(true)
   const [monthlyChartView, setMonthlyChartView] = useState<MonthlyChartView>('curves')
   const [selectedTrajectoryDay, setSelectedTrajectoryDay] = useState<number | null>(null)
   const [selectedTrajectoryChartDay, setSelectedTrajectoryChartDay] = useState<number | null>(null)
-  const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>(() => getDefaultProjectionPeriodValue())
+  const [selectedPeriod, setSelectedPeriod] = useState<ProjectionPeriodValue>(
+    () => `${currentYear}-${String(Math.min(currentMonth, 12)).padStart(2, '0')}`,
+  )
   const [showPeriodModal, setShowPeriodModal] = useState(false)
   const [showReservedAmountDetailModal, setShowReservedAmountDetailModal] = useState(false)
   const [showLiquidityDetailModal, setShowLiquidityDetailModal] = useState(false)
   const trajectoryChartContainerRef = useRef<HTMLDivElement | null>(null)
 
+  // ── Mois de projection dynamiques : du mois courant à décembre ──────────────
+  const projectionMonths = useMemo(
+    () => Array.from({ length: 12 - currentMonth + 1 }, (_, i) => currentMonth + i),
+    [currentMonth],
+  )
+  const minProjectionMonth = projectionMonths[0] ?? currentMonth
+  const maxProjectionMonth = projectionMonths[projectionMonths.length - 1] ?? 12
+
   const { user } = useAuth()
   const { summary } = useAnnual2026Analysis()
   const { data: revenueData } = useBudgetRevenueAnalytics()
-  const { data: projection } = useAnnualProjectionOverview2026(2026)
-  const { data: savingsPlanningMonthDetails = [] } = useSavingsPlanningMonthDetails(user?.id, 2026)
+  const { data: projection } = useAnnualProjectionOverview2026(currentYear)
+  const { data: savingsPlanningMonthDetails = [] } = useSavingsPlanningMonthDetails(user?.id, currentYear)
   const { data: monthlyMetrics = [] } = useQuery({
-    queryKey: [QK.BUDGET_METRICS_YEAR_DATASET, 2026],
-    queryFn: () => getMonthlyMetrics(2026),
+    queryKey: [QK.BUDGET_METRICS_YEAR_DATASET, currentYear],
+    queryFn: () => getMonthlyMetrics(currentYear),
     staleTime: STALE.ANALYTICS,
   })
   const { data: monthlyExpenseBudgets2026 = [] } = useQuery({
-    queryKey: ['projection-expense-budgets-2026'],
+    queryKey: ['projection-expense-budgets', user?.id ?? 'anon', currentYear],
     staleTime: STALE.ANALYTICS,
     queryFn: async (): Promise<MonthlyExpenseBudgetRow[]> => {
       const { data, error } = await budgetDb
         .from('v_monthly_bucket_budgets_clean' as never)
         .select('period_month, budget_bucket, budget_amount')
-        .eq('period_year', 2026)
+        .eq('period_year', currentYear)
         .in('budget_bucket', [...EXPENSE_BUCKETS])
         .order('period_month', { ascending: true })
 
-      if (error) throw new Error(`projection-expense-budgets-2026 failed: ${error.message}`)
+      if (error) throw new Error(`projection-expense-budgets failed: ${error.message}`)
       return (data ?? []) as MonthlyExpenseBudgetRow[]
     },
   })
   const periodOptions = useMemo<Array<{ value: ProjectionPeriodValue; label: string; mode: ProjectionPeriodMode; month: number | null }>>(
     () => [
-      { value: 'year-2026', label: 'Année 2026', mode: 'annual', month: null },
-      ...MONTHLY_PROJECTION_MONTHS_2026.map((month) => ({
-        value: `2026-${String(month).padStart(2, '0')}` as ProjectionPeriodValue,
-        label: `${MONTHS_FR_FULL_PROJ[month - 1]} 2026`,
+      { value: `year-${currentYear}`, label: `Année ${currentYear}`, mode: 'annual', month: null },
+      ...projectionMonths.map((month) => ({
+        value: `${currentYear}-${String(month).padStart(2, '0')}`,
+        label: `${MONTHS_FR_FULL_PROJ[month - 1]} ${currentYear}`,
         mode: 'month' as const,
         month,
       })),
     ],
-    [],
+    [currentYear, projectionMonths],
   )
   const selectedPeriodOption = useMemo(
     () => periodOptions.find((option) => option.value === selectedPeriod) ?? periodOptions[0],
@@ -1657,14 +1693,14 @@ export function ProjectionsTabContent() {
   const selectedProjectionMonthDateRange = useMemo(() => {
     if (selectedProjectionMonth == null) return null
     const month = String(selectedProjectionMonth).padStart(2, '0')
-    const monthEndDate = new Date(2026, selectedProjectionMonth, 0).getDate()
+    const monthEndDate = new Date(currentYear, selectedProjectionMonth, 0).getDate()
     return {
-      startDate: `2026-${month}-01`,
-      endDate: `2026-${month}-${String(monthEndDate).padStart(2, '0')}`,
+      startDate: `${currentYear}-${month}-01`,
+      endDate: `${currentYear}-${month}-${String(monthEndDate).padStart(2, '0')}`,
     }
-  }, [selectedProjectionMonth])
+  }, [currentYear, selectedProjectionMonth])
   const { data: monthlyAdditionalCommitmentOps = [] } = useQuery({
-    queryKey: ['projection-month-additional-commitments', user?.id ?? 'anon', selectedProjectionMonth ?? 0],
+    queryKey: ['projection-month-additional-commitments', user?.id ?? 'anon', currentYear, selectedProjectionMonth ?? 0],
     enabled: Boolean(user?.id) && projectionPeriodMode === 'month' && selectedProjectionMonthDateRange != null,
     staleTime: STALE.ANALYTICS,
     queryFn: async (): Promise<AdditionalCommitmentOperationRow[]> => {
@@ -1688,28 +1724,33 @@ export function ProjectionsTabContent() {
     },
   })
 
-  const now = new Date()
-  const currentMonth = now.getMonth() + 1
   const ytdMonths = summary?.ytdMonths ?? Math.min(currentMonth, 12)
-  const monthlyRevenueSeries2026 = revenueData?.monthlySeries.filter((row) => row.month_start.startsWith('2026-')) ?? []
+  const monthlyRevenueSeries2026 = revenueData?.monthlySeries.filter((row) => row.month_start.startsWith(`${currentYear}-`)) ?? []
   const selectedMonthActualRevenue = useMemo(() => {
     if (!selectedProjectionMonth) return 0
     const match = monthlyRevenueSeries2026.find((row) => Number(row.month_start.slice(5, 7)) === selectedProjectionMonth)
     return Number(match?.revenue_amount ?? 0)
   }, [monthlyRevenueSeries2026, selectedProjectionMonth])
+  const mainRevenueScenarioConfig: RevenueScenarioConfig = {
+    guaranteedMonthlyIncome: REVENUE_SCENARIO_GUARANTEED_MONTHLY_INCOME,
+    salaryAndPrimeMonthlyIncome: REVENUE_SCENARIO_2_SALARY_AND_PRIME_MONTHLY_INCOME,
+    unemploymentMonths: REVENUE_SCENARIO_2_UNEMPLOYMENT_MONTHS,
+    salaryMonths: REVENUE_SCENARIO_2_SALARY_MONTHS,
+  }
   const monthlyScenario2ProjectedIncomeAmount = useMemo(
     () => selectedProjectionMonth
       ? getRevenueScenario2ProjectedMonthAmount({
         month: selectedProjectionMonth,
         ytdMonths,
         actualMonthAmount: selectedMonthActualRevenue,
+        config: mainRevenueScenarioConfig,
       })
       : 0,
     [selectedMonthActualRevenue, selectedProjectionMonth, ytdMonths],
   )
   const { data: monthlyTrajectoryData, isLoading: isMonthlyTrajectoryLoading } = useMonthlyTrajectoryData({
-    year: 2026,
-    month: selectedProjectionMonth ?? 6,
+    year: currentYear,
+    month: selectedProjectionMonth ?? currentMonth,
     includeFuturePlanned: true,
     projectedMonthlyIncomeAmount: monthlyScenario2ProjectedIncomeAmount,
     projectedIncomeDay: REVENUE_SCENARIO_DEFAULT_INCOME_DAY,
@@ -1753,7 +1794,7 @@ export function ProjectionsTabContent() {
       const isClosedMonth = month <= completedMonths
       return {
         month,
-        monthLabel: `${MONTHS_FR_FULL_PROJ[month - 1]} 2026`,
+        monthLabel: `${MONTHS_FR_FULL_PROJ[month - 1]} ${currentYear}`,
         sourceLabel: isClosedMonth ? 'réel' : 'budget',
         amount: isClosedMonth ? realAmount : futureBudgetAmount,
       }
@@ -1805,8 +1846,8 @@ export function ProjectionsTabContent() {
   // projected income minus protected allocations.
   // It does not subtract actual variable spending.
   const monthlyAvailableLiquidityAmount = monthlyScenario2ProjectedIncomeAmount - monthlyReservedAmount
-  const canGoToPreviousProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth > MIN_PROJECTION_MONTH_2026
-  const canGoToNextProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth < MAX_PROJECTION_MONTH_2026
+  const canGoToPreviousProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth > minProjectionMonth
+  const canGoToNextProjectionMonth = selectedProjectionMonth != null && selectedProjectionMonth < maxProjectionMonth
   const monthlyTrajectoryRows = monthlyTrajectoryData?.tableRows ?? []
   const monthlyTrajectoryIncomeAmount = Number(monthlyTrajectoryData?.monthlyProjectedIncomeAmount ?? 0)
   const monthlyTrajectoryIncomeDay = monthlyTrajectoryData?.incomeDay ?? REVENUE_SCENARIO_DEFAULT_INCOME_DAY
@@ -1832,7 +1873,7 @@ export function ProjectionsTabContent() {
     const monthLabel = selectedProjectionMonth != null
       ? MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]
       : selectedTrajectoryChartRow.forecast_date.slice(5, 7)
-    return `${selectedTrajectoryChartRow.day_of_month} ${monthLabel.toLowerCase()} 2026`
+    return `${selectedTrajectoryChartRow.day_of_month} ${monthLabel.toLowerCase()} ${currentYear}`
   }, [selectedProjectionMonth, selectedTrajectoryChartRow])
   const selectedTrajectoryChartHasProjectedIncome = selectedTrajectoryChartDay != null
     && monthlyScenario2ProjectedIncomeAmount > 0
@@ -1867,8 +1908,8 @@ export function ProjectionsTabContent() {
   const navigateProjectionMonth = (delta: -1 | 1) => {
     if (selectedProjectionMonth == null) return
     const targetMonth = selectedProjectionMonth + delta
-    if (targetMonth < MIN_PROJECTION_MONTH_2026 || targetMonth > MAX_PROJECTION_MONTH_2026) return
-    setSelectedPeriod(`2026-${String(targetMonth).padStart(2, '0')}` as ProjectionPeriodValue)
+    if (targetMonth < minProjectionMonth || targetMonth > maxProjectionMonth) return
+    setSelectedPeriod(`${currentYear}-${String(targetMonth).padStart(2, '0')}`)
   }
 
   useEffect(() => {
@@ -1966,14 +2007,14 @@ export function ProjectionsTabContent() {
               <div style={{ marginBottom: 'var(--space-3)' }}>
                 <button
                   type="button"
-                    onClick={() => { setSelectedPeriod('year-2026'); setShowPeriodModal(false) }}
+                  onClick={() => { setSelectedPeriod(`year-${currentYear}`); setShowPeriodModal(false) }}
                   style={{
                     width: '100%',
                     padding: '8px var(--space-3)',
-                    border: selectedPeriod === 'year-2026' ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
+                    border: selectedPeriod === `year-${currentYear}` ? '2px solid var(--primary-600)' : '1px solid var(--neutral-200)',
                     borderRadius: 'var(--radius-md)',
-                    background: selectedPeriod === 'year-2026' ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
-                    color: selectedPeriod === 'year-2026' ? 'var(--primary-600)' : 'var(--neutral-700)',
+                    background: selectedPeriod === `year-${currentYear}` ? 'color-mix(in oklab, var(--primary-600) 10%, var(--neutral-0) 90%)' : 'var(--neutral-50)',
+                    color: selectedPeriod === `year-${currentYear}` ? 'var(--primary-600)' : 'var(--neutral-700)',
                     fontSize: 'var(--font-size-sm)',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -1981,13 +2022,13 @@ export function ProjectionsTabContent() {
                     textAlign: 'center',
                   } as React.CSSProperties}
                 >
-                  2026 — Année complète
+                  {currentYear} — Année complète
                 </button>
               </div>
-              {/* Month grid: Juin → Déc. 2026 */}
+              {/* Month grid: mois courant → Déc. */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-                {MONTHLY_PROJECTION_MONTHS_2026.map((month) => {
-                  const monthValue = `2026-${String(month).padStart(2, '0')}` as ProjectionPeriodValue
+                {projectionMonths.map((month) => {
+                  const monthValue = `${currentYear}-${String(month).padStart(2, '0')}`
                   const isSelected = selectedPeriod === monthValue
                   return (
                     <button
@@ -2143,7 +2184,7 @@ export function ProjectionsTabContent() {
           <>
             {/* ── Revenue 2026 KPIs + histogram — revenus mode only ── */}
             {annualMode === 'revenus' && (
-              <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} />
+              <RevenueSection2026 revenueData={revenueData} ytdMonths={ytdMonths} year={currentYear} />
             )}
             {annualMode === 'depenses' && (
               <ExpenseSection2026
@@ -2212,7 +2253,7 @@ export function ProjectionsTabContent() {
                   </div>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)' }}>
-                  {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} 2026` : '—'}
+                  {selectedProjectionMonth != null ? `${MONTHS_FR_FULL_PROJ[selectedProjectionMonth - 1]} ${currentYear}` : '—'}
                 </p>
               </div>
 
