@@ -1,20 +1,19 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
 import { Plus, Pencil, ArrowRightLeft, ReceiptText, X, Link } from 'lucide-react'
 import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenses } from '@/features/voyages/hooks/useTripExpenses'
+import { useTripExpenseBars } from '@/features/voyages/hooks/useTripExpenseBars'
 import { useMatchCandidates } from '@/features/voyages/hooks/useMatchCandidates'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
 import { PlanVoyageModal } from '@/features/voyages/components/PlanVoyageModal'
+import { TripExpenseBarsSection } from '@/features/voyages/components/TripExpenseBarsSection'
 import { formatCurrencyFloored } from '@/lib/utils'
 import { AmbianceBgScene, tripAmbianceBackground } from '@/features/voyages/components/AmbianceBgScene'
 import { useVoyagesData } from '@/features/voyages/hooks/useVoyagesData'
 import { useTransaction } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
-import { useAuth } from '@/hooks/useAuth'
-import { budgetDb } from '@/lib/supabaseBudget'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { TripTransactionRattachementModal } from '@/features/voyages/components/TripTransactionRattachementModal'
 
@@ -46,14 +45,6 @@ function stripVoyageSuffix(name: string): string {
   return name.replace(/\s+voyage$/i, '').trim()
 }
 
-function normalizeCategoryLabel(name: string): string {
-  return stripVoyageSuffix(name)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-}
-
 interface TripDetailsModalProps {
   tripId: string | null
   isOpen: boolean
@@ -61,7 +52,6 @@ interface TripDetailsModalProps {
 }
 
 export function TripDetailsModal({ tripId, isOpen, onClose }: TripDetailsModalProps) {
-  const { user } = useAuth()
   const { allTrips } = useTripCockpit()
 
   // Find the trip
@@ -92,114 +82,12 @@ export function TripDetailsModal({ tripId, isOpen, onClose }: TripDetailsModalPr
 
   const { data: categories = [] } = useCategories()
   const { data: activeTransaction } = useTransaction(selectedTransactionId)
-  const categoryNameById = useMemo(
-    () => new Map(categories.map((category) => [category.id, stripVoyageSuffix(category.name)])),
-    [categories],
-  )
-
-  // Données pour la modale Moyen/mois (sous-catégories voyage de l'année)
   const { tripsWithStats } = useVoyagesData(selectedYear)
   const selectedTripWithStats = useMemo(
     () => tripsWithStats.find((item) => item.trip.id === tripId) ?? null,
     [tripId, tripsWithStats],
   )
-
-  const { data: plannedCategoryRows = [] } = useQuery({
-    queryKey: ['voyages-future-planned-category-rows', user?.id ?? null, tripId, selectedTrip?.name ?? null, selectedTrip?.start_date ?? null, selectedTrip?.end_date ?? null],
-    enabled: Boolean(
-      user?.id
-      && selectedTrip?.trip_status === 'future'
-      && selectedTrip?.name
-      && selectedTrip?.start_date
-      && selectedTrip?.end_date,
-    ),
-    queryFn: async () => {
-      const { data, error } = await budgetDb
-        .from('planned_operations')
-        .select('category_id, planned_amount')
-        .eq('user_id', user!.id)
-        .eq('flow_type', 'expense')
-        .eq('label', selectedTrip!.name)
-        .gte('planned_date', selectedTrip!.start_date)
-        .lte('planned_date', selectedTrip!.end_date)
-      if (error) throw error
-      return (data ?? []) as Array<{ category_id: string | null; planned_amount: number | null }>
-    },
-    staleTime: 60_000,
-  })
-
-  const expenseBars = useMemo(() => {
-    const mode: 'future' | 'ongoing' | 'default' = selectedTrip?.trip_status === 'future'
-      ? 'future'
-      : selectedTrip?.trip_status === 'ongoing'
-        ? 'ongoing'
-        : 'default'
-
-    const budgetMap = new Map<string, { name: string; amount: number }>()
-    if (mode === 'future' && plannedCategoryRows.length > 0) {
-      for (const row of plannedCategoryRows) {
-        const categoryId = row.category_id ?? ''
-        const categoryName = categoryId ? (categoryNameById.get(categoryId) ?? 'Autre') : 'Autre'
-        const key = normalizeCategoryLabel(categoryName)
-        const amount = Number(row.planned_amount ?? 0)
-        if (!key || !Number.isFinite(amount) || amount <= 0) continue
-        const current = budgetMap.get(key)
-        budgetMap.set(key, { name: stripVoyageSuffix(categoryName), amount: (current?.amount ?? 0) + amount })
-      }
-    } else {
-      for (const row of selectedTripWithStats?.byCategory ?? []) {
-        const key = normalizeCategoryLabel(row.categoryName)
-        const amount = Number(row.amount ?? 0)
-        if (!key || !Number.isFinite(amount) || amount <= 0) continue
-        const current = budgetMap.get(key)
-        budgetMap.set(key, { name: stripVoyageSuffix(row.categoryName), amount: (current?.amount ?? 0) + amount })
-      }
-    }
-
-    const consumedMap = new Map<string, { name: string; amount: number }>()
-    for (const row of categoryBreakdown) {
-      const key = normalizeCategoryLabel(row.categoryName)
-      const amount = Number(row.amount ?? 0)
-      if (!key || !Number.isFinite(amount) || amount <= 0) continue
-      const current = consumedMap.get(key)
-      consumedMap.set(key, { name: stripVoyageSuffix(row.categoryName), amount: (current?.amount ?? 0) + amount })
-    }
-
-    if (mode === 'future') {
-      const rows = [...budgetMap.entries()]
-        .map(([key, value]) => ({ key, name: value.name, budgetAmount: value.amount, consumedAmount: 0 }))
-        .sort((a, b) => b.budgetAmount - a.budgetAmount)
-      return { mode, rows }
-    }
-
-    if (mode === 'ongoing') {
-      const keys = new Set<string>([...budgetMap.keys(), ...consumedMap.keys()])
-      const rows = [...keys]
-        .map((key) => {
-          const budget = budgetMap.get(key)
-          const consumed = consumedMap.get(key)
-          return {
-            key,
-            name: consumed?.name ?? budget?.name ?? key,
-            budgetAmount: Number(budget?.amount ?? 0),
-            consumedAmount: Number(consumed?.amount ?? 0),
-          }
-        })
-        .filter((row) => row.budgetAmount > 0 || row.consumedAmount > 0)
-        .sort((a, b) => b.budgetAmount - a.budgetAmount || b.consumedAmount - a.consumedAmount)
-      return { mode, rows }
-    }
-
-    const rows = categoryBreakdown
-      .map((row) => ({
-        key: row.categoryId,
-        name: stripVoyageSuffix(row.categoryName),
-        budgetAmount: 0,
-        consumedAmount: Number(row.amount ?? 0),
-      }))
-      .sort((a, b) => b.consumedAmount - a.consumedAmount)
-    return { mode, rows }
-  }, [categoryBreakdown, categoryNameById, plannedCategoryRows, selectedTrip?.trip_status, selectedTripWithStats?.byCategory])
+  const expenseBars = useTripExpenseBars(selectedTrip)
 
   const spentKpi = useMemo(() => {
     if (!selectedTrip) return ''
@@ -588,93 +476,7 @@ export function TripDetailsModal({ tripId, isOpen, onClose }: TripDetailsModalPr
                 </div>
 
                 {/* Category progress bars */}
-                {expenseBars.rows.length > 0 ? (
-                  <div style={{ display: 'grid', gap: 'var(--space-2.5)', borderTop: '1px solid var(--neutral-100)', paddingTop: 'var(--space-3)' }}>
-                    <p style={{ margin: '0 0 var(--space-1)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--neutral-400)' }}>
-                      Par poste de dépense
-                    </p>
-                    {expenseBars.rows.map((cat) => {
-                      const maxAmount = Math.max(
-                        ...expenseBars.rows.map((row) =>
-                          expenseBars.mode === 'future'
-                            ? row.budgetAmount
-                            : Math.max(row.budgetAmount, row.consumedAmount),
-                        ),
-                        1,
-                      )
-                      const budgetPct = maxAmount > 0 ? (cat.budgetAmount / maxAmount) * 100 : 0
-                      const consumedPct = maxAmount > 0 ? (cat.consumedAmount / maxAmount) * 100 : 0
-                      const consumedVsBudgetPct = cat.budgetAmount > 0 ? (cat.consumedAmount / cat.budgetAmount) * 100 : 0
-                      return (
-                        <div
-                          key={cat.key}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '80px 1fr 64px',
-                            alignItems: 'center',
-                            gap: 'var(--space-3)',
-                          }}
-                        >
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-600)' }}>
-                            {cat.name}
-                          </span>
-                          <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--neutral-150)', overflow: 'hidden' }}>
-                            {expenseBars.mode === 'future' ? (
-                              <div
-                                style={{
-                                  width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
-                                  height: '100%',
-                                  borderRadius: 'var(--radius-full)',
-                                  background: '#38BDF8',
-                                  transition: 'width 0.3s ease',
-                                }}
-                              />
-                            ) : expenseBars.mode === 'ongoing' ? (
-                              <div style={{ position: 'relative', height: '100%' }}>
-                                <div
-                                  style={{
-                                    width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
-                                    height: '100%',
-                                    borderRadius: 'var(--radius-full)',
-                                    background: '#38BDF8',
-                                    transition: 'width 0.3s ease',
-                                  }}
-                                />
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    top: 0,
-                                    width: `${Math.max(0, Math.min(consumedPct, 100))}%`,
-                                    height: '100%',
-                                    borderRadius: 'var(--radius-full)',
-                                    background: '#F59E0B',
-                                    transition: 'width 0.3s ease',
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div
-                                style={{
-                                  width: `${Math.max(0, Math.min(consumedPct, 100))}%`,
-                                  height: '100%',
-                                  borderRadius: 'var(--radius-full)',
-                                  background: '#F59E0B',
-                                  transition: 'width 0.3s ease',
-                                }}
-                              />
-                            )}
-                          </div>
-                          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--neutral-850)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {expenseBars.mode === 'ongoing'
-                              ? `${Math.round(Math.max(0, consumedVsBudgetPct))}%`
-                              : formatCurrencyFloored(expenseBars.mode === 'future' ? cat.budgetAmount : cat.consumedAmount)}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : null}
+                <TripExpenseBarsSection mode={expenseBars.mode} rows={expenseBars.rows} />
 
                 {/* Rapprochements en attente */}
                 {matchGroups.length > 0 ? (

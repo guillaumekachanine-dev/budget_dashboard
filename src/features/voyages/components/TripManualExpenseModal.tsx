@@ -6,6 +6,7 @@ import { useAllTrips } from '@/features/voyages/hooks/useAllTrips'
 import { useCategories } from '@/hooks/useCategories'
 import { useCreateTripManualExpense } from '../hooks/useCreateTripManualExpense'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { StableDateField } from '@/components/ui/StableDateField'
 
 // ─── constantes ───────────────────────────────────────────────────────────────
 
@@ -279,15 +280,16 @@ export function TripManualExpenseModal({
           {/* ── Date + Montant (2 colonnes côte à côte) ──────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', minWidth: 0 }}>
             <div style={{ minWidth: 0 }}>
-              <label htmlFor="tme-date" style={currentLabelStyle}>Date</label>
-              <input
-                id="tme-date"
-                type="date"
+              <label style={currentLabelStyle}>Date</label>
+              <StableDateField
                 value={date}
-                className="tme-date-input"
-                onChange={e => setDate(e.target.value)}
+                onChange={setDate}
+                ariaLabel="Date de la dépense manuelle"
                 required
-                style={{ ...currentInputStyle, minWidth: 0, width: '100%' }}
+                fullWidth
+                textAlign="left"
+                textStyle={{ fontSize: 14, fontWeight: 600, color: glass ? '#FFFFFF' : 'var(--neutral-900)' }}
+                buttonStyle={{ ...currentInputStyle, minWidth: 0, width: '100%', justifyContent: 'space-between' }}
               />
             </div>
             <div style={{ minWidth: 0 }}>

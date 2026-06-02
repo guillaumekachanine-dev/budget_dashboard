@@ -8,6 +8,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useState } from 'react'
 import { CategoryPickerModal, ALL_CATEGORY_TOKEN } from './AddTransactionModal'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { StableDateField } from '@/components/ui/StableDateField'
 import { TripPickerSection } from './TripPickerSection'
 
 interface TransactionDetailsModalProps {
@@ -405,20 +406,18 @@ export function TransactionDetailsModal({
                       }}
                     >
                       {isEditing ? (
-                        <input
-                          type="date"
+                        <StableDateField
                           value={editDate}
-                          onChange={(e) => setEditDate(e.target.value)}
-                          style={{
+                          onChange={setEditDate}
+                          ariaLabel="Date de l'opération"
+                          showIcon={false}
+                          textAlign="center"
+                          textStyle={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: '#fff' }}
+                          buttonStyle={{
                             background: 'rgba(255,255,255,0.1)',
                             border: '1px solid rgba(255,255,255,0.3)',
                             borderRadius: 'var(--radius-md)',
-                            color: '#fff',
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: 'bold',
                             padding: '2px 8px',
-                            textAlign: 'center',
-                            outline: 'none',
                           }}
                         />
                       ) : details.dateText}

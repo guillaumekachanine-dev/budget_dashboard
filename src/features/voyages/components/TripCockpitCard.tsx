@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plus, ArrowRightLeft, ArrowRight, Plane, ShoppingBag } from 'lucide-react'
+import { ArrowRightLeft, ArrowRight, Plane, ShoppingBag } from 'lucide-react'
 import { useTripExpenses } from '../hooks/useTripExpenses'
 import type { TripExpenseRow } from '../types'
 import { useTripCockpit } from '../hooks/useTripCockpit'
@@ -17,12 +17,6 @@ const VOYAGE_ACCENT = '#38BDF8'  // --bucket-voyage
 const VOYAGE_ACCENT_DARK = '#0284C7'
 
 // ─── Utilitaires locaux ───────────────────────────────────────────────────────
-
-function fmtDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
-  const m = MONTHS_FR[d.getMonth()]
-  return `${d.getDate()} ${m} ${d.getFullYear()}`
-}
 
 function fmtDateShort(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
@@ -107,10 +101,7 @@ function TripCard({
   const showMatch = trip.pending_match_count > 0
 
   const dateRange = useMemo(() => {
-    const sameYear = trip.start_date.slice(0, 4) === trip.end_date.slice(0, 4)
-    return sameYear
-      ? `${fmtDateShort(trip.start_date)} → ${fmtDate(trip.end_date)}`
-      : `${fmtDate(trip.start_date)} → ${fmtDate(trip.end_date)}`
+    return `${fmtDateShort(trip.start_date)} → ${fmtDateShort(trip.end_date)}`
   }, [trip.start_date, trip.end_date])
 
   const contextLine = useMemo(() => {
@@ -171,11 +162,8 @@ function TripCard({
         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
           {hasPlannedBudget ? (
             <>
-              {'Consommé '}
+              {'Consommé : '}
               <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(consumed)}</span>
-              {' / '}
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrencyFloored(budget)}</span>
-              {' €'}
             </>
           ) : (
             <>
@@ -194,6 +182,41 @@ function TripCard({
 
       {/* ── 3. CTAs — mêmes dimensions, même ligne ──────────── */}
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+        {onAddExpense ? (
+          <button
+            type="button"
+            onClick={onAddExpense}
+            style={{
+              flex: '1 1 0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              border: '1px solid color-mix(in oklab, var(--color-warning) 48%, rgba(255,255,255,0.22) 52%)',
+              background: 'color-mix(in oklab, var(--color-warning) 8%, rgba(255,255,255,0.04) 92%)',
+              color: 'rgba(255,255,255,0.94)',
+              borderRadius: 'var(--radius-button)',
+              padding: '8px var(--space-3)',
+              minHeight: 40,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'color-mix(in oklab, var(--color-warning) 13%, rgba(255,255,255,0.05) 87%)'
+              e.currentTarget.style.borderColor = 'color-mix(in oklab, var(--color-warning) 62%, rgba(255,255,255,0.24) 38%)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'color-mix(in oklab, var(--color-warning) 8%, rgba(255,255,255,0.04) 92%)'
+              e.currentTarget.style.borderColor = 'color-mix(in oklab, var(--color-warning) 48%, rgba(255,255,255,0.22) 52%)'
+            }}
+          >
+            + dépense
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={onViewDetail}
@@ -222,43 +245,9 @@ function TripCard({
             e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
           }}
         >
-          Voir détail
+          Voir détails
           <ArrowRight size={12} />
         </button>
-
-        {onAddExpense ? (
-          <button
-            type="button"
-            onClick={onAddExpense}
-            style={{
-              flex: '1 1 0',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.06)',
-              color: 'rgba(255,255,255,0.9)',
-              borderRadius: 'var(--radius-button)',
-              padding: '8px var(--space-3)',
-              minHeight: 40,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'background 120ms ease',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-            }}
-          >
-            <Plus size={12} />
-            Dépense
-          </button>
-        ) : null}
 
         {showMatch && onMatch ? (
           <button

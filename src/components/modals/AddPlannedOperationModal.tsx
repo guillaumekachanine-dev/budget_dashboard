@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { StableDateField } from '@/components/ui/StableDateField'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useAuth } from '@/hooks/useAuth'
 import { useCategories } from '@/hooks/useCategories'
@@ -329,25 +330,14 @@ function RecurrenceDateRow({
             ×
           </button>
         ) : null}
-        <input
-          type="date"
+        <StableDateField
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={onChange}
           disabled={!enabled}
-          style={{
-            border: 'none',
-            background: 'transparent',
-            fontFamily: 'inherit',
-            fontSize,
-            fontWeight: 700,
-            color: !enabled ? 'var(--neutral-400)' : value ? 'var(--neutral-900)' : 'var(--neutral-400)',
-            cursor: enabled ? 'pointer' : 'not-allowed',
-            outline: 'none',
-            padding: 0,
-            textAlign: 'right',
-            minWidth: 0,
-            opacity: enabled ? 1 : 0.7,
-          }}
+          ariaLabel={label}
+          width={isMobileViewport ? 122 : 136}
+          textStyle={{ fontSize: 'var(--font-size-sm)', fontWeight: 700 }}
+          buttonStyle={{ lineHeight: 'var(--line-height-tight)' }}
         />
       </div>
     </div>
@@ -1065,7 +1055,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         compactMobile={isMobileViewport}
                         onClick={handleShareRatioToggle}
                       />
-                      <div style={{ background: 'var(--neutral-50)' }}>
+                      <div>
                         <RecurrenceDateRow
                           label="Date de début"
                           value={values.recurrenceStartDate}

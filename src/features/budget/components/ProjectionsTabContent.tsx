@@ -9,6 +9,7 @@ import { useAnnualProjectionOverview2026 } from '@/features/annual-analysis/hook
 import { AnnualProjectionSectionConnected } from '@/features/annual-analysis/components/AnnualCostProjection2026'
 import { useSavingsPlanningMonthDetails } from '@/features/savings/hooks/useSavingsPlanningMonthDetails'
 import { useAuth } from '@/hooks/useAuth'
+import { DetailModal, DetailModalRow, DetailModalSeparator } from '@/components/modals/DetailModal'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { formatCurrencyRounded as fmt } from '@/lib/utils'
 import { EXPENSE_BUCKETS, getMonthShortLabel, MONTH_LABELS_SHORT } from '@/features/annual-analysis/components/_constants'
@@ -2164,24 +2165,24 @@ export function ProjectionsTabContent() {
                 aria-label="Voir le détail du montant réservé"
                 style={{
                   background: 'var(--neutral-0)',
-                  border: '1.5px solid var(--neutral-200)',
+                  border: '1.5px solid color-mix(in oklab, var(--color-petrol) 68%, var(--neutral-200) 32%)',
                   borderRadius: 'var(--radius-md)',
-                  minHeight: 78,
-                  padding: 'var(--space-2) var(--space-3)',
+                  minHeight: 60,
+                  padding: 'var(--space-2)',
                   display: 'grid',
                   gridTemplateRows: 'auto auto',
                   justifyItems: 'center',
                   alignContent: 'center',
-                  gap: 4,
+                  gap: 1,
                   cursor: 'pointer',
                   textAlign: 'center',
                   transition: 'border-color var(--transition-base), box-shadow var(--transition-base)',
                 }}
               >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: 'var(--color-petrol)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Montant réservé
                 </span>
-                <span style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                <span style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
                   {fmt(monthlyReservedAmount)}
                 </span>
               </button>
@@ -2189,12 +2190,12 @@ export function ProjectionsTabContent() {
                 type="button"
                 onClick={() => setShowLiquidityDetailModal(true)}
                 aria-label="Voir le détail de la liquidité disponible"
-                style={{ background: 'var(--neutral-0)', border: '1.5px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', minHeight: 78, padding: 'var(--space-2) var(--space-3)', display: 'grid', gridTemplateRows: 'auto auto', justifyItems: 'center', alignContent: 'center', gap: 4, cursor: 'pointer', textAlign: 'center' }}
+                style={{ background: 'var(--neutral-0)', border: '1.5px solid color-mix(in oklab, var(--color-success) 72%, var(--neutral-200) 28%)', borderRadius: 'var(--radius-md)', minHeight: 60, padding: 'var(--space-2)', display: 'grid', gridTemplateRows: 'auto auto', justifyItems: 'center', alignContent: 'center', gap: 1, cursor: 'pointer', textAlign: 'center' }}
               >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Liquidité disponible
                 </span>
-                <span style={{ margin: 0, fontSize: 18, fontWeight: 800, color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                <span style={{ margin: 0, fontSize: 16, fontWeight: 800, color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
                   {fmt(monthlyAvailableLiquidityAmount)}
                 </span>
               </button>
@@ -2520,198 +2521,58 @@ export function ProjectionsTabContent() {
       </div>
       <AnimatePresence>
         {projectionPeriodMode === 'month' && showReservedAmountDetailModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowReservedAmountDetailModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(13,13,31,0.45)' }}
+          <DetailModal
+            open
+            onClose={() => setShowReservedAmountDetailModal(false)}
+            title="Détail du montant réservé"
+            accentColor="var(--color-petrol)"
+          >
+            {[
+              { label: 'Socle fixe prévu', value: fixedBudgetAmount },
+              { label: 'Provisions prévues', value: provisionBudgetAmount },
+              { label: 'Voyages prévus', value: voyageBudgetAmount },
+              { label: 'Autres dépenses additionnelles prévues', value: additionalPlannedAmount },
+              { label: 'Objectif épargne', value: plannedSavingsObjectiveAmount },
+            ].map((row) => (
+              <DetailModalRow
+                key={row.label}
+                label={row.label}
+                value={fmt(row.value)}
+              />
+            ))}
+            <DetailModalSeparator />
+            <DetailModalRow
+              label="Total réservé"
+              value={fmt(monthlyReservedAmount)}
+              variant="total"
             />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détail du montant réservé"
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--page-gutter)',
-                right: 'var(--page-gutter)',
-                top: '28vh',
-                zIndex: 91,
-                maxWidth: 360,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-xl)',
-                border: '1px solid var(--neutral-200)',
-                boxShadow: '0 12px 36px rgba(13,13,31,0.2)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-3)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-                  Détail du montant réservé
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowReservedAmountDetailModal(false)}
-                  aria-label="Fermer"
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    width: 28,
-                    height: 28,
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                {[
-                  { label: 'Socle fixe prévu', value: fixedBudgetAmount },
-                  { label: 'Provisions prévues', value: provisionBudgetAmount },
-                  { label: 'Voyages prévus', value: voyageBudgetAmount },
-                  { label: 'Autres dépenses additionnelles prévues', value: additionalPlannedAmount },
-                  { label: 'Objectif épargne', value: plannedSavingsObjectiveAmount },
-                ].map((row) => (
-                  <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '9px var(--space-3)', borderTop: '1px solid var(--neutral-200)' }}>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>{row.label}</span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.value)}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '10px var(--space-3)', borderTop: '1px solid var(--neutral-200)', background: 'var(--neutral-100)' }}>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>Total réservé</span>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{fmt(monthlyReservedAmount)}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowReservedAmountDetailModal(false)}
-                style={{
-                  border: '1px solid var(--neutral-300)',
-                  background: 'var(--neutral-0)',
-                  color: 'var(--neutral-800)',
-                  borderRadius: 'var(--radius-md)',
-                  minHeight: 36,
-                  fontSize: 'var(--font-size-sm)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Fermer
-              </button>
-            </motion.div>
-          </>
+          </DetailModal>
         ) : null}
         {projectionPeriodMode === 'month' && showLiquidityDetailModal ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowLiquidityDetailModal(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(13,13,31,0.45)' }}
+          <DetailModal
+            open
+            onClose={() => setShowLiquidityDetailModal(false)}
+            title="Détail liquidité disponible"
+            accentColor="var(--color-success)"
+          >
+            <DetailModalRow
+              label="Revenus projetés"
+              value={fmt(monthlyScenario2ProjectedIncomeAmount)}
             />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Détail liquidité disponible"
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                position: 'fixed',
-                left: 'var(--page-gutter)',
-                right: 'var(--page-gutter)',
-                top: '30vh',
-                zIndex: 93,
-                maxWidth: 360,
-                margin: '0 auto',
-                background: 'var(--neutral-0)',
-                borderRadius: 'var(--radius-xl)',
-                border: '1px solid var(--neutral-200)',
-                boxShadow: '0 12px 36px rgba(13,13,31,0.2)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-3)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2 }}>
-                  Détail liquidité disponible
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowLiquidityDetailModal(false)}
-                  aria-label="Fermer"
-                  style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    width: 28,
-                    height: 28,
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                {[
-                  { label: 'Revenus projetés', value: monthlyScenario2ProjectedIncomeAmount },
-                  { label: 'Montant réservé', value: monthlyReservedAmount },
-                ].map((row) => (
-                  <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '9px var(--space-3)', borderTop: '1px solid var(--neutral-200)' }}>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-700)' }}>{row.label}</span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.value)}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--space-2)', padding: '10px var(--space-3)', borderTop: '1px solid var(--neutral-200)', background: 'var(--neutral-100)' }}>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>Liquidité disponible</span>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{fmt(monthlyAvailableLiquidityAmount)}</span>
-                </div>
-              </div>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)', lineHeight: 1.35 }}>
-                Montant théorique avant dépenses variables réellement effectuées.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowLiquidityDetailModal(false)}
-                style={{
-                  border: '1px solid var(--neutral-300)',
-                  background: 'var(--neutral-0)',
-                  color: 'var(--neutral-800)',
-                  borderRadius: 'var(--radius-md)',
-                  minHeight: 36,
-                  fontSize: 'var(--font-size-sm)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Fermer
-              </button>
-            </motion.div>
-          </>
+            <DetailModalRow
+              label="Montant réservé"
+              value={fmt(monthlyReservedAmount)}
+            />
+            <DetailModalSeparator />
+            <DetailModalRow
+              label="Liquidité disponible"
+              value={fmt(monthlyAvailableLiquidityAmount)}
+              variant="total"
+            />
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-500)', lineHeight: 1.35 }}>
+              Montant théorique avant dépenses variables réellement effectuées.
+            </p>
+          </DetailModal>
         ) : null}
       </AnimatePresence>
     </>

@@ -8,6 +8,7 @@ type CurrentMonthSavingsPlanning = {
   plannedSavingsAmount: number
   transferAmount: number
   effectivePlannedSavingsAmount: number
+  transferDate: string | null
 }
 
 function toFiniteNumber(value: unknown): number {
@@ -29,7 +30,7 @@ export function useCurrentMonthSavingsPlanning(periodYear?: number, periodMonth?
     queryFn: async () => {
       const { data, error } = await budgetDb
         .from('savings_planning_month_details' as never)
-        .select('planned_savings_amount,transfer_amount')
+        .select('planned_savings_amount,transfer_amount,transfer_date')
         .eq('user_id', userId as string)
         .eq('period_year', targetYear)
         .eq('period_month', targetMonth)
@@ -47,6 +48,7 @@ export function useCurrentMonthSavingsPlanning(periodYear?: number, periodMonth?
         plannedSavingsAmount,
         transferAmount,
         effectivePlannedSavingsAmount,
+        transferDate: typeof row.transfer_date === 'string' ? row.transfer_date : null,
       }
     },
   })

@@ -1255,8 +1255,8 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                       border: '1.5px solid var(--neutral-200)',
                       borderRadius: 'var(--radius-md)',
                       background: 'var(--neutral-0)',
-                      padding: '4px 12px',
-                      minHeight: 38,
+                      padding: '3px 12px',
+                      minHeight: 36,
                       boxShadow: '0 1px 4px rgba(28,28,58,0.05)',
                     }}
                   >
@@ -1290,6 +1290,7 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                       onChange={(event) => setValue('description', event.target.value)}
                       placeholder="Libellé de l'opération"
                       aria-label="Libellé de l'opération"
+                      className="placeholder:text-[10.5px]"
                       style={{
                         flex: 1,
                         border: 'none',

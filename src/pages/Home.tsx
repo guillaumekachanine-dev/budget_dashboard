@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Bell, Check, ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bell, Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
+import { TripExpenseBarsSection } from '@/features/voyages/components/TripExpenseBarsSection'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
+import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
+import { useTripExpenseBars } from '@/features/voyages/hooks/useTripExpenseBars'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
 import {
   getCurrentPeriod,
@@ -93,6 +96,8 @@ const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 // Swipe constants (module-level pour stabilité des dépendances)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
+const HOME_HERO_ACCENT_DOT = 'var(--primary-500)'
+const HOME_HERO_ACCENT_SHADOW = 'rgba(91, 87, 245, 0.2)'
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -132,9 +137,47 @@ function formatDateShort(isoDate: string): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function formatDayMonthLabel(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return isoDate
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).replace('.', '')
+}
+
 function formatSignedCurrency(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
   return `${sign}${formatCurrencyFloored(Math.abs(value))}`
+}
+
+function renderOperationSummary(count: number, amount: number): ReactNode | string {
+  if (count <= 0) return 'aucune opération'
+
+  return (
+    <>
+      <span style={{ fontWeight: 500 }}>{`${count} opé.`}</span>
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' · '}</span>
+      <span style={{ fontWeight: 800 }}>{`${amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(amount))}`}</span>
+    </>
+  )
+}
+
+function renderDateAmountSummary(dateLabel: string, amountLabel: string): ReactNode {
+  return (
+    <>
+      <span style={{ fontWeight: 500 }}>{dateLabel}</span>
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' - '}</span>
+      <span style={{ fontWeight: 800 }}>{amountLabel}</span>
+    </>
+  )
+}
+
+function renderDriftSummary(count: number, totalOverrunAmount: number): ReactNode {
+  return (
+    <>
+      <span style={{ fontWeight: 500 }}>{count > 0 ? `${count} cat.` : 'Aucune'}</span>
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' - '}</span>
+      <span style={{ fontWeight: 800 }}>{`+${formatCurrencyFloored(count > 0 ? totalOverrunAmount : 0)}`}</span>
+    </>
+  )
 }
 
 function getGlassColors(accentColor: string | null | undefined) {
@@ -354,12 +397,16 @@ function PlannedOpsModal({
   title,
   dotColor,
   items,
+  maxHeight,
+  contentMaxHeight,
 }: {
   open: boolean
   onClose: () => void
   title: string
   dotColor: string
   items: PlannedOperationItem[]
+  maxHeight?: string
+  contentMaxHeight?: string
 }) {
   const total = items.reduce((sum, item) => {
     const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
@@ -375,12 +422,21 @@ function PlannedOpsModal({
       onClose={onClose}
       title={title}
       variant="center"
+      maxHeight={maxHeight}
       glass
       glassBackground={glassBackground}
       glassBorder={glassBorder}
       zIndex={1200}
     >
-      <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
+      <div
+        style={{
+          padding: 'var(--space-4) var(--space-5) var(--space-5)',
+          display: 'grid',
+          gap: 10,
+          maxHeight: contentMaxHeight,
+          overflowY: contentMaxHeight ? 'auto' : undefined,
+        }}
+      >
         {items.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', fontStyle: 'italic' }}>
             Aucune opération planifiée.
@@ -552,93 +608,131 @@ function DriftsTile({
   onClick: () => void
 }) {
   const hasDrifts = count > 0
-  const toneColor = hasDrifts ? '#FC5A5A' : '#2ED47A'
+
+  return (
+    <MirrorTimelineTile
+      title="Dérives"
+      sublabel="budgétaires"
+      value={renderDriftSummary(count, totalOverrunAmount)}
+      valueEmphasis={hasDrifts}
+      dotColor={HOME_HERO_ACCENT_DOT}
+      shadowColor={HOME_HERO_ACCENT_SHADOW}
+      onClick={onClick}
+      ariaLabel={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire, total ${formatCurrencyFloored(totalOverrunAmount)} — voir le détail`}
+    />
+  )
+}
+
+function MirrorTimelineTile({
+  title,
+  sublabel,
+  value,
+  valueEmphasis,
+  dotColor,
+  shadowColor,
+  onClick,
+  ariaLabel,
+}: {
+  title: string
+  sublabel?: string
+  value: ReactNode
+  valueEmphasis: boolean
+  dotColor: string
+  shadowColor: string
+  onClick?: () => void
+  ariaLabel: string
+}) {
+  const [hovered, setHovered] = useState(false)
 
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire, total ${formatCurrencyFloored(totalOverrunAmount)} — voir le détail`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      disabled={!onClick}
+      aria-label={ariaLabel}
       style={{
+        display: 'flex',
+        alignItems: 'center',
+        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
+        border: 'none',
+        padding: '12px 10px 12px 0',
         width: '100%',
         minHeight: 64,
-        border: hasDrifts ? '1px solid rgba(252, 90, 90, 0.3)' : '1px solid rgba(46, 212, 122, 0.3)',
-        background: hasDrifts
-          ? 'radial-gradient(120% 90% at 14% -8%, rgba(252, 90, 90, 0.28) 0%, rgba(252, 90, 90, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(140, 20, 20, 0.3) 0%, rgba(140, 20, 20, 0) 62%), linear-gradient(145deg, #1A0B0B 0%, #2D1515 47%, #3A1A1A 100%)'
-          : 'radial-gradient(120% 90% at 14% -8%, rgba(46, 212, 122, 0.2) 0%, rgba(46, 212, 122, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(15, 80, 40, 0.25) 0%, rgba(15, 80, 40, 0) 62%), linear-gradient(145deg, #0B1A10 0%, #152D1E 47%, #1A3A25 100%)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
-        cursor: 'pointer',
-        overflow: 'hidden',
-        padding: 'var(--space-2) var(--space-3)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        alignItems: 'stretch',
-        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-        position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-        e.currentTarget.style.transform = 'translateY(-1px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-        e.currentTarget.style.transform = 'translateY(0)'
+        borderRadius: 'var(--radius-lg)',
+        cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left',
+        transition: 'background 0.2s ease',
+        outline: 'none',
+        overflow: 'visible',
       }}
     >
-      {/* Watermark picto */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        <TriangleAlert
-          size={52}
-          color={toneColor}
-          style={{ opacity: 0.12 }}
-        />
-      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
+        <div style={{ width: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, overflow: 'visible' }}>
+          <div
+            aria-hidden="true"
+            style={{
+              display: 'block',
+              width: 12,
+              height: 12,
+              minWidth: 12,
+              minHeight: 12,
+              borderRadius: '50%',
+              background: dotColor,
+              boxShadow: `0 0 0 4px ${shadowColor}`,
+              transformOrigin: 'center',
+              marginLeft: -6,
+              transform: hovered ? 'scale(1.25)' : 'scale(1)',
+              transition: 'transform 0.2s ease',
+            }}
+          />
+        </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', minWidth: 0, position: 'relative', zIndex: 1 }}>
-        <span
-          style={{
-            margin: 0,
-            fontSize: 11,
-            fontWeight: 800,
-            color: '#FFFFFF',
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          Dérives
-        </span>
-      </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 1, justifyItems: 'start' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-start', gap: 6, minWidth: 0, width: '100%' }}>
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 800,
+                color: 'var(--neutral-900)',
+                fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {title}
+            </span>
+            {sublabel ? (
+              <span
+                style={{
+                  fontSize: 8.5,
+                  fontWeight: 700,
+                  color: 'var(--neutral-500)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {sublabel}
+              </span>
+            ) : null}
+          </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', minWidth: 0, marginTop: 4, position: 'relative', zIndex: 1 }}>
-        <span
-          style={{
-            fontSize: 'clamp(16px, 4.5vw, 19px)',
-            fontWeight: 800,
-            fontFamily: 'var(--font-mono)',
-            color: toneColor,
-            transition: 'color var(--transition-base)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {hasDrifts ? `${count} dérive${count > 1 ? 's' : ''}` : 'Aucune'}
-        </span>
+          <span
+            style={{
+              fontSize: 11.5,
+              fontWeight: 500,
+              color: valueEmphasis ? 'var(--neutral-800)' : 'var(--neutral-400)',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '100%',
+            }}
+          >
+            {value}
+          </span>
+        </div>
       </div>
     </button>
   )
@@ -656,7 +750,7 @@ function TimelineRow({
 }: {
   label: string
   sublabel: string
-  value: string
+  value: ReactNode
   dotColor: string
   shadowColor: string
   onClick: () => void
@@ -693,9 +787,12 @@ function TimelineRow({
         <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
           <div
             style={{
+              display: 'block',
               width: 12,
               height: 12,
-              borderRadius: 'var(--radius-full)',
+              minWidth: 12,
+              minHeight: 12,
+              borderRadius: '50%',
               background: dotColor,
               boxShadow: `0 0 0 4px ${shadowColor}`,
               transition: 'transform 0.2s ease',
@@ -705,7 +802,7 @@ function TimelineRow({
         </div>
 
         {/* Text Area */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
             {/* Title + Sublabel */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -737,7 +834,7 @@ function TimelineRow({
             <span
               style={{
                 fontSize: isJ3 ? 11.5 : 11,
-                fontWeight: hasOps ? 700 : 500,
+                fontWeight: 500,
                 color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
                 fontFamily: 'var(--font-mono)',
               }}
@@ -745,17 +842,6 @@ function TimelineRow({
               {value}
             </span>
           </div>
-
-          {/* Chevron vertically centered relative to block */}
-          <ChevronRight
-            size={13}
-            style={{
-              color: hovered ? 'var(--neutral-700)' : 'var(--neutral-400)',
-              transition: 'color 0.2s ease, transform 0.2s ease',
-              transform: hovered ? 'translateX(2px)' : 'translateX(0)',
-              flexShrink: 0,
-            }}
-          />
         </div>
       </div>
     </button>
@@ -1129,102 +1215,25 @@ function OptimizationsTile({
 }
 
 function SavingsGoalTile({
-  goalAmount,
-  reached,
+  scheduleValue,
+  scheduleAriaLabel,
   onClick,
 }: {
-  goalAmount: number
-  reached: boolean
+  scheduleValue: ReactNode
+  scheduleAriaLabel: string
   onClick?: () => void
 }) {
   return (
-    <button
-      type="button"
+    <MirrorTimelineTile
+      title="Épargne"
+      sublabel="mensuelle"
+      value={scheduleValue}
+      valueEmphasis={scheduleAriaLabel !== 'Aucun versement'}
+      dotColor={HOME_HERO_ACCENT_DOT}
+      shadowColor={HOME_HERO_ACCENT_SHADOW}
       onClick={onClick}
-      disabled={!onClick}
-      aria-label={`Objectif d'épargne: ${formatCurrencyFloored(goalAmount)}`}
-      style={{
-        position: 'relative',
-        width: '100%',
-        minHeight: 64,
-        border: 'none',
-        background:
-          'radial-gradient(120% 90% at 14% -8%, rgba(45, 212, 191, 0.28) 0%, rgba(45, 212, 191, 0) 58%), radial-gradient(98% 82% at 100% 100%, rgba(20, 184, 166, 0.24) 0%, rgba(20, 184, 166, 0) 62%), linear-gradient(145deg, #083344 0%, #0F4C5C 48%, #0F766E 100%)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-card)',
-        cursor: onClick ? 'pointer' : 'default',
-        overflow: 'hidden',
-        padding: 'var(--space-2) var(--space-3)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        alignItems: 'stretch',
-        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) {
-          e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-          e.currentTarget.style.transform = 'translateY(-1px)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (onClick) {
-          e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-          e.currentTarget.style.transform = 'translateY(0)'
-        }
-      }}
-    >
-      {reached && (
-        <span
-          style={{
-            position: 'absolute',
-            right: 12,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            opacity: 0.16,
-            color: '#2ED47A',
-            zIndex: 0,
-            pointerEvents: 'none',
-          }}
-        >
-          <Check size={64} strokeWidth={3} />
-        </span>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', minWidth: 0, position: 'relative', zIndex: 1 }}>
-        <span
-          style={{
-            margin: 0,
-            fontSize: 11,
-            fontWeight: 800,
-            color: 'rgba(255, 255, 255, 0.82)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          Épargne
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', minWidth: 0, marginTop: 4, position: 'relative', zIndex: 1 }}>
-        <span
-          style={{
-            fontSize: 'clamp(16px, 4.5vw, 19px)',
-            fontWeight: 800,
-            fontFamily: 'var(--font-mono)',
-            color: '#E6FDF9',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {formatCurrencyFloored(goalAmount)}
-        </span>
-      </div>
-    </button>
+      ariaLabel={`Épargne mensuelle prévue: ${scheduleAriaLabel}`}
+    />
   )
 }
 
@@ -1314,7 +1323,9 @@ function QuickSearchTile({
         alignItems: 'stretch',
         position: 'relative',
         height: 52,
-        width: '100%',
+        width: 'calc(100% + 32px)',
+        marginLeft: -16,
+        marginRight: -16,
         gap: 'var(--space-3)',
       }}
     >
@@ -1382,11 +1393,11 @@ function QuickSearchTile({
           width: 44,
           height: 44,
           borderRadius: 'var(--radius-full)',
-          background: canSearch 
-            ? 'linear-gradient(135deg, var(--primary-500) 0%, #3b37c4 100%)' 
-            : 'var(--neutral-300)',
+          background: canSearch
+            ? 'linear-gradient(135deg, var(--primary-500) 0%, #3b37c4 100%)'
+            : 'linear-gradient(135deg, rgba(214, 214, 219, 0.96) 0%, rgba(196, 196, 204, 0.96) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
           color: '#ffffff',
-          border: '3px solid var(--neutral-0)',
+          border: canSearch ? '3px solid var(--neutral-0)' : '3px solid transparent',
           boxShadow: canSearch 
             ? '0 4px 12px rgba(91, 87, 245, 0.3)' 
             : 'none',
@@ -1895,6 +1906,8 @@ export function Home() {
     accountId: selectedAccount?.id ?? null,
     startDate: '2024-01-01',
   })
+  const { selectedTrip: selectedTripCockpit } = useTripCockpit()
+  const tripExpenseBars = useTripExpenseBars(selectedTripCockpit)
   const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
   const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
@@ -2042,6 +2055,20 @@ export function Home() {
     () => `${savingsMonthLabel} ${formatCurrencyFloored(savingsMonthlySavedDisplay)}`,
     [savingsMonthLabel, savingsMonthlySavedDisplay],
   )
+  const upcomingSavingsTransfer = useMemo(
+    () => (upcomingOps ?? []).find((item) => item.flow_type === 'savings') ?? null,
+    [upcomingOps],
+  )
+  const savingsPlannedTransferLabel = useMemo<ReactNode | string>(() => {
+    const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
+    if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
+    return renderDateAmountSummary(formatDayMonthLabel(transferDate), formatCurrencyFloored(plannedSavingsAmountDisplay))
+  }, [currentMonthSavingsPlanning?.transferDate, plannedSavingsAmountDisplay, upcomingSavingsTransfer?.planned_date])
+  const savingsPlannedTransferAriaLabel = useMemo(() => {
+    const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
+    if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
+    return `${formatDayMonthLabel(transferDate)} - ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
+  }, [currentMonthSavingsPlanning?.transferDate, plannedSavingsAmountDisplay, upcomingSavingsTransfer?.planned_date])
   const variableEssentialConsumedDisplay = Number(
     dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'variable_essentielle')?.actual_amount ?? 0,
   )
@@ -2830,6 +2857,23 @@ export function Home() {
                 )}
               </div>
             </section>
+            {isBudgetVoyageTab && tripExpenseBars.rows.length > 0 ? (
+              <section style={{ padding: sectionHorizontalPadding }}>
+                <div
+                  style={{
+                    maxWidth: 600,
+                    margin: '0 auto',
+                    background: 'rgba(255,255,255,0.9)',
+                    borderRadius: 'var(--radius-xl)',
+                    border: '1px solid var(--neutral-150)',
+                    boxShadow: 'var(--shadow-card)',
+                    padding: 'var(--space-4)',
+                  }}
+                >
+                  <TripExpenseBarsSection mode={tripExpenseBars.mode} rows={tripExpenseBars.rows} />
+                </div>
+              </section>
+            ) : null}
 
       {!isCombinedSavingsPage && !isBudgetVoyageTab ? (
         <>
@@ -2909,27 +2953,13 @@ export function Home() {
                   paddingRight: 16,
                 }}
               >
-                {/* Connecting Vertical Line for the Timeline on the left */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 22,
-                    top: 24,
-                    bottom: 'calc(var(--space-3) + 12px + 56px + 24px)',
-                    width: 2,
-                    background: 'linear-gradient(180deg, var(--primary-500) 0%, #FFAB2E 100%)',
-                    borderRadius: 'var(--radius-full)',
-                    opacity: 0.6,
-                  }}
-                />
-
                 {/* ROW 1: J+3 Timeline (Left) & Optimizations Tile (Right) */}
                 <TimelineRow
                   label="J+3"
                   sublabel="échéances"
-                  value={upcomingOpsWindows.j3.count <= 0 ? 'aucune opération' : `${upcomingOpsWindows.j3.count} opé. · ${upcomingOpsWindows.j3.amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(upcomingOpsWindows.j3.amount))}`}
-                  dotColor="var(--primary-500)"
-                  shadowColor="rgba(91, 87, 245, 0.2)"
+                  value={renderOperationSummary(upcomingOpsWindows.j3.count, upcomingOpsWindows.j3.amount)}
+                  dotColor={HOME_HERO_ACCENT_DOT}
+                  shadowColor={HOME_HERO_ACCENT_SHADOW}
                   onClick={() => setShowPlannedOpsModal(true)}
                   hasOps={upcomingOpsWindows.j3.count > 0}
                 />
@@ -2943,15 +2973,15 @@ export function Home() {
                 <TimelineRow
                   label={`J+${daysRemaining}`}
                   sublabel="fin de mois"
-                  value={upcomingOpsWindows.eom.count <= 0 ? 'aucune opération' : `${upcomingOpsWindows.eom.count} opé. · ${upcomingOpsWindows.eom.amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(upcomingOpsWindows.eom.amount))}`}
-                  dotColor="#FFAB2E"
-                  shadowColor="rgba(255, 171, 46, 0.2)"
+                  value={renderOperationSummary(upcomingOpsWindows.eom.count, upcomingOpsWindows.eom.amount)}
+                  dotColor={HOME_HERO_ACCENT_DOT}
+                  shadowColor={HOME_HERO_ACCENT_SHADOW}
                   onClick={() => setShowPlannedOpsEomModal(true)}
                   hasOps={upcomingOpsWindows.eom.count > 0}
                 />
                 <SavingsGoalTile
-                  goalAmount={savingsMonthlyGoalDisplay}
-                  reached={savingsGoalReached}
+                  scheduleValue={savingsPlannedTransferLabel}
+                  scheduleAriaLabel={savingsPlannedTransferAriaLabel}
                   onClick={() => setShowSavingsModal(true)}
                 />
 
@@ -2994,8 +3024,8 @@ export function Home() {
                   />
                   <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
                   <SavingsGoalTile
-                    goalAmount={savingsMonthlyGoalDisplay}
-                    reached={savingsGoalReached}
+                    scheduleValue={savingsPlannedTransferLabel}
+                    scheduleAriaLabel={savingsPlannedTransferAriaLabel}
                     onClick={() => setShowSavingsModal(true)}
                   />
                 </div>
@@ -3007,7 +3037,7 @@ export function Home() {
           <section
             style={{ padding: sectionHorizontalPadding }}
           >
-            <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', justifyContent: 'flex-start' }}>
+            <div style={{ maxWidth: 600, width: '100%', margin: '0 auto', display: 'flex', justifyContent: 'center' }}>
               <button
                 id="infos-bell-btn"
                 type="button"
@@ -3033,6 +3063,7 @@ export function Home() {
                   position: 'relative',
                   padding: infosExpanded ? '0 var(--space-4)' : 0,
                   overflow: 'hidden',
+                  transformOrigin: 'center center',
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.transform = 'translateY(-1px)'
@@ -3427,6 +3458,8 @@ export function Home() {
         title="Échéances fin de mois"
         dotColor="#FFAB2E"
         items={upcomingOpsWindows.eom.items}
+        maxHeight="min(56dvh, 360px)"
+        contentMaxHeight="min(34dvh, 180px)"
       />
 
       {/* Mini Modale de sélection de la Catégorie / Socle */}

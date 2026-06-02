@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Search, Calendar, Link, AlertTriangle, Loader, CheckCircle } from 'lucide-react'
+import { Search, Link, AlertTriangle, Loader, CheckCircle } from 'lucide-react'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { StableDateField } from '@/components/ui/StableDateField'
 import { useTransactions, useAssignTripToTransaction } from '@/hooks/useTransactions'
 import { useQuery } from '@tanstack/react-query'
 import { QK, STALE } from '@/lib/queryKeys'
@@ -199,22 +200,20 @@ export function TripTransactionRattachementModal({
 
             {/* Date Search */}
             <div style={{ position: 'relative' }}>
-              <Calendar size={14} style={{ position: 'absolute', left: 12, top: 13, color: 'var(--neutral-400)', pointerEvents: 'none' }} />
-              <input
-                type="date"
+              <StableDateField
                 value={searchDate}
-                onChange={(e) => setSearchDate(e.target.value)}
-                style={{
+                onChange={setSearchDate}
+                ariaLabel="Date de recherche"
+                fullWidth
+                textAlign="left"
+                textStyle={{ fontSize: 13, fontWeight: 650 }}
+                buttonStyle={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '8px var(--space-2) 8px 32px',
-                  fontSize: 13,
-                  fontWeight: 650,
+                  padding: '8px var(--space-2)',
                   background: 'var(--neutral-0)',
                   border: '1px solid var(--neutral-200)',
                   borderRadius: 'var(--radius-md)',
-                  color: 'var(--neutral-900)',
-                  outline: 'none',
                 }}
               />
             </div>

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { StableDateField } from '@/components/ui/StableDateField'
 import { QK } from '@/lib/queryKeys'
 import type { TripTransaction, TripWithStats } from '../types'
 
@@ -1181,11 +1182,14 @@ export function PlanVoyageModal({
                     >
                       Départ
                     </label>
-                    <input
-                      type="date"
+                    <StableDateField
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      style={{
+                      onChange={setStartDate}
+                      ariaLabel="Date de départ"
+                      fullWidth
+                      textAlign="left"
+                      textStyle={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}
+                      buttonStyle={{
                         width: '100%', border: '1.5px solid var(--neutral-200)', borderRadius: 10,
                         padding: '7px 10px', fontSize: 12, color: 'var(--neutral-800)',
                         background: 'var(--neutral-50)', outline: 'none', boxSizing: 'border-box',
@@ -1198,12 +1202,15 @@ export function PlanVoyageModal({
                     >
                       Retour
                     </label>
-                    <input
-                      type="date"
+                    <StableDateField
                       value={endDate}
                       min={startDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      style={{
+                      onChange={setEndDate}
+                      ariaLabel="Date de retour"
+                      fullWidth
+                      textAlign="left"
+                      textStyle={{ fontSize: 12, fontWeight: 700, color: 'var(--neutral-800)' }}
+                      buttonStyle={{
                         width: '100%', border: '1.5px solid var(--neutral-200)', borderRadius: 10,
                         padding: '7px 10px', fontSize: 12, color: 'var(--neutral-800)',
                         background: 'var(--neutral-50)', outline: 'none', boxSizing: 'border-box',

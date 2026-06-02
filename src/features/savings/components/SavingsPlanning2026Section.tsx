@@ -16,6 +16,7 @@ import {
 import { useAccounts } from '@/hooks/useAccounts'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlannedOperationsForFlow } from '@/hooks/usePlannedOperations'
+import { StableDateField } from '@/components/ui/StableDateField'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -821,18 +822,19 @@ function PlanningModal({
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
                     <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 500 }}>Date</span>
-                    <input
-                      type="date"
+                    <StableDateField
                       value={draft.virementDateIso}
-                      onChange={(e) => applyDraftValue('virementDateIso', e.target.value)}
-                      style={{
+                      onChange={(value) => applyDraftValue('virementDateIso', value)}
+                      ariaLabel={`Date du virement pour ${milestone.fullLabel}`}
+                      width={154}
+                      textStyle={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)' }}
+                      buttonStyle={{
                         width: 154,
                         height: 32,
                         padding: '4px 8px',
                         borderRadius: 8,
                         border: '1px solid var(--neutral-250)',
-                        fontSize: 12,
-                        fontFamily: 'var(--font-mono)',
+                        background: 'transparent',
                       }}
                     />
                   </div>

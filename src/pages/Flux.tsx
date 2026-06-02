@@ -744,35 +744,6 @@ export function Flux() {
 
       {/* ── Boutons d'action centrés ── */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: '-8px' }}>
-        <button
-          type="button"
-          aria-label="Ouvrir les paramètres"
-          onClick={showOnlyFixedRecurring ? undefined : openParametersModal}
-          disabled={showOnlyFixedRecurring}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 114,
-            height: 30,
-            gap: 6,
-            border: 'none',
-            background: showOnlyFixedRecurring ? 'var(--neutral-200)' : 'var(--color-warning)',
-            borderRadius: 'var(--radius-full)',
-            cursor: showOnlyFixedRecurring ? 'not-allowed' : 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            color: showOnlyFixedRecurring ? 'var(--neutral-400)' : 'var(--neutral-0)',
-            boxShadow: showOnlyFixedRecurring ? 'none' : '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
-            opacity: showOnlyFixedRecurring ? 0.75 : 1,
-            transition: 'all var(--transition-base)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <Settings2 size={13} strokeWidth={2.2} />
-          Paramètres
-        </button>
-
         <div
           style={{
             position: 'relative',
@@ -885,6 +856,35 @@ export function Flux() {
             <Plus size={12} strokeWidth={2.5} />
           </button>
         </div>
+
+        <button
+          type="button"
+          aria-label="Ouvrir les paramètres"
+          onClick={showOnlyFixedRecurring ? undefined : openParametersModal}
+          disabled={showOnlyFixedRecurring}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 114,
+            height: 30,
+            gap: 6,
+            border: 'none',
+            background: showOnlyFixedRecurring ? 'var(--neutral-200)' : 'var(--color-warning)',
+            borderRadius: 'var(--radius-full)',
+            cursor: showOnlyFixedRecurring ? 'not-allowed' : 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: showOnlyFixedRecurring ? 'var(--neutral-400)' : 'var(--neutral-0)',
+            boxShadow: showOnlyFixedRecurring ? 'none' : '0 2px 8px color-mix(in oklab, var(--color-warning) 40%, transparent 60%)',
+            opacity: showOnlyFixedRecurring ? 0.75 : 1,
+            transition: 'all var(--transition-base)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Settings2 size={13} strokeWidth={2.2} />
+          Paramètres
+        </button>
 
 
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Plus, Upload, X } from 'lucide-react'
+import { StableDateField } from '@/components/ui/StableDateField'
 import transactionsUpdateIcon from '@/assets/icons/app/transactions_update.png'
 import soldeUpdateIcon from '@/assets/icons/app/solde_update.png'
 import comptePrincipalIcon from '@/assets/icons/accounts/compte_principal_banque_populaire.webp'
@@ -322,19 +323,6 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
   const [directives, setDirectives] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const dateInputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '9px 12px',
-    borderRadius: 'var(--radius-md)',
-    border: '1.5px solid var(--neutral-200)',
-    background: 'var(--neutral-0)',
-    fontSize: 'var(--font-size-sm)',
-    color: 'var(--neutral-800)',
-    fontFamily: 'var(--font-mono)',
-    outline: 'none',
-    boxSizing: 'border-box',
-  }
-
   return (
     <div>
       <ModalHeader
@@ -411,27 +399,42 @@ function TransactionsContent({ onBack }: { onClose: () => void; onBack: () => vo
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'nowrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
             <label style={{ display: 'block', minWidth: 0 }}>
-              <input
-                type="date"
+              <StableDateField
                 value={dateFrom}
-                onChange={(e) => {
-                  const next = e.target.value
+                onChange={(next) => {
                   setDateFrom(next)
                   if (singleDay) setDateTo(next)
                 }}
-                style={{ ...dateInputStyle, width: 118 }}
+                ariaLabel="Date de début de période"
+                width={118}
+                textStyle={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}
+                buttonStyle={{
+                  padding: '9px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.5px solid var(--neutral-200)',
+                  background: 'var(--neutral-0)',
+                  boxSizing: 'border-box',
+                }}
               />
             </label>
             <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--neutral-600)', fontWeight: 600, lineHeight: 1 }}>
               au
             </span>
             <label style={{ display: 'block', minWidth: 0 }}>
-              <input
-                type="date"
+              <StableDateField
                 value={singleDay ? dateFrom : dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={setDateTo}
                 disabled={singleDay}
-                style={{ ...dateInputStyle, width: 118, opacity: singleDay ? 0.55 : 1 }}
+                ariaLabel="Date de fin de période"
+                width={118}
+                textStyle={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}
+                buttonStyle={{
+                  padding: '9px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.5px solid var(--neutral-200)',
+                  background: 'var(--neutral-0)',
+                  boxSizing: 'border-box',
+                }}
               />
             </label>
           </div>
