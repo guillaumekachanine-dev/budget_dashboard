@@ -292,9 +292,11 @@ function TripCard({
 function RecentTransactions({
   expenses,
   isLoading,
+  onRepartition,
 }: {
   expenses: TripExpenseRow[]
   isLoading: boolean
+  onRepartition?: () => void
 }) {
   const recent = useMemo(() => expenses.slice(0, 5), [expenses])
 
@@ -321,6 +323,38 @@ function RecentTransactions({
         >
           Dernières transactions
         </p>
+        {onRepartition ? (
+          <button
+            type="button"
+            onClick={onRepartition}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 30,
+              padding: '0 12px',
+              borderRadius: 'var(--radius-xl)',
+              border: '2px solid transparent',
+              background: 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
+              color: 'var(--neutral-600)',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              letterSpacing: '0.01em',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
+            }}
+          >
+            Répartition
+          </button>
+        ) : null}
       </div>
 
       {/* Body */}
@@ -547,9 +581,10 @@ export interface TripCockpitCardProps {
    */
   /** tripId + tripName pour pré-filtrer et titrer le sheet de rapprochement */
   onMatch?: (tripId: string, tripName: string) => void
+  onRepartition?: () => void
 }
 
-export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCockpitCardProps) {
+export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch, onRepartition }: TripCockpitCardProps) {
   const { selectedTrip, isLoading, error } = useTripCockpit()
   const { expenses: tripExpenses, isLoading: expensesLoading } = useTripExpenses(
     selectedTrip?.trip_id ?? null
@@ -590,6 +625,7 @@ export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch }: TripCoc
       <RecentTransactions
         expenses={tripExpenses}
         isLoading={expensesLoading}
+        onRepartition={onRepartition}
       />
     </div>
   )

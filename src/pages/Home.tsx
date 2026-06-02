@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
 import { TripExpenseBarsSection } from '@/features/voyages/components/TripExpenseBarsSection'
+import { TripBudgetOverlay } from '@/features/voyages/components/TripBudgetOverlay'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
 import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
@@ -150,16 +151,9 @@ function formatSignedCurrency(value: number): string {
   return `${sign}${formatCurrencyFloored(Math.abs(value))}`
 }
 
-function renderOperationSummary(count: number, amount: number): ReactNode | string {
-  if (count <= 0) return 'aucune opération'
-
-  return (
-    <>
-      <span style={{ fontWeight: 500 }}>{`${count} opé.`}</span>
-      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' · '}</span>
-      <span style={{ fontWeight: 800 }}>{`${amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(amount))}`}</span>
-    </>
-  )
+function renderOperationSummary(count: number, amount: number): string {
+  if (count <= 0) return 'Aucune'
+  return `${amount < 0 ? '+' : ''}${formatCurrencyFloored(Math.abs(amount))}`
 }
 
 function renderDateAmountSummary(dateLabel: string, amountLabel: string): ReactNode {
@@ -172,14 +166,9 @@ function renderDateAmountSummary(dateLabel: string, amountLabel: string): ReactN
   )
 }
 
-function renderDriftSummary(count: number, totalOverrunAmount: number): ReactNode {
-  return (
-    <>
-      <span style={{ fontWeight: 500 }}>{count > 0 ? `${count} cat.` : 'Aucune'}</span>
-      <span aria-hidden="true" style={{ opacity: 0.5 }}>{' - '}</span>
-      <span style={{ fontWeight: 800 }}>{`+${formatCurrencyFloored(count > 0 ? totalOverrunAmount : 0)}`}</span>
-    </>
-  )
+function renderDriftSummary(count: number, totalOverrunAmount: number): string {
+  if (count === 0) return 'Aucune'
+  return `${count} cat. +${formatCurrencyFloored(totalOverrunAmount)}`
 }
 
 function getGlassColors(accentColor: string | null | undefined) {
@@ -618,9 +607,9 @@ function MirrorTimelineTile({
         alignItems: 'center',
         background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
         border: 'none',
-        padding: '12px 10px 12px 0',
+        padding: '10px 10px 10px 0',
         width: '100%',
-        minHeight: 64,
+        minHeight: 44,
         borderRadius: 'var(--radius-lg)',
         cursor: onClick ? 'pointer' : 'default',
         textAlign: 'left',
@@ -650,45 +639,31 @@ function MirrorTimelineTile({
           />
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 1, justifyItems: 'start' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-start', gap: 6, minWidth: 0, width: '100%' }}>
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: 'var(--neutral-900)',
-                fontFamily: 'var(--font-mono)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {title}
-            </span>
-            {sublabel ? (
-              <span
-                style={{
-                  fontSize: 8.5,
-                  fontWeight: 700,
-                  color: 'var(--neutral-500)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {sublabel}
-              </span>
-            ) : null}
-          </div>
-
+        {/* Single-line: bold title — value */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span
             style={{
-              fontSize: 11.5,
-              fontWeight: 500,
+              fontSize: 13,
+              fontWeight: 800,
+              color: 'var(--neutral-900)',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {title}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: valueEmphasis ? 700 : 400,
               color: valueEmphasis ? 'var(--neutral-800)' : 'var(--neutral-400)',
               fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              maxWidth: '100%',
+              minWidth: 0,
             }}
           >
             {value}
@@ -762,47 +737,35 @@ function TimelineRow({
           />
         </div>
 
-        {/* Text Area */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
-            {/* Title + Sublabel */}
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 14,
-                  fontWeight: 800,
-                  color: 'var(--neutral-900)',
-                  fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </span>
-              <span
-                style={{
-                  fontSize: 8.5,
-                  fontWeight: 700,
-                  color: 'var(--neutral-500)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {sublabel}
-              </span>
-            </div>
-
-            <span
-              style={{
-                fontSize: isJ3 ? 11.5 : 11,
-                fontWeight: 500,
-                color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              {value}
-            </span>
-          </div>
+        {/* Text Area — single line */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 800,
+              color: 'var(--neutral-900)',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {label}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: hasOps ? 700 : 400,
+              color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+            }}
+          >
+            {value}
+          </span>
         </div>
       </div>
     </button>
@@ -1339,6 +1302,7 @@ function QuickSearchTile({
         type="button"
         onClick={onSearch}
         disabled={!canSearch}
+        className={canSearch ? 'qs-btn-ready' : ''}
         style={{
           position: 'absolute',
           left: '50%',
@@ -1347,32 +1311,29 @@ function QuickSearchTile({
           width: 44,
           height: 44,
           borderRadius: 'var(--radius-full)',
-          background: canSearch
-            ? 'linear-gradient(135deg, var(--primary-500) 0%, #3b37c4 100%)'
-            : 'linear-gradient(135deg, rgba(214, 214, 219, 0.96) 0%, rgba(196, 196, 204, 0.96) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
+          ...(!canSearch ? {
+            background: 'linear-gradient(135deg, rgba(214, 214, 219, 0.96) 0%, rgba(196, 196, 204, 0.96) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
+            boxShadow: 'none',
+          } : {}),
           color: '#ffffff',
           border: canSearch ? '3px solid var(--neutral-0)' : '3px solid transparent',
-          boxShadow: canSearch 
-            ? '0 4px 12px rgba(91, 87, 245, 0.3)' 
-            : 'none',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: canSearch ? 'pointer' : 'not-allowed',
           zIndex: 10,
-          transition: 'all 0.2s ease',
+          transition: 'transform 0.2s ease, border 0.3s ease',
         }}
         onMouseEnter={(e) => {
           if (canSearch) {
             e.currentTarget.style.transform = 'translate(-50%, -52%) scale(1.06)'
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(91, 87, 245, 0.45)'
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(91, 87, 245, 0.5)'
           }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'
-          e.currentTarget.style.boxShadow = canSearch 
-            ? '0 4px 12px rgba(91, 87, 245, 0.3)' 
-            : 'none'
+          e.currentTarget.style.transform = 'translate(-50%, -50%)'
+          // Clear inline override so CSS animation resumes
+          e.currentTarget.style.boxShadow = canSearch ? '' : 'none'
         }}
       >
         <ArrowUp size={18} strokeWidth={3} />
@@ -1792,6 +1753,7 @@ export function Home() {
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
   const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
+  const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
@@ -2023,11 +1985,10 @@ export function Home() {
     () => (upcomingOps ?? []).find((item) => item.flow_type === 'savings') ?? null,
     [upcomingOps],
   )
-  const savingsPlannedTransferLabel = useMemo<ReactNode | string>(() => {
-    const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
-    if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
-    return renderDateAmountSummary(formatDayMonthLabel(transferDate), formatCurrencyFloored(plannedSavingsAmountDisplay))
-  }, [currentMonthSavingsPlanning?.transferDate, plannedSavingsAmountDisplay, upcomingSavingsTransfer?.planned_date])
+  const savingsPlannedTransferLabel = useMemo<string>(() => {
+    if (plannedSavingsAmountDisplay <= 0) return 'Aucun'
+    return `Obj. ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
+  }, [plannedSavingsAmountDisplay])
   const savingsPlannedTransferAriaLabel = useMemo(() => {
     const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
     if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
@@ -2595,6 +2556,7 @@ export function Home() {
                       setMatchingTripName(tripName ?? null)
                       setMatchingSheetOpen(true)
                     }}
+                    onRepartition={tripExpenseBars.rows.length > 0 ? () => setShowRepartitionModal(true) : undefined}
                   />
                 ) : isCombinedSavingsPage ? (
                   <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
@@ -2822,23 +2784,14 @@ export function Home() {
                 )}
               </div>
             </section>
-            {isBudgetVoyageTab && tripExpenseBars.rows.length > 0 ? (
-              <section style={{ padding: sectionHorizontalPadding }}>
-                <div
-                  style={{
-                    maxWidth: 600,
-                    margin: '0 auto',
-                    background: 'rgba(255,255,255,0.9)',
-                    borderRadius: 'var(--radius-xl)',
-                    border: '1px solid var(--neutral-150)',
-                    boxShadow: 'var(--shadow-card)',
-                    padding: 'var(--space-4)',
-                  }}
-                >
-                  <TripExpenseBarsSection mode={tripExpenseBars.mode} rows={tripExpenseBars.rows} />
-                </div>
-              </section>
-            ) : null}
+
+            <TripBudgetOverlay
+              open={showRepartitionModal}
+              onClose={() => setShowRepartitionModal(false)}
+              mode={tripExpenseBars.mode}
+              rows={tripExpenseBars.rows}
+              tripName={selectedTripCockpit?.name ?? null}
+            />
 
       {!isCombinedSavingsPage && !isBudgetVoyageTab ? (
         <>

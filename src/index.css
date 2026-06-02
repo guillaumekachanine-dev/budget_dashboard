@@ -437,6 +437,65 @@
   100% { transform: translateX(100%); }
 }
 
+/* Quick Search — animated ready state for the central action button */
+@keyframes qs-gradient-flow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Jolt every 1.5s: snap → overshoot → settle → gentle breathe */
+@keyframes qs-pulse {
+  0%    { scale: 1;    box-shadow: 0 4px 18px rgba(91, 87, 245, 0.28); }
+  5%    { scale: 1.12; box-shadow: 0 14px 42px rgba(91, 87, 245, 0.62), 0 0 0 9px rgba(100, 80, 255, 0.16); }
+  11%   { scale: 0.96; box-shadow: 0 2px 10px rgba(91, 87, 245, 0.18); }
+  19%   { scale: 1.03; box-shadow: 0 7px 24px rgba(91, 87, 245, 0.34); }
+  40%   { scale: 1.05; box-shadow: 0 9px 28px rgba(91, 87, 245, 0.40); }
+  60%   { scale: 1.01; box-shadow: 0 5px 20px rgba(91, 87, 245, 0.28); }
+  80%   { scale: 1.04; box-shadow: 0 8px 26px rgba(91, 87, 245, 0.36); }
+  100%  { scale: 1;    box-shadow: 0 4px 18px rgba(91, 87, 245, 0.28); }
+}
+
+/* Shine streak from bottom to top, once per cycle */
+@keyframes qs-shine {
+  0%    { transform: translateY(120%);  opacity: 0; }
+  6%    { opacity: 1; }
+  52%   { transform: translateY(-120%); opacity: 0.85; }
+  62%   { opacity: 0; }
+  63%   { transform: translateY(120%);  opacity: 0; }
+  100%  { transform: translateY(120%);  opacity: 0; }
+}
+
+.qs-btn-ready {
+  overflow: hidden !important;
+  background: linear-gradient(
+    135deg,
+    #5b57f5, #7c4fff, #b84dff, #ff004d,
+    #ff7a00, #ffb700, #33d17a, #00c2ff,
+    #4f6bff, #5b57f5, #b84dff, #5b57f5
+  ) !important;
+  background-size: 400% 400% !important;
+  animation: qs-gradient-flow 3s linear infinite, qs-pulse 1.5s ease-in-out infinite;
+}
+
+.qs-btn-ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0) 80%,
+    transparent 100%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+  animation: qs-shine 3s ease-in-out infinite;
+  animation-delay: 0.5s;
+}
+
 /* Custom scrollbar utility */
 .custom-scrollbar {
   scrollbar-width: thin;
