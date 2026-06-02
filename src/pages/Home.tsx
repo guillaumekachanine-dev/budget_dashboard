@@ -1340,14 +1340,15 @@ function QuickSearchTile({
           justifyContent: 'center',
           padding: '0 var(--space-3)',
           borderRadius: 'var(--radius-xl)',
-          border: 'none',
-          background: hasSelection 
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)' 
-            : 'var(--neutral-100)',
+          border: '2px solid transparent',
+          background: `${hasSelection
+            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
+            : 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%)'
+          } padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box`,
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          boxShadow: hasSelection 
-            ? '0 2px 8px rgba(91, 87, 245, 0.1)' 
+          boxShadow: hasSelection
+            ? '0 2px 8px rgba(91, 87, 245, 0.1)'
             : 'none',
         }}
         onMouseEnter={(e) => {
@@ -1435,14 +1436,15 @@ function QuickSearchTile({
           justifyContent: 'center',
           padding: '0 var(--space-3)',
           borderRadius: 'var(--radius-xl)',
-          border: 'none',
-          background: hasPeriod 
-            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)' 
-            : 'var(--neutral-100)',
+          border: '2px solid transparent',
+          background: `${hasPeriod
+            ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.16) 0%, rgba(91, 87, 245, 0.08) 100%)'
+            : 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%)'
+          } padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box`,
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          boxShadow: hasPeriod 
-            ? '0 2px 8px rgba(91, 87, 245, 0.1)' 
+          boxShadow: hasPeriod
+            ? '0 2px 8px rgba(91, 87, 245, 0.1)'
             : 'none',
         }}
         onMouseEnter={(e) => {
