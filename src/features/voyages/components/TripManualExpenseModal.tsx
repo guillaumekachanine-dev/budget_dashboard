@@ -46,6 +46,8 @@ interface TripManualExpenseModalProps {
   glass?: boolean
   glassBackground?: string
   glassBorder?: string
+  /** 'dark' (défaut) = textes blancs sur fond sombre | 'light' = textes graphite sur fond crème/champagne */
+  glassTone?: 'dark' | 'light'
 }
 
 // ─── composant ────────────────────────────────────────────────────────────────
@@ -57,6 +59,7 @@ export function TripManualExpenseModal({
   glass = false,
   glassBackground,
   glassBorder,
+  glassTone = 'dark',
 }: TripManualExpenseModalProps) {
   // ── données de référence ────────────────────────────────────────────────────
   const { trips } = useAllTrips()
@@ -74,31 +77,48 @@ export function TripManualExpenseModal({
     [allCategories],
   )
 
+  // derived tone helpers
+  const isLight = glass && glassTone === 'light'
+  const glassText      = isLight ? 'rgba(40, 32, 20, 0.90)' : 'rgba(255, 255, 255, 0.92)'
+  const glassSubtext   = isLight ? 'rgba(100, 80, 45, 0.62)' : 'rgba(255, 255, 255, 0.48)'
+  const glassMuted     = isLight ? 'rgba(140, 110, 60, 0.45)' : 'rgba(255, 255, 255, 0.4)'
+  const glassInputBg   = isLight ? 'rgba(255, 252, 245, 0.70)' : 'rgba(255, 255, 255, 0.06)'
+  const glassInputBdr  = isLight ? 'rgba(200, 175, 120, 0.40)' : 'rgba(255, 255, 255, 0.12)'
+  const glassToggleBg  = isLight ? 'rgba(220, 200, 160, 0.28)' : 'rgba(255, 255, 255, 0.08)'
+  const glassSelBg     = isLight ? 'rgba(210, 180, 110, 0.18)' : 'rgba(255, 255, 255, 0.05)'
+  const glassSelBdr    = isLight ? 'rgba(190, 155, 80, 0.35)' : 'rgba(255, 255, 255, 0.1)'
+  const glassDivider   = isLight ? 'rgba(190, 160, 90, 0.20)' : 'rgba(255, 255, 255, 0.1)'
+  const glassAccentTxt = isLight ? '#8B5E14' : '#38BDF8'
+  const glassActiveBg  = isLight ? 'rgba(200, 165, 80, 0.22)' : 'rgba(255, 255, 255, 0.12)'
+  const glassCloseBg   = isLight ? 'rgba(220, 200, 155, 0.45)' : 'rgba(255, 255, 255, 0.1)'
+  const glassCloseBdr  = isLight ? 'rgba(185, 155, 80, 0.30)' : 'rgba(255, 255, 255, 0.12)'
+  const glassCloseClr  = isLight ? 'rgba(80, 55, 15, 0.70)' : 'rgba(255, 255, 255, 0.75)'
+
   // dynamic styles
   const currentLabelStyle = useMemo<React.CSSProperties>(() => ({
     display: 'block',
     fontSize: 12,
     fontWeight: 700,
-    color: glass ? 'rgba(255, 255, 255, 0.48)' : 'var(--neutral-500)',
+    color: glass ? glassSubtext : 'var(--neutral-500)',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-  }), [glass])
+  }), [glass, glassSubtext])
 
   const currentInputStyle = useMemo<React.CSSProperties>(() => ({
     width: '100%',
     boxSizing: 'border-box',
     fontSize: 14,
     fontWeight: 600,
-    color: glass ? '#FFFFFF' : 'var(--neutral-900)',
-    background: glass ? 'rgba(255, 255, 255, 0.06)' : 'var(--neutral-50)',
-    border: glass ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid var(--neutral-200)',
+    color: glass ? glassText : 'var(--neutral-900)',
+    background: glass ? glassInputBg : 'var(--neutral-50)',
+    border: glass ? `1px solid ${glassInputBdr}` : '1px solid var(--neutral-200)',
     borderRadius: 'var(--radius-md)',
     padding: '10px var(--space-3)',
     outline: 'none',
     fontFamily: 'var(--font-sans)',
     transition: 'border-color 120ms ease',
-  }), [glass])
+  }), [glass, glassText, glassInputBg, glassInputBdr])
 
   const currentSelectFieldStyle = useMemo<React.CSSProperties>(() => ({
     ...currentInputStyle,
@@ -257,7 +277,7 @@ export function TripManualExpenseModal({
               </span>
             </label>
             {trips.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)' }}>
+              <p style={{ margin: 0, fontSize: 13, color: glass ? glassMuted : 'var(--neutral-400)' }}>
                 Aucun voyage enregistré.
               </p>
             ) : (
@@ -272,7 +292,7 @@ export function TripManualExpenseModal({
                     {selectedTripObject ? formatTripNameWithMonthYear(selectedTripObject.name, selectedTripObject.start_date || selectedTripObject.end_date) : '— Choisir un voyage —'}
                   </span>
                 </span>
-                <ChevronDown size={14} style={{ color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)', flexShrink: 0 }} />
+                <ChevronDown size={14} style={{ color: glass ? glassMuted : 'var(--neutral-400)', flexShrink: 0 }} />
               </button>
             )}
           </div>
@@ -288,7 +308,7 @@ export function TripManualExpenseModal({
                 required
                 fullWidth
                 textAlign="left"
-                textStyle={{ fontSize: 14, fontWeight: 600, color: glass ? '#FFFFFF' : 'var(--neutral-900)' }}
+                textStyle={{ fontSize: 14, fontWeight: 600, color: glass ? glassText : 'var(--neutral-900)' }}
                 buttonStyle={{ ...currentInputStyle, minWidth: 0, width: '100%', justifyContent: 'space-between' }}
               />
             </div>
@@ -311,7 +331,7 @@ export function TripManualExpenseModal({
 
           {/* Aperçu dynamique de l'imputation */}
           {parseFloat(amountStr.replace(',', '.')) > 0 && (
-            <div style={{ fontSize: 11, fontWeight: 700, color: glass ? 'rgba(255, 255, 255, 0.48)' : 'var(--neutral-500)', marginTop: -6, paddingLeft: 2 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: glass ? glassSubtext : 'var(--neutral-500)', marginTop: -6, paddingLeft: 2 }}>
               {imputationType === 'personal' ? (
                 <span>Imputé : {parseFloat(amountStr.replace(',', '.')).toFixed(2)} €</span>
               ) : (
@@ -323,7 +343,7 @@ export function TripManualExpenseModal({
           {/* ── Imputation ────────────────────────────────────────────────── */}
           <div>
             <label style={currentLabelStyle}>Imputation</label>
-            <div style={{ display: 'flex', background: glass ? 'rgba(255, 255, 255, 0.08)' : 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 4 }}>
+            <div style={{ display: 'flex', background: glass ? glassToggleBg : 'var(--neutral-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 4 }}>
               <button
                 type="button"
                 onClick={() => setImputationType('personal')}
@@ -337,9 +357,9 @@ export function TripManualExpenseModal({
                   cursor: 'pointer',
                   transition: 'all 120ms ease',
                   border: 'none',
-                  background: imputationType === 'personal' ? (glass ? 'rgba(255, 255, 255, 0.12)' : 'var(--neutral-0)') : 'transparent',
-                  color: imputationType === 'personal' ? (glass ? '#FFFFFF' : 'var(--neutral-900)') : (glass ? 'rgba(255, 255, 255, 0.48)' : 'var(--neutral-500)'),
-                  boxShadow: imputationType === 'personal' ? (glass ? 'none' : '0 1px 3px rgba(0,0,0,0.08)') : 'none',
+                  background: imputationType === 'personal' ? (glass ? glassActiveBg : 'var(--neutral-0)') : 'transparent',
+                  color: imputationType === 'personal' ? (glass ? glassText : 'var(--neutral-900)') : (glass ? glassSubtext : 'var(--neutral-500)'),
+                  boxShadow: imputationType === 'personal' ? (glass ? (isLight ? '0 1px 4px rgba(120,90,20,0.12)' : 'none') : '0 1px 3px rgba(0,0,0,0.08)') : 'none',
                 }}
               >
                 Personnelle
@@ -357,9 +377,9 @@ export function TripManualExpenseModal({
                   cursor: 'pointer',
                   transition: 'all 120ms ease',
                   border: 'none',
-                  background: imputationType === 'joint' ? (glass ? 'rgba(255, 255, 255, 0.12)' : 'var(--neutral-0)') : 'transparent',
-                  color: imputationType === 'joint' ? (glass ? '#FFFFFF' : 'var(--neutral-900)') : (glass ? 'rgba(255, 255, 255, 0.48)' : 'var(--neutral-500)'),
-                  boxShadow: imputationType === 'joint' ? (glass ? 'none' : '0 1px 3px rgba(0,0,0,0.08)') : 'none',
+                  background: imputationType === 'joint' ? (glass ? glassActiveBg : 'var(--neutral-0)') : 'transparent',
+                  color: imputationType === 'joint' ? (glass ? glassText : 'var(--neutral-900)') : (glass ? glassSubtext : 'var(--neutral-500)'),
+                  boxShadow: imputationType === 'joint' ? (glass ? (isLight ? '0 1px 4px rgba(120,90,20,0.12)' : 'none') : '0 1px 3px rgba(0,0,0,0.08)') : 'none',
                 }}
               >
                 Jointe
@@ -371,7 +391,7 @@ export function TripManualExpenseModal({
           <div>
             <label style={currentLabelStyle}>Catégorie</label>
             {voyageCategories.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)' }}>
+              <p style={{ margin: 0, fontSize: 13, color: glass ? glassMuted : 'var(--neutral-400)' }}>
                 Catégories voyage non trouvées.
               </p>
             ) : (
@@ -388,7 +408,7 @@ export function TripManualExpenseModal({
                     {selectedCategoryObject ? stripVoyageSuffix(selectedCategoryObject.name) : 'Choisir une catégorie'}
                   </span>
                 </span>
-                <ChevronDown size={14} style={{ color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)', flexShrink: 0 }} />
+                <ChevronDown size={14} style={{ color: glass ? glassMuted : 'var(--neutral-400)', flexShrink: 0 }} />
               </button>
             )}
           </div>
@@ -412,7 +432,7 @@ export function TripManualExpenseModal({
           <div>
             <label htmlFor="tme-notes" style={currentLabelStyle}>
               Notes
-              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)' }}>
+              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: glass ? glassMuted : 'var(--neutral-400)' }}>
                 optionnel
               </span>
             </label>
@@ -458,9 +478,9 @@ export function TripManualExpenseModal({
               background: success
                 ? 'var(--color-success)'
                 : isSaving
-                  ? (glass ? 'rgba(255, 255, 255, 0.12)' : 'var(--neutral-300)')
-                  : VOYAGE_ACCENT_DARK,
-              color: isSaving && glass ? 'rgba(255, 255, 255, 0.3)' : 'var(--neutral-0)',
+                  ? (glass ? (isLight ? 'rgba(180,145,70,0.25)' : 'rgba(255, 255, 255, 0.12)') : 'var(--neutral-300)')
+                  : (isLight ? 'linear-gradient(135deg, #8B5E14 0%, #A67420 100%)' : VOYAGE_ACCENT_DARK),
+              color: isSaving && glass ? (isLight ? 'rgba(100,75,20,0.5)' : 'rgba(255, 255, 255, 0.3)') : 'var(--neutral-0)',
               transition: 'background 200ms ease',
               minHeight: 44,
             }}
@@ -517,9 +537,9 @@ export function TripManualExpenseModal({
                 margin: '0 auto',
                 width: '100%',
                 maxWidth: 420,
-                background: glass ? 'rgba(20, 20, 45, 0.95)' : 'var(--neutral-0)',
-                backdropFilter: glass ? 'blur(20px)' : undefined,
-                border: glass ? '1px solid rgba(255, 255, 255, 0.12)' : undefined,
+                background: glass ? (isLight ? 'rgba(252, 248, 238, 0.95)' : 'rgba(20, 20, 45, 0.95)') : 'var(--neutral-0)',
+                backdropFilter: glass ? (isLight ? 'blur(24px) saturate(1.4)' : 'blur(20px)') : undefined,
+                border: glass ? `1px solid ${isLight ? 'rgba(200,170,100,0.30)' : 'rgba(255, 255, 255, 0.12)'}` : undefined,
                 boxShadow: 'var(--shadow-lg)',
                 borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
                 padding: 'var(--space-4) var(--space-5) calc(var(--space-6) + var(--safe-bottom-offset, 16px))',
@@ -528,16 +548,16 @@ export function TripManualExpenseModal({
             >
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: glass ? '#FFFFFF' : 'var(--neutral-900)' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: glass ? (isLight ? glassText : '#FFFFFF') : 'var(--neutral-900)' }}>
                   Choisir une catégorie
                 </p>
                 <button
                   type="button"
                   onClick={() => setCategoryPickerOpen(false)}
                   style={{
-                    border: glass ? '1px solid rgba(255, 255, 255, 0.12)' : 'none',
-                    background: glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-100)',
-                    color: glass ? 'rgba(255, 255, 255, 0.75)' : 'var(--neutral-600)',
+                    border: glass ? `1px solid ${glassCloseBdr}` : 'none',
+                    background: glass ? glassCloseBg : 'var(--neutral-100)',
+                    color: glass ? glassCloseClr : 'var(--neutral-600)',
                     width: 28,
                     height: 28,
                     borderRadius: 'var(--radius-full)',
@@ -575,10 +595,10 @@ export function TripManualExpenseModal({
                         alignItems: 'center',
                         gap: 'var(--space-2)',
                         padding: '12px var(--space-2)',
-                        background: isSelected ? 'rgba(2, 132, 199, 0.15)' : (glass ? 'rgba(255, 255, 255, 0.05)' : 'var(--neutral-50)'),
+                        background: isSelected ? (isLight ? 'rgba(180,140,60,0.18)' : 'rgba(2, 132, 199, 0.15)') : (glass ? glassSelBg : 'var(--neutral-50)'),
                         border: isSelected
-                          ? '1.5px solid var(--primary-600)'
-                          : `1.5px solid ${glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-200)'}`,
+                          ? `1.5px solid ${isLight ? 'rgba(170,130,50,0.55)' : 'var(--primary-600)'}`
+                          : `1.5px solid ${glass ? glassSelBdr : 'var(--neutral-200)'}`,
                         borderRadius: 'var(--radius-md)',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
@@ -589,7 +609,7 @@ export function TripManualExpenseModal({
                         style={{
                           fontSize: 12,
                           fontWeight: isSelected ? 800 : 700,
-                          color: isSelected ? (glass ? '#38BDF8' : 'var(--primary-700)') : (glass ? 'rgba(255, 255, 255, 0.8)' : 'var(--neutral-700)'),
+                          color: isSelected ? (isLight ? '#7A5010' : '#38BDF8') : (glass ? (isLight ? glassText : 'rgba(255, 255, 255, 0.8)') : 'var(--neutral-700)'),
                           textAlign: 'center',
                         }}
                       >
@@ -639,9 +659,9 @@ export function TripManualExpenseModal({
                 margin: '0 auto',
                 width: '100%',
                 maxWidth: 420,
-                background: glass ? 'rgba(20, 20, 45, 0.95)' : 'var(--neutral-0)',
-                backdropFilter: glass ? 'blur(20px)' : undefined,
-                border: glass ? '1px solid rgba(255, 255, 255, 0.12)' : undefined,
+                background: glass ? (isLight ? 'rgba(252, 248, 238, 0.95)' : 'rgba(20, 20, 45, 0.95)') : 'var(--neutral-0)',
+                backdropFilter: glass ? (isLight ? 'blur(24px) saturate(1.4)' : 'blur(20px)') : undefined,
+                border: glass ? `1px solid ${isLight ? 'rgba(200,170,100,0.30)' : 'rgba(255, 255, 255, 0.12)'}` : undefined,
                 boxShadow: 'var(--shadow-lg)',
                 borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
                 padding: 'var(--space-4) var(--space-5) calc(var(--space-6) + var(--safe-bottom-offset, 16px))',
@@ -660,9 +680,9 @@ export function TripManualExpenseModal({
                   type="button"
                   onClick={() => setTripPickerOpen(false)}
                   style={{
-                    border: glass ? '1px solid rgba(255, 255, 255, 0.12)' : 'none',
-                    background: glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-100)',
-                    color: glass ? 'rgba(255, 255, 255, 0.75)' : 'var(--neutral-600)',
+                    border: glass ? `1px solid ${glassCloseBdr}` : 'none',
+                    background: glass ? glassCloseBg : 'var(--neutral-100)',
+                    color: glass ? glassCloseClr : 'var(--neutral-600)',
                     width: 28,
                     height: 28,
                     borderRadius: 'var(--radius-full)',
@@ -679,7 +699,7 @@ export function TripManualExpenseModal({
               {/* List */}
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 {sortedTripsForSelect.length === 0 ? (
-                  <p style={{ margin: 'var(--space-4) 0', fontSize: 13, color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-500)', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: glass ? (isLight ? glassSubtext : 'rgba(255, 255, 255, 0.4)') : 'var(--neutral-500)', textAlign: 'center' }}>
                     Aucun voyage disponible.
                   </p>
                 ) : (
@@ -701,9 +721,9 @@ export function TripManualExpenseModal({
                       <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                         {showDivider && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', margin: '8px 0 var(--space-2)' }}>
-                            <div style={{ flex: 1, height: 1, background: glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-200)' }} />
-                            <span style={{ fontSize: 11, fontWeight: 700, color: glass ? 'rgba(255, 255, 255, 0.4)' : 'var(--neutral-400)', letterSpacing: '0.05em' }}>2025</span>
-                            <div style={{ flex: 1, height: 1, background: glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-200)' }} />
+                            <div style={{ flex: 1, height: 1, background: glass ? glassDivider : 'var(--neutral-200)' }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: glass ? (isLight ? glassSubtext : 'rgba(255, 255, 255, 0.4)') : 'var(--neutral-400)', letterSpacing: '0.05em' }}>2025</span>
+                            <div style={{ flex: 1, height: 1, background: glass ? glassDivider : 'var(--neutral-200)' }} />
                           </div>
                         )}
                         <button
@@ -717,10 +737,10 @@ export function TripManualExpenseModal({
                             alignItems: 'center',
                             gap: 'var(--space-3)',
                             padding: '10px var(--space-3)',
-                            background: isSelected ? 'rgba(2, 132, 199, 0.15)' : (glass ? 'rgba(255, 255, 255, 0.05)' : 'var(--neutral-50)'),
+                            background: isSelected ? (isLight ? 'rgba(180,140,60,0.18)' : 'rgba(2, 132, 199, 0.15)') : (glass ? glassSelBg : 'var(--neutral-50)'),
                             border: isSelected
-                              ? '1.5px solid var(--primary-600)'
-                              : `1.5px solid ${glass ? 'rgba(255, 255, 255, 0.1)' : 'var(--neutral-150)'}`,
+                              ? `1.5px solid ${isLight ? 'rgba(170,130,50,0.55)' : 'var(--primary-600)'}`
+                              : `1.5px solid ${glass ? glassSelBdr : 'var(--neutral-150)'}`,
                             borderRadius: 'var(--radius-md)',
                             cursor: 'pointer',
                             textAlign: 'left',
@@ -730,7 +750,7 @@ export function TripManualExpenseModal({
                         >
                           <span style={{ fontSize: 18 }}>{t.emoji?.trim() || '✈️'}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: isSelected ? 800 : 700, color: isSelected ? (glass ? '#38BDF8' : 'var(--neutral-800)') : (glass ? 'rgba(255, 255, 255, 0.8)' : 'var(--neutral-800)'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: isSelected ? 800 : 700, color: isSelected ? (isLight ? '#7A5010' : '#38BDF8') : (glass ? (isLight ? glassText : 'rgba(255, 255, 255, 0.8)') : 'var(--neutral-800)'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {displayName}
                             </p>
                           </div>

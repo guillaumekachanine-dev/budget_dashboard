@@ -7,14 +7,14 @@ import type { TripExpenseBarsMode, TripExpenseBarsRow } from '@/features/voyages
 
 // ─── Ring palette ─────────────────────────────────────────────────────────────
 const PALETTE = [
-  '#38BDF8',
-  '#0EA5E9',
   '#6366F1',
   '#8B5CF6',
+  '#EC4899',
   '#F59E0B',
   '#10B981',
-  '#EC4899',
-  '#06B6D4',
+  '#0EA5E9',
+  '#EF4444',
+  '#14B8A6',
 ]
 
 // ─── SVG geometry ─────────────────────────────────────────────────────────────
@@ -133,9 +133,9 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
             position: 'fixed',
             inset: 0,
             zIndex: 400,
-            background: 'rgba(4, 8, 24, 0.9)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
+            background: 'rgba(10, 8, 28, 0.62)',
+            backdropFilter: 'blur(20px) saturate(1.3)',
+            WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -155,21 +155,34 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
               maxWidth: 380,
               borderRadius: 28,
               overflow: 'hidden',
-              background: 'linear-gradient(160deg, #0c1629 0%, #111e3a 50%, #0a1222 100%)',
-              border: '1px solid rgba(56, 189, 248, 0.18)',
-              boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(56,189,248,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
+              background: 'rgba(255, 255, 255, 0.72)',
+              border: '1px solid rgba(255, 255, 255, 0.55)',
+              boxShadow: '0 24px 64px rgba(10, 8, 40, 0.22), 0 1px 0 rgba(255,255,255,0.9) inset, 0 -1px 0 rgba(200,200,220,0.15) inset',
+              backdropFilter: 'blur(40px) saturate(1.8) brightness(1.04)',
+              WebkitBackdropFilter: 'blur(40px) saturate(1.8) brightness(1.04)',
             }}
           >
-            {/* Atmospheric top glow */}
+            {/* Frosted glass top highlight */}
             <div style={{
               position: 'absolute',
-              top: -60,
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent 100%)',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }} />
+            {/* Atmospheric inner glow */}
+            <div style={{
+              position: 'absolute',
+              top: -80,
               left: '50%',
               transform: 'translateX(-50%)',
-              width: 280,
-              height: 160,
+              width: 320,
+              height: 200,
               borderRadius: '50%',
-              background: 'radial-gradient(ellipse, rgba(56,189,248,0.18) 0%, transparent 70%)',
+              background: 'radial-gradient(ellipse, rgba(160, 140, 240, 0.12) 0%, transparent 68%)',
               pointerEvents: 'none',
             }} />
 
@@ -188,7 +201,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
-                  color: 'rgba(56,189,248,0.65)',
+                  color: 'rgba(110, 108, 130, 0.7)',
                 }}>
                   Répartition du budget
                 </p>
@@ -197,7 +210,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                     margin: '3px 0 0',
                     fontSize: 15,
                     fontWeight: 700,
-                    color: 'rgba(255,255,255,0.9)',
+                    color: 'rgba(22, 20, 38, 0.9)',
                     letterSpacing: '-0.01em',
                   }}>
                     {tripName}
@@ -212,23 +225,23 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                   width: 32,
                   height: 32,
                   borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(200, 200, 215, 0.55)',
+                  background: 'rgba(235, 235, 245, 0.7)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  color: 'rgba(255,255,255,0.5)',
+                  color: 'rgba(90, 88, 110, 0.65)',
                   flexShrink: 0,
                   transition: 'background 0.15s, color 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.9)'
+                  e.currentTarget.style.background = 'rgba(220, 220, 235, 0.9)'
+                  e.currentTarget.style.color = 'rgba(22, 20, 38, 0.8)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.5)'
+                  e.currentTarget.style.background = 'rgba(235, 235, 245, 0.7)'
+                  e.currentTarget.style.color = 'rgba(90, 88, 110, 0.65)'
                 }}
               >
                 <X size={14} strokeWidth={2.5} />
@@ -252,9 +265,9 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                   </feMerge>
                 </filter>
                 <radialGradient id="tbo-aura" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%"   stopColor="#38BDF8" stopOpacity="0.10" />
-                  <stop offset="100%" stopColor="#38BDF8" stopOpacity="0"    />
-                </radialGradient>
+                  <stop offset="0%"   stopColor="#6366F1" stopOpacity="0.07" />
+                  <stop offset="100%" stopColor="#6366F1" stopOpacity="0"    />
+              </radialGradient>
               </defs>
 
               {/* Background aura */}
@@ -325,7 +338,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                 fontFamily="var(--font-mono)"
                 fontWeight={800}
                 fontSize={24}
-                fill="rgba(255,255,255,0.95)"
+                fill="rgba(22, 20, 38, 0.88)"
                 style={{ opacity: ringMounted ? 1 : 0, transition: 'opacity 0.4s ease 0.3s' }}
               >
                 {formatCurrencyFloored(centerAmt)}
@@ -339,7 +352,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                 fontWeight={selSeg ? 700 : 500}
                 fontSize={selSeg ? 11 : 10}
                 letterSpacing="0.03em"
-                fill={selSeg ? selSeg.color : 'rgba(255,255,255,0.35)'}
+                fill={selSeg ? selSeg.color : 'rgba(110, 108, 130, 0.5)'}
                 style={{ opacity: ringMounted ? 1 : 0, transition: 'all 0.2s ease' }}
               >
                 {centerLabel}
@@ -387,13 +400,16 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                       borderRadius: 12,
                       border: 'none',
                       background: isSel
-                        ? `rgba(${hexToRgb(seg.color)}, 0.14)`
-                        : 'transparent',
+                        ? `rgba(${hexToRgb(seg.color)}, 0.10)`
+                        : 'rgba(255,255,255,0)',
+                      backdropFilter: isSel ? 'blur(8px)' : 'none',
+                      WebkitBackdropFilter: isSel ? 'blur(8px)' : 'none',
+                      border: isSel ? `1px solid rgba(${hexToRgb(seg.color)}, 0.18)` : '1px solid transparent',
                       cursor: 'pointer',
                       textAlign: 'left',
                       width: '100%',
-                      transition: 'background 0.18s ease, opacity 0.18s ease',
-                      opacity: dimmed ? 0.35 : 1,
+                      transition: 'background 0.18s ease, opacity 0.18s ease, border-color 0.18s ease',
+                      opacity: dimmed ? 0.3 : 1,
                     }}
                   >
                     {/* Dot */}
@@ -412,7 +428,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                     <span style={{
                       fontSize: 12.5,
                       fontWeight: isSel ? 600 : 400,
-                      color: isSel ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)',
+                      color: isSel ? 'rgba(22, 20, 38, 0.92)' : 'rgba(80, 78, 100, 0.72)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -426,7 +442,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                       fontSize: 12.5,
                       fontWeight: 700,
                       fontFamily: 'var(--font-mono)',
-                      color: isSel ? seg.color : 'rgba(255,255,255,0.7)',
+                      color: isSel ? seg.color : 'rgba(22, 20, 38, 0.78)',
                       whiteSpace: 'nowrap',
                       transition: 'color 0.15s',
                     }}>
@@ -438,7 +454,7 @@ export function TripBudgetOverlay({ open, onClose, mode, rows, tripName }: TripB
                       fontSize: 11,
                       fontWeight: 600,
                       fontFamily: 'var(--font-mono)',
-                      color: isSel ? seg.color : 'rgba(255,255,255,0.28)',
+                      color: isSel ? seg.color : 'rgba(110, 108, 130, 0.45)',
                       whiteSpace: 'nowrap',
                       minWidth: 32,
                       textAlign: 'right',

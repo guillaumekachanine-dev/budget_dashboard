@@ -3335,8 +3335,9 @@ export function Home() {
         }}
         initialTripId={tripExpenseInitialId}
         glass
-        glassBackground={getGlassColors('#38BDF8').glassBackground}
-        glassBorder={getGlassColors('#38BDF8').glassBorder}
+        glassBackground="rgba(250, 246, 238, 0.82)"
+        glassBorder="rgba(210, 185, 140, 0.35)"
+        glassTone="light"
       />
 
       <TripExpenseMatchingSheet
