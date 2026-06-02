@@ -421,7 +421,7 @@ function RevenueSection2026({
   const [activeRevenueKpiModal, setActiveRevenueKpiModal] = useState<RevenueKpiModalKey>(null)
   const [revenueDisplayMode, setRevenueDisplayMode] = useState<RevenueDisplayMode>('real_ytd')
   const [showRevenueDisplayPicker, setShowRevenueDisplayPicker] = useState(false)
-  const { data: rawSources } = useBudgetRevenueSources2026()
+  const { data: rawSources } = useBudgetRevenueSources2026(2026)
 
   const series2026 = revenueData?.monthlySeries.filter(p => p.month_start.startsWith('2026')) ?? []
   const guaranteedMonthlyIncome = 3338
