@@ -1178,7 +1178,8 @@ function OptimizationsTile({
         color: '#FFFFFF',
         borderRadius: 'var(--radius-button)',
         padding: '4px var(--space-3)',
-        minHeight: 40,
+        height: '100%',
+        minHeight: 48,
         cursor: 'pointer',
         transition: 'background 120ms ease',
       }}
@@ -2724,7 +2725,7 @@ export function Home() {
                         </div>
 
                         {/* ── CTAs ──────────────────────────────────────────────── */}
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)', alignItems: 'stretch' }}>
                           <button
                             type="button"
                             onClick={() => setShowHeroBalanceModal(true)}
@@ -2741,7 +2742,8 @@ export function Home() {
                               color: '#FFFFFF',
                               borderRadius: 'var(--radius-button)',
                               padding: '4px var(--space-3)',
-                              minHeight: 40,
+                              height: '100%',
+                              minHeight: 48,
                               cursor: 'pointer',
                               transition: 'background 120ms ease',
                             }}
