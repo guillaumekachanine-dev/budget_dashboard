@@ -1,4 +1,6 @@
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 
 // ── Compact gauge geometry (two cards side-by-side) ───────────────
@@ -238,21 +240,192 @@ interface OptimizationsModalProps {
 }
 
 export function OptimizationsModal({ data, formatCurrencyFloored }: OptimizationsModalProps) {
+  const [currentSlide, setCurrentSlide] = useState(0)
+
+  // Show max 2 cards per slide, limit to 5 total cards
+  const displayData = data.slice(0, 5)
+  const cardsPerSlide = 2
+  const totalSlides = Math.ceil(displayData.length / cardsPerSlide)
+
+  const canGoPrev = currentSlide > 0
+  const canGoNext = currentSlide < totalSlides - 1
+
+  const handlePrev = () => {
+    if (canGoPrev) setCurrentSlide(currentSlide - 1)
+  }
+
+  const handleNext = () => {
+    if (canGoNext) setCurrentSlide(currentSlide + 1)
+  }
+
+  // Get the current slide's cards
+  const startIdx = currentSlide * cardsPerSlide
+  const endIdx = Math.min(startIdx + cardsPerSlide, displayData.length)
+  const currentCards = displayData.slice(startIdx, endIdx)
+
   return (
     <div style={{
       padding: '14px 14px 18px',
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 10,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12,
     }}>
-      {data.map((row, i) => (
-        <GaugeCard
-          key={row.label}
-          row={row}
-          idx={i}
-          formatCurrencyFloored={formatCurrencyFloored}
-        />
-      ))}
+      {/* Carousel Container */}
+      <div style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+      }}>
+        {/* Left Arrow */}
+        <button
+          onClick={handlePrev}
+          disabled={!canGoPrev}
+          aria-label="Slide précédent"
+          style={{
+            flexShrink: 0,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: `1px solid ${canGoPrev ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)'}`,
+            background: canGoPrev
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(255,255,255,0.02)',
+            color: canGoPrev
+              ? 'rgba(255,255,255,0.6)'
+              : 'rgba(255,255,255,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: canGoPrev ? 'pointer' : 'not-allowed',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (canGoPrev) {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
+              e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = canGoPrev
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(255,255,255,0.02)'
+            e.currentTarget.style.color = canGoPrev
+              ? 'rgba(255,255,255,0.6)'
+              : 'rgba(255,255,255,0.2)'
+          }}
+        >
+          <ChevronLeft size={18} strokeWidth={2.5} />
+        </button>
+
+        {/* Cards Grid */}
+        <div style={{
+          flex: 1,
+          display: 'grid',
+          gridTemplateColumns: cardsPerSlide === 1 ? '1fr' : '1fr 1fr',
+          gap: 10,
+          minHeight: 260,
+          overflow: 'hidden',
+        }}>
+          <AnimatePresence>
+            {currentCards.map((row, i) => (
+              <motion.div
+                key={`${currentSlide}-${i}`}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+              >
+                <GaugeCard
+                  row={row}
+                  idx={startIdx + i}
+                  formatCurrencyFloored={formatCurrencyFloored}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Right Arrow */}
+        <button
+          onClick={handleNext}
+          disabled={!canGoNext}
+          aria-label="Slide suivant"
+          style={{
+            flexShrink: 0,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: `1px solid ${canGoNext ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)'}`,
+            background: canGoNext
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(255,255,255,0.02)',
+            color: canGoNext
+              ? 'rgba(255,255,255,0.6)'
+              : 'rgba(255,255,255,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: canGoNext ? 'pointer' : 'not-allowed',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (canGoNext) {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
+              e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = canGoNext
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(255,255,255,0.02)'
+            e.currentTarget.style.color = canGoNext
+              ? 'rgba(255,255,255,0.6)'
+              : 'rgba(255,255,255,0.2)'
+          }}
+        >
+          <ChevronRight size={18} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* Slide Indicators */}
+      {totalSlides > 1 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 6,
+          marginTop: 4,
+        }}>
+          {Array.from({ length: totalSlides }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentSlide(i)}
+              aria-label={`Aller au slide ${i + 1}`}
+              style={{
+                width: currentSlide === i ? 8 : 6,
+                height: 6,
+                borderRadius: '50%',
+                border: 'none',
+                background: currentSlide === i
+                  ? 'rgba(255,255,255,0.7)'
+                  : 'rgba(255,255,255,0.2)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (currentSlide !== i) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.4)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = currentSlide === i
+                  ? 'rgba(255,255,255,0.7)'
+                  : 'rgba(255,255,255,0.2)'
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
