@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -733,6 +733,7 @@ export function Budgets() {
   const defaultPeriodYear = isGracePeriod ? (nowMonth === 0 ? nowYear - 1 : nowYear) : nowYear
   const defaultPeriodMonth = isGracePeriod ? (nowMonth === 0 ? 12 : nowMonth) : nowMonth + 1
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
   const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
@@ -908,6 +909,22 @@ export function Budgets() {
       nextParams.delete('category')
       nextParams.delete('block')
       setSearchParams(nextParams, { replace: true })
+    }
+
+    // Apply navigation state from quick-search navigation
+    type NavState = { categoryId?: string | null; year?: number; month?: number } | null
+    const navState = (location.state as NavState) ?? null
+    if (navState) {
+      if (typeof navState.year === 'number') setSelectedPeriodYear(navState.year)
+      if (typeof navState.month === 'number') {
+        setPeriodKey('mois')
+        setSelectedPeriodMonth(navState.month)
+      }
+      if (navState.categoryId) {
+        // setSelectedCat is not yet defined here; delay one tick so it's stable
+        const catId = navState.categoryId
+        setTimeout(() => setSelectedCat(catId), 0)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

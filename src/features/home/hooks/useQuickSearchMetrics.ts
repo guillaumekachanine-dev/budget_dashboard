@@ -17,6 +17,8 @@ export interface QuickSearchMetricsData {
   average6m: number | null
   ytdDiffAmount: number | null
   ytdDiffPct: number | null
+  evolution3mAmount: number | null
+  evolution3mPct: number | null
   isFuturePeriod: boolean
 }
 
@@ -212,33 +214,57 @@ export function useQuickSearchMetrics(
       })
       average6m = count6m > 0 ? sum6m / count6m : null
 
-      // 4. Year to Year comparison
-      // Comparing targetYear with targetYear - 1 (or 2026 vs 2025)
+      // 4. Year to Year comparison (kept for backwards compat, not displayed)
       let ytdDiffAmount: number | null = null
       let ytdDiffPct: number | null = null
 
       const compareYear = targetYear === 2026 ? 2025 : 2026
       if (targetMonth !== undefined) {
-        // Compare same month
         const currentVal = isFuturePeriod ? budget : (actualsMap.get(`${targetYear}:${targetMonth}`) ?? 0)
         const compareVal = actualsMap.get(`${compareYear}:${targetMonth}`) ?? 0
-
         ytdDiffAmount = currentVal - compareVal
         ytdDiffPct = compareVal > 0 ? (ytdDiffAmount / compareVal) * 100 : null
       } else {
-        // Compare YTD up to current month (or all 12 months if 2025 is selected)
         const maxMonth = targetYear === currentYear ? currentMonth : 12
         let currentSum = 0
         let compareSum = 0
-
         for (let m = 1; m <= maxMonth; m++) {
           currentSum += actualsMap.get(`${targetYear}:${m}`) ?? 0
           compareSum += actualsMap.get(`${compareYear}:${m}`) ?? 0
         }
-
         ytdDiffAmount = currentSum - compareSum
         ytdDiffPct = compareSum > 0 ? (ytdDiffAmount / compareSum) * 100 : null
       }
+
+      // 5. Évolution 3M
+      // Recent window  = anchor month + 2 months before it (3 months)
+      // Previous window = 3 months before the recent window
+      const anchor3mMonth = targetMonth !== undefined ? targetMonth : (targetYear === currentYear ? currentMonth : 12)
+      const anchor3mYear = targetYear
+
+      function step3m(y: number, m: number, steps: number): { year: number; month: number } {
+        let ry = y, rm = m
+        for (let i = 0; i < steps; i++) {
+          rm -= 1
+          if (rm < 1) { rm = 12; ry -= 1 }
+        }
+        return { year: ry, month: rm }
+      }
+
+      let recentSum3m = 0
+      let prevSum3m = 0
+
+      for (let i = 0; i < 3; i++) {
+        const { year: ry, month: rm } = step3m(anchor3mYear, anchor3mMonth, i)
+        recentSum3m += actualsMap.get(`${ry}:${rm}`) ?? 0
+      }
+      for (let i = 3; i < 6; i++) {
+        const { year: ry, month: rm } = step3m(anchor3mYear, anchor3mMonth, i)
+        prevSum3m += actualsMap.get(`${ry}:${rm}`) ?? 0
+      }
+
+      const evolution3mAmount = recentSum3m - prevSum3m
+      const evolution3mPct = prevSum3m > 0 ? (evolution3mAmount / prevSum3m) * 100 : null
 
       return {
         consomme,
@@ -246,6 +272,8 @@ export function useQuickSearchMetrics(
         average6m,
         ytdDiffAmount,
         ytdDiffPct,
+        evolution3mAmount,
+        evolution3mPct,
         isFuturePeriod,
       }
     },

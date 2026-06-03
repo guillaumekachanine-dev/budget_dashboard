@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Bell, Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowUp, Bell, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
@@ -43,19 +43,12 @@ import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemai
 import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
 import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
-import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
-import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
-import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
 import { useAuth } from '@/hooks/useAuth'
-import { useSavingsTransfersYtd } from '@/features/savings/hooks/useSavingsTransfersYtd'
-import { useSavingsObjective2026Details } from '@/features/savings/hooks/useSavingsObjective2026Details'
 import {
   DetailModalRow,
   DetailModalSeparator,
 } from '@/components'
-import { SavingsProgressModal } from '@/components/modals/SavingsProgressModal'
-import { OptimizationsModal } from '@/components/modals/OptimizationsModal'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -139,11 +132,6 @@ function formatDateShort(isoDate: string): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function formatDayMonthLabel(isoDate: string): string {
-  const date = new Date(`${isoDate}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return isoDate
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).replace('.', '')
-}
 
 function formatSignedCurrency(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
@@ -156,10 +144,6 @@ function renderOperationSummary(count: number): string {
 }
 
 
-function renderDriftSummary(count: number, totalOverrunAmount: number): string {
-  if (count === 0) return 'Aucune'
-  return `${count} cat. +${formatCurrencyFloored(totalOverrunAmount)}`
-}
 
 function getGlassColors(accentColor: string | null | undefined) {
   let hex = accentColor || '#5B57F5'
@@ -228,8 +212,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 const MAIN_CHECKING_ACCOUNT_ID = 'bcffa4d1-92b0-4feb-a492-51ea328cfce2'
-
-type SavingsTileStatus = 'validated' | 'pending' | 'alert'
 
 
 function DriftCategoryTransactionsModal({
@@ -535,133 +517,6 @@ function DriftsModal({
         )}
       </div>
     </BottomSheet>
-  )
-}
-
-function DriftsTile({
-  count,
-  totalOverrunAmount,
-  onClick,
-}: {
-  count: number
-  totalOverrunAmount: number
-  onClick: () => void
-}) {
-  const hasDrifts = count > 0
-
-  return (
-    <MirrorTimelineTile
-      title="Dérives"
-      sublabel="budgétaires"
-      value={renderDriftSummary(count, totalOverrunAmount)}
-      valueEmphasis={hasDrifts}
-      dotColor={HOME_HERO_ACCENT_DOT}
-      shadowColor={HOME_HERO_ACCENT_SHADOW}
-      onClick={onClick}
-      ariaLabel={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire, total ${formatCurrencyFloored(totalOverrunAmount)} — voir le détail`}
-    />
-  )
-}
-
-function MirrorTimelineTile({
-  title,
-  sublabel,
-  value,
-  valueEmphasis,
-  dotColor,
-  shadowColor,
-  onClick,
-  ariaLabel,
-}: {
-  title: string
-  sublabel?: string
-  value: ReactNode
-  valueEmphasis: boolean
-  dotColor: string
-  shadowColor: string
-  onClick?: () => void
-  ariaLabel: string
-}) {
-  void sublabel
-  const [hovered, setHovered] = useState(false)
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      disabled={!onClick}
-      aria-label={ariaLabel}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
-        border: 'none',
-        padding: '10px 10px 10px 0',
-        width: '100%',
-        minHeight: 44,
-        borderRadius: 'var(--radius-lg)',
-        cursor: onClick ? 'pointer' : 'default',
-        textAlign: 'left',
-        transition: 'background 0.2s ease',
-        outline: 'none',
-        overflow: 'visible',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
-        <div style={{ width: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, overflow: 'visible' }}>
-          <div
-            aria-hidden="true"
-            style={{
-              display: 'block',
-              width: 12,
-              height: 12,
-              minWidth: 12,
-              minHeight: 12,
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 0 4px ${shadowColor}`,
-              transformOrigin: 'center',
-              marginLeft: -6,
-              transform: hovered ? 'scale(1.25)' : 'scale(1)',
-              transition: 'transform 0.2s ease',
-            }}
-          />
-        </div>
-
-        {/* Single-line: bold title — value */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'var(--neutral-900)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {title}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: valueEmphasis ? 700 : 400,
-              color: valueEmphasis ? 'var(--neutral-800)' : 'var(--neutral-400)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-            }}
-          >
-            {value}
-          </span>
-        </div>
-      </div>
-    </button>
   )
 }
 
@@ -975,182 +830,6 @@ function BudgetProgressModal({
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SavingsTile({
-  status,
-  monthAmountLabel,
-  onClick,
-}: {
-  status: SavingsTileStatus
-  monthAmountLabel: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Voir le détail de l'objectif d'épargne"
-      style={{
-        position: 'relative',
-        width: '100%',
-        minHeight: 64,
-        border: 'none',
-        background: 'rgba(255,255,255,0.82)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
-        cursor: 'pointer',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-        padding: 'var(--space-2) var(--space-4)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-        e.currentTarget.style.transform = 'translateY(-1px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-        e.currentTarget.style.transform = 'translateY(0)'
-      }}
-    >
-      <div style={{ display: 'grid', gap: 2, textAlign: 'left' }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 11,
-            fontWeight: 800,
-            color: 'var(--neutral-800)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          Épargne
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 12,
-            fontWeight: 700,
-            color: 'var(--neutral-700)',
-            fontFamily: 'var(--font-mono)',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          {monthAmountLabel}
-        </p>
-      </div>
-
-      <span
-        style={{
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {status === 'validated' ? (
-          <Check size={30} color="var(--color-success)" strokeWidth={3} />
-        ) : null}
-        {status === 'pending' || status === 'alert' ? (
-          <X size={30} color={status === 'pending' ? 'var(--neutral-500)' : 'var(--color-error)'} strokeWidth={3} />
-        ) : null}
-      </span>
-    </button>
-  )
-}
-
-
-
-function OptimizationsTile({
-  onClick,
-}: {
-  onClick: () => void
-  theme?: 'light' | 'dark'
-}) {
-  const { balance, isLoading } = useOptimizationBalance()
-
-  const formattedAmount = isLoading ? '— €' : `${formatCurrencyFloored(Math.abs(balance))}`
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Voir le détail des optimisations"
-      style={{
-        width: '100%',
-        display: 'inline-flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 1,
-        border: '1px solid rgba(255,255,255,0.25)',
-        background: 'rgba(255,255,255,0.1)',
-        color: '#FFFFFF',
-        borderRadius: 'var(--radius-button)',
-        padding: '4px var(--space-3)',
-        height: '100%',
-        minHeight: 48,
-        cursor: 'pointer',
-        transition: 'background 120ms ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-      }}
-    >
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          color: 'rgba(255,255,255,0.6)',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        Optimisations
-      </span>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: '#FFFFFF',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        {formattedAmount}
-      </span>
-    </button>
-  )
-}
-
-function SavingsGoalTile({
-  scheduleValue,
-  scheduleAriaLabel,
-  onClick,
-}: {
-  scheduleValue: ReactNode
-  scheduleAriaLabel: string
-  onClick?: () => void
-}) {
-  return (
-      <MirrorTimelineTile
-        title="Épargne"
-        sublabel="mensuelle"
-        value={scheduleValue}
-        valueEmphasis={false}
-        dotColor={HOME_HERO_ACCENT_DOT}
-        shadowColor={HOME_HERO_ACCENT_SHADOW}
-        onClick={onClick}
-        ariaLabel={`Épargne mensuelle prévue: ${scheduleAriaLabel}`}
-    />
-  )
-}
 
 const MONTHS_FR_FULL = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -1377,14 +1056,20 @@ function SearchResultKpiCard({
   value,
   subtitle,
   valueColor,
+  onClick,
+  ariaLabel,
 }: {
   title: string
   value: string
   subtitle: string
   valueColor?: string
+  onClick?: () => void
+  ariaLabel?: string
 }) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div
+    <Tag
+      {...(onClick ? { type: 'button' as const, onClick, 'aria-label': ariaLabel } : {})}
       style={{
         position: 'relative',
         background: 'linear-gradient(135deg, rgba(255, 236, 179, 0.16) 0%, rgba(255, 171, 46, 0.08) 100%)',
@@ -1397,6 +1082,9 @@ function SearchResultKpiCard({
         minHeight: 120,
         boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
+        width: '100%',
+        textAlign: 'left',
+        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       {/* Accent Strip */}
@@ -1410,7 +1098,7 @@ function SearchResultKpiCard({
           background: 'rgba(255, 171, 46, 0.6)',
         }}
       />
-      
+
       <span
         style={{
           fontSize: 9,
@@ -1423,7 +1111,7 @@ function SearchResultKpiCard({
       >
         {title}
       </span>
-      
+
       <p
         style={{
           margin: 0,
@@ -1438,7 +1126,7 @@ function SearchResultKpiCard({
       >
         {value}
       </p>
-      
+
       <p
         style={{
           margin: 0,
@@ -1450,7 +1138,7 @@ function SearchResultKpiCard({
       >
         {subtitle}
       </p>
-    </div>
+    </Tag>
   )
 }
 
@@ -1465,16 +1153,12 @@ export function Home() {
   const navigate = useNavigate()
   const { year, month } = getCurrentPeriod()
   const now = new Date()
-  const { user } = useAuth()
-  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, year)
-  const objective2026Details = useSavingsObjective2026Details(user?.id)
+  useAuth()
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
-  const { data: optimizationCapacity } = useOptimizationCapacity(year)
-  const budgetPayloadForOptimizations = useBudgetPagePayload({ periodYear: year, periodMonth: month, monthsBack: 1 })
   const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const eomDateStr = toLocalIsoDate(eomDate)
   const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
@@ -1486,6 +1170,7 @@ export function Home() {
   const [showSearchCatModal, setShowSearchCatModal] = useState(false)
   const [showSearchPeriodModal, setShowSearchPeriodModal] = useState(false)
   const [showSearchResultsModal, setShowSearchResultsModal] = useState(false)
+  const [quickSearchCompareMode, setQuickSearchCompareMode] = useState(false)
   const [searchPickerYear, setSearchPickerYear] = useState(2026)
 
   const { data: searchMetrics, isPending: searchPending } = useQuickSearchMetrics(
@@ -1546,62 +1231,27 @@ export function Home() {
     return `${monthLabel} ${searchPeriod.year}`
   }
 
-  const getYtdColor = () => {
-    if (!searchMetrics || searchMetrics.ytdDiffPct === null) return undefined
-    const diff = searchMetrics.ytdDiffPct
+  const getEvolution3mColor = () => {
+    if (!searchMetrics || searchMetrics.evolution3mPct === null) return undefined
+    const diff = searchMetrics.evolution3mPct
     if (diff === 0) return 'rgba(255, 255, 255, 0.9)'
     const isGood = isSelectionIncome ? diff > 0 : diff < 0
     return isGood ? '#2ED47A' : '#FC5A5A'
   }
 
-
-  const optimizationsData = useMemo(() => {
-    const levers = optimizationCapacity?.optimization_levers ?? []
-
-    // Build lookup: normalized category name → actual spending this month
-    const normalize = (v: string | null | undefined) =>
-      (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-    const actualByCategory = new Map<string, number>()
-    for (const row of budgetPayloadForOptimizations.data?.by_category ?? []) {
-      const key = normalize(row.category_name)
-      if (key) actualByCategory.set(key, Number(row.actual_amount ?? 0))
-    }
-
-    return levers.map((lever) => {
-      const avg = Math.max(0, Number(lever.avg_monthly_amount_6m ?? 0))
-      const gain = Math.max(0, Number(lever.realistic_monthly_gain ?? 0))
-      // "Cible opti." = avg monthly spend minus the realistic monthly savings
-      const cibleOpti = Math.max(0, avg - gain)
-
-      const n = normalize(lever.category_name)
-      // Actual spending this month for this category
-      const consumedAmount = actualByCategory.get(n) ?? 0
-
-      const progressPct = cibleOpti > 0 ? Math.min(110, (consumedAmount / cibleOpti) * 100) : 0
-
-      let iconKey = n.replace(/\s+/g, '_')
-      if (n.includes('retrait') && n.includes('espece')) iconKey = 'achats_divers_retrait_d_especes'
-      else if (n.includes('petits achats alimentaires')) iconKey = 'alimentation_petits_achats_alimentaires'
-      else if (n.includes('cafe') && n.includes('bar')) iconKey = 'sorties_cafe_bars'
-      else if (n.includes('restaurant')) iconKey = 'sorties_restaurant'
-      else if (n.includes('courses')) iconKey = 'alimentation_courses'
-      else if (n.includes('e-commerce')) iconKey = 'achats_divers_e_commerce'
-      else if (n.includes('vetement')) iconKey = 'achats_divers_vetements'
-
-      let barColor = '#5B57F5'
-      if (progressPct >= 75) barColor = '#FFAB2E'
-      if (progressPct >= 100) barColor = '#FC5A5A'
-
-      return {
-        label: lever.category_name ?? '—',
-        iconKey,
-        consumedAmount,      // consommé à date ce mois-ci
-        objectiveAmount: cibleOpti, // cible opti.
-        progressPct,
-        barColor,
-      }
+  const handleNavigateToBudgetsCategory = (anchor: 'donuts' | 'categories') => {
+    void anchor
+    setShowSearchResultsModal(false)
+    const categoryId = searchSelection?.kind === 'category' ? searchSelection.id : null
+    navigate('/budgets', {
+      state: {
+        categoryId,
+        year: searchPeriod?.year,
+        month: searchPeriod?.month,
+      },
     })
-  }, [optimizationCapacity, budgetPayloadForOptimizations.data])
+  }
+
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
@@ -1738,8 +1388,6 @@ export function Home() {
   const [showDriftsModal, setShowDriftsModal] = useState(false)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
-  const [showSavingsModal, setShowSavingsModal] = useState(false)
-  const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
   const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
@@ -1764,19 +1412,17 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
         setShowDriftsModal(false)
         setShowHeroBalanceModal(false)
-        setShowSavingsModal(false)
-        setShowOptimizationsModal(false)
         setShowProgressModal(false)
         setShowPlannedOpsModal(false)
         setShowPlannedOpsEomModal(false)
@@ -1784,7 +1430,7 @@ export function Home() {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1941,49 +1587,6 @@ export function Home() {
     })
   }, [dailyPayload])
 
-  const savingsMonthlyGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
-  const savingsMonthlySavedDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
-  const savingsYtdDisplay = Number(savingsTransfersYtd?.totalAmount ?? 0)
-  const savingsAnnualGoalDisplay = useMemo(() => {
-    const dbObjective = objective2026Details.totalUpdatedObjective
-    if (dbObjective > 0) return dbObjective
-    return Number(dailyPayload?.budgets.savings_budget_amount ?? 0) * 12
-  }, [objective2026Details.totalUpdatedObjective, dailyPayload?.budgets.savings_budget_amount])
-  const savingsProgressPct = useMemo(() => {
-    if (savingsMonthlyGoalDisplay <= 0) return 0
-    return Math.max(0, Math.min(100, (savingsMonthlySavedDisplay / savingsMonthlyGoalDisplay) * 100))
-  }, [savingsMonthlyGoalDisplay, savingsMonthlySavedDisplay])
-  const savingsYtdProgressPct = useMemo(() => {
-    if (savingsAnnualGoalDisplay <= 0) return 0
-    return Math.max(0, Math.min(100, (savingsYtdDisplay / savingsAnnualGoalDisplay) * 100))
-  }, [savingsYtdDisplay, savingsAnnualGoalDisplay])
-  const savingsGoalReached = savingsProgressPct >= 100
-  const savingsTileStatus: SavingsTileStatus = useMemo(() => {
-    if (savingsGoalReached) return 'validated'
-    if (daysRemaining <= 10) return 'alert'
-    return 'pending'
-  }, [daysRemaining, savingsGoalReached])
-  const savingsMonthLabel = useMemo(
-    () => new Date(year, month - 1, 1).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', ''),
-    [month, year],
-  )
-  const savingsTileMonthAmountLabel = useMemo(
-    () => `${savingsMonthLabel} ${formatCurrencyFloored(savingsMonthlySavedDisplay)}`,
-    [savingsMonthLabel, savingsMonthlySavedDisplay],
-  )
-  const upcomingSavingsTransfer = useMemo(
-    () => (upcomingOps ?? []).find((item) => item.flow_type === 'savings') ?? null,
-    [upcomingOps],
-  )
-  const savingsPlannedTransferLabel = useMemo<string>(() => {
-    if (plannedSavingsAmountDisplay <= 0) return 'Aucun'
-    return `Obj. ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
-  }, [plannedSavingsAmountDisplay])
-  const savingsPlannedTransferAriaLabel = useMemo(() => {
-    const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
-    if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
-    return `${formatDayMonthLabel(transferDate)} - ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
-  }, [currentMonthSavingsPlanning?.transferDate, plannedSavingsAmountDisplay, upcomingSavingsTransfer?.planned_date])
   const variableEssentialConsumedDisplay = Number(
     dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'variable_essentielle')?.actual_amount ?? 0,
   )
@@ -2638,13 +2241,13 @@ export function Home() {
                         </div>
 
                         {/* ── CTAs ──────────────────────────────────────────────── */}
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)', alignItems: 'stretch' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                           <button
                             type="button"
                             onClick={() => setShowHeroBalanceModal(true)}
                             aria-label="Voir le détail du solde bancaire du compte principal"
                             style={{
-                              flex: '1 1 auto',
+                              width: '100%',
                               display: 'inline-flex',
                               flexDirection: 'column',
                               alignItems: 'center',
@@ -2655,7 +2258,6 @@ export function Home() {
                               color: '#FFFFFF',
                               borderRadius: 'var(--radius-button)',
                               padding: '4px var(--space-3)',
-                              height: '100%',
                               minHeight: 48,
                               cursor: 'pointer',
                               transition: 'background 120ms ease',
@@ -2675,9 +2277,36 @@ export function Home() {
                             </span>
                           </button>
 
-                          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                            <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} theme="dark" />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowDriftsModal(true)}
+                            aria-label="Voir les dérives budgétaires"
+                            style={{
+                              width: '100%',
+                              display: 'inline-flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
+                              border: '1px solid rgba(255,255,255,0.25)',
+                              background: 'rgba(255,255,255,0.1)',
+                              color: '#FFFFFF',
+                              borderRadius: 'var(--radius-button)',
+                              padding: '4px var(--space-3)',
+                              minHeight: 48,
+                              cursor: 'pointer',
+                              transition: 'background 120ms ease',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                          >
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                              Dérives
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: driftOverrunTotal > 0 ? '#FC5A5A' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                              {formatCurrencyFloored(driftOverrunTotal)}
+                            </span>
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -2855,45 +2484,39 @@ export function Home() {
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   columnGap: 'var(--space-4)',
-                  rowGap: 'var(--space-4)',
+                  rowGap: 'var(--space-2)',
                   position: 'relative',
                   paddingLeft: 16,
                   paddingRight: 16,
                 }}
               >
-                {/* ROW 1: J+3 Timeline (Left) & Optimizations Tile (Right) */}
-                <TimelineRow
-                  label="J+3"
-                  sublabel="échéances"
-                  value={renderOperationSummary(upcomingOpsWindows.j3.count)}
-                  dotColor={HOME_HERO_ACCENT_DOT}
-                  shadowColor={HOME_HERO_ACCENT_SHADOW}
-                  onClick={() => setShowPlannedOpsModal(true)}
-                  hasOps={false}
-                />
-                <DriftsTile
-                  count={driftRows.length}
-                  totalOverrunAmount={driftOverrunTotal}
-                  onClick={() => setShowDriftsModal(true)}
-                />
+                {/* Échéances J+3 — pleine largeur */}
+                <div style={{ gridColumn: 'span 2', minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                  <TimelineRow
+                    label="J+3"
+                    sublabel="échéances"
+                    value={renderOperationSummary(upcomingOpsWindows.j3.count)}
+                    dotColor={HOME_HERO_ACCENT_DOT}
+                    shadowColor={HOME_HERO_ACCENT_SHADOW}
+                    onClick={() => setShowPlannedOpsModal(true)}
+                    hasOps={false}
+                  />
+                </div>
 
-                {/* ROW 2: Fin de mois Timeline (Left) & Épargne Tile (Right) */}
-                <TimelineRow
-                  label={`J+${daysRemaining}`}
-                  sublabel="fin de mois"
-                  value={renderOperationSummary(upcomingOpsWindows.eom.count)}
-                  dotColor={HOME_HERO_ACCENT_DOT}
-                  shadowColor={HOME_HERO_ACCENT_SHADOW}
-                  onClick={() => setShowPlannedOpsEomModal(true)}
-                  hasOps={false}
-                />
-                <SavingsGoalTile
-                  scheduleValue={savingsPlannedTransferLabel}
-                  scheduleAriaLabel={savingsPlannedTransferAriaLabel}
-                  onClick={() => setShowSavingsModal(true)}
-                />
+                {/* Échéances fin de mois — pleine largeur */}
+                <div style={{ gridColumn: 'span 2', minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                  <TimelineRow
+                    label={`J+${daysRemaining}`}
+                    sublabel="fin de mois"
+                    value={renderOperationSummary(upcomingOpsWindows.eom.count)}
+                    dotColor={HOME_HERO_ACCENT_DOT}
+                    shadowColor={HOME_HERO_ACCENT_SHADOW}
+                    onClick={() => setShowPlannedOpsEomModal(true)}
+                    hasOps={false}
+                  />
+                </div>
 
-                {/* ROW 3: Recherche Rapide Tile (Full-width spanning both columns) */}
+                {/* Recherche Rapide Tile — pleine largeur */}
                 <div style={{ gridColumn: 'span 2', marginTop: 12 }}>
                   <QuickSearchTile
                     selection={searchSelection}
@@ -2906,40 +2529,7 @@ export function Home() {
                 </div>
               </div>
             </section>
-          ) : (
-            <>
-              <section
-                style={{ padding: sectionHorizontalPadding }}
-              >
-                <div
-                  style={{
-                    maxWidth: 600,
-                    margin: '0 auto',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                    gap: 'var(--space-4)',
-                  }}
-                >
-                  <SavingsTile
-                    status={savingsTileStatus}
-                    monthAmountLabel={savingsTileMonthAmountLabel}
-                    onClick={() => setShowSavingsModal(true)}
-                  />
-                  <DriftsTile
-                    count={driftRows.length}
-                    totalOverrunAmount={driftOverrunTotal}
-                    onClick={() => setShowDriftsModal(true)}
-                  />
-                  <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
-                  <SavingsGoalTile
-                    scheduleValue={savingsPlannedTransferLabel}
-                    scheduleAriaLabel={savingsPlannedTransferAriaLabel}
-                    onClick={() => setShowSavingsModal(true)}
-                  />
-                </div>
-              </section>
-            </>
-          )}
+          ) : null}
 
           {/* ── Module libre Infos — tuile cloche dépliable ── */}
           <section
@@ -3082,42 +2672,6 @@ export function Home() {
     </motion.div>
   </AnimatePresence>
 </div>
-
-      <BottomSheet
-        open={showOptimizationsModal}
-        onClose={() => setShowOptimizationsModal(false)}
-        title="Optimisations"
-        zIndex={67}
-        variant="center"
-        glass
-      >
-        <OptimizationsModal
-          data={optimizationsData}
-          formatCurrencyFloored={formatCurrencyFloored}
-        />
-      </BottomSheet>
-
-      <BottomSheet
-        open={showSavingsModal}
-        onClose={() => setShowSavingsModal(false)}
-        zIndex={68}
-        variant="center"
-        glass
-        glassBackground="rgba(22, 12, 4, 0.54)"
-        glassBorder="rgba(255, 171, 46, 0.15)"
-        header={<></>}
-      >
-        <SavingsProgressModal
-          savingsYtdDisplay={savingsYtdDisplay}
-          savingsAnnualGoalDisplay={savingsAnnualGoalDisplay}
-          savingsYtdProgressPct={savingsYtdProgressPct}
-          savingsMonthlyGoalDisplay={savingsMonthlyGoalDisplay}
-          savingsGoalReached={savingsGoalReached}
-          savingsMonthLabel={savingsMonthLabel}
-          formatCurrencyFloored={formatCurrencyFloored}
-          onClose={() => setShowSavingsModal(false)}
-        />
-      </BottomSheet>
 
       <AnimatePresence>
       <BottomSheet
@@ -3689,7 +3243,7 @@ export function Home() {
       {/* Modale des Résultats de Recherche Rapide */}
       <BottomSheet
         open={showSearchResultsModal}
-        onClose={() => setShowSearchResultsModal(false)}
+        onClose={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
         title={getSelectionName()}
         subtitle={getPeriodName()}
         variant="center"
@@ -3698,7 +3252,7 @@ export function Home() {
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
         zIndex={1200}
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)' }}>
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {searchPending ? (
             <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.4)', fontSize: 13, fontStyle: 'italic' }}>
@@ -3706,49 +3260,186 @@ export function Home() {
               </p>
             </div>
           ) : searchMetrics ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 12,
-              }}
-            >
-              <SearchResultKpiCard
-                title="Consommé"
-                value={searchMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(searchMetrics.consomme ?? 0)}
-                subtitle={
-                  searchMetrics.isFuturePeriod
-                    ? 'Période future'
-                    : searchPeriod?.month === undefined
-                    ? 'Cumul constaté (YTD)'
-                    : 'Réel constaté'
-                }
-              />
-              <SearchResultKpiCard
-                title="Budget"
-                value={formatCurrencyFloored(searchMetrics.budget)}
-                subtitle={searchPeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
-              />
-              <SearchResultKpiCard
-                title="Moyenne 6M"
-                value={searchMetrics.average6m !== null ? formatCurrencyFloored(searchMetrics.average6m) : '—'}
-                subtitle="Moyenne mobile 6 mois"
-              />
-              <SearchResultKpiCard
-                title="Year to Year"
-                value={
-                  searchMetrics.ytdDiffPct !== null
-                    ? `${searchMetrics.ytdDiffPct >= 0 ? '+' : ''}${searchMetrics.ytdDiffPct.toFixed(1)}%`
-                    : '—'
-                }
-                subtitle={
-                  searchMetrics.ytdDiffAmount !== null
-                    ? `${searchMetrics.ytdDiffAmount >= 0 ? '+' : ''}${formatCurrencyFloored(searchMetrics.ytdDiffAmount)} vs N-1`
-                    : '—'
-                }
-                valueColor={getYtdColor()}
-              />
-            </div>
+            <>
+              {/* ── Grille KPI principale ── */}
+              <motion.div
+                layout
+                animate={quickSearchCompareMode ? { y: -6 } : { y: 0 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 12,
+                }}
+              >
+                <SearchResultKpiCard
+                  title="Consommé"
+                  value={searchMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(searchMetrics.consomme ?? 0)}
+                  subtitle={
+                    searchMetrics.isFuturePeriod
+                      ? 'Période future'
+                      : searchPeriod?.month === undefined
+                      ? 'Cumul constaté (YTD)'
+                      : 'Réel constaté'
+                  }
+                  onClick={() => handleNavigateToBudgetsCategory('donuts')}
+                  ariaLabel="Voir le consommé dans les enveloppes Budgets"
+                />
+                <SearchResultKpiCard
+                  title="Budget"
+                  value={formatCurrencyFloored(searchMetrics.budget)}
+                  subtitle={searchPeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
+                  onClick={() => handleNavigateToBudgetsCategory('donuts')}
+                  ariaLabel="Voir le budget dans les enveloppes Budgets"
+                />
+                <SearchResultKpiCard
+                  title="Moyenne 6M"
+                  value={searchMetrics.average6m !== null ? formatCurrencyFloored(searchMetrics.average6m) : '—'}
+                  subtitle="Moyenne mobile 6 mois"
+                  onClick={() => handleNavigateToBudgetsCategory('categories')}
+                  ariaLabel="Voir la catégorie dans les enveloppes Budgets"
+                />
+                <SearchResultKpiCard
+                  title="Évolution 3M"
+                  value={
+                    searchMetrics.evolution3mPct !== null
+                      ? `${searchMetrics.evolution3mPct >= 0 ? '+' : ''}${searchMetrics.evolution3mPct.toFixed(1)}%`
+                      : '—'
+                  }
+                  subtitle={
+                    searchMetrics.evolution3mAmount !== null
+                      ? `${searchMetrics.evolution3mAmount >= 0 ? '+' : ''}${formatCurrencyFloored(searchMetrics.evolution3mAmount)} vs 3M préc.`
+                      : '—'
+                  }
+                  valueColor={getEvolution3mColor()}
+                />
+              </motion.div>
+
+              {/* ── Bouton VS ── */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, marginBottom: quickSearchCompareMode ? 4 : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setQuickSearchCompareMode((c) => !c)}
+                  aria-label={quickSearchCompareMode ? 'Désactiver le mode comparaison' : 'Activer le mode comparaison'}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    height: 28,
+                    padding: '0 14px',
+                    borderRadius: 'var(--radius-full)',
+                    border: quickSearchCompareMode
+                      ? '1px solid rgba(255, 171, 46, 0.55)'
+                      : '1px solid rgba(255, 255, 255, 0.18)',
+                    background: quickSearchCompareMode
+                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.22) 0%, rgba(255, 204, 100, 0.12) 100%)'
+                      : 'rgba(255, 255, 255, 0.08)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    boxShadow: quickSearchCompareMode
+                      ? '0 2px 12px rgba(255, 171, 46, 0.18)'
+                      : '0 1px 6px rgba(0,0,0,0.18)',
+                    color: quickSearchCompareMode ? 'rgba(255, 220, 120, 0.95)' : 'rgba(255, 255, 255, 0.65)',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: '0.08em',
+                    cursor: 'pointer',
+                    transition: 'all 200ms ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = quickSearchCompareMode
+                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.32) 0%, rgba(255, 204, 100, 0.18) 100%)'
+                      : 'rgba(255, 255, 255, 0.13)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = quickSearchCompareMode
+                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.22) 0%, rgba(255, 204, 100, 0.12) 100%)'
+                      : 'rgba(255, 255, 255, 0.08)'
+                  }}
+                >
+                  VS
+                </button>
+              </div>
+
+              {/* ── Section comparative ── */}
+              <AnimatePresence>
+                {quickSearchCompareMode ? (
+                  <motion.div
+                    key="compare-section"
+                    initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}
+                  >
+                    {/* Sélecteurs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchCatModal(true)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                          height: 34,
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          color: 'rgba(255, 255, 255, 0.55)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'background 150ms ease',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                      >
+                        Choisir catégorie
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchPeriodModal(true)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                          height: 34,
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          color: 'rgba(255, 255, 255, 0.55)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'background 150ms ease',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                      >
+                        Choisir période
+                      </button>
+                    </div>
+
+                    {/* Cartes placeholder avec stagger */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                      {(['Consommé', 'Budget', 'Moyenne 6M', 'Évolution 3M'] as const).map((title, i) => (
+                        <motion.div
+                          key={title}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: i * 0.06 }}
+                        >
+                          <SearchResultKpiCard title={title} value="—" subtitle="—" />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </>
           ) : (
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.4)', textAlign: 'center', fontStyle: 'italic' }}>
               Aucun résultat disponible.
