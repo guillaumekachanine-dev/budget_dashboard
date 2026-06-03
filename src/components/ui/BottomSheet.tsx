@@ -72,8 +72,8 @@ export function BottomSheet({
         background: isGlass
           ? (glassBackground ?? 'rgba(10, 12, 30, 0.52)')
           : 'var(--neutral-0)',
-        backdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
-        WebkitBackdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
+        backdropFilter: isGlass ? 'blur(var(--blur-lg)) saturate(160%)' : undefined,
+        WebkitBackdropFilter: isGlass ? 'blur(var(--blur-lg)) saturate(160%)' : undefined,
         borderRadius: 'var(--radius-xl)',
         border: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.1)'}` : undefined,
         boxShadow: isGlass
@@ -173,7 +173,7 @@ export function BottomSheet({
             {hasHeader ? (
               <div
                 style={{
-                  padding: 'var(--space-3) var(--space-5) var(--space-3)',
+                  padding: '8px var(--space-5)',
                   borderBottom: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.08)'}` : '1px solid var(--neutral-150)',
                   display: 'flex',
                   alignItems: 'center',
@@ -217,19 +217,22 @@ export function BottomSheet({
                     aria-label="Fermer"
                     style={{
                       flexShrink: 0,
-                      border: isGlass ? '1px solid rgba(255,255,255,0.12)' : 'none',
-                      background: isGlass ? 'rgba(255,255,255,0.1)' : 'var(--neutral-100)',
-                      color: isGlass ? 'rgba(255,255,255,0.75)' : 'var(--neutral-600)',
-                      minWidth: 44,
-                      minHeight: 44,
+                      border: isGlass ? '1px solid rgba(255,255,255,0.14)' : 'none',
+                      background: isGlass ? 'rgba(255,255,255,0.09)' : 'var(--neutral-100)',
+                      color: isGlass ? 'rgba(255,255,255,0.6)' : 'var(--neutral-600)',
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      minHeight: 32,
                       borderRadius: 'var(--radius-full)',
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
+                      padding: 0,
                     }}
                   >
-                    <X size={16} />
+                    <X size={11} />
                   </button>
                 ) : null}
               </div>

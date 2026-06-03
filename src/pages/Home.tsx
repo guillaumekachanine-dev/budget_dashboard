@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Bell, Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { ArrowDownToLine, ArrowUp, Bell, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
 import { TripBudgetOverlay } from '@/features/voyages/components/TripBudgetOverlay'
@@ -10,6 +10,9 @@ import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpe
 import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenseBars } from '@/features/voyages/hooks/useTripExpenseBars'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { useTripsForMonth } from '@/features/budget/hooks/useTripsForMonth'
+import { AllEnvelopesModal } from '@/features/budget/components/EnveloppesTab'
 import {
   getCurrentPeriod,
   getDaysRemainingInMonth,
@@ -25,6 +28,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { UpdateModal } from '@/components/modals/UpdateModal'
 import { useCategories } from '@/hooks/useCategories'
 import { useQuickSearchMetrics } from '@/features/home/hooks/useQuickSearchMetrics'
 import type { QuickSearchSelection, QuickSearchPeriod } from '@/features/home/hooks/useQuickSearchMetrics'
@@ -36,6 +40,7 @@ import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
+import updateExchangeReferenceIcon from '@/assets/icons/app/update_exchange_reference.png'
 
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
@@ -43,19 +48,12 @@ import { useHomeUsefulRemaining } from '@/features/home/hooks/useHomeUsefulRemai
 import { useCurrentMonthSavingsPlanning } from '@/features/home/hooks/useCurrentMonthSavingsPlanning'
 import { useHomeDriftOperations } from '@/features/home/hooks/useHomeDriftOperations'
 import { useAccountBalanceStatus } from '@/features/home/hooks/useAccountBalanceStatus'
-import { useOptimizationBalance } from '@/features/stats/hooks/useOptimizationBalance'
-import { useOptimizationCapacity } from '@/features/stats/hooks/useOptimizationCapacity'
-import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
 import { useUpcomingPlannedOperations } from '@/features/home/hooks/useUpcomingPlannedOperations'
 import { useAuth } from '@/hooks/useAuth'
-import { useSavingsTransfersYtd } from '@/features/savings/hooks/useSavingsTransfersYtd'
-import { useSavingsObjective2026Details } from '@/features/savings/hooks/useSavingsObjective2026Details'
 import {
   DetailModalRow,
   DetailModalSeparator,
 } from '@/components'
-import { SavingsProgressModal } from '@/components/modals/SavingsProgressModal'
-import { OptimizationsModal } from '@/components/modals/OptimizationsModal'
 import comptePrincipalIcon from "@/assets/icons/accounts/compte_principal_banque_populaire.webp";
 import compteJointIcon from "@/assets/icons/accounts/banque_postale_compte_joint.webp";
 import peaIcon from "@/assets/icons/accounts/boursorama_pea.webp";
@@ -98,8 +96,6 @@ const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 // Swipe constants (module-level pour stabilité des dépendances)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
-const HOME_HERO_ACCENT_DOT = 'var(--primary-500)'
-const HOME_HERO_ACCENT_SHADOW = 'rgba(91, 87, 245, 0.2)'
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -139,27 +135,13 @@ function formatDateShort(isoDate: string): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function formatDayMonthLabel(isoDate: string): string {
-  const date = new Date(`${isoDate}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return isoDate
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).replace('.', '')
-}
 
 function formatSignedCurrency(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
   return `${sign}${formatCurrencyFloored(Math.abs(value))}`
 }
 
-function renderOperationSummary(count: number): string {
-  if (count <= 0) return 'Aucune'
-  return `${count} opé.`
-}
 
-
-function renderDriftSummary(count: number, totalOverrunAmount: number): string {
-  if (count === 0) return 'Aucune'
-  return `${count} cat. +${formatCurrencyFloored(totalOverrunAmount)}`
-}
 
 function getGlassColors(accentColor: string | null | undefined) {
   let hex = accentColor || '#5B57F5'
@@ -228,8 +210,6 @@ const SAVINGS_INTEREST_RATE_BY_YEAR: Record<number, number> = {
 
 const PER_ACCOUNT_ID = 'ef9f92c1-c6db-4672-8231-39ec75aa0195'
 const MAIN_CHECKING_ACCOUNT_ID = 'bcffa4d1-92b0-4feb-a492-51ea328cfce2'
-
-type SavingsTileStatus = 'validated' | 'pending' | 'alert'
 
 
 function DriftCategoryTransactionsModal({
@@ -327,91 +307,6 @@ function DriftCategoryTransactionsModal({
           )
         })
       )}
-    </BottomSheet>
-  )
-}
-
-function PlannedOpsModal({
-  open,
-  onClose,
-  title,
-  dotColor,
-  items,
-  maxHeight,
-  contentMaxHeight,
-}: {
-  open: boolean
-  onClose: () => void
-  title: string
-  dotColor: string
-  items: PlannedOperationItem[]
-  maxHeight?: string
-  contentMaxHeight?: string
-}) {
-  const total = items.reduce((sum, item) => {
-    const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-    const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
-    return sum + (isOutflow ? amount : -amount)
-  }, 0)
-
-  const { glassBackground, glassBorder } = getGlassColors(dotColor)
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title={title}
-      variant="center"
-      maxHeight={maxHeight}
-      glass
-      glassBackground={glassBackground}
-      glassBorder={glassBorder}
-      zIndex={1200}
-    >
-      <div
-        style={{
-          padding: 'var(--space-4) var(--space-5) var(--space-5)',
-          display: 'grid',
-          gap: 10,
-          maxHeight: contentMaxHeight,
-          overflowY: contentMaxHeight ? 'auto' : undefined,
-        }}
-      >
-        {items.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', fontStyle: 'italic' }}>
-            Aucune opération planifiée.
-          </p>
-        ) : (
-          <>
-            {items.map((item) => {
-              const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-              const isIncome = item.flow_type === 'income'
-              const isSavings = item.flow_type === 'savings'
-              const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
-              const dateLabel = new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-              return (
-                <DetailModalRow
-                  glass
-                  key={item.id}
-                  label={`${item.label} (${flowLabel}, ${dateLabel})`}
-                  value={`${isIncome ? '+' : '-'}${formatCurrencyFloored(amount)}`}
-                />
-              )
-            })}
-            {items.length > 1 ? (
-              <>
-                <DetailModalSeparator glass />
-                <DetailModalRow
-                  glass
-                  label="Total"
-                  value={`${total >= 0 ? '-' : '+'}${formatCurrencyFloored(Math.abs(total))}`}
-                  variant="total"
-                />
-              </>
-            ) : null}
-          </>
-        )}
-      </div>
     </BottomSheet>
   )
 }
@@ -538,52 +433,64 @@ function DriftsModal({
   )
 }
 
-function DriftsTile({
-  count,
-  totalOverrunAmount,
-  onClick,
-}: {
-  count: number
-  totalOverrunAmount: number
-  onClick: () => void
-}) {
-  const hasDrifts = count > 0
 
-  return (
-    <MirrorTimelineTile
-      title="Dérives"
-      sublabel="budgétaires"
-      value={renderDriftSummary(count, totalOverrunAmount)}
-      valueEmphasis={hasDrifts}
-      dotColor={HOME_HERO_ACCENT_DOT}
-      shadowColor={HOME_HERO_ACCENT_SHADOW}
-      onClick={onClick}
-      ariaLabel={`${count} catégorie${count !== 1 ? 's' : ''} en dérive budgétaire, total ${formatCurrencyFloored(totalOverrunAmount)} — voir le détail`}
-    />
-  )
+
+// ─── EcheancesTimelineTile — Phase Arc design ────────────────────────────────
+// Arc : cercle centre (100, 103) r=93, de 194° à 346° (sens horaire SVG)
+// → point gauche ≈ (10, 80), sommet ≈ (100, 10), point droit ≈ (190, 80)
+const PARC_CX = 100
+const PARC_CY = 103
+const PARC_R  = 93
+const PARC_A0 = 194   // angle SVG départ (degrés, sens horaire depuis axe X+)
+const PARC_SPAN = 152 // amplitude totale de l'arc
+
+function parcPoint(t: number): [number, number] {
+  const rad = ((PARC_A0 + t * PARC_SPAN) * Math.PI) / 180
+  return [PARC_CX + PARC_R * Math.cos(rad), PARC_CY + PARC_R * Math.sin(rad)]
 }
 
-function MirrorTimelineTile({
-  title,
-  sublabel,
-  value,
-  valueEmphasis,
-  dotColor,
-  shadowColor,
+function EcheancesTimelineTile({
+  items,
+  daysElapsed,
+  daysInMonth,
   onClick,
-  ariaLabel,
 }: {
-  title: string
-  sublabel?: string
-  value: ReactNode
-  valueEmphasis: boolean
-  dotColor: string
-  shadowColor: string
-  onClick?: () => void
-  ariaLabel: string
+  items: PlannedOperationItem[]
+  daysElapsed: number
+  daysInMonth: number
+  onClick: () => void
 }) {
-  void sublabel
   const [hovered, setHovered] = useState(false)
+
+  const { dots, totalCount } = useMemo(() => {
+    const maxAmt = Math.max(
+      ...items.map(i => Math.abs(Number(i.planned_personal_amount ?? i.planned_amount ?? 0))),
+      1
+    )
+    const dotList: { x: number; y: number; color: string; r: number; key: string }[] = []
+    for (const item of items) {
+      const d = new Date(`${item.planned_date}T00:00:00`)
+      if (Number.isNaN(d.getTime())) continue
+      const day = d.getDate()
+      const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+      const t = (day - 1) / Math.max(daysInMonth - 1, 1)
+      const [x, y] = parcPoint(t)
+      const color = item.flow_type === 'income'  ? 'var(--color-success)'
+                  : item.flow_type === 'savings' ? 'var(--color-warning)'
+                  : 'var(--primary-500)'
+      const r = 2.5 + 2.5 * (amount / maxAmt)
+      dotList.push({ x, y, color, r, key: item.id })
+    }
+    return { dots: dotList, totalCount: items.length }
+  }, [items, daysInMonth])
+
+  const todayT = Math.min(1, Math.max(0, (daysElapsed - 1) / Math.max(daysInMonth - 1, 1)))
+  const [todayX, todayY] = parcPoint(todayT)
+  const [arcX0, arcY0] = parcPoint(0)
+  const [arcX1, arcY1] = parcPoint(1)
+
+  const trackPath   = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${arcX1.toFixed(1)} ${arcY1.toFixed(1)}`
+  const elapsedPath = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${todayX.toFixed(1)} ${todayY.toFixed(1)}`
 
   return (
     <button
@@ -591,177 +498,93 @@ function MirrorTimelineTile({
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      disabled={!onClick}
-      aria-label={ariaLabel}
+      aria-label={`${totalCount} échéances ce mois`}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
-        border: 'none',
-        padding: '10px 10px 10px 0',
         width: '100%',
-        minHeight: 44,
-        borderRadius: 'var(--radius-lg)',
-        cursor: onClick ? 'pointer' : 'default',
-        textAlign: 'left',
-        transition: 'background 0.2s ease',
-        outline: 'none',
-        overflow: 'visible',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
-        <div style={{ width: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, overflow: 'visible' }}>
-          <div
-            aria-hidden="true"
-            style={{
-              display: 'block',
-              width: 12,
-              height: 12,
-              minWidth: 12,
-              minHeight: 12,
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 0 4px ${shadowColor}`,
-              transformOrigin: 'center',
-              marginLeft: -6,
-              transform: hovered ? 'scale(1.25)' : 'scale(1)',
-              transition: 'transform 0.2s ease',
-            }}
-          />
-        </div>
-
-        {/* Single-line: bold title — value */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'var(--neutral-900)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {title}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: valueEmphasis ? 700 : 400,
-              color: valueEmphasis ? 'var(--neutral-800)' : 'var(--neutral-400)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-            }}
-          >
-            {value}
-          </span>
-        </div>
-      </div>
-    </button>
-  )
-}
-
-
-function TimelineRow({
-  label,
-  sublabel,
-  value,
-  dotColor,
-  shadowColor,
-  onClick,
-  hasOps,
-}: {
-  label: string
-  sublabel: string
-  value: ReactNode
-  dotColor: string
-  shadowColor: string
-  onClick: () => void
-  hasOps: boolean
-}) {
-  void sublabel
-  const [hovered, setHovered] = useState(false)
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
         display: 'flex',
         alignItems: 'center',
-        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
-        border: 'none',
-        padding: '12px 16px',
-        marginLeft: -16,
-        marginRight: -16,
-        width: 'calc(100% + 32px)',
-        borderRadius: 'var(--radius-lg)',
+        justifyContent: 'center',
         cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'background 0.2s ease, transform 0.2s ease',
-        transform: hovered ? 'translateX(2px)' : 'translateX(0)',
-        outline: 'none',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
-        {/* Dot — vertically centered */}
-        <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-          <div
-            style={{
-              display: 'block',
-              width: 12,
-              height: 12,
-              minWidth: 12,
-              minHeight: 12,
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 0 4px ${shadowColor}`,
-              transition: 'transform 0.2s ease',
-              transform: hovered ? 'scale(1.25)' : 'scale(1)',
-            }}
-          />
-        </div>
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+      >
+        {/* Piste complète du mois */}
+        <path
+          d={trackPath}
+          fill="none"
+          stroke="var(--neutral-300)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
 
-        {/* Text Area — single line */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'var(--neutral-900)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {label}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: hasOps ? 700 : 400,
-              color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-            }}
-          >
-            {value}
-          </span>
-        </div>
-      </div>
+        {/* Arc écoulé */}
+        {todayT > 0.02 && (
+          <path
+            d={elapsedPath}
+            fill="none"
+            stroke="var(--primary-500)"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            opacity={0.45}
+          />
+        )}
+
+        {/* Points opérations — taille ∝ montant, couleur ∝ type */}
+        {dots.map((dot, i) => (
+          <motion.circle
+            key={dot.key}
+            cx={dot.x}
+            cy={dot.y}
+            r={dot.r}
+            fill={dot.color}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.88 }}
+            transition={{ delay: 0.06 + i * 0.028, duration: 0.38, ease: 'easeOut' }}
+          />
+        ))}
+
+        {/* Marqueur aujourd'hui — anneau qui pulse */}
+        <motion.circle
+          cx={todayX}
+          cy={todayY}
+          r={5.5}
+          fill="var(--neutral-0)"
+          stroke="var(--primary-500)"
+          strokeWidth={2}
+          animate={{ opacity: [0.65, 1, 0.65] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        {/* Cartouche bas — label gauche, compteur droit */}
+        <text
+          x={100}
+          y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
+        >
+          ÉCHÉANCES
+        </text>
+      </svg>
     </button>
   )
 }
-
 
 
 // ─── Budget progress constants ────────────────────────────────────────────────
@@ -777,6 +600,15 @@ const EXPENSE_BUCKET_LABELS: Record<ExpenseBucketId, string> = {
 }
 
 type MonthlyBlockProgressItem = { id: string; label: string; actual: number; budget: number; pct: number }
+
+type EnvelopeShortcutSlice = {
+  id: ExpenseBucketId
+  label: string
+  budget: number
+  share: number
+  color: string
+  pct?: number   // consommation réelle / budget (0–1+)
+}
 
 // ─── ProgressRing ─────────────────────────────────────────────────────────────
 function ProgressRing({
@@ -889,6 +721,137 @@ function ProgressCircleTile({
   )
 }
 
+function EnvelopeShortcutTile({
+  slices,
+  onClick,
+}: {
+  slices: EnvelopeShortcutSlice[]
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  // SVG constants — même viewBox que l'arc tile (200×120)
+  const BASELINE = 87
+  const MAX_BAR_H = 66
+  const BAR_W = 14
+  const PAD_X = 15
+
+  const n = slices.length
+  const usableW = 200 - 2 * PAD_X - BAR_W
+  const centers = slices.map((_, i) =>
+    n > 1 ? PAD_X + BAR_W / 2 + i * (usableW / (n - 1)) : 100
+  )
+  const maxBudget = Math.max(...slices.map(s => s.budget), 1)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label="Enveloppes budgétaires"
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
+      }}
+    >
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+      >
+        {slices.map((slice, i) => {
+          const cx = centers[i]
+          const x = cx - BAR_W / 2
+          const trackH = Math.max(4, MAX_BAR_H * (slice.budget / maxBudget))
+          const trackY = BASELINE - trackH
+          const consumption = Math.min(1.05, Math.max(0, slice.pct ?? 0))
+          const fillH = Math.max(0, trackH * consumption)
+          const fillY = BASELINE - fillH
+          const entranceDelay = 0.08 + i * 0.07
+
+          return (
+            <g key={slice.id}>
+              {/* Piste — hauteur budget */}
+              <rect
+                x={x} y={trackY}
+                width={BAR_W} height={trackH}
+                rx={6}
+                fill="var(--neutral-150)"
+              />
+
+              {/* Fill — consommation, croît de bas en haut */}
+              {fillH > 1 && (
+                <motion.rect
+                  x={x}
+                  width={BAR_W}
+                  rx={6}
+                  fill={slice.color}
+                  opacity={0.82}
+                  initial={{ y: BASELINE, height: 0 }}
+                  animate={{ y: fillY, height: fillH }}
+                  transition={{ delay: entranceDelay, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                />
+              )}
+
+              {/* Shimmer — pulse au sommet du fill après l'entrée */}
+              {fillH > 4 && (
+                <motion.rect
+                  x={x} y={fillY}
+                  width={BAR_W} height={3}
+                  rx={3}
+                  fill="white"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 0.55, 0] }}
+                  transition={{
+                    delay: entranceDelay + 0.7 + i * 0.18,
+                    duration: 2.4,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                />
+              )}
+            </g>
+          )
+        })}
+
+        {/* Ligne de base */}
+        <line
+          x1={PAD_X} y1={BASELINE + 1}
+          x2={200 - PAD_X} y2={BASELINE + 1}
+          stroke="var(--neutral-200)"
+          strokeWidth={1}
+        />
+
+        {/* Cartouche — miroir de ÉCHÉANCES */}
+        <text
+          x={100} y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
+        >
+          ENVELOPPES
+        </text>
+      </svg>
+    </button>
+  )
+}
+
 // ─── BudgetProgressModal ─────────────────────────────────────────────────────
 function BudgetProgressModal({
   open,
@@ -975,182 +938,6 @@ function BudgetProgressModal({
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SavingsTile({
-  status,
-  monthAmountLabel,
-  onClick,
-}: {
-  status: SavingsTileStatus
-  monthAmountLabel: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Voir le détail de l'objectif d'épargne"
-      style={{
-        position: 'relative',
-        width: '100%',
-        minHeight: 64,
-        border: 'none',
-        background: 'rgba(255,255,255,0.82)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 8px 20px rgba(46, 212, 122, 0.12)',
-        cursor: 'pointer',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        transition: 'box-shadow var(--transition-base), transform var(--transition-base)',
-        padding: 'var(--space-2) var(--space-4)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-        e.currentTarget.style.transform = 'translateY(-1px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-        e.currentTarget.style.transform = 'translateY(0)'
-      }}
-    >
-      <div style={{ display: 'grid', gap: 2, textAlign: 'left' }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 11,
-            fontWeight: 800,
-            color: 'var(--neutral-800)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          Épargne
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 12,
-            fontWeight: 700,
-            color: 'var(--neutral-700)',
-            fontFamily: 'var(--font-mono)',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          {monthAmountLabel}
-        </p>
-      </div>
-
-      <span
-        style={{
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {status === 'validated' ? (
-          <Check size={30} color="var(--color-success)" strokeWidth={3} />
-        ) : null}
-        {status === 'pending' || status === 'alert' ? (
-          <X size={30} color={status === 'pending' ? 'var(--neutral-500)' : 'var(--color-error)'} strokeWidth={3} />
-        ) : null}
-      </span>
-    </button>
-  )
-}
-
-
-
-function OptimizationsTile({
-  onClick,
-}: {
-  onClick: () => void
-  theme?: 'light' | 'dark'
-}) {
-  const { balance, isLoading } = useOptimizationBalance()
-
-  const formattedAmount = isLoading ? '— €' : `${formatCurrencyFloored(Math.abs(balance))}`
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Voir le détail des optimisations"
-      style={{
-        width: '100%',
-        display: 'inline-flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 1,
-        border: '1px solid rgba(255,255,255,0.25)',
-        background: 'rgba(255,255,255,0.1)',
-        color: '#FFFFFF',
-        borderRadius: 'var(--radius-button)',
-        padding: '4px var(--space-3)',
-        height: '100%',
-        minHeight: 48,
-        cursor: 'pointer',
-        transition: 'background 120ms ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-      }}
-    >
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          color: 'rgba(255,255,255,0.6)',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        Optimisations
-      </span>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: '#FFFFFF',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        {formattedAmount}
-      </span>
-    </button>
-  )
-}
-
-function SavingsGoalTile({
-  scheduleValue,
-  scheduleAriaLabel,
-  onClick,
-}: {
-  scheduleValue: ReactNode
-  scheduleAriaLabel: string
-  onClick?: () => void
-}) {
-  return (
-      <MirrorTimelineTile
-        title="Épargne"
-        sublabel="mensuelle"
-        value={scheduleValue}
-        valueEmphasis={false}
-        dotColor={HOME_HERO_ACCENT_DOT}
-        shadowColor={HOME_HERO_ACCENT_SHADOW}
-        onClick={onClick}
-        ariaLabel={`Épargne mensuelle prévue: ${scheduleAriaLabel}`}
-    />
-  )
-}
 
 const MONTHS_FR_FULL = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -1167,6 +954,7 @@ function QuickSearchTile({
   onSelectCategory,
   onSelectPeriod,
   onSearch,
+  onCollapse,
   categories,
 }: {
   selection: QuickSearchSelection | null
@@ -1174,6 +962,7 @@ function QuickSearchTile({
   onSelectCategory: () => void
   onSelectPeriod: () => void
   onSearch: () => void
+  onCollapse?: () => void
   categories: Category[]
 }) {
   const getSelectionText = () => {
@@ -1290,8 +1079,7 @@ function QuickSearchTile({
       {/* Action Button (Center) */}
       <button
         type="button"
-        onClick={onSearch}
-        disabled={!canSearch}
+        onClick={canSearch ? onSearch : onCollapse}
         className={canSearch ? 'qs-btn-ready' : ''}
         style={{
           position: 'absolute',
@@ -1310,7 +1098,7 @@ function QuickSearchTile({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: canSearch ? 'pointer' : 'not-allowed',
+          cursor: 'pointer',
           zIndex: 10,
           transition: 'transform 0.2s ease, border 0.3s ease',
         }}
@@ -1322,7 +1110,6 @@ function QuickSearchTile({
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translate(-50%, -50%)'
-          // Clear inline override so CSS animation resumes
           e.currentTarget.style.boxShadow = canSearch ? '' : 'none'
         }}
       >
@@ -1372,85 +1159,142 @@ function QuickSearchTile({
   )
 }
 
+function UpdateShortcutTile({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label="Ouvrir la mise à jour"
+      style={{
+        border: 'none',
+        background: 'transparent',
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.72 : 1,
+      }}
+    >
+      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+        <img
+          src={updateExchangeReferenceIcon}
+          alt=""
+          aria-hidden
+          style={{
+            width: 78,
+            height: 58,
+            objectFit: 'contain',
+            display: 'block',
+            transform: 'translateY(-1px) scaleX(1.08)',
+          }}
+        />
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 20,
+          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+          pointerEvents: 'none',
+        }} />
+      </div>
+      <span style={{
+        fontSize: 11,
+        fontWeight: 800,
+        color: 'var(--neutral-400)',
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.13em',
+        textTransform: 'uppercase',
+        marginTop: 8,
+        display: 'block',
+      }}>
+        Mise à jour
+      </span>
+    </button>
+  )
+}
+
 function SearchResultKpiCard({
   title,
   value,
   subtitle,
   valueColor,
+  onClick,
+  ariaLabel,
+  diffPct,
+  accentColor,
+  compact,
 }: {
   title: string
   value: string
   subtitle: string
   valueColor?: string
+  onClick?: () => void
+  ariaLabel?: string
+  diffPct?: number | null
+  accentColor?: string
+  compact?: boolean
 }) {
+  const Tag = onClick ? 'button' : 'div'
+  const accent = accentColor ?? 'rgba(255, 171, 46, 0.6)'
+  const accentBg = accentColor
+    ? `linear-gradient(135deg, ${accentColor.replace('0.6)', '0.13)')} 0%, ${accentColor.replace('0.6)', '0.05)')} 100%)`
+    : 'linear-gradient(135deg, rgba(255, 236, 179, 0.16) 0%, rgba(255, 171, 46, 0.08) 100%)'
+  const accentBorder = accentColor ? accentColor.replace('0.6)', '0.22)') : 'rgba(255, 204, 128, 0.25)'
+  const accentLabel = accentColor ? accentColor.replace('0.6)', '0.75)') : 'rgba(255, 236, 179, 0.8)'
+
+  const diffColor = diffPct == null ? undefined
+    : diffPct > 0 ? 'rgba(252, 90, 90, 0.9)'
+    : diffPct < 0 ? 'rgba(46, 212, 122, 0.9)'
+    : 'rgba(255,255,255,0.5)'
+
   return (
-    <div
+    <Tag
+      {...(onClick ? { type: 'button' as const, onClick, 'aria-label': ariaLabel } : {})}
       style={{
         position: 'relative',
-        background: 'linear-gradient(135deg, rgba(255, 236, 179, 0.16) 0%, rgba(255, 171, 46, 0.08) 100%)',
-        border: '1px solid rgba(255, 204, 128, 0.25)',
+        background: accentBg,
+        border: `1px solid ${accentBorder}`,
         borderRadius: 'var(--radius-lg)',
-        padding: '16px 14px',
+        padding: compact ? '10px 12px' : '16px 14px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        minHeight: 120,
+        minHeight: compact ? 88 : 120,
         boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
+        width: '100%',
+        textAlign: 'left',
+        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       {/* Accent Strip */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          background: 'rgba(255, 171, 46, 0.6)',
-        }}
-      />
-      
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: 'rgba(255, 236, 179, 0.8)',
-          marginBottom: 8,
-        }}
-      >
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: accent }} />
+
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accentLabel, marginBottom: compact ? 4 : 8 }}>
         {title}
       </span>
-      
-      <p
-        style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 24,
-          fontWeight: 600,
-          color: valueColor ?? '#ffffff',
-          lineHeight: 1,
-          letterSpacing: '-0.02em',
-          marginBottom: 6,
-        }}
-      >
+
+      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: compact ? 19 : 24, fontWeight: 600, color: valueColor ?? '#ffffff', lineHeight: 1, letterSpacing: '-0.02em', marginBottom: diffPct != null ? 3 : (compact ? 3 : 6) }}>
         {value}
       </p>
-      
-      <p
-        style={{
-          margin: 0,
-          fontSize: 10,
-          fontWeight: 500,
-          color: 'rgba(255, 255, 255, 0.5)',
-          lineHeight: 1.2,
-        }}
-      >
+
+      {diffPct != null && (
+        <span style={{ fontSize: 9, fontWeight: 800, color: diffColor, letterSpacing: '0.04em', marginBottom: compact ? 2 : 4, display: 'block' }}>
+          {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}% vs A
+        </span>
+      )}
+
+      <p style={{ margin: 0, fontSize: compact ? 9 : 10, fontWeight: 500, color: 'rgba(255, 255, 255, 0.5)', lineHeight: 1.2 }}>
         {subtitle}
       </p>
-    </div>
+    </Tag>
   )
 }
 
@@ -1463,35 +1307,72 @@ function toLocalIsoDate(date: Date): string {
 
 export function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { year, month } = getCurrentPeriod()
   const now = new Date()
-  const { user } = useAuth()
-  const { data: savingsTransfersYtd } = useSavingsTransfersYtd(user?.id, year)
-  const objective2026Details = useSavingsObjective2026Details(user?.id)
+  useAuth()
   const { data: accounts } = useAccounts()
   const { data: summaries, isLoading: loadingSummaries } = useBudgetSummaries(year, month)
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
-  const { data: optimizationCapacity } = useOptimizationCapacity(year)
-  const budgetPayloadForOptimizations = useBudgetPagePayload({ periodYear: year, periodMonth: month, monthsBack: 1 })
+  const { data: homeBudgetPayload } = useBudgetPagePayload({ periodYear: year, periodMonth: month })
+  const { data: tripsForMonth = [] } = useTripsForMonth(year, month)
   const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const eomDateStr = toLocalIsoDate(eomDate)
   const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
 
   // Quick Search States
   const { data: categories = [] } = useCategories()
+  const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories])
   const [searchSelection, setSearchSelection] = useState<QuickSearchSelection | null>(null)
   const [searchPeriod, setSearchPeriod] = useState<QuickSearchPeriod | null>(null)
   const [showSearchCatModal, setShowSearchCatModal] = useState(false)
   const [showSearchPeriodModal, setShowSearchPeriodModal] = useState(false)
   const [showSearchResultsModal, setShowSearchResultsModal] = useState(false)
+  const [searchTileExpanded, setSearchTileExpanded] = useState(false)
+  const [quickSearchCompareMode, setQuickSearchCompareMode] = useState(false)
   const [searchPickerYear, setSearchPickerYear] = useState(2026)
+  // Compare (section versus)
+  const [compareSelection, setCompareSelection] = useState<QuickSearchSelection | null>(null)
+  const [comparePeriod, setComparePeriod] = useState<QuickSearchPeriod | null>(null)
+  const [showCompareCatModal, setShowCompareCatModal] = useState(false)
+  const [showComparePeriodModal, setShowComparePeriodModal] = useState(false)
+  const [comparePickerYear, setComparePickerYear] = useState(2026)
+
+  // Restaure la modale au retour depuis Budgets (navigation back depuis une carte KPI)
+  useEffect(() => {
+    type ReturnState = {
+      fromQuickSearch?: boolean
+      quickSearchSelection?: QuickSearchSelection
+      quickSearchPeriod?: QuickSearchPeriod
+      quickSearchCompareMode?: boolean
+      quickSearchCompareSelection?: QuickSearchSelection
+      quickSearchComparePeriod?: QuickSearchPeriod
+    } | null
+    const state = (location.state as ReturnState) ?? null
+    if (state?.fromQuickSearch) {
+      if (state.quickSearchSelection) setSearchSelection(state.quickSearchSelection)
+      if (state.quickSearchPeriod) setSearchPeriod(state.quickSearchPeriod)
+      setQuickSearchCompareMode(state.quickSearchCompareMode ?? false)
+      if (state.quickSearchCompareSelection) setCompareSelection(state.quickSearchCompareSelection)
+      if (state.quickSearchComparePeriod) setComparePeriod(state.quickSearchComparePeriod)
+      setShowSearchResultsModal(true)
+      window.history.replaceState(null, '', window.location.href)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: searchMetrics, isPending: searchPending } = useQuickSearchMetrics(
     searchSelection,
     searchPeriod,
     showSearchResultsModal
+  )
+  const compareEnabled = quickSearchCompareMode && showSearchResultsModal && !!compareSelection && !!comparePeriod
+  const { data: compareMetrics, isPending: comparePending } = useQuickSearchMetrics(
+    compareSelection,
+    comparePeriod,
+    compareEnabled
   )
   const parentCategories = useMemo(() => {
     return categories.filter((c) => c.parent_id === null && c.is_active === true)
@@ -1546,62 +1427,125 @@ export function Home() {
     return `${monthLabel} ${searchPeriod.year}`
   }
 
-  const getYtdColor = () => {
-    if (!searchMetrics || searchMetrics.ytdDiffPct === null) return undefined
-    const diff = searchMetrics.ytdDiffPct
+  const allEnvelopeParentRows = useMemo(
+    () => (Array.isArray(homeBudgetPayload?.by_parent_category) ? homeBudgetPayload.by_parent_category : []),
+    [homeBudgetPayload],
+  )
+  const allEnvelopeCategoryRows = useMemo(
+    () => (Array.isArray(homeBudgetPayload?.by_category) ? homeBudgetPayload.by_category : []),
+    [homeBudgetPayload],
+  )
+  const allEnvelopeParentRowsWithoutSavings = useMemo(
+    () => allEnvelopeParentRows.filter((row) => normalizeLabel(row.parent_category_name) !== 'epargne'),
+    [allEnvelopeParentRows],
+  )
+  const homeEnvelopeSlices = useMemo<EnvelopeShortcutSlice[]>(() => {
+    const bucketRows = Array.isArray(homeBudgetPayload?.by_bucket) ? homeBudgetPayload.by_bucket : []
+    const rows = EXPENSE_BUCKET_IDS
+      .map((bucketId) => {
+        const row = bucketRows.find((candidate) => candidate.budget_bucket === bucketId)
+        const budget = Math.max(0, Number(row?.budget_amount ?? 0))
+        const actual = Math.max(0, Number(row?.actual_amount ?? 0))
+        const pct = budget > 0 ? actual / budget : 0
+        return {
+          id: bucketId,
+          label: EXPENSE_BUCKET_LABELS[bucketId],
+          budget,
+          color: getBudgetBucketColor(bucketId),
+          pct,
+        }
+      })
+      .filter((slice) => slice.budget > 0)
+
+    const total = rows.reduce((sum, slice) => sum + slice.budget, 0)
+    if (total <= 0) return []
+
+    return rows
+      .map((slice) => ({ ...slice, share: slice.budget / total }))
+      .sort((a, b) => b.budget - a.budget)
+  }, [homeBudgetPayload])
+  const voyagesRootCategoryId = useMemo(
+    () => categories.find((category) => category.parent_id === null && normalizeLabel(category.name) === 'voyages')?.id ?? null,
+    [categories],
+  )
+  const homeEnvelopeMonthLabel = useMemo(
+    () => `${MONTHS_FR_FULL[month - 1] ?? 'Mois'} ${String(year).slice(2)}`,
+    [month, year],
+  )
+
+  const getEvolution3mColor = () => {
+    if (!searchMetrics || searchMetrics.evolution3mPct === null) return undefined
+    const diff = searchMetrics.evolution3mPct
     if (diff === 0) return 'rgba(255, 255, 255, 0.9)'
     const isGood = isSelectionIncome ? diff > 0 : diff < 0
     return isGood ? '#2ED47A' : '#FC5A5A'
   }
 
-
-  const optimizationsData = useMemo(() => {
-    const levers = optimizationCapacity?.optimization_levers ?? []
-
-    // Build lookup: normalized category name → actual spending this month
-    const normalize = (v: string | null | undefined) =>
-      (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-    const actualByCategory = new Map<string, number>()
-    for (const row of budgetPayloadForOptimizations.data?.by_category ?? []) {
-      const key = normalize(row.category_name)
-      if (key) actualByCategory.set(key, Number(row.actual_amount ?? 0))
-    }
-
-    return levers.map((lever) => {
-      const avg = Math.max(0, Number(lever.avg_monthly_amount_6m ?? 0))
-      const gain = Math.max(0, Number(lever.realistic_monthly_gain ?? 0))
-      // "Cible opti." = avg monthly spend minus the realistic monthly savings
-      const cibleOpti = Math.max(0, avg - gain)
-
-      const n = normalize(lever.category_name)
-      // Actual spending this month for this category
-      const consumedAmount = actualByCategory.get(n) ?? 0
-
-      const progressPct = cibleOpti > 0 ? Math.min(110, (consumedAmount / cibleOpti) * 100) : 0
-
-      let iconKey = n.replace(/\s+/g, '_')
-      if (n.includes('retrait') && n.includes('espece')) iconKey = 'achats_divers_retrait_d_especes'
-      else if (n.includes('petits achats alimentaires')) iconKey = 'alimentation_petits_achats_alimentaires'
-      else if (n.includes('cafe') && n.includes('bar')) iconKey = 'sorties_cafe_bars'
-      else if (n.includes('restaurant')) iconKey = 'sorties_restaurant'
-      else if (n.includes('courses')) iconKey = 'alimentation_courses'
-      else if (n.includes('e-commerce')) iconKey = 'achats_divers_e_commerce'
-      else if (n.includes('vetement')) iconKey = 'achats_divers_vetements'
-
-      let barColor = '#5B57F5'
-      if (progressPct >= 75) barColor = '#FFAB2E'
-      if (progressPct >= 100) barColor = '#FC5A5A'
-
-      return {
-        label: lever.category_name ?? '—',
-        iconKey,
-        consumedAmount,      // consommé à date ce mois-ci
-        objectiveAmount: cibleOpti, // cible opti.
-        progressPct,
-        barColor,
+  const getCompareName = (): string => {
+    if (!compareSelection) return 'Choisir catégorie'
+    if (compareSelection.kind === 'all') return 'Toutes catégories'
+    if (compareSelection.kind === 'socle') {
+      const socleNames: Record<string, string> = {
+        socle_fixe: 'Socle fixe', variable_essentielle: 'Variable essentielle',
+        provision: 'Provisions', voyage: 'Voyage', discretionnaire: 'Discrétionnaire', revenu: 'Revenus',
       }
+      return socleNames[compareSelection.id] ?? compareSelection.id
+    }
+    const cat = categories.find((c) => c.id === compareSelection.id)
+    return cat ? cat.name : 'Catégorie'
+  }
+
+  const getComparePeriodLabel = (): string => {
+    if (!comparePeriod) return 'Choisir période'
+    if (comparePeriod.month === undefined) return `Année ${comparePeriod.year}`
+    const monthLabel = MONTHS_FR_FULL[comparePeriod.month - 1] ?? 'Mois'
+    return `${monthLabel} ${comparePeriod.year}`
+  }
+
+  const calcVsDiffPct = (compareVal: number | null | undefined, baseVal: number | null | undefined): number | null => {
+    if (compareVal == null || baseVal == null || baseVal === 0) return null
+    return ((compareVal - baseVal) / Math.abs(baseVal)) * 100
+  }
+
+  const handleNavigateToBudgetsCategory = (anchor: 'donuts' | 'categories') => {
+    void anchor
+    setShowSearchResultsModal(false)
+    const categoryId = searchSelection?.kind === 'category' ? searchSelection.id : null
+    navigate('/budgets', {
+      state: {
+        categoryId,
+        year: searchPeriod?.year,
+        month: searchPeriod?.month,
+        fromQuickSearch: true,
+        quickSearchSelection: searchSelection,
+        quickSearchPeriod: searchPeriod,
+        quickSearchCompareMode,
+        quickSearchCompareSelection: compareSelection,
+        quickSearchComparePeriod: comparePeriod,
+      },
     })
-  }, [optimizationCapacity, budgetPayloadForOptimizations.data])
+  }
+
+  const handleNavigateToCompareBudgetsCategory = (anchor: 'donuts' | 'categories') => {
+    void anchor
+    if (!compareSelection || !comparePeriod) return
+    setShowSearchResultsModal(false)
+    const categoryId = compareSelection.kind === 'category' ? compareSelection.id : null
+    navigate('/budgets', {
+      state: {
+        categoryId,
+        year: comparePeriod.year,
+        month: comparePeriod.month,
+        fromQuickSearch: true,
+        quickSearchSelection: searchSelection,
+        quickSearchPeriod: searchPeriod,
+        quickSearchCompareMode,
+        quickSearchCompareSelection: compareSelection,
+        quickSearchComparePeriod: comparePeriod,
+      },
+    })
+  }
+
 
   const todayDate = now.toISOString().slice(0, 10)
   const {
@@ -1617,46 +1561,38 @@ export function Home() {
   const sectionHorizontalPadding = '0 calc(var(--space-6) + 6px)'
 
   const upcomingOpsWindows = useMemo(() => {
-    const items = upcomingOps ?? []
-    const plus3Date = new Date(now)
-    plus3Date.setDate(now.getDate() + 3)
-    const end3 = toLocalIsoDate(plus3Date)
+    const allItems = upcomingOps ?? []
     const localToday = toLocalIsoDate(now)
 
-    let count3 = 0
-    let amount3 = 0
-    let countEom = 0
-    let amountEom = 0
-    const items3: PlannedOperationItem[] = []
-    const itemsEom: PlannedOperationItem[] = []
+    const endDate = (daysAhead: number) => {
+      const d = new Date(now)
+      d.setDate(now.getDate() + daysAhead)
+      return toLocalIsoDate(d)
+    }
+    const end3 = endDate(3)
+    const end7 = endDate(7)
+    const end15 = endDate(15)
 
-    for (const item of items) {
+    const makeWindow = () => ({ count: 0, amount: 0, items: [] as PlannedOperationItem[] })
+    const j3 = makeWindow()
+    const j7 = makeWindow()
+    const j15 = makeWindow()
+    const eom = makeWindow()
+
+    for (const item of allItems) {
       const date = String(item.planned_date ?? '').slice(0, 10)
-      if (!date) continue
-      if (date < localToday) continue
-
+      if (!date || date < localToday) continue
       const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
       const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
+      const sign = isOutflow ? 1 : -1
 
-      if (date <= end3) {
-        count3 += 1
-        if (isOutflow) amount3 += amount
-        else amount3 -= amount
-        items3.push(item)
-      }
-
-      if (date <= eomDateStr) {
-        countEom += 1
-        if (isOutflow) amountEom += amount
-        else amountEom -= amount
-        itemsEom.push(item)
-      }
+      if (date <= end3) { j3.count++; j3.amount += sign * amount; j3.items.push(item) }
+      if (date <= end7) { j7.count++; j7.amount += sign * amount; j7.items.push(item) }
+      if (date <= end15) { j15.count++; j15.amount += sign * amount; j15.items.push(item) }
+      if (date <= eomDateStr) { eom.count++; eom.amount += sign * amount; eom.items.push(item) }
     }
 
-    return {
-      j3: { count: count3, amount: amount3, items: items3 },
-      eom: { count: countEom, amount: amountEom, items: itemsEom },
-    }
+    return { j3, j7, j15, eom }
   }, [upcomingOps, now, eomDateStr])
 
   const driftCategories = useMemo(() => {
@@ -1738,13 +1674,15 @@ export function Home() {
   const [showDriftsModal, setShowDriftsModal] = useState(false)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
-  const [showSavingsModal, setShowSavingsModal] = useState(false)
-  const [showOptimizationsModal, setShowOptimizationsModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
-  const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
-  const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
+  const [showEcheancesModal, setShowEcheancesModal] = useState(false)
+  const [showAllEnvelopesModal, setShowAllEnvelopesModal] = useState(false)
+  const [protectedAmountsExpanded, setProtectedAmountsExpanded] = useState(false)
+  const [consumedAmountsExpanded, setConsumedAmountsExpanded] = useState(false)
+  const [echeancesFilter, setEcheancesFilter] = useState<'j3' | 'j7' | 'j15' | 'mois'>('mois')
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
@@ -1764,27 +1702,31 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal && !showAllEnvelopesModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showEcheancesModal, showAllEnvelopesModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showSavingsModal && !showOptimizationsModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal && !showAllEnvelopesModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
         setShowDriftsModal(false)
         setShowHeroBalanceModal(false)
-        setShowSavingsModal(false)
-        setShowOptimizationsModal(false)
         setShowProgressModal(false)
-        setShowPlannedOpsModal(false)
-        setShowPlannedOpsEomModal(false)
+        setShowEcheancesModal(false)
+        setShowAllEnvelopesModal(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showSavingsModal, showOptimizationsModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showEcheancesModal, showAllEnvelopesModal])
+
+  useEffect(() => {
+    if (!showResteUtileModal) return
+    setProtectedAmountsExpanded(false)
+    setConsumedAmountsExpanded(false)
+  }, [showResteUtileModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1822,7 +1764,7 @@ export function Home() {
     accountId: selectedAccount?.id ?? null,
     startDate: '2024-01-01',
   })
-  const { selectedTrip: selectedTripCockpit } = useTripCockpit()
+  const { allTrips: tripCockpitRows, selectedTrip: selectedTripCockpit } = useTripCockpit()
   const tripExpenseBars = useTripExpenseBars(selectedTripCockpit)
   const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
   const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
@@ -1941,49 +1883,6 @@ export function Home() {
     })
   }, [dailyPayload])
 
-  const savingsMonthlyGoalDisplay = Number(dailyPayload?.budgets.savings_budget_amount ?? 0)
-  const savingsMonthlySavedDisplay = Number(dailyPayload?.realized.savings_actual_amount ?? 0)
-  const savingsYtdDisplay = Number(savingsTransfersYtd?.totalAmount ?? 0)
-  const savingsAnnualGoalDisplay = useMemo(() => {
-    const dbObjective = objective2026Details.totalUpdatedObjective
-    if (dbObjective > 0) return dbObjective
-    return Number(dailyPayload?.budgets.savings_budget_amount ?? 0) * 12
-  }, [objective2026Details.totalUpdatedObjective, dailyPayload?.budgets.savings_budget_amount])
-  const savingsProgressPct = useMemo(() => {
-    if (savingsMonthlyGoalDisplay <= 0) return 0
-    return Math.max(0, Math.min(100, (savingsMonthlySavedDisplay / savingsMonthlyGoalDisplay) * 100))
-  }, [savingsMonthlyGoalDisplay, savingsMonthlySavedDisplay])
-  const savingsYtdProgressPct = useMemo(() => {
-    if (savingsAnnualGoalDisplay <= 0) return 0
-    return Math.max(0, Math.min(100, (savingsYtdDisplay / savingsAnnualGoalDisplay) * 100))
-  }, [savingsYtdDisplay, savingsAnnualGoalDisplay])
-  const savingsGoalReached = savingsProgressPct >= 100
-  const savingsTileStatus: SavingsTileStatus = useMemo(() => {
-    if (savingsGoalReached) return 'validated'
-    if (daysRemaining <= 10) return 'alert'
-    return 'pending'
-  }, [daysRemaining, savingsGoalReached])
-  const savingsMonthLabel = useMemo(
-    () => new Date(year, month - 1, 1).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', ''),
-    [month, year],
-  )
-  const savingsTileMonthAmountLabel = useMemo(
-    () => `${savingsMonthLabel} ${formatCurrencyFloored(savingsMonthlySavedDisplay)}`,
-    [savingsMonthLabel, savingsMonthlySavedDisplay],
-  )
-  const upcomingSavingsTransfer = useMemo(
-    () => (upcomingOps ?? []).find((item) => item.flow_type === 'savings') ?? null,
-    [upcomingOps],
-  )
-  const savingsPlannedTransferLabel = useMemo<string>(() => {
-    if (plannedSavingsAmountDisplay <= 0) return 'Aucun'
-    return `Obj. ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
-  }, [plannedSavingsAmountDisplay])
-  const savingsPlannedTransferAriaLabel = useMemo(() => {
-    const transferDate = currentMonthSavingsPlanning?.transferDate ?? upcomingSavingsTransfer?.planned_date ?? null
-    if (!transferDate || plannedSavingsAmountDisplay <= 0) return 'Aucun versement'
-    return `${formatDayMonthLabel(transferDate)} - ${formatCurrencyFloored(plannedSavingsAmountDisplay)}`
-  }, [currentMonthSavingsPlanning?.transferDate, plannedSavingsAmountDisplay, upcomingSavingsTransfer?.planned_date])
   const variableEssentialConsumedDisplay = Number(
     dailyPayload?.by_bucket.find((bucket) => bucket.budget_bucket === 'variable_essentielle')?.actual_amount ?? 0,
   )
@@ -2638,13 +2537,13 @@ export function Home() {
                         </div>
 
                         {/* ── CTAs ──────────────────────────────────────────────── */}
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)', alignItems: 'stretch' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                           <button
                             type="button"
                             onClick={() => setShowHeroBalanceModal(true)}
                             aria-label="Voir le détail du solde bancaire du compte principal"
                             style={{
-                              flex: '1 1 auto',
+                              width: '100%',
                               display: 'inline-flex',
                               flexDirection: 'column',
                               alignItems: 'center',
@@ -2655,7 +2554,6 @@ export function Home() {
                               color: '#FFFFFF',
                               borderRadius: 'var(--radius-button)',
                               padding: '4px var(--space-3)',
-                              height: '100%',
                               minHeight: 48,
                               cursor: 'pointer',
                               transition: 'background 120ms ease',
@@ -2675,9 +2573,36 @@ export function Home() {
                             </span>
                           </button>
 
-                          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                            <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} theme="dark" />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowDriftsModal(true)}
+                            aria-label="Voir les dérives budgétaires"
+                            style={{
+                              width: '100%',
+                              display: 'inline-flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
+                              border: '1px solid rgba(255,255,255,0.25)',
+                              background: 'rgba(255,255,255,0.1)',
+                              color: '#FFFFFF',
+                              borderRadius: 'var(--radius-button)',
+                              padding: '4px var(--space-3)',
+                              minHeight: 48,
+                              cursor: 'pointer',
+                              transition: 'background 120ms ease',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                          >
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                              Dérives
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: driftOverrunTotal > 0 ? '#FC5A5A' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                              {formatCurrencyFloored(driftOverrunTotal)}
+                            </span>
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -2846,7 +2771,7 @@ export function Home() {
 
           {isMainCheckingAccount ? (
             <section
-              style={{ padding: sectionHorizontalPadding }}
+              style={{ padding: sectionHorizontalPadding, paddingTop: 'var(--space-8)' }}
             >
               <div
                 style={{
@@ -2855,91 +2780,123 @@ export function Home() {
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   columnGap: 'var(--space-4)',
-                  rowGap: 'var(--space-4)',
+                  rowGap: 'var(--space-2)',
                   position: 'relative',
                   paddingLeft: 16,
                   paddingRight: 16,
                 }}
               >
-                {/* ROW 1: J+3 Timeline (Left) & Optimizations Tile (Right) */}
-                <TimelineRow
-                  label="J+3"
-                  sublabel="échéances"
-                  value={renderOperationSummary(upcomingOpsWindows.j3.count)}
-                  dotColor={HOME_HERO_ACCENT_DOT}
-                  shadowColor={HOME_HERO_ACCENT_SHADOW}
-                  onClick={() => setShowPlannedOpsModal(true)}
-                  hasOps={false}
-                />
-                <DriftsTile
-                  count={driftRows.length}
-                  totalOverrunAmount={driftOverrunTotal}
-                  onClick={() => setShowDriftsModal(true)}
-                />
-
-                {/* ROW 2: Fin de mois Timeline (Left) & Épargne Tile (Right) */}
-                <TimelineRow
-                  label={`J+${daysRemaining}`}
-                  sublabel="fin de mois"
-                  value={renderOperationSummary(upcomingOpsWindows.eom.count)}
-                  dotColor={HOME_HERO_ACCENT_DOT}
-                  shadowColor={HOME_HERO_ACCENT_SHADOW}
-                  onClick={() => setShowPlannedOpsEomModal(true)}
-                  hasOps={false}
-                />
-                <SavingsGoalTile
-                  scheduleValue={savingsPlannedTransferLabel}
-                  scheduleAriaLabel={savingsPlannedTransferAriaLabel}
-                  onClick={() => setShowSavingsModal(true)}
-                />
-
-                {/* ROW 3: Recherche Rapide Tile (Full-width spanning both columns) */}
-                <div style={{ gridColumn: 'span 2', marginTop: 12 }}>
-                  <QuickSearchTile
-                    selection={searchSelection}
-                    period={searchPeriod}
-                    onSelectCategory={() => setShowSearchCatModal(true)}
-                    onSelectPeriod={() => setShowSearchPeriodModal(true)}
-                    onSearch={() => setShowSearchResultsModal(true)}
-                    categories={categories}
+                {/* Échéances — timeline visuelle */}
+                <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                  <EcheancesTimelineTile
+                    items={upcomingOpsWindows.eom.items}
+                    daysElapsed={daysElapsed}
+                    daysInMonth={daysInMonth}
+                    onClick={() => { setEcheancesFilter('mois'); setShowEcheancesModal(true) }}
                   />
                 </div>
+
+                <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                  <EnvelopeShortcutTile
+                    slices={homeEnvelopeSlices}
+                    onClick={() => setShowAllEnvelopesModal(true)}
+                  />
+                </div>
+
+                {/* Recherche Rapide — collapsed (bouton) ou expanded (pleine largeur) */}
+                {searchTileExpanded ? (
+                  <motion.div
+                    key="qs-expanded"
+                    style={{ gridColumn: 'span 2', marginTop: 'var(--space-6)' }}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                  >
+                    <QuickSearchTile
+                      selection={searchSelection}
+                      period={searchPeriod}
+                      onSelectCategory={() => setShowSearchCatModal(true)}
+                      onSelectPeriod={() => setShowSearchPeriodModal(true)}
+                      onSearch={() => { setShowSearchResultsModal(true); setSearchTileExpanded(false) }}
+                      onCollapse={() => setSearchTileExpanded(false)}
+                      categories={categories}
+                    />
+                  </motion.div>
+                ) : (
+                  <>
+                    <motion.div
+                      key="update-shortcut"
+                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                    >
+                      <UpdateShortcutTile onClick={() => setShowUpdateModal(true)} />
+                    </motion.div>
+                    {/* Colonne droite — bouton collapsed */}
+                    <motion.div
+                      key="qs-collapsed"
+                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                    >
+                      {/* Bouton réduit avec fondu bas */}
+                      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSearchTileExpanded(true)}
+                          className="qs-btn-idle"
+                          aria-label="Ouvrir la recherche rapide"
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            width: 80,
+                            height: 80,
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <ArrowUp size={20} strokeWidth={2.5} />
+                        </button>
+                        {/* Fondu bas vers couleur de page */}
+                        <div style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 36,
+                          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+                          pointerEvents: 'none',
+                        }} />
+                      </div>
+                      {/* Label */}
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: 'var(--neutral-400)',
+                        fontFamily: 'var(--font-mono)',
+                        letterSpacing: '0.13em',
+                        textTransform: 'uppercase',
+                        marginTop: 8,
+                        display: 'block',
+                      }}>
+                        Recherche
+                      </span>
+                    </motion.div>
+                  </>
+                )}
               </div>
             </section>
-          ) : (
-            <>
-              <section
-                style={{ padding: sectionHorizontalPadding }}
-              >
-                <div
-                  style={{
-                    maxWidth: 600,
-                    margin: '0 auto',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                    gap: 'var(--space-4)',
-                  }}
-                >
-                  <SavingsTile
-                    status={savingsTileStatus}
-                    monthAmountLabel={savingsTileMonthAmountLabel}
-                    onClick={() => setShowSavingsModal(true)}
-                  />
-                  <DriftsTile
-                    count={driftRows.length}
-                    totalOverrunAmount={driftOverrunTotal}
-                    onClick={() => setShowDriftsModal(true)}
-                  />
-                  <OptimizationsTile onClick={() => setShowOptimizationsModal(true)} />
-                  <SavingsGoalTile
-                    scheduleValue={savingsPlannedTransferLabel}
-                    scheduleAriaLabel={savingsPlannedTransferAriaLabel}
-                    onClick={() => setShowSavingsModal(true)}
-                  />
-                </div>
-              </section>
-            </>
-          )}
+          ) : null}
 
           {/* ── Module libre Infos — tuile cloche dépliable ── */}
           <section
@@ -3083,42 +3040,6 @@ export function Home() {
   </AnimatePresence>
 </div>
 
-      <BottomSheet
-        open={showOptimizationsModal}
-        onClose={() => setShowOptimizationsModal(false)}
-        title="Optimisations"
-        zIndex={67}
-        variant="center"
-        glass
-      >
-        <OptimizationsModal
-          data={optimizationsData}
-          formatCurrencyFloored={formatCurrencyFloored}
-        />
-      </BottomSheet>
-
-      <BottomSheet
-        open={showSavingsModal}
-        onClose={() => setShowSavingsModal(false)}
-        zIndex={68}
-        variant="center"
-        glass
-        glassBackground="rgba(22, 12, 4, 0.54)"
-        glassBorder="rgba(255, 171, 46, 0.15)"
-        header={<></>}
-      >
-        <SavingsProgressModal
-          savingsYtdDisplay={savingsYtdDisplay}
-          savingsAnnualGoalDisplay={savingsAnnualGoalDisplay}
-          savingsYtdProgressPct={savingsYtdProgressPct}
-          savingsMonthlyGoalDisplay={savingsMonthlyGoalDisplay}
-          savingsGoalReached={savingsGoalReached}
-          savingsMonthLabel={savingsMonthLabel}
-          formatCurrencyFloored={formatCurrencyFloored}
-          onClose={() => setShowSavingsModal(false)}
-        />
-      </BottomSheet>
-
       <AnimatePresence>
       <BottomSheet
         open={showHeroBalanceModal}
@@ -3211,8 +3132,8 @@ export function Home() {
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
-              {'\u25b8'} Revenus encaissés
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)', paddingLeft: 18 }}>
+              Revenus encaissés
             </span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', whiteSpace: 'nowrap' }}>
               {`+${formatCurrencyFloored(revenueAmountDisplay)}`}
@@ -3221,31 +3142,93 @@ export function Home() {
 
           <div style={{ height: 2 }} />
 
-          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
-            {'\u25b8'} Montants protégés
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setProtectedAmountsExpanded((current) => !current)}
+              aria-expanded={protectedAmountsExpanded}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 8,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ChevronRight
+                  size={12}
+                  aria-hidden="true"
+                  style={{
+                    flexShrink: 0,
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    transform: protectedAmountsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 160ms ease',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
+                  Montants protégés
+                </span>
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+                {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
+              </span>
+            </button>
+            {protectedAmountsExpanded ? (
+              <div style={{ display: 'grid', gap: 8, paddingLeft: 18 }}>
+                <DetailModalRow glass label="− Socle fixe prévu" value={formatCurrencyFloored(fixedBudgetAmountDisplay)} />
+                <DetailModalRow glass label="− Provisions prévues" value={formatCurrencyFloored(provisionBudgetAmountDisplay)} />
+                <DetailModalRow glass label="− Épargne prévue" value={formatCurrencyFloored(plannedSavingsAmountDisplay)} />
+              </div>
+            ) : null}
           </div>
-          <DetailModalRow glass label="− Socle fixe prévu" value={formatCurrencyFloored(fixedBudgetAmountDisplay)} />
-          <DetailModalRow glass label="− Provisions prévues" value={formatCurrencyFloored(provisionBudgetAmountDisplay)} />
-          <DetailModalRow glass label="− Épargne prévue" value={formatCurrencyFloored(plannedSavingsAmountDisplay)} />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, paddingLeft: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255, 255, 255, 0.52)' }}>Total protégé</span>
-            <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
-              {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
-            </span>
-          </div>
-
-          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)', marginTop: 4 }}>
-            {'\u25b8'} Déjà consommé
-          </div>
-          <DetailModalRow glass label="− Variable essentielle consommée" value={formatCurrencyFloored(variableEssentialConsumedDisplay)} />
-          <DetailModalRow glass label="− Discrétionnaire consommé" value={formatCurrencyFloored(discretionaryConsumedDisplay)} />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, paddingLeft: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255, 255, 255, 0.52)' }}>Total consommé</span>
-            <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
-              {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
-            </span>
+          <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setConsumedAmountsExpanded((current) => !current)}
+              aria-expanded={consumedAmountsExpanded}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 8,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ChevronRight
+                  size={12}
+                  aria-hidden="true"
+                  style={{
+                    flexShrink: 0,
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    transform: consumedAmountsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 160ms ease',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
+                  Déjà consommé
+                </span>
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+                {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
+              </span>
+            </button>
+            {consumedAmountsExpanded ? (
+              <div style={{ display: 'grid', gap: 8, paddingLeft: 18 }}>
+                <DetailModalRow glass label="− Variable essentielle consommée" value={formatCurrencyFloored(variableEssentialConsumedDisplay)} />
+                <DetailModalRow glass label="− Discrétionnaire consommé" value={formatCurrencyFloored(discretionaryConsumedDisplay)} />
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -3302,6 +3285,26 @@ export function Home() {
         }}
       />
 
+      <AllEnvelopesModal
+        open={showAllEnvelopesModal}
+        onClose={() => setShowAllEnvelopesModal(false)}
+        displayMonthLabel={homeEnvelopeMonthLabel}
+        parentCategoryRows={allEnvelopeParentRowsWithoutSavings}
+        subCategoryRows={allEnvelopeCategoryRows}
+        categoryById={categoryById}
+        tripsForMonth={tripsForMonth}
+        onTripClick={() => {
+          setShowAllEnvelopesModal(false)
+          navigate('/budgets', {
+            state: {
+              categoryId: voyagesRootCategoryId,
+              year,
+              month,
+            },
+          })
+        }}
+      />
+
       <DriftsModal
         open={showDriftsModal}
         onClose={() => setShowDriftsModal(false)}
@@ -3354,22 +3357,295 @@ export function Home() {
         glassBorder={getGlassColors('#38BDF8').glassBorder}
       />
 
-      <PlannedOpsModal
-        open={showPlannedOpsModal}
-        onClose={() => setShowPlannedOpsModal(false)}
-        title="Échéances J+3"
-        dotColor="var(--primary-500)"
-        items={upcomingOpsWindows.j3.items}
+      <UpdateModal
+        open={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        pickerPlacement="center"
       />
-      <PlannedOpsModal
-        open={showPlannedOpsEomModal}
-        onClose={() => setShowPlannedOpsEomModal(false)}
-        title="Échéances fin de mois"
-        dotColor="#FFAB2E"
-        items={upcomingOpsWindows.eom.items}
-        maxHeight="min(78dvh, 576px)"
-        contentMaxHeight="min(56dvh, 336px)"
-      />
+
+      {/* ── Modale Échéances unifiée ── */}
+      {(() => {
+        const filterMap = { j3: upcomingOpsWindows.j3.items, j7: upcomingOpsWindows.j7.items, j15: upcomingOpsWindows.j15.items, mois: upcomingOpsWindows.eom.items } as const
+        const filterLabels = { j3: 'J+3', j7: 'J+7', j15: 'J+15', mois: 'Mois' } as const
+        const activeItems = filterMap[echeancesFilter]
+        const knownTripNames = new Set(tripCockpitRows.map((trip) => normalizeLabel(trip.name ?? '')))
+        const aggregatedVoyages = new Map<string, {
+          key: string
+          label: string
+          flowType: PlannedOperationItem['flow_type']
+          amount: number
+          dates: string[]
+        }>()
+        const displayItems: Array<{
+          key: string
+          label: string
+          flowType: PlannedOperationItem['flow_type']
+          amount: number
+          sortDate: string
+          dateLabel: string
+        }> = []
+
+        for (const item of activeItems) {
+          const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+          const normalizedLabel = normalizeLabel(item.label)
+          const isVoyageExpense =
+            item.flow_type === 'expense'
+            && (
+              knownTripNames.has(normalizedLabel)
+              || (
+              item.budget_bucket === 'voyage'
+              || normalizeLabel(item.parent_category_name ?? '') === 'voyages'
+              )
+            )
+
+          if (!isVoyageExpense) {
+            displayItems.push({
+              key: item.id,
+              label: item.label,
+              flowType: item.flow_type,
+              amount,
+              sortDate: item.planned_date,
+              dateLabel: new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+            })
+            continue
+          }
+
+          const voyageKey = normalizedLabel
+          const current = aggregatedVoyages.get(voyageKey)
+          if (current) {
+            current.amount += amount
+            current.dates.push(item.planned_date)
+          } else {
+            aggregatedVoyages.set(voyageKey, {
+              key: `voyage-${voyageKey}`,
+              label: item.label,
+              flowType: item.flow_type,
+              amount,
+              dates: [item.planned_date],
+            })
+          }
+        }
+
+        for (const voyage of aggregatedVoyages.values()) {
+          const sortedDates = [...voyage.dates].sort()
+          const firstDate = sortedDates[0]
+          const lastDate = sortedDates[sortedDates.length - 1]
+          const firstLabel = new Date(firstDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+          const lastLabel = new Date(lastDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+
+          displayItems.push({
+            key: voyage.key,
+            label: voyage.label,
+            flowType: voyage.flowType,
+            amount: voyage.amount,
+            sortDate: firstDate,
+            dateLabel: firstDate === lastDate ? firstLabel : `${firstLabel} → ${lastLabel}`,
+          })
+        }
+
+        displayItems.sort((a, b) => {
+          const aDate = a.sortDate
+          const bDate = b.sortDate
+          if (aDate !== bDate) return aDate.localeCompare(bDate, 'fr')
+          return a.label.localeCompare(b.label, 'fr')
+        })
+
+        const totalRevenus = displayItems.reduce((sum, item) => (
+          item.flowType === 'income' ? sum + item.amount : sum
+        ), 0)
+        const totalDepensesPlanifiees = displayItems.reduce((sum, item) => (
+          item.flowType === 'expense' || item.flowType === 'savings' ? sum + item.amount : sum
+        ), 0)
+        const balance = totalRevenus - totalDepensesPlanifiees
+        const { glassBackground, glassBorder } = getGlassColors('#5B57F5')
+        return (
+          <BottomSheet
+            open={showEcheancesModal}
+            onClose={() => setShowEcheancesModal(false)}
+            variant="center"
+            glass
+            glassBackground={glassBackground}
+            glassBorder={glassBorder}
+            maxHeight="min(90dvh, 700px)"
+            zIndex={1200}
+            header={
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', minWidth: 0 }}>
+                {/* Ligne 1 : titre + croix */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'rgba(255,255,255,0.90)', letterSpacing: '-0.01em' }}>
+                    Échéances
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowEcheancesModal(false)}
+                    aria-label="Fermer"
+                    style={{
+                      flexShrink: 0, border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
+                      color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
+                      borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
+                    }}
+                  ><X size={11} /></button>
+                </div>
+                {/* Ligne 2 : pastilles filtres */}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['j3', 'j7', 'j15', 'mois'] as const).map((f) => {
+                    const isActive = echeancesFilter === f
+                    const cnt = filterMap[f].length
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setEcheancesFilter(f)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px',
+                          borderRadius: 'var(--radius-full)',
+                          border: isActive ? '1px solid rgba(91,87,245,0.75)' : '1px solid rgba(255,255,255,0.14)',
+                          background: isActive ? 'rgba(91,87,245,0.28)' : 'rgba(255,255,255,0.07)',
+                          color: isActive ? 'rgba(195,190,255,0.98)' : 'rgba(255,255,255,0.45)',
+                          fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                          transition: 'all 140ms ease',
+                          letterSpacing: '0.02em',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {filterLabels[f]}
+                        {cnt > 0 && (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            minWidth: 15, height: 15, padding: '0 3px',
+                            borderRadius: 'var(--radius-full)',
+                            background: isActive ? 'rgba(91,87,245,0.5)' : 'rgba(255,255,255,0.1)',
+                            color: isActive ? '#fff' : 'rgba(255,255,255,0.4)',
+                            fontSize: 9, fontWeight: 900, lineHeight: 1,
+                          }}>{cnt}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            }
+          >
+            <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10, maxHeight: 'min(68dvh, 520px)', overflowY: 'auto' }}>
+              {displayItems.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+                  Aucune opération sur cette période.
+                </p>
+              ) : (
+                <>
+                  {displayItems.map((item) => {
+                    const isIncome = item.flowType === 'income'
+                    const isSavings = item.flowType === 'savings'
+                    const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
+                    return (
+                      <div
+                        key={item.key}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          gap: 8,
+                          paddingLeft: isIncome ? 2 : 0,
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          {isIncome ? (
+                            <ArrowDownToLine
+                              size={13}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                              style={{ flexShrink: 0, color: 'rgba(46, 212, 122, 0.72)' }}
+                            />
+                          ) : null}
+                          <span style={{ fontSize: 11, color: isIncome ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
+                            {`${item.label} (${flowLabel}, ${item.dateLabel})`}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            fontFamily: 'var(--font-mono)',
+                            color: isIncome ? 'rgba(240, 255, 246, 0.94)' : '#FFFFFF',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {`${isIncome ? '+' : '-'}${formatCurrencyFloored(item.amount)}`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {displayItems.length > 0 && (
+                    <>
+                      <DetailModalSeparator glass />
+                      <div
+                        style={{
+                          display: 'grid',
+                          gap: 10,
+                          paddingTop: 2,
+                        }}
+                      >
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.82)', letterSpacing: '-0.01em' }}>
+                              Total revenus
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
+                              {`+${formatCurrencyFloored(totalRevenus)}`}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.82)', letterSpacing: '-0.01em' }}>
+                              Total dépenses planifiées
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
+                              {`-${formatCurrencyFloored(totalDepensesPlanifiees)}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                            gap: 8,
+                            paddingTop: 10,
+                            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: 'rgba(255, 255, 255, 0.82)',
+                              letterSpacing: '-0.01em',
+                            }}
+                          >
+                            Balance
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 800,
+                              fontFamily: 'var(--font-mono)',
+                              color: '#FFFFFF',
+                              whiteSpace: 'nowrap',
+                              letterSpacing: '-0.02em',
+                            }}
+                          >
+                            {`${balance >= 0 ? '+' : '-'}${formatCurrencyFloored(Math.abs(balance))}`}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </BottomSheet>
+        )
+      })()}
 
       {/* Mini Modale de sélection de la Catégorie / Socle */}
       <BottomSheet
@@ -3380,7 +3656,7 @@ export function Home() {
         glass
         glassBackground={getGlassColors('#5B57F5').glassBackground}
         glassBorder={getGlassColors('#5B57F5').glassBorder}
-        zIndex={1200}
+        zIndex={1300}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Toutes catégories banner */}
@@ -3569,7 +3845,7 @@ export function Home() {
         glass
         glassBackground={getGlassColors('#FFAB2E').glassBackground}
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
-        zIndex={1200}
+        zIndex={1300}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Year Buttons */}
@@ -3686,19 +3962,196 @@ export function Home() {
         </div>
       </BottomSheet>
 
+      {/* Modale sélection catégorie — section Compare (B) */}
+      <BottomSheet
+        open={showCompareCatModal}
+        onClose={() => setShowCompareCatModal(false)}
+        title="Catégorie B"
+        variant="center"
+        glass
+        glassBackground={getGlassColors('#5B57F5').glassBackground}
+        glassBorder={getGlassColors('#5B57F5').glassBorder}
+        zIndex={1300}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <button
+            type="button"
+            onClick={() => { setCompareSelection({ kind: 'all', id: 'all_categories' }); setShowCompareCatModal(false) }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
+              border: compareSelection?.kind === 'all' ? '2px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.12)',
+              background: compareSelection?.kind === 'all' ? 'rgba(91,87,245,0.25)' : 'rgba(255,255,255,0.05)',
+              cursor: 'pointer', color: '#ffffff', fontWeight: 700, fontSize: 14, transition: 'all 0.2s',
+            }}
+          >
+            <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', overflow: 'hidden', flexShrink: 0 }}>
+              <CategoryIcon iconKey="toutes_categories" size={22} style={{ transform: 'scale(1.15)', display: 'block' }} />
+            </div>
+            Toutes catégories
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {parentCategories.map((cat) => {
+              const isSel = compareSelection?.kind === 'category' && compareSelection.id === cat.id
+              return (
+                <button key={cat.id} type="button"
+                  onClick={() => { setCompareSelection({ kind: 'category', id: cat.id }); setShowCompareCatModal(false) }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '6px 2px',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1px solid rgba(255,255,255,0.08)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'transparent',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', overflow: 'hidden', flexShrink: 0 }}>
+                    <CategoryIcon iconKey={cat.icon_key} size={26} style={{ transform: 'scale(1.12)', display: 'block' }} />
+                  </div>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: isSel ? '#ffffff' : 'rgba(255,255,255,0.7)', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1.15 }}>
+                    {cat.name}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {soclesList.map((socle) => {
+              const isSel = compareSelection?.kind === 'socle' && compareSelection.id === socle.id
+              return (
+                <button key={socle.id} type="button"
+                  onClick={() => { setCompareSelection({ kind: 'socle', id: socle.id }); setShowCompareCatModal(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.05)',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >
+                  <img src={socle.icon} alt={socle.label} style={{ width: 18, height: 18, borderRadius: 4 }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isSel ? '#ffffff' : 'rgba(255,255,255,0.85)' }}>{socle.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Modale sélection période — section Compare (B) */}
+      <BottomSheet
+        open={showComparePeriodModal}
+        onClose={() => setShowComparePeriodModal(false)}
+        title="Période B"
+        variant="center"
+        glass
+        glassBackground={getGlassColors('#FFAB2E').glassBackground}
+        glassBorder={getGlassColors('#FFAB2E').glassBorder}
+        zIndex={1300}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[2025, 2026].map((y) => {
+              const isSel = comparePickerYear === y
+              return (
+                <button key={y} type="button" onClick={() => setComparePickerYear(y)}
+                  style={{
+                    padding: '10px 0', borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.05)',
+                    color: isSel ? '#ffffff' : 'rgba(255,255,255,0.7)',
+                    fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >{y}</button>
+              )
+            })}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+            {MONTHS_FR_SHORT.map((mName, idx) => {
+              const monthNum = idx + 1
+              const isFuture = isMonthFuture(comparePickerYear, monthNum)
+              const isSel = comparePeriod?.year === comparePickerYear && comparePeriod?.month === monthNum
+              return (
+                <button key={monthNum} type="button"
+                  onClick={() => { setComparePeriod({ year: comparePickerYear, month: monthNum }); setShowComparePeriodModal(false) }}
+                  style={{
+                    padding: '12px 0', borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : isFuture ? '1px dashed rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.08)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : isFuture ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.04)',
+                    color: isSel ? '#ffffff' : isFuture ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.8)',
+                    fontWeight: isSel ? 700 : 500, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >{mName}</button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setComparePeriod({ year: comparePickerYear, month: undefined }); setShowComparePeriodModal(false) }}
+            style={{
+              marginTop: 4, padding: '10px 0', width: '100%', borderRadius: 'var(--radius-md)',
+              border: comparePeriod?.year === comparePickerYear && comparePeriod?.month === undefined ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+              background: comparePeriod?.year === comparePickerYear && comparePeriod?.month === undefined ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.04)',
+              color: '#ffffff', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+          >Année entière {comparePickerYear}</button>
+        </div>
+      </BottomSheet>
+
       {/* Modale des Résultats de Recherche Rapide */}
       <BottomSheet
         open={showSearchResultsModal}
-        onClose={() => setShowSearchResultsModal(false)}
-        title={getSelectionName()}
-        subtitle={getPeriodName()}
+        onClose={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
         variant="center"
         glass
         glassBackground={getGlassColors('#FFAB2E').glassBackground}
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
         zIndex={1200}
+        header={
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickSearchCompareMode((c) => {
+                  if (c) { setCompareSelection(null); setComparePeriod(null) }
+                  return !c
+                })
+              }}
+              aria-label={quickSearchCompareMode ? 'Désactiver le mode comparaison' : 'Activer le mode comparaison'}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                height: 28, padding: '0 14px',
+                borderRadius: 'var(--radius-full)',
+                border: quickSearchCompareMode ? '1.5px solid rgba(255,171,46,0.7)' : '1.5px solid rgba(91,87,245,0.75)',
+                background: quickSearchCompareMode
+                  ? 'linear-gradient(135deg, rgba(255,171,46,0.28) 0%, rgba(255,204,100,0.15) 100%)'
+                  : 'linear-gradient(135deg, rgba(91,87,245,0.28) 0%, rgba(130,120,255,0.16) 100%)',
+                boxShadow: quickSearchCompareMode ? '0 2px 12px rgba(255,171,46,0.28)' : '0 2px 12px rgba(91,87,245,0.35)',
+                color: quickSearchCompareMode ? 'rgba(255,224,130,0.98)' : 'rgba(195,190,255,0.98)',
+                fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
+                cursor: 'pointer', transition: 'all 220ms ease',
+              }}
+            >versus</button>
+            <div />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
+                aria-label="Fermer"
+                style={{
+                  flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
+                  color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
+                  borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0,
+                }}
+              ><X size={11} /></button>
+            </div>
+          </div>
+        }
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)' }}>
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {searchPending ? (
             <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.4)', fontSize: 13, fontStyle: 'italic' }}>
@@ -3706,49 +4159,188 @@ export function Home() {
               </p>
             </div>
           ) : searchMetrics ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 12,
-              }}
-            >
-              <SearchResultKpiCard
-                title="Consommé"
-                value={searchMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(searchMetrics.consomme ?? 0)}
-                subtitle={
-                  searchMetrics.isFuturePeriod
-                    ? 'Période future'
-                    : searchPeriod?.month === undefined
-                    ? 'Cumul constaté (YTD)'
-                    : 'Réel constaté'
-                }
-              />
-              <SearchResultKpiCard
-                title="Budget"
-                value={formatCurrencyFloored(searchMetrics.budget)}
-                subtitle={searchPeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
-              />
-              <SearchResultKpiCard
-                title="Moyenne 6M"
-                value={searchMetrics.average6m !== null ? formatCurrencyFloored(searchMetrics.average6m) : '—'}
-                subtitle="Moyenne mobile 6 mois"
-              />
-              <SearchResultKpiCard
-                title="Year to Year"
-                value={
-                  searchMetrics.ytdDiffPct !== null
-                    ? `${searchMetrics.ytdDiffPct >= 0 ? '+' : ''}${searchMetrics.ytdDiffPct.toFixed(1)}%`
-                    : '—'
-                }
-                subtitle={
-                  searchMetrics.ytdDiffAmount !== null
-                    ? `${searchMetrics.ytdDiffAmount >= 0 ? '+' : ''}${formatCurrencyFloored(searchMetrics.ytdDiffAmount)} vs N-1`
-                    : '—'
-                }
-                valueColor={getYtdColor()}
-              />
-            </div>
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                {quickSearchCompareMode ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchCatModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(255, 224, 130, 0.94)' }}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255, 224, 130, 0.52)', flexShrink: 0 }}>A</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getSelectionName()}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchPeriodModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(255, 224, 130, 0.94)' }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getPeriodName()}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>
+                      {getSelectionName()}
+                    </p>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.34)' }}>•</span>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.52)', letterSpacing: '0.01em' }}>
+                      {getPeriodName()}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Grille KPI principale ── */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 12,
+                }}
+              >
+                <SearchResultKpiCard
+                  title="Consommé"
+                  value={searchMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(searchMetrics.consomme ?? 0)}
+                  subtitle={
+                    searchMetrics.isFuturePeriod
+                      ? 'Période future'
+                      : searchPeriod?.month === undefined
+                      ? 'Cumul constaté (YTD)'
+                      : 'Réel constaté'
+                  }
+                  onClick={() => handleNavigateToBudgetsCategory('donuts')}
+                  ariaLabel="Voir le consommé dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
+                />
+                <SearchResultKpiCard
+                  title="Budget"
+                  value={formatCurrencyFloored(searchMetrics.budget)}
+                  subtitle={searchPeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
+                  onClick={() => handleNavigateToBudgetsCategory('donuts')}
+                  ariaLabel="Voir le budget dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
+                />
+                <SearchResultKpiCard
+                  title="Moyenne 6M"
+                  value={searchMetrics.average6m !== null ? formatCurrencyFloored(searchMetrics.average6m) : '—'}
+                  subtitle="Moyenne mobile 6 mois"
+                  onClick={() => handleNavigateToBudgetsCategory('categories')}
+                  ariaLabel="Voir la catégorie dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
+                />
+                <SearchResultKpiCard
+                  title="Évolution 3M"
+                  value={
+                    searchMetrics.evolution3mPct !== null
+                      ? `${searchMetrics.evolution3mPct >= 0 ? '+' : ''}${searchMetrics.evolution3mPct.toFixed(1)}%`
+                      : '—'
+                  }
+                  subtitle={
+                    searchMetrics.evolution3mAmount !== null
+                      ? `${searchMetrics.evolution3mAmount >= 0 ? '+' : ''}${formatCurrencyFloored(searchMetrics.evolution3mAmount)} vs 3M préc.`
+                      : '—'
+                  }
+                  valueColor={getEvolution3mColor()}
+                  compact={quickSearchCompareMode}
+                />
+              </div>
+
+              {/* ── Section comparative ── */}
+              <AnimatePresence>
+                {quickSearchCompareMode ? (
+                  <motion.div
+                    key="compare-section"
+                    initial={{ opacity: 0, y: 32, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 14, scale: 0.97 }}
+                    transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}
+                  >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowCompareCatModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(195, 190, 255, 0.94)' }}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(195, 190, 255, 0.52)', flexShrink: 0 }}>B</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{compareSelection ? getCompareName() : 'Catégorie'}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowComparePeriodModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, minWidth: 0, cursor: 'pointer', color: comparePeriod ? 'rgba(195, 190, 255, 0.94)' : 'rgba(195, 190, 255, 0.58)' }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comparePeriod ? getComparePeriodLabel() : 'Période'}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
+                    </div>
+                    {/* Cartes B avec données réelles + écart % */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                      {/* Consommé B */}
+                      <motion.div key="cmp-consomme" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.22 }}>
+                        <SearchResultKpiCard
+                          title="Consommé"
+                          value={comparePending ? '…' : compareMetrics ? (compareMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(compareMetrics.consomme ?? 0)) : '—'}
+                          subtitle={compareMetrics?.isFuturePeriod ? 'Période future' : comparePeriod?.month === undefined ? 'Cumul constaté (YTD)' : 'Réel constaté'}
+                          diffPct={compareMetrics && !compareMetrics.isFuturePeriod && searchMetrics && !searchMetrics.isFuturePeriod ? calcVsDiffPct(compareMetrics.consomme, searchMetrics.consomme) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('donuts')}
+                          ariaLabel="Voir le consommé dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Budget B */}
+                      <motion.div key="cmp-budget" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}>
+                        <SearchResultKpiCard
+                          title="Budget"
+                          value={comparePending ? '…' : compareMetrics ? formatCurrencyFloored(compareMetrics.budget) : '—'}
+                          subtitle={comparePeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
+                          diffPct={compareMetrics && searchMetrics ? calcVsDiffPct(compareMetrics.budget, searchMetrics.budget) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('donuts')}
+                          ariaLabel="Voir le budget dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Moyenne 6M B */}
+                      <motion.div key="cmp-avg" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.42 }}>
+                        <SearchResultKpiCard
+                          title="Moyenne 6M"
+                          value={comparePending ? '…' : compareMetrics?.average6m != null ? formatCurrencyFloored(compareMetrics.average6m) : '—'}
+                          subtitle="Moyenne mobile 6 mois"
+                          diffPct={compareMetrics?.average6m != null && searchMetrics?.average6m != null ? calcVsDiffPct(compareMetrics.average6m, searchMetrics.average6m) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('categories')}
+                          ariaLabel="Voir la catégorie dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Évolution 3M B */}
+                      <motion.div key="cmp-evo" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.52 }}>
+                        <SearchResultKpiCard
+                          title="Évolution 3M"
+                          value={comparePending ? '…' : compareMetrics?.evolution3mPct != null
+                            ? `${compareMetrics.evolution3mPct >= 0 ? '+' : ''}${compareMetrics.evolution3mPct.toFixed(1)}%`
+                            : '—'}
+                          subtitle={compareMetrics?.evolution3mAmount != null
+                            ? `${compareMetrics.evolution3mAmount >= 0 ? '+' : ''}${formatCurrencyFloored(compareMetrics.evolution3mAmount)} vs 3M préc.`
+                            : '—'}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                        />
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </>
           ) : (
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.4)', textAlign: 'center', fontStyle: 'italic' }}>
               Aucun résultat disponible.

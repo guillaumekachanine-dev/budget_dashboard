@@ -60,8 +60,8 @@ function TripProgressRing({
   const burstGlowId = `${travelerId}-burst-glow`
   const animationClass = `trip-orbit-${travelerId}`
 
-  const trackColor = 'rgba(255, 248, 228, 0.18)'
-  const arcColor = pct > 100 ? '#FC5A5A' : '#F3B24F'
+  const trackColor = 'rgba(110, 78, 22, 0.28)'
+  const arcColor = pct > 100 ? '#C41C1C' : '#B8730A'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
@@ -240,10 +240,10 @@ function TripProgressRing({
         </g>
       </svg>
       <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%', padding: '0 8px', boxSizing: 'border-box' }}>
-        <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+        <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#26190A', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
           {amountText}
         </span>
-        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(70, 44, 10, 0.75)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
           {label}
         </span>
       </div>
@@ -310,7 +310,7 @@ function TripCard({
             {dateRange}
           </span>
           {contextLine && (
-            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(108, 76, 23, 0.66)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(255, 225, 170, 0.78)' }}>
               {contextLine}
             </p>
           )}
@@ -351,7 +351,7 @@ function TripCard({
 
       {/* ── 2. Ligne consommation unifiée ─────────────────────────────── */}
       <div style={{ textAlign: 'center', display: 'grid', gap: 2 }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFDF8', textShadow: '0 1px 5px rgba(92, 62, 8, 0.14)' }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#2C1A08' }}>
           {hasPlannedBudget ? (
             <>
               {'Consommé : '}
@@ -366,7 +366,7 @@ function TripCard({
           )}
         </p>
         {hasPlannedBudget && (
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(108, 76, 23, 0.72)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'rgba(52, 30, 6, 0.82)' }}>
             {consumedPct.toFixed(0)}% consommé
           </p>
         )}

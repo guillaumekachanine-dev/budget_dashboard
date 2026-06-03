@@ -26,7 +26,7 @@ export function HeroCard({ account, totalSpent, totalBudget }: HeroCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15, duration: 0.4, ease: 'easeOut' }}
       className="budget-hero"
-      style={{ padding: '18px 18px 14px' }}
+      style={{ padding: 'var(--space-4) var(--space-4) var(--space-3)' }}
     >
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

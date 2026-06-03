@@ -165,7 +165,6 @@ export function TripManualExpenseModal({
   const [amountStr,  setAmountStr]  = useState('')
   const [categoryId, setCategoryId] = useState<string>('')
   const [label,      setLabel]      = useState('')
-  const [notes,      setNotes]      = useState('')
   const [imputationType, setImputationType] = useState<'personal' | 'joint'>('personal')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [success,    setSuccess]    = useState(false)
@@ -192,7 +191,6 @@ export function TripManualExpenseModal({
     setAmountStr('')
     setCategoryId(voyageCategories[0]?.id ?? voyagesRootCategory?.id ?? '')
     setLabel('')
-    setNotes('')
     setImputationType('personal')
     setSubmitError(null)
     setSuccess(false)
@@ -234,7 +232,7 @@ export function TripManualExpenseModal({
         date,
         amount,
         label,
-        notes: notes.trim() || null,
+        notes: null,
         imputationType,
         personalShareRatio: imputationType === 'joint' ? 0.5 : 1.0,
       })
@@ -255,47 +253,72 @@ export function TripManualExpenseModal({
       <BottomSheet
         open={open}
         onClose={onClose}
-        title="Dépense voyage"
         maxHeight="92dvh"
         zIndex={260}
-        variant={glass ? "center" : "sheet"}
+        variant="center"
         glass={glass}
         glassBackground={glassBackground}
         glassBorder={glassBorder}
-      >
-        <form
-          onSubmit={handleSubmit}
-          style={{ padding: 'var(--space-4) var(--space-5) var(--space-8)', display: 'grid', gap: 'var(--space-4)' }}
-        >
-          {/* ── Voyage ──────────────────────────────────────────────────────── */}
-          <div>
-            <label style={currentLabelStyle}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Plane size={11} />
-                Voyage
-              </span>
-            </label>
+        header={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%' }}>
+            {/* Sélecteur voyage en position titre */}
             {trips.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: glass ? glassMuted : 'var(--neutral-400)' }}>
-                Aucun voyage enregistré.
+              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: glass ? 'rgba(255,255,255,0.90)' : 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
+                Dépense voyage
               </p>
             ) : (
               <button
                 type="button"
                 onClick={() => setTripPickerOpen(true)}
-                style={currentSelectFieldStyle}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '3px 10px 3px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  border: glass ? '1px solid rgba(255,255,255,0.22)' : '1px solid var(--neutral-200)',
+                  background: glass ? 'rgba(255,255,255,0.10)' : 'var(--neutral-50)',
+                  cursor: 'pointer', flex: 1, minWidth: 0,
+                  transition: 'background 120ms ease',
+                  textAlign: 'left',
+                }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                  <span>{selectedTripObject?.emoji || '✈️'}</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
-                    {selectedTripObject ? formatTripNameWithMonthYear(selectedTripObject.name, selectedTripObject.start_date || selectedTripObject.end_date) : '— Choisir un voyage —'}
-                  </span>
+                <span style={{
+                  fontSize: 'var(--font-size-md)', fontWeight: 800,
+                  color: glass ? 'rgba(255,255,255,0.90)' : 'var(--neutral-900)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em', flex: 1,
+                }}>
+                  {selectedTripObject
+                    ? formatTripNameWithMonthYear(selectedTripObject.name, selectedTripObject.start_date || selectedTripObject.end_date)
+                    : '— Choisir un voyage —'}
                 </span>
-                <ChevronDown size={14} style={{ color: glass ? glassMuted : 'var(--neutral-400)', flexShrink: 0 }} />
+                <ChevronDown size={12} style={{ color: glass ? 'rgba(255,255,255,0.55)' : 'var(--neutral-400)', flexShrink: 0 }} />
               </button>
             )}
+            {/* Bouton fermer */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fermer"
+              style={{
+                flexShrink: 0,
+                border: glass ? '1px solid rgba(255,255,255,0.35)' : '1px solid var(--neutral-300)',
+                background: glass ? 'rgba(255,255,255,0.20)' : 'var(--neutral-100)',
+                color: glass ? 'rgba(255,255,255,0.92)' : 'var(--neutral-700)',
+                width: 26, height: 26, minWidth: 26, minHeight: 26,
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', padding: 0,
+              }}
+            >
+              <X size={11} />
+            </button>
           </div>
-
+        }
+      >
+        <form
+          onSubmit={handleSubmit}
+          style={{ padding: 'var(--space-4) var(--space-5) var(--space-8)', display: 'grid', gap: 'var(--space-4)' }}
+        >
           {/* ── Date + Montant (2 colonnes côte à côte) ──────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', minWidth: 0 }}>
             <div style={{ minWidth: 0 }}>
@@ -424,30 +447,6 @@ export function TripManualExpenseModal({
               required
               maxLength={120}
               style={currentInputStyle}
-            />
-          </div>
-
-          {/* ── Notes (optionnel) ───────────────────────────────────────────── */}
-          <div>
-            <label htmlFor="tme-notes" style={currentLabelStyle}>
-              Notes
-              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: glass ? glassMuted : 'var(--neutral-400)' }}>
-                optionnel
-              </span>
-            </label>
-            <textarea
-              id="tme-notes"
-              placeholder="Détails, nom du marchand, réf. réservation…"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-              maxLength={500}
-              style={{
-                ...currentInputStyle,
-                resize: 'vertical',
-                minHeight: 60,
-                lineHeight: 1.5,
-              }}
             />
           </div>
 
