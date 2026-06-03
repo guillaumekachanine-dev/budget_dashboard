@@ -4754,7 +4754,7 @@ export function Home() {
             rgba(255, 255, 255, 0.35),
             transparent
           );
-          animation: shine-pass 0.8s ease-in-out;
+          animation: shine-pass 0.35s ease-in-out;
         }
 
         .shine-btn--1::before {
