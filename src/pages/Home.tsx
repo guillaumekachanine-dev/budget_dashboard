@@ -28,6 +28,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
 import { CategoryIcon } from '@/components/ui/CategoryIcon'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { UpdateModal } from '@/components/modals/UpdateModal'
 import { useCategories } from '@/hooks/useCategories'
 import { useQuickSearchMetrics } from '@/features/home/hooks/useQuickSearchMetrics'
 import type { QuickSearchSelection, QuickSearchPeriod } from '@/features/home/hooks/useQuickSearchMetrics'
@@ -39,6 +40,7 @@ import blockDiscretionnaireIcon from '@/assets/icons/blocks/discretionnaire.webp
 import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
+import updateExchangeReferenceIcon from '@/assets/icons/app/update_exchange_reference.png'
 
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
@@ -952,6 +954,7 @@ function QuickSearchTile({
   onSelectCategory,
   onSelectPeriod,
   onSearch,
+  onCollapse,
   categories,
 }: {
   selection: QuickSearchSelection | null
@@ -959,6 +962,7 @@ function QuickSearchTile({
   onSelectCategory: () => void
   onSelectPeriod: () => void
   onSearch: () => void
+  onCollapse?: () => void
   categories: Category[]
 }) {
   const getSelectionText = () => {
@@ -1075,8 +1079,7 @@ function QuickSearchTile({
       {/* Action Button (Center) */}
       <button
         type="button"
-        onClick={onSearch}
-        disabled={!canSearch}
+        onClick={canSearch ? onSearch : onCollapse}
         className={canSearch ? 'qs-btn-ready' : ''}
         style={{
           position: 'absolute',
@@ -1095,7 +1098,7 @@ function QuickSearchTile({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: canSearch ? 'pointer' : 'not-allowed',
+          cursor: 'pointer',
           zIndex: 10,
           transition: 'transform 0.2s ease, border 0.3s ease',
         }}
@@ -1107,7 +1110,6 @@ function QuickSearchTile({
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translate(-50%, -50%)'
-          // Clear inline override so CSS animation resumes
           e.currentTarget.style.boxShadow = canSearch ? '' : 'none'
         }}
       >
@@ -1154,6 +1156,67 @@ function QuickSearchTile({
         </span>
       </button>
     </div>
+  )
+}
+
+function UpdateShortcutTile({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label="Ouvrir la mise à jour"
+      style={{
+        border: 'none',
+        background: 'transparent',
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.72 : 1,
+      }}
+    >
+      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+        <img
+          src={updateExchangeReferenceIcon}
+          alt=""
+          aria-hidden
+          style={{
+            width: 78,
+            height: 58,
+            objectFit: 'contain',
+            display: 'block',
+            transform: 'translateY(-1px) scaleX(1.08)',
+          }}
+        />
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 20,
+          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+          pointerEvents: 'none',
+        }} />
+      </div>
+      <span style={{
+        fontSize: 11,
+        fontWeight: 800,
+        color: 'var(--neutral-400)',
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.13em',
+        textTransform: 'uppercase',
+        marginTop: 8,
+        display: 'block',
+      }}>
+        Mise à jour
+      </span>
+    </button>
   )
 }
 
@@ -1267,6 +1330,7 @@ export function Home() {
   const [showSearchCatModal, setShowSearchCatModal] = useState(false)
   const [showSearchPeriodModal, setShowSearchPeriodModal] = useState(false)
   const [showSearchResultsModal, setShowSearchResultsModal] = useState(false)
+  const [searchTileExpanded, setSearchTileExpanded] = useState(false)
   const [quickSearchCompareMode, setQuickSearchCompareMode] = useState(false)
   const [searchPickerYear, setSearchPickerYear] = useState(2026)
   // Compare (section versus)
@@ -1618,6 +1682,7 @@ export function Home() {
   const [echeancesFilter, setEcheancesFilter] = useState<'j3' | 'j7' | 'j15' | 'mois'>('mois')
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
@@ -2738,17 +2803,97 @@ export function Home() {
                   />
                 </div>
 
-                {/* Recherche Rapide Tile — pleine largeur */}
-                <div style={{ gridColumn: 'span 2', marginTop: 'var(--space-10)' }}>
-                  <QuickSearchTile
-                    selection={searchSelection}
-                    period={searchPeriod}
-                    onSelectCategory={() => setShowSearchCatModal(true)}
-                    onSelectPeriod={() => setShowSearchPeriodModal(true)}
-                    onSearch={() => setShowSearchResultsModal(true)}
-                    categories={categories}
-                  />
-                </div>
+                {/* Recherche Rapide — collapsed (bouton) ou expanded (pleine largeur) */}
+                {searchTileExpanded ? (
+                  <motion.div
+                    key="qs-expanded"
+                    style={{ gridColumn: 'span 2', marginTop: 'var(--space-6)' }}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                  >
+                    <QuickSearchTile
+                      selection={searchSelection}
+                      period={searchPeriod}
+                      onSelectCategory={() => setShowSearchCatModal(true)}
+                      onSelectPeriod={() => setShowSearchPeriodModal(true)}
+                      onSearch={() => { setShowSearchResultsModal(true); setSearchTileExpanded(false) }}
+                      onCollapse={() => setSearchTileExpanded(false)}
+                      categories={categories}
+                    />
+                  </motion.div>
+                ) : (
+                  <>
+                    <motion.div
+                      key="update-shortcut"
+                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                    >
+                      <UpdateShortcutTile onClick={() => setShowUpdateModal(true)} />
+                    </motion.div>
+                    {/* Colonne droite — bouton collapsed */}
+                    <motion.div
+                      key="qs-collapsed"
+                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                    >
+                      {/* Bouton réduit avec fondu bas */}
+                      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSearchTileExpanded(true)}
+                          className="qs-btn-idle"
+                          aria-label="Ouvrir la recherche rapide"
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            width: 80,
+                            height: 80,
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <ArrowUp size={20} strokeWidth={2.5} />
+                        </button>
+                        {/* Fondu bas vers couleur de page */}
+                        <div style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 36,
+                          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+                          pointerEvents: 'none',
+                        }} />
+                      </div>
+                      {/* Label */}
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: 'var(--neutral-400)',
+                        fontFamily: 'var(--font-mono)',
+                        letterSpacing: '0.13em',
+                        textTransform: 'uppercase',
+                        marginTop: 8,
+                        display: 'block',
+                      }}>
+                        Recherche
+                      </span>
+                    </motion.div>
+                  </>
+                )}
               </div>
             </section>
           ) : null}
@@ -3210,6 +3355,12 @@ export function Home() {
         glass
         glassBackground={getGlassColors('#38BDF8').glassBackground}
         glassBorder={getGlassColors('#38BDF8').glassBorder}
+      />
+
+      <UpdateModal
+        open={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        pickerPlacement="center"
       />
 
       {/* ── Modale Échéances unifiée ── */}

@@ -469,6 +469,12 @@
   100% { background-position: 0% 50%; }
 }
 
+/* Respiration douce pour le bouton au repos */
+@keyframes qs-breathe {
+  0%, 100% { opacity: 0.78; }
+  50%       { opacity: 1;    }
+}
+
 /* Jolt every 1.5s: snap → overshoot → settle → gentle breathe */
 @keyframes qs-pulse {
   0%    { scale: 1;    box-shadow: 0 4px 18px rgba(91, 87, 245, 0.28); }
@@ -479,6 +485,20 @@
   60%   { scale: 1.01; box-shadow: 0 5px 20px rgba(91, 87, 245, 0.28); }
   80%   { scale: 1.04; box-shadow: 0 8px 26px rgba(91, 87, 245, 0.36); }
   100%  { scale: 1;    box-shadow: 0 4px 18px rgba(91, 87, 245, 0.28); }
+}
+
+/* Bouton collapsed — repos, sans ombre ni jolt */
+.qs-btn-idle {
+  overflow: hidden !important;
+  background: linear-gradient(
+    135deg,
+    #5b57f5, #7c4fff, #b84dff, #ff004d,
+    #ff7a00, #ffb700, #33d17a, #00c2ff,
+    #4f6bff, #5b57f5, #b84dff, #5b57f5
+  ) !important;
+  background-size: 400% 400% !important;
+  animation: qs-gradient-flow 7s linear infinite, qs-breathe 4s ease-in-out infinite;
+  box-shadow: none !important;
 }
 
 /* Shine streak from bottom to top, once per cycle */

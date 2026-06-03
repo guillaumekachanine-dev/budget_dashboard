@@ -826,11 +826,13 @@ function BalancesContent({ onClose, onBack }: { onClose: () => void; onBack: () 
 export interface UpdateModalProps {
   open: boolean
   onClose: () => void
+  pickerPlacement?: 'bottom' | 'center'
 }
 
-export function UpdateModal({ open, onClose }: UpdateModalProps) {
+export function UpdateModal({ open, onClose, pickerPlacement = 'bottom' }: UpdateModalProps) {
   const [mode, setMode] = useState<UpdateMode>('picker')
   const isPickerMode = mode === 'picker'
+  const centerPanel = !isPickerMode || pickerPlacement === 'center'
 
   // Reset to picker each time modal opens
   useEffect(() => {
@@ -879,8 +881,15 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
               position: 'fixed',
               zIndex: 105,
               pointerEvents: 'none',
-              ...(isPickerMode
+              ...(centerPanel
                 ? {
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 'var(--space-4)',
+                  }
+                : {
                     left: 0,
                     right: 0,
                     bottom: 'calc(var(--nav-height) + var(--space-2))',
@@ -888,13 +897,6 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
                     justifyContent: 'center',
                     paddingLeft: 'var(--space-3)',
                     paddingRight: 'var(--space-3)',
-                  }
-                : {
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 'var(--space-4)',
                   }),
             }}
           >
@@ -902,13 +904,13 @@ export function UpdateModal({ open, onClose }: UpdateModalProps) {
               role="dialog"
               aria-modal="true"
               aria-label="Mettre à jour"
-              initial={isPickerMode ? { opacity: 0, y: 20, scale: 0.98 } : { opacity: 0, scale: 0.97, y: 12 }}
+              initial={centerPanel ? { opacity: 0, scale: 0.97, y: 12 } : { opacity: 0, y: 20, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={isPickerMode ? { opacity: 0, y: 40, scale: 0.97 } : { opacity: 0, scale: 0.97, y: 12 }}
-              transition={isPickerMode ? { duration: 0.17, ease: [0.4, 0, 1, 1] } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              exit={centerPanel ? { opacity: 0, scale: 0.97, y: 12 } : { opacity: 0, y: 40, scale: 0.97 }}
+              transition={centerPanel ? { duration: 0.2, ease: [0.22, 1, 0.36, 1] } : { duration: 0.17, ease: [0.4, 0, 1, 1] }}
               style={{
-                width: isPickerMode ? 'min(480px, calc(100vw - 22px))' : 'min(480px, 100%)',
-                maxHeight: isPickerMode ? 'min(74dvh, calc(100dvh - var(--nav-height) - var(--space-4)))' : 'calc(100dvh - 2 * var(--space-4))',
+                width: centerPanel ? 'min(480px, 100%)' : 'min(480px, calc(100vw - 22px))',
+                maxHeight: centerPanel ? 'calc(100dvh - 2 * var(--space-4))' : 'min(74dvh, calc(100dvh - var(--nav-height) - var(--space-4)))',
                 borderRadius: 'var(--radius-xl)',
                 background: 'var(--neutral-0)',
                 boxShadow: 'var(--shadow-lg)',
