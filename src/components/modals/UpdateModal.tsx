@@ -827,17 +827,18 @@ export interface UpdateModalProps {
   open: boolean
   onClose: () => void
   pickerPlacement?: 'bottom' | 'center'
+  defaultMode?: UpdateMode
 }
 
-export function UpdateModal({ open, onClose, pickerPlacement = 'bottom' }: UpdateModalProps) {
-  const [mode, setMode] = useState<UpdateMode>('picker')
+export function UpdateModal({ open, onClose, pickerPlacement = 'bottom', defaultMode = 'picker' }: UpdateModalProps) {
+  const [mode, setMode] = useState<UpdateMode>(defaultMode)
   const isPickerMode = mode === 'picker'
   const centerPanel = !isPickerMode || pickerPlacement === 'center'
 
-  // Reset to picker each time modal opens
+  // Reset to defaultMode each time modal opens
   useEffect(() => {
-    if (open) setMode('picker')
-  }, [open])
+    if (open) setMode(defaultMode)
+  }, [open, defaultMode])
 
   // Escape: go back one level
   useEffect(() => {

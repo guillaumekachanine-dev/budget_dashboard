@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, LayoutGroup } from 'framer-motion'
 import { ArrowDownToLine, ArrowUp, Bell, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -41,6 +41,8 @@ import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import updateExchangeReferenceIcon from '@/assets/icons/app/update_exchange_reference.png'
+import transactionsUpdateIcon from '@/assets/icons/app/transactions_update.png'
+import soldeUpdateIcon from '@/assets/icons/app/solde_update.png'
 
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
@@ -721,6 +723,8 @@ function ProgressCircleTile({
   )
 }
 
+const ENV_CLICK_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF', '#FF9F43']
+
 function EnvelopeShortcutTile({
   slices,
   onClick,
@@ -729,8 +733,9 @@ function EnvelopeShortcutTile({
   onClick: () => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [animating, setAnimating] = useState(false)
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // SVG constants — même viewBox que l'arc tile (200×120)
   const BASELINE = 87
   const MAX_BAR_H = 66
   const BAR_W = 14
@@ -743,10 +748,23 @@ function EnvelopeShortcutTile({
   )
   const maxBudget = Math.max(...slices.map(s => s.budget), 1)
 
+  const handleClick = () => {
+    if (animTimerRef.current) clearTimeout(animTimerRef.current)
+    setAnimating(false)
+    requestAnimationFrame(() => {
+      setAnimating(true)
+      const totalMs = (n > 1 ? (n - 1) * 80 : 0) + 520
+      animTimerRef.current = setTimeout(() => {
+        setAnimating(false)
+        onClick()
+      }, totalMs)
+    })
+  }
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       aria-label="Enveloppes budgétaires"
@@ -784,42 +802,47 @@ function EnvelopeShortcutTile({
 
           return (
             <g key={slice.id}>
-              {/* Piste — hauteur budget */}
-              <rect
-                x={x} y={trackY}
-                width={BAR_W} height={trackH}
-                rx={6}
-                fill="var(--neutral-150)"
-              />
+              {/* Piste */}
+              <rect x={x} y={trackY} width={BAR_W} height={trackH} rx={6} fill="var(--neutral-150)" />
 
-              {/* Fill — consommation, croît de bas en haut */}
+              {/* Fill consommation */}
               {fillH > 1 && (
                 <motion.rect
-                  x={x}
-                  width={BAR_W}
-                  rx={6}
-                  fill={slice.color}
-                  opacity={0.82}
+                  x={x} width={BAR_W} rx={6}
+                  fill={slice.color} opacity={0.82}
                   initial={{ y: BASELINE, height: 0 }}
                   animate={{ y: fillY, height: fillH }}
                   transition={{ delay: entranceDelay, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                 />
               )}
 
-              {/* Shimmer — pulse au sommet du fill après l'entrée */}
+              {/* Shimmer */}
               {fillH > 4 && (
                 <motion.rect
-                  x={x} y={fillY}
-                  width={BAR_W} height={3}
-                  rx={3}
-                  fill="white"
+                  x={x} y={fillY} width={BAR_W} height={3} rx={3} fill="white"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: [0, 0.55, 0] }}
+                  transition={{ delay: entranceDelay + 0.7 + i * 0.18, duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
+
+              {/* ── Overlay clic : remplissage → vidage asynchrone ── */}
+              {animating && (
+                <motion.rect
+                  key={`env-anim-${i}`}
+                  x={x} width={BAR_W} rx={6}
+                  fill={ENV_CLICK_COLORS[i % ENV_CLICK_COLORS.length]}
+                  style={{ filter: 'brightness(1.1)' }}
+                  initial={{ y: BASELINE, height: 0 }}
+                  animate={{
+                    y: [BASELINE, BASELINE - trackH, BASELINE],
+                    height: [0, trackH, 0],
+                  }}
                   transition={{
-                    delay: entranceDelay + 0.7 + i * 0.18,
-                    duration: 2.4,
-                    repeat: Infinity,
+                    duration: 0.5,
+                    delay: i * 0.08,
                     ease: 'easeInOut',
+                    times: [0, 0.5, 1],
                   }}
                 />
               )}
@@ -828,23 +851,10 @@ function EnvelopeShortcutTile({
         })}
 
         {/* Ligne de base */}
-        <line
-          x1={PAD_X} y1={BASELINE + 1}
-          x2={200 - PAD_X} y2={BASELINE + 1}
-          stroke="var(--neutral-200)"
-          strokeWidth={1}
-        />
+        <line x1={PAD_X} y1={BASELINE + 1} x2={200 - PAD_X} y2={BASELINE + 1} stroke="var(--neutral-200)" strokeWidth={1} />
 
-        {/* Cartouche — miroir de ÉCHÉANCES */}
-        <text
-          x={100} y={116}
-          textAnchor="middle"
-          fontSize={14}
-          fontWeight="800"
-          fill="var(--neutral-400)"
-          fontFamily="var(--font-mono)"
-          letterSpacing="0.13em"
-        >
+        {/* Label */}
+        <text x={100} y={116} textAnchor="middle" fontSize={14} fontWeight="800" fill="var(--neutral-400)" fontFamily="var(--font-mono)" letterSpacing="0.13em">
           ENVELOPPES
         </text>
       </svg>
@@ -1159,64 +1169,376 @@ function QuickSearchTile({
   )
 }
 
-function UpdateShortcutTile({ onClick }: { onClick: () => void }) {
-  const [hovered, setHovered] = useState(false)
-
+function UpdateOptionCard({
+  src,
+  label,
+  delay,
+  onClick,
+}: {
+  src: string
+  label: string
+  delay: number
+  onClick: () => void
+}) {
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      aria-label="Ouvrir la mise à jour"
+      initial={{ opacity: 0, scale: 0.80 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.15, delay: 0, ease: 'easeIn' } }}
+      transition={{ duration: 0.36, delay, ease: [0.22, 1, 0.36, 1] }}
+      whileTap={{ scale: 0.93 }}
       style={{
-        border: 'none',
         background: 'transparent',
+        border: 'none',
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         cursor: 'pointer',
-        transition: 'opacity 0.2s ease',
-        opacity: hovered ? 0.72 : 1,
+        gap: 5,
+        flex: 1,
+        minWidth: 0,
       }}
+      aria-label={label}
     >
-      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', width: 40, height: 32, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
         <img
-          src={updateExchangeReferenceIcon}
+          src={src}
           alt=""
           aria-hidden
-          style={{
-            width: 78,
-            height: 58,
-            objectFit: 'contain',
-            display: 'block',
-            transform: 'translateY(-1px) scaleX(1.08)',
-          }}
+          style={{ width: 40, height: 32, objectFit: 'contain', display: 'block' }}
         />
         <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 20,
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 10,
           background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
           pointerEvents: 'none',
         }} />
       </div>
       <span style={{
-        fontSize: 11,
+        fontSize: 9,
         fontWeight: 800,
         color: 'var(--neutral-400)',
         fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.13em',
+        letterSpacing: '0.10em',
         textTransform: 'uppercase',
-        marginTop: 8,
-        display: 'block',
+        whiteSpace: 'nowrap',
       }}>
-        Mise à jour
+        {label}
+      </span>
+    </motion.button>
+  )
+}
+
+function UpdateExpandableTile({
+  expanded,
+  onToggle,
+  onSelectMode,
+}: {
+  expanded: boolean
+  onToggle: () => void
+  onSelectMode: (mode: 'transactions' | 'balances') => void
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'flex-start',
+      width: '100%',
+      gap: 6,
+      justifyContent: expanded ? 'flex-start' : 'center',
+    }}>
+      {/* Trigger — compact quand ouvert, pleine taille + centré quand fermé */}
+      <motion.button
+        type="button"
+        onClick={onToggle}
+        aria-label={expanded ? 'Réduire la mise à jour' : 'Ouvrir la mise à jour'}
+        aria-expanded={expanded}
+        animate={{ width: expanded ? 38 : 86 }}
+        transition={{ duration: 0.45, ease: [0.25, 0.1, 0.25, 1] }}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          cursor: 'pointer',
+          flexShrink: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ position: 'relative', width: '100%', height: 64, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <motion.img
+            src={updateExchangeReferenceIcon}
+            alt=""
+            aria-hidden
+            animate={{ rotateZ: expanded ? 180 : 0, scaleX: 1.08, y: -1 }}
+            initial={{ rotateZ: 0, scaleX: 1.08, y: -1 }}
+            transition={{ duration: 0.40, ease: [0.34, 1.20, 0.64, 1] }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+              transformOrigin: 'center center',
+            }}
+          />
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 20,
+            background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+            pointerEvents: 'none',
+          }} />
+        </div>
+        <motion.span
+          animate={{ opacity: expanded ? 0 : 1 }}
+          transition={{ duration: 0.18 }}
+          style={{
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'var(--neutral-400)',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.13em',
+            textTransform: 'uppercase',
+            marginTop: 8,
+            display: 'block',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Mise à jour
+        </motion.span>
+      </motion.button>
+
+      {/* Options — prennent l'espace restant */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            key="options-row"
+            style={{ display: 'flex', flex: 1, alignItems: 'flex-start', minWidth: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          >
+            <UpdateOptionCard
+              src={transactionsUpdateIcon}
+              label="Trans."
+              delay={0.30}
+              onClick={() => onSelectMode('transactions')}
+            />
+            <UpdateOptionCard
+              src={soldeUpdateIcon}
+              label="Solde"
+              delay={0.44}
+              onClick={() => onSelectMode('balances')}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ─── Tuile Mise à jour miniature (pour la ligne infos quand recherche dépliée) ──
+
+function UpdateMiniTile({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Mise à jour"
+      style={{
+        border: 'none', background: 'transparent', padding: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        cursor: 'pointer', gap: 4, flexShrink: 0,
+      }}
+    >
+      <div style={{ width: 36, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <img src={updateExchangeReferenceIcon} alt="" aria-hidden style={{ width: 36, height: 28, objectFit: 'contain' }} />
+      </div>
+      <span style={{
+        fontSize: 9, fontWeight: 800, color: 'var(--neutral-400)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.10em', textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+      }}>
+        Màj
       </span>
     </button>
+  )
+}
+
+// ─── Recherche rapide animée (remplace QuickSearchTile en état déplié) ───────
+
+const CONIC_GRAD = 'conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg)'
+const EASE_SPRING: [number, number, number, number] = [0.22, 1, 0.36, 1]
+const EASE_IN_SWIFT: [number, number, number, number] = [0.4, 0, 0.8, 0.2]
+
+function AnimatedQuickSearchExpanded({
+  selection,
+  period,
+  onCollapse,
+  onSelectCategory,
+  onSelectPeriod,
+  onSearch,
+  categories,
+}: {
+  selection: QuickSearchSelection | null
+  period: QuickSearchPeriod | null
+  onCollapse: () => void
+  onSelectCategory: () => void
+  onSelectPeriod: () => void
+  onSearch: () => void
+  categories: Category[]
+}) {
+  const hasSelection = !!selection
+  const hasPeriod = !!period
+  const canSearch = hasSelection && hasPeriod
+
+  const getSelectionText = () => {
+    if (!selection) return 'Catégorie'
+    if (selection.kind === 'all') return 'Toutes'
+    if (selection.kind === 'socle') {
+      const names: Record<string, string> = {
+        socle_fixe: 'Fixe', variable_essentielle: 'Variable',
+        provision: 'Provision', voyage: 'Voyage',
+        discretionnaire: 'Discrétionn.', revenu: 'Revenus',
+      }
+      return names[selection.id] ?? selection.id
+    }
+    const cat = categories.find((c) => c.id === selection.id)
+    return cat ? cat.name : 'Catégorie'
+  }
+
+  const getPeriodText = () => {
+    if (!period) return 'Période'
+    if (period.month === undefined) return `${period.year}`
+    return `${MONTHS_FR_SHORT[period.month - 1]} ${period.year}`
+  }
+
+  const renderSelectionIcon = () => {
+    if (!selection) return null
+    if (selection.kind === 'all') return <CategoryIcon iconKey="toutes_categories" size={18} style={{ marginRight: 6 }} />
+    if (selection.kind === 'socle') {
+      const blockIcons: Record<string, string> = {
+        socle_fixe: blockFixeIcon, variable_essentielle: blockVariableIcon,
+        provision: blockProvisionsIcon, voyage: blockVoyagesIcon,
+        discretionnaire: blockDiscretionnaireIcon, revenu: blockRevenusIcon,
+      }
+      const src = blockIcons[selection.id]
+      if (src) return <img src={src} alt={selection.id} style={{ width: 18, height: 18, marginRight: 6, borderRadius: 4 }} />
+      return null
+    }
+    const cat = categories.find((c) => c.id === selection.id)
+    if (cat) return <CategoryIcon iconKey={cat.icon_key} size={18} style={{ marginRight: 6 }} />
+    return null
+  }
+
+  const wingBg = `linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, ${CONIC_GRAD} border-box`
+  const wingHoverBg = `linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, ${CONIC_GRAD} border-box`
+  const circleBgIdle = `linear-gradient(135deg, rgba(214,214,219,0.96) 0%, rgba(196,196,204,0.96) 100%) padding-box, ${CONIC_GRAD} border-box`
+
+  const wingStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 var(--space-3)',
+    borderRadius: 'var(--radius-xl)',
+    border: '2px solid transparent',
+    background: wingBg,
+    cursor: 'pointer',
+    height: '100%',
+    minWidth: 0,
+    fontFamily: 'inherit',
+  }
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      height: 52,
+      width: 'calc(100% + 32px)',
+      marginLeft: -16,
+      marginRight: -16,
+      position: 'relative',
+    }}>
+
+      {/* ── Aile gauche : Catégorie ── */}
+      <motion.div
+        style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}
+        initial={{ maxWidth: 0, opacity: 0 }}
+        animate={{ maxWidth: 2000, opacity: 1 }}
+        exit={{ maxWidth: 0, opacity: 0, transition: { duration: 0.30, ease: EASE_IN_SWIFT } }}
+        transition={{
+          maxWidth: { duration: 0.62, delay: 0.20, ease: EASE_SPRING },
+          opacity: { duration: 0.28, delay: 0.24 },
+        }}
+      >
+        <button
+          type="button"
+          onClick={onSelectCategory}
+          style={wingStyle}
+          onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+          onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
+            {renderSelectionIcon()}
+            <span style={{ fontSize: 13, fontWeight: 800, color: hasSelection ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {getSelectionText()}
+            </span>
+          </div>
+        </button>
+      </motion.div>
+
+      <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
+
+      {/* ── Centre : bouton action (position animée par layoutId) ── */}
+      <motion.button
+        layoutId="qs-circle"
+        type="button"
+        onClick={canSearch ? onSearch : onCollapse}
+        className={canSearch ? 'qs-btn-ready' : ''}
+        animate={{ width: 44, height: 44 }}
+        transition={{ duration: 0.58, ease: EASE_SPRING }}
+        aria-label={canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide'}
+        style={{
+          flexShrink: 0,
+          borderRadius: 'var(--radius-full)',
+          border: canSearch ? '3px solid var(--neutral-0)' : '3px solid transparent',
+          color: '#ffffff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', zIndex: 10, overflow: 'hidden',
+          ...(!canSearch ? { background: circleBgIdle } : {}),
+        }}
+      >
+        <ArrowUp size={18} strokeWidth={canSearch ? 3 : 2.5} />
+      </motion.button>
+
+      <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
+
+      {/* ── Aile droite : Période ── */}
+      <motion.div
+        style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}
+        initial={{ maxWidth: 0, opacity: 0 }}
+        animate={{ maxWidth: 2000, opacity: 1 }}
+        exit={{ maxWidth: 0, opacity: 0, transition: { duration: 0.30, ease: EASE_IN_SWIFT } }}
+        transition={{
+          maxWidth: { duration: 0.62, delay: 0.28, ease: EASE_SPRING },
+          opacity: { duration: 0.28, delay: 0.32 },
+        }}
+      >
+        <button
+          type="button"
+          onClick={onSelectPeriod}
+          style={wingStyle}
+          onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+          onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 800, color: hasPeriod ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {getPeriodText()}
+          </span>
+        </button>
+      </motion.div>
+    </div>
   )
 }
 
@@ -1683,6 +2005,8 @@ export function Home() {
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [updateModalMode, setUpdateModalMode] = useState<'transactions' | 'balances'>('transactions')
+  const [updateExpanded, setUpdateExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
@@ -2803,97 +3127,131 @@ export function Home() {
                   />
                 </div>
 
-                {/* Recherche Rapide — collapsed (bouton) ou expanded (pleine largeur) */}
-                {searchTileExpanded ? (
-                  <motion.div
-                    key="qs-expanded"
-                    style={{ gridColumn: 'span 2', marginTop: 'var(--space-6)' }}
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.22, ease: 'easeOut' }}
-                  >
-                    <QuickSearchTile
-                      selection={searchSelection}
-                      period={searchPeriod}
-                      onSelectCategory={() => setShowSearchCatModal(true)}
-                      onSelectPeriod={() => setShowSearchPeriodModal(true)}
-                      onSearch={() => { setShowSearchResultsModal(true); setSearchTileExpanded(false) }}
-                      onCollapse={() => setSearchTileExpanded(false)}
-                      categories={categories}
-                    />
-                  </motion.div>
-                ) : (
-                  <>
+                {/* ── Rangée update + recherche (compacte ou dépliée, animée) ── */}
+                <AnimatePresence initial={false}>
+                  {searchTileExpanded ? (
+
+                    /* ── ÉTAT DÉPLIÉ : recherche en pleine largeur ── */
                     <motion.div
-                      key="update-shortcut"
-                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      key="qs-expanded"
+                      style={{ gridColumn: 'span 2', marginTop: 'var(--space-6)' }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      exit={{ opacity: 0, transition: { duration: 0.20 } }}
+                      transition={{ duration: 0.28 }}
                     >
-                      <UpdateShortcutTile onClick={() => setShowUpdateModal(true)} />
+                      <AnimatedQuickSearchExpanded
+                        selection={searchSelection}
+                        period={searchPeriod}
+                        onCollapse={() => setSearchTileExpanded(false)}
+                        onSelectCategory={() => setShowSearchCatModal(true)}
+                        onSelectPeriod={() => setShowSearchPeriodModal(true)}
+                        onSearch={() => { setShowSearchResultsModal(true); setSearchTileExpanded(false) }}
+                        categories={categories}
+                      />
                     </motion.div>
-                    {/* Colonne droite — bouton collapsed */}
+
+                  ) : (
+
+                    /* ── ÉTAT COMPACT : update + bouton recherche ── */
                     <motion.div
-                      key="qs-collapsed"
-                      style={{ marginTop: 'var(--space-10)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      key="compact-row"
+                      style={{
+                        gridColumn: 'span 2',
+                        marginTop: 'var(--space-10)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 'var(--space-4)',
+                      }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      exit={{ opacity: 0, transition: { duration: 0.18 } }}
                     >
-                      {/* Bouton réduit avec fondu bas */}
-                      <div style={{ position: 'relative', width: 80, height: 58, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => setSearchTileExpanded(true)}
-                          className="qs-btn-idle"
-                          aria-label="Ouvrir la recherche rapide"
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            width: 80,
-                            height: 80,
-                            borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            color: '#ffffff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            overflow: 'hidden',
-                            flexShrink: 0,
+                      {/* Update tile — layoutId pour animation de descente */}
+                      <motion.div
+                        layoutId="qs-update"
+                        layout
+                        style={{
+                          flex: updateExpanded ? 1 : '0 0 calc(50% - 8px)',
+                          display: 'flex',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                        }}
+                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
+                      >
+                        <UpdateExpandableTile
+                          expanded={updateExpanded}
+                          onToggle={() => setUpdateExpanded((v) => !v)}
+                          onSelectMode={(mode) => {
+                            setUpdateExpanded(false)
+                            setUpdateModalMode(mode)
+                            setShowUpdateModal(true)
                           }}
-                        >
-                          <ArrowUp size={20} strokeWidth={2.5} />
-                        </button>
-                        {/* Fondu bas vers couleur de page */}
-                        <div style={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: 36,
-                          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
-                          pointerEvents: 'none',
-                        }} />
-                      </div>
-                      {/* Label */}
-                      <span style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        color: 'var(--neutral-400)',
-                        fontFamily: 'var(--font-mono)',
-                        letterSpacing: '0.13em',
-                        textTransform: 'uppercase',
-                        marginTop: 8,
-                        display: 'block',
-                      }}>
-                        Recherche
-                      </span>
+                        />
+                      </motion.div>
+
+                      {/* Search tile — colonne droite */}
+                      <motion.div
+                        layout
+                        style={{
+                          flex: updateExpanded ? '0 0 auto' : '0 0 calc(50% - 8px)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                        }}
+                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
+                      >
+                        <div style={{ position: 'relative', width: 80, height: 64, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+                          {/* Cercle recherche — layoutId pour animation de centrage */}
+                          <motion.button
+                            layoutId="qs-circle"
+                            type="button"
+                            onClick={() => {
+                              setUpdateExpanded(false)
+                              setSearchTileExpanded(true)
+                            }}
+                            className="qs-btn-idle"
+                            aria-label="Ouvrir la recherche rapide"
+                            animate={{
+                              width: updateExpanded ? 56 : 80,
+                              height: updateExpanded ? 56 : 80,
+                            }}
+                            transition={{ duration: 0.52, ease: [0.25, 0.1, 0.25, 1] }}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              borderRadius: 'var(--radius-full)',
+                              border: 'none',
+                              color: '#ffffff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <ArrowUp size={updateExpanded ? 15 : 20} strokeWidth={2.5} />
+                          </motion.button>
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0, left: 0, right: 0, height: 36,
+                            background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+                            pointerEvents: 'none',
+                          }} />
+                        </div>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800, color: 'var(--neutral-400)',
+                          fontFamily: 'var(--font-mono)', letterSpacing: '0.13em',
+                          textTransform: 'uppercase', marginTop: 8, display: 'block',
+                        }}>
+                          Recherche
+                        </span>
+                      </motion.div>
                     </motion.div>
-                  </>
-                )}
+
+                  )}
+                </AnimatePresence>
               </div>
             </section>
           ) : null}
@@ -2902,7 +3260,24 @@ export function Home() {
           <section
             style={{ padding: sectionHorizontalPadding }}
           >
-            <div style={{ maxWidth: 600, width: '100%', margin: '0 auto', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ maxWidth: 600, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+
+              {/* Mini update tile — apparaît à gauche quand la recherche est dépliée */}
+              <AnimatePresence>
+                {isMainCheckingAccount && searchTileExpanded && (
+                  <motion.div
+                    layoutId="qs-update"
+                    key="update-in-infos"
+                    style={{ position: 'absolute', left: 16, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}
+                    initial={{ opacity: 0, scale: 0.82 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.82, transition: { duration: 0.22 } }}
+                    transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <UpdateMiniTile onClick={() => setSearchTileExpanded(false)} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <button
                 id="infos-bell-btn"
                 type="button"
@@ -3361,6 +3736,7 @@ export function Home() {
         open={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
         pickerPlacement="center"
+        defaultMode={updateModalMode}
       />
 
       {/* ── Modale Échéances unifiée ── */}
