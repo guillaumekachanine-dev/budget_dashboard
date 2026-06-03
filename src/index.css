@@ -103,16 +103,18 @@
   --line-height-relaxed: 1.65;
 
   /* SPACING (4px base unit) */
-  --space-1:  4px;
-  --space-2:  8px;
-  --space-3:  12px;
-  --space-4:  16px;
-  --space-5:  20px;
-  --space-6:  24px;
-  --space-8:  32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
+  --space-1:   4px;
+  --space-1.5: 6px;
+  --space-2:   8px;
+  --space-2.5: 10px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
 
   /* BORDER RADIUS — aligné sur tailwind.config.js + CLAUDE.md */
   --radius-xs:     4px;
@@ -136,10 +138,33 @@
   --shadow-card: 0 2px 12px rgba(28, 28, 58, 0.07);
   --shadow-fab:  0 8px 24px rgba(91, 87, 245, 0.20);
 
+  /* BLUR (glass effects) */
+  --blur-sm: 10px;
+  --blur-lg: 28px;
+
+  /* TYPOGRAPHY — tailles sub-xs utilisées dans micro-labels */
+  --font-size-xxs: 9px;
+  --font-size-10:  10px;
+
   /* TRANSITIONS */
   --transition-fast:  150ms ease-out;
   --transition-base:  200ms ease-out;
   --transition-slow:  350ms ease-in-out;
+
+  /* VOYAGE ACCENT (alias de --bucket-voyage pour usage inline) */
+  --voyage-accent:      #38BDF8;
+  --voyage-accent-dark: #0284C7;
+  --voyage-accent-bg:   rgba(56, 189, 248, 0.15);
+
+  /* Z-INDEX SCALE */
+  --z-base:      1;
+  --z-page:      10;
+  --z-sticky:    50;
+  --z-header:    120;
+  --z-dropdown:  140;
+  --z-modal:     200;
+  --z-modal-top: 1200;
+  --z-modal-max: 1300;
 
   /* MOBILE INTERACTION */
   --touch-target-min: 44px;

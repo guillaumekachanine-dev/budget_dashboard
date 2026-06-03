@@ -28,8 +28,8 @@ import { TripTransactionRattachementModal } from '@/features/voyages/components/
 
 const MONTHS_FR = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin',
                    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
-const VOYAGE_ACCENT      = '#38BDF8'
-const VOYAGE_ACCENT_DARK = '#0284C7'
+const VOYAGE_ACCENT      = 'var(--voyage-accent)'
+const VOYAGE_ACCENT_DARK = 'var(--voyage-accent-dark)'
 
 const PAGE_GUTTER = 'var(--space-5)'
 
@@ -67,7 +67,7 @@ function normalizeCategoryLabel(name: string): string {
 }
 
 const STATUS_BADGE: Record<TripCockpitRow['trip_status'], { label: string; bg: string; color: string }> = {
-  ongoing: { label: 'en cours',  bg: 'rgba(56,189,248,0.15)', color: VOYAGE_ACCENT_DARK },
+  ongoing: { label: 'en cours',  bg: 'var(--voyage-accent-bg)', color: VOYAGE_ACCENT_DARK },
   future:  { label: 'À venir',   bg: 'rgba(91,87,245,0.12)',  color: 'var(--primary-600)' },
   past:    { label: 'Passé',     bg: 'var(--neutral-100)',    color: 'var(--neutral-500)' },
 }
@@ -535,8 +535,8 @@ export function Voyages() {
                 background:   'rgba(255,255,255,0.18)',
                 border:       '1px solid rgba(255,255,255,0.30)',
                 borderRadius: 'var(--radius-full)',
-                width:        36,
-                height:       36,
+                width:        44,
+                height:       44,
                 display:      'flex',
                 alignItems:   'center',
                 justifyContent: 'center',
@@ -567,11 +567,11 @@ export function Voyages() {
             aria-label="Nouveau voyage"
             title="Créer un voyage"
             style={{
-              background:    '#0E9AAE',
+              background:    'var(--voyage-accent-dark)',
               border:        'none',
               borderRadius:  '9999px',
-              height:        32,
-              padding:       '0 14px',
+              height:        44,
+              padding:       '0 16px',
               display:       'inline-flex',
               alignItems:    'center',
               justifyContent: 'center',
@@ -1087,7 +1087,7 @@ export function Voyages() {
                                         width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
                                         height: '100%',
                                         borderRadius: 'var(--radius-full)',
-                                        background: '#38BDF8',
+                                        background: 'var(--voyage-accent)',
                                         transition: 'width 0.3s ease',
                                       }}
                                     />
@@ -1098,7 +1098,7 @@ export function Voyages() {
                                           width: `${Math.max(0, Math.min(budgetPct, 100))}%`,
                                           height: '100%',
                                           borderRadius: 'var(--radius-full)',
-                                          background: '#38BDF8',
+                                          background: 'var(--voyage-accent)',
                                           transition: 'width 0.3s ease',
                                         }}
                                       />
@@ -1345,7 +1345,7 @@ export function Voyages() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0, flex: 1 }}>
                             <span style={{ fontSize: 18, flexShrink: 0 }}>{trip.emoji?.trim() || '✈️'}</span>
                             <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flex: 1 }}>
-                              <span style={{ fontSize: 13, fontWeight: 750, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {trip.name}
                               </span>
                               <span style={{ fontSize: 10, color: 'var(--neutral-400)', whiteSpace: 'nowrap', flexShrink: 0 }}>

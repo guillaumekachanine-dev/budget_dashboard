@@ -72,8 +72,8 @@ export function BottomSheet({
         background: isGlass
           ? (glassBackground ?? 'rgba(10, 12, 30, 0.52)')
           : 'var(--neutral-0)',
-        backdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
-        WebkitBackdropFilter: isGlass ? 'blur(28px) saturate(160%)' : undefined,
+        backdropFilter: isGlass ? 'blur(var(--blur-lg)) saturate(160%)' : undefined,
+        WebkitBackdropFilter: isGlass ? 'blur(var(--blur-lg)) saturate(160%)' : undefined,
         borderRadius: 'var(--radius-xl)',
         border: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.1)'}` : undefined,
         boxShadow: isGlass
@@ -220,10 +220,10 @@ export function BottomSheet({
                       border: isGlass ? '1px solid rgba(255,255,255,0.14)' : 'none',
                       background: isGlass ? 'rgba(255,255,255,0.09)' : 'var(--neutral-100)',
                       color: isGlass ? 'rgba(255,255,255,0.6)' : 'var(--neutral-600)',
-                      width: 26,
-                      height: 26,
-                      minWidth: 26,
-                      minHeight: 26,
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      minHeight: 32,
                       borderRadius: 'var(--radius-full)',
                       display: 'inline-flex',
                       alignItems: 'center',

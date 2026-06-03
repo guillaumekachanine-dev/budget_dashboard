@@ -536,6 +536,157 @@ function TimelineRow({
 }
 
 
+// ─── EcheancesTimelineTile — Phase Arc design ────────────────────────────────
+// Arc : cercle centre (100, 103) r=93, de 194° à 346° (sens horaire SVG)
+// → point gauche ≈ (10, 80), sommet ≈ (100, 10), point droit ≈ (190, 80)
+const PARC_CX = 100
+const PARC_CY = 103
+const PARC_R  = 93
+const PARC_A0 = 194   // angle SVG départ (degrés, sens horaire depuis axe X+)
+const PARC_SPAN = 152 // amplitude totale de l'arc
+
+function parcPoint(t: number): [number, number] {
+  const rad = ((PARC_A0 + t * PARC_SPAN) * Math.PI) / 180
+  return [PARC_CX + PARC_R * Math.cos(rad), PARC_CY + PARC_R * Math.sin(rad)]
+}
+
+function EcheancesTimelineTile({
+  items,
+  daysElapsed,
+  daysInMonth,
+  onClick,
+}: {
+  items: PlannedOperationItem[]
+  daysElapsed: number
+  daysInMonth: number
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  const { dots, totalCount } = useMemo(() => {
+    const maxAmt = Math.max(
+      ...items.map(i => Math.abs(Number(i.planned_personal_amount ?? i.planned_amount ?? 0))),
+      1
+    )
+    const dotList: { x: number; y: number; color: string; r: number; key: string }[] = []
+    for (const item of items) {
+      const d = new Date(`${item.planned_date}T00:00:00`)
+      if (Number.isNaN(d.getTime())) continue
+      const day = d.getDate()
+      const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+      const t = (day - 1) / Math.max(daysInMonth - 1, 1)
+      const [x, y] = parcPoint(t)
+      const color = item.flow_type === 'income'  ? 'var(--color-success)'
+                  : item.flow_type === 'savings' ? 'var(--color-warning)'
+                  : 'var(--primary-500)'
+      const r = 2.5 + 2.5 * (amount / maxAmt)
+      dotList.push({ x, y, color, r, key: item.id })
+    }
+    return { dots: dotList, totalCount: items.length }
+  }, [items, daysInMonth])
+
+  const todayT = Math.min(1, Math.max(0, (daysElapsed - 1) / Math.max(daysInMonth - 1, 1)))
+  const [todayX, todayY] = parcPoint(todayT)
+  const [arcX0, arcY0] = parcPoint(0)
+  const [arcX1, arcY1] = parcPoint(1)
+
+  const trackPath   = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${arcX1.toFixed(1)} ${arcY1.toFixed(1)}`
+  const elapsedPath = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${todayX.toFixed(1)} ${todayY.toFixed(1)}`
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label={`${totalCount} échéances ce mois`}
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
+      }}
+    >
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+      >
+        {/* Piste complète du mois */}
+        <path
+          d={trackPath}
+          fill="none"
+          stroke="var(--neutral-300)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
+
+        {/* Arc écoulé */}
+        {todayT > 0.02 && (
+          <path
+            d={elapsedPath}
+            fill="none"
+            stroke="var(--primary-500)"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            opacity={0.45}
+          />
+        )}
+
+        {/* Points opérations — taille ∝ montant, couleur ∝ type */}
+        {dots.map((dot, i) => (
+          <motion.circle
+            key={dot.key}
+            cx={dot.x}
+            cy={dot.y}
+            r={dot.r}
+            fill={dot.color}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.88 }}
+            transition={{ delay: 0.06 + i * 0.028, duration: 0.38, ease: 'easeOut' }}
+          />
+        ))}
+
+        {/* Marqueur aujourd'hui — anneau qui pulse */}
+        <motion.circle
+          cx={todayX}
+          cy={todayY}
+          r={5.5}
+          fill="var(--neutral-0)"
+          stroke="var(--primary-500)"
+          strokeWidth={2}
+          animate={{ opacity: [0.65, 1, 0.65] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        {/* Cartouche bas — label gauche, compteur droit */}
+        <text
+          x={100}
+          y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
+        >
+          ÉCHÉANCES
+        </text>
+      </svg>
+    </button>
+  )
+}
+
 
 // ─── Budget progress constants ────────────────────────────────────────────────
 const EXPENSE_BUCKET_IDS = ['socle_fixe', 'variable_essentielle', 'provision', 'voyage', 'discretionnaire'] as const
@@ -557,6 +708,7 @@ type EnvelopeShortcutSlice = {
   budget: number
   share: number
   color: string
+  pct?: number   // consommation réelle / budget (0–1+)
 }
 
 // ─── ProgressRing ─────────────────────────────────────────────────────────────
@@ -677,166 +829,127 @@ function EnvelopeShortcutTile({
   slices: EnvelopeShortcutSlice[]
   onClick: () => void
 }) {
-  const gradient = useMemo(() => {
-    if (slices.length === 0) {
-      return 'conic-gradient(from 220deg, rgba(255,255,255,0.18) 0deg, rgba(255,255,255,0.03) 360deg)'
-    }
+  const [hovered, setHovered] = useState(false)
 
-    let cursor = 0
-    const stops = slices.map((slice) => {
-      const start = cursor
-      const end = cursor + slice.share * 360
-      cursor = end
-      return `${slice.color} ${start}deg ${end}deg`
-    })
+  // SVG constants — même viewBox que l'arc tile (200×120)
+  const BASELINE = 87
+  const MAX_BAR_H = 66
+  const BAR_W = 14
+  const PAD_X = 15
 
-    if (cursor < 360) {
-      stops.push(`rgba(255,255,255,0.06) ${cursor}deg 360deg`)
-    }
-
-    return `conic-gradient(from 210deg, ${stops.join(', ')})`
-  }, [slices])
-
-  const accentDots = slices.slice(0, 4)
+  const n = slices.length
+  const usableW = 200 - 2 * PAD_X - BAR_W
+  const centers = slices.map((_, i) =>
+    n > 1 ? PAD_X + BAR_W / 2 + i * (usableW / (n - 1)) : 100
+  )
+  const maxBudget = Math.max(...slices.map(s => s.budget), 1)
 
   return (
-    <div style={{ width: '100%', minHeight: 112, display: 'grid', placeItems: 'center' }}>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label="Ouvrir toutes les enveloppes budgétaires"
-        style={{
-          position: 'relative',
-          width: 108,
-          height: 108,
-          border: 'none',
-          background: 'transparent',
-          padding: 0,
-          borderRadius: '50%',
-          cursor: 'pointer',
-          display: 'grid',
-          placeItems: 'center',
-        }}
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label="Enveloppes budgétaires"
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
+      }}
+    >
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          whileHover={{ y: -2, scale: 1.02 }}
-          whileTap={{ scale: 0.985 }}
-          transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            position: 'relative',
-            width: 96,
-            height: 96,
-            borderRadius: '50%',
-            display: 'grid',
-            placeItems: 'center',
-          }}
+        {slices.map((slice, i) => {
+          const cx = centers[i]
+          const x = cx - BAR_W / 2
+          const trackH = Math.max(4, MAX_BAR_H * (slice.budget / maxBudget))
+          const trackY = BASELINE - trackH
+          const consumption = Math.min(1.05, Math.max(0, slice.pct ?? 0))
+          const fillH = Math.max(0, trackH * consumption)
+          const fillY = BASELINE - fillH
+          const entranceDelay = 0.08 + i * 0.07
+
+          return (
+            <g key={slice.id}>
+              {/* Piste — hauteur budget */}
+              <rect
+                x={x} y={trackY}
+                width={BAR_W} height={trackH}
+                rx={6}
+                fill="var(--neutral-150)"
+              />
+
+              {/* Fill — consommation, croît de bas en haut */}
+              {fillH > 1 && (
+                <motion.rect
+                  x={x}
+                  width={BAR_W}
+                  rx={6}
+                  fill={slice.color}
+                  opacity={0.82}
+                  initial={{ y: BASELINE, height: 0 }}
+                  animate={{ y: fillY, height: fillH }}
+                  transition={{ delay: entranceDelay, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                />
+              )}
+
+              {/* Shimmer — pulse au sommet du fill après l'entrée */}
+              {fillH > 4 && (
+                <motion.rect
+                  x={x} y={fillY}
+                  width={BAR_W} height={3}
+                  rx={3}
+                  fill="white"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 0.55, 0] }}
+                  transition={{
+                    delay: entranceDelay + 0.7 + i * 0.18,
+                    duration: 2.4,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                />
+              )}
+            </g>
+          )
+        })}
+
+        {/* Ligne de base */}
+        <line
+          x1={PAD_X} y1={BASELINE + 1}
+          x2={200 - PAD_X} y2={BASELINE + 1}
+          stroke="var(--neutral-200)"
+          strokeWidth={1}
+        />
+
+        {/* Cartouche — miroir de ÉCHÉANCES */}
+        <text
+          x={100} y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
         >
-          <motion.div
-            aria-hidden="true"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 32, ease: 'linear', repeat: Infinity }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: '50%',
-              background: gradient,
-              opacity: 0.9,
-              WebkitMask: 'radial-gradient(circle, transparent 0 33px, black 34px)',
-              mask: 'radial-gradient(circle, transparent 0 33px, black 34px)',
-            }}
-          />
-          <motion.div
-            aria-hidden="true"
-            animate={{ rotate: -360 }}
-            transition={{ duration: 44, ease: 'linear', repeat: Infinity }}
-            style={{
-              position: 'absolute',
-              inset: 8,
-              borderRadius: '50%',
-              border: '1px solid rgba(255,255,255,0.12)',
-              opacity: 0.9,
-              WebkitMask: 'radial-gradient(circle, transparent 0 27px, black 28px)',
-              mask: 'radial-gradient(circle, transparent 0 27px, black 28px)',
-              background:
-                'conic-gradient(from 90deg, rgba(255,255,255,0.18) 0deg, rgba(255,255,255,0.18) 18deg, transparent 18deg, transparent 110deg, rgba(255,255,255,0.12) 110deg, rgba(255,255,255,0.12) 132deg, transparent 132deg, transparent 250deg, rgba(255,255,255,0.14) 250deg, rgba(255,255,255,0.14) 272deg, transparent 272deg 360deg)',
-            }}
-          />
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              inset: 24,
-              borderRadius: '50%',
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.03)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-            }}
-          />
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              border: '1.5px solid rgba(255,255,255,0.16)',
-            }}
-          />
-          <motion.div
-            aria-hidden="true"
-            animate={{ opacity: [0.45, 0.72, 0.45] }}
-            transition={{ duration: 3.4, ease: 'easeInOut', repeat: Infinity }}
-            style={{
-              position: 'absolute',
-              width: 44,
-              height: 1,
-              background: 'rgba(255,255,255,0.16)',
-            }}
-          />
-          <motion.div
-            aria-hidden="true"
-            animate={{ opacity: [0.3, 0.56, 0.3] }}
-            transition={{ duration: 3.4, ease: 'easeInOut', repeat: Infinity, delay: 0.35 }}
-            style={{
-              position: 'absolute',
-              width: 1,
-              height: 44,
-              background: 'rgba(255,255,255,0.14)',
-            }}
-          />
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.72)',
-            }}
-          />
-          {accentDots.map((slice, index) => (
-            <motion.div
-              key={slice.id}
-              animate={{ opacity: [0.28, 0.72, 0.28] }}
-              transition={{ duration: 3.6 + index * 0.4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                position: 'absolute',
-                top: index === 0 ? 10 : index === 1 ? 18 : index === 2 ? 70 : 80,
-                right: index === 0 ? 22 : index === 1 ? 8 : index === 2 ? 14 : 32,
-                width: 4,
-                height: 4,
-                borderRadius: '50%',
-                background: slice.color,
-                boxShadow: `0 0 0 3px color-mix(in srgb, ${slice.color} 12%, transparent)`,
-              }}
-            />
-          ))}
-        </motion.div>
-      </button>
-    </div>
+          ENVELOPPES
+        </text>
+      </svg>
+    </button>
   )
 }
 
@@ -1371,11 +1484,14 @@ export function Home() {
       .map((bucketId) => {
         const row = bucketRows.find((candidate) => candidate.budget_bucket === bucketId)
         const budget = Math.max(0, Number(row?.budget_amount ?? 0))
+        const actual = Math.max(0, Number(row?.actual_amount ?? 0))
+        const pct = budget > 0 ? actual / budget : 0
         return {
           id: bucketId,
           label: EXPENSE_BUCKET_LABELS[bucketId],
           budget,
           color: getBudgetBucketColor(bucketId),
+          pct,
         }
       })
       .filter((slice) => slice.budget > 0)
@@ -2693,7 +2809,7 @@ export function Home() {
 
           {isMainCheckingAccount ? (
             <section
-              style={{ padding: sectionHorizontalPadding }}
+              style={{ padding: sectionHorizontalPadding, paddingTop: 'var(--space-8)' }}
             >
               <div
                 style={{
@@ -2708,16 +2824,13 @@ export function Home() {
                   paddingRight: 16,
                 }}
               >
-                {/* Échéances — tuile fusionnée, colonne gauche */}
+                {/* Échéances — timeline visuelle */}
                 <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
-                  <TimelineRow
-                    label="Échéances"
-                    sublabel={upcomingOpsWindows.j3.count > 0 ? `${upcomingOpsWindows.j3.count} dans 3j` : `fin de mois`}
-                    value={renderOperationSummary(upcomingOpsWindows.eom.count)}
-                    dotColor={HOME_HERO_ACCENT_DOT}
-                    shadowColor={HOME_HERO_ACCENT_SHADOW}
+                  <EcheancesTimelineTile
+                    items={upcomingOpsWindows.eom.items}
+                    daysElapsed={daysElapsed}
+                    daysInMonth={daysInMonth}
                     onClick={() => { setEcheancesFilter('mois'); setShowEcheancesModal(true) }}
-                    hasOps={false}
                   />
                 </div>
 
@@ -2729,7 +2842,7 @@ export function Home() {
                 </div>
 
                 {/* Recherche Rapide Tile — pleine largeur */}
-                <div style={{ gridColumn: 'span 2', marginTop: 12 }}>
+                <div style={{ gridColumn: 'span 2', marginTop: 'var(--space-10)' }}>
                   <QuickSearchTile
                     selection={searchSelection}
                     period={searchPeriod}
