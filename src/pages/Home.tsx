@@ -2866,6 +2866,7 @@ export function Home() {
                             type="button"
                             onClick={() => setShowHeroBalanceModal(true)}
                             aria-label="Voir le détail du solde bancaire du compte principal"
+                            className="shine-btn shine-btn--1"
                             style={{
                               width: '100%',
                               display: 'inline-flex',
@@ -2881,6 +2882,8 @@ export function Home() {
                               minHeight: 48,
                               cursor: 'pointer',
                               transition: 'background 120ms ease',
+                              position: 'relative',
+                              overflow: 'hidden',
                             }}
                             onMouseEnter={e => {
                               e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
@@ -2901,6 +2904,7 @@ export function Home() {
                             type="button"
                             onClick={() => setShowDriftsModal(true)}
                             aria-label="Voir les dérives budgétaires"
+                            className="shine-btn shine-btn--2"
                             style={{
                               width: '100%',
                               display: 'inline-flex',
@@ -2916,6 +2920,8 @@ export function Home() {
                               minHeight: 48,
                               cursor: 'pointer',
                               transition: 'background 120ms ease',
+                              position: 'relative',
+                              overflow: 'hidden',
                             }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
@@ -4724,6 +4730,45 @@ export function Home() {
           )}
         </div>
       </BottomSheet>
+
+      <style>{`
+        @keyframes shine-pass {
+          0% {
+            left: -100%;
+          }
+          100% {
+            left: 100%;
+          }
+        }
+
+        .shine-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.35),
+            transparent
+          );
+          animation: shine-pass 0.8s ease-in-out;
+        }
+
+        .shine-btn--1::before {
+          animation-delay: 0s;
+          animation-iteration-count: infinite;
+          animation-duration: 12s;
+        }
+
+        .shine-btn--2::before {
+          animation-delay: 3s;
+          animation-iteration-count: infinite;
+          animation-duration: 12s;
+        }
+      `}</style>
     </div>
   )
 }
