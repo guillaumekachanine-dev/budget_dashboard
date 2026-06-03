@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Bell, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUp, Bell, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
@@ -10,6 +10,9 @@ import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpe
 import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenseBars } from '@/features/voyages/hooks/useTripExpenseBars'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
+import { useBudgetPagePayload } from '@/features/budget/hooks/useBudgetPagePayload'
+import { useTripsForMonth } from '@/features/budget/hooks/useTripsForMonth'
+import { AllEnvelopesModal } from '@/features/budget/components/EnveloppesTab'
 import {
   getCurrentPeriod,
   getDaysRemainingInMonth,
@@ -548,6 +551,14 @@ const EXPENSE_BUCKET_LABELS: Record<ExpenseBucketId, string> = {
 
 type MonthlyBlockProgressItem = { id: string; label: string; actual: number; budget: number; pct: number }
 
+type EnvelopeShortcutSlice = {
+  id: ExpenseBucketId
+  label: string
+  budget: number
+  share: number
+  color: string
+}
+
 // ─── ProgressRing ─────────────────────────────────────────────────────────────
 function ProgressRing({
   pct,
@@ -656,6 +667,176 @@ function ProgressCircleTile({
         ) : null}
       </div>
     </button>
+  )
+}
+
+function EnvelopeShortcutTile({
+  slices,
+  onClick,
+}: {
+  slices: EnvelopeShortcutSlice[]
+  onClick: () => void
+}) {
+  const gradient = useMemo(() => {
+    if (slices.length === 0) {
+      return 'conic-gradient(from 220deg, rgba(255,255,255,0.18) 0deg, rgba(255,255,255,0.03) 360deg)'
+    }
+
+    let cursor = 0
+    const stops = slices.map((slice) => {
+      const start = cursor
+      const end = cursor + slice.share * 360
+      cursor = end
+      return `${slice.color} ${start}deg ${end}deg`
+    })
+
+    if (cursor < 360) {
+      stops.push(`rgba(255,255,255,0.06) ${cursor}deg 360deg`)
+    }
+
+    return `conic-gradient(from 210deg, ${stops.join(', ')})`
+  }, [slices])
+
+  const accentDots = slices.slice(0, 4)
+
+  return (
+    <div style={{ width: '100%', minHeight: 112, display: 'grid', placeItems: 'center' }}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Ouvrir toutes les enveloppes budgétaires"
+        style={{
+          position: 'relative',
+          width: 108,
+          height: 108,
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          borderRadius: '50%',
+          cursor: 'pointer',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ y: -2, scale: 1.02 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: 'relative',
+            width: 96,
+            height: 96,
+            borderRadius: '50%',
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <motion.div
+            aria-hidden="true"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 32, ease: 'linear', repeat: Infinity }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: gradient,
+              opacity: 0.9,
+              WebkitMask: 'radial-gradient(circle, transparent 0 33px, black 34px)',
+              mask: 'radial-gradient(circle, transparent 0 33px, black 34px)',
+            }}
+          />
+          <motion.div
+            aria-hidden="true"
+            animate={{ rotate: -360 }}
+            transition={{ duration: 44, ease: 'linear', repeat: Infinity }}
+            style={{
+              position: 'absolute',
+              inset: 8,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.12)',
+              opacity: 0.9,
+              WebkitMask: 'radial-gradient(circle, transparent 0 27px, black 28px)',
+              mask: 'radial-gradient(circle, transparent 0 27px, black 28px)',
+              background:
+                'conic-gradient(from 90deg, rgba(255,255,255,0.18) 0deg, rgba(255,255,255,0.18) 18deg, transparent 18deg, transparent 110deg, rgba(255,255,255,0.12) 110deg, rgba(255,255,255,0.12) 132deg, transparent 132deg, transparent 250deg, rgba(255,255,255,0.14) 250deg, rgba(255,255,255,0.14) 272deg, transparent 272deg 360deg)',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 24,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(255,255,255,0.03)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: '1.5px solid rgba(255,255,255,0.16)',
+            }}
+          />
+          <motion.div
+            aria-hidden="true"
+            animate={{ opacity: [0.45, 0.72, 0.45] }}
+            transition={{ duration: 3.4, ease: 'easeInOut', repeat: Infinity }}
+            style={{
+              position: 'absolute',
+              width: 44,
+              height: 1,
+              background: 'rgba(255,255,255,0.16)',
+            }}
+          />
+          <motion.div
+            aria-hidden="true"
+            animate={{ opacity: [0.3, 0.56, 0.3] }}
+            transition={{ duration: 3.4, ease: 'easeInOut', repeat: Infinity, delay: 0.35 }}
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 44,
+              background: 'rgba(255,255,255,0.14)',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.72)',
+            }}
+          />
+          {accentDots.map((slice, index) => (
+            <motion.div
+              key={slice.id}
+              animate={{ opacity: [0.28, 0.72, 0.28] }}
+              transition={{ duration: 3.6 + index * 0.4, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute',
+                top: index === 0 ? 10 : index === 1 ? 18 : index === 2 ? 70 : 80,
+                right: index === 0 ? 22 : index === 1 ? 8 : index === 2 ? 14 : 32,
+                width: 4,
+                height: 4,
+                borderRadius: '50%',
+                background: slice.color,
+                boxShadow: `0 0 0 3px color-mix(in srgb, ${slice.color} 12%, transparent)`,
+              }}
+            />
+          ))}
+        </motion.div>
+      </button>
+    </div>
   )
 }
 
@@ -1062,12 +1243,15 @@ export function Home() {
   const { data: dailyPayload } = useHomeDailyBudgetPayload(year, month)
   const { data: currentMonthSavingsPlanning } = useCurrentMonthSavingsPlanning(year, month)
   const { data: driftOperations, isLoading: loadingDriftOperations } = useHomeDriftOperations(year, month)
+  const { data: homeBudgetPayload } = useBudgetPagePayload({ periodYear: year, periodMonth: month })
+  const { data: tripsForMonth = [] } = useTripsForMonth(year, month)
   const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const eomDateStr = toLocalIsoDate(eomDate)
   const { data: upcomingOps } = useUpcomingPlannedOperations(eomDateStr)
 
   // Quick Search States
   const { data: categories = [] } = useCategories()
+  const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories])
   const [searchSelection, setSearchSelection] = useState<QuickSearchSelection | null>(null)
   const [searchPeriod, setSearchPeriod] = useState<QuickSearchPeriod | null>(null)
   const [showSearchCatModal, setShowSearchCatModal] = useState(false)
@@ -1168,6 +1352,49 @@ export function Home() {
     const monthLabel = MONTHS_FR_FULL[searchPeriod.month - 1] ?? 'Mois'
     return `${monthLabel} ${searchPeriod.year}`
   }
+
+  const allEnvelopeParentRows = useMemo(
+    () => (Array.isArray(homeBudgetPayload?.by_parent_category) ? homeBudgetPayload.by_parent_category : []),
+    [homeBudgetPayload],
+  )
+  const allEnvelopeCategoryRows = useMemo(
+    () => (Array.isArray(homeBudgetPayload?.by_category) ? homeBudgetPayload.by_category : []),
+    [homeBudgetPayload],
+  )
+  const allEnvelopeParentRowsWithoutSavings = useMemo(
+    () => allEnvelopeParentRows.filter((row) => normalizeLabel(row.parent_category_name) !== 'epargne'),
+    [allEnvelopeParentRows],
+  )
+  const homeEnvelopeSlices = useMemo<EnvelopeShortcutSlice[]>(() => {
+    const bucketRows = Array.isArray(homeBudgetPayload?.by_bucket) ? homeBudgetPayload.by_bucket : []
+    const rows = EXPENSE_BUCKET_IDS
+      .map((bucketId) => {
+        const row = bucketRows.find((candidate) => candidate.budget_bucket === bucketId)
+        const budget = Math.max(0, Number(row?.budget_amount ?? 0))
+        return {
+          id: bucketId,
+          label: EXPENSE_BUCKET_LABELS[bucketId],
+          budget,
+          color: getBudgetBucketColor(bucketId),
+        }
+      })
+      .filter((slice) => slice.budget > 0)
+
+    const total = rows.reduce((sum, slice) => sum + slice.budget, 0)
+    if (total <= 0) return []
+
+    return rows
+      .map((slice) => ({ ...slice, share: slice.budget / total }))
+      .sort((a, b) => b.budget - a.budget)
+  }, [homeBudgetPayload])
+  const voyagesRootCategoryId = useMemo(
+    () => categories.find((category) => category.parent_id === null && normalizeLabel(category.name) === 'voyages')?.id ?? null,
+    [categories],
+  )
+  const homeEnvelopeMonthLabel = useMemo(
+    () => `${MONTHS_FR_FULL[month - 1] ?? 'Mois'} ${String(year).slice(2)}`,
+    [month, year],
+  )
 
   const getEvolution3mColor = () => {
     if (!searchMetrics || searchMetrics.evolution3mPct === null) return undefined
@@ -1372,6 +1599,9 @@ export function Home() {
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showEcheancesModal, setShowEcheancesModal] = useState(false)
+  const [showAllEnvelopesModal, setShowAllEnvelopesModal] = useState(false)
+  const [protectedAmountsExpanded, setProtectedAmountsExpanded] = useState(false)
+  const [consumedAmountsExpanded, setConsumedAmountsExpanded] = useState(false)
   const [echeancesFilter, setEcheancesFilter] = useState<'j3' | 'j7' | 'j15' | 'mois'>('mois')
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
@@ -1394,12 +1624,12 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal && !showAllEnvelopesModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showEcheancesModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showEcheancesModal, showAllEnvelopesModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal && !showAllEnvelopesModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
@@ -1407,11 +1637,18 @@ export function Home() {
         setShowHeroBalanceModal(false)
         setShowProgressModal(false)
         setShowEcheancesModal(false)
+        setShowAllEnvelopesModal(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showEcheancesModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showEcheancesModal, showAllEnvelopesModal])
+
+  useEffect(() => {
+    if (!showResteUtileModal) return
+    setProtectedAmountsExpanded(false)
+    setConsumedAmountsExpanded(false)
+  }, [showResteUtileModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -1449,7 +1686,7 @@ export function Home() {
     accountId: selectedAccount?.id ?? null,
     startDate: '2024-01-01',
   })
-  const { selectedTrip: selectedTripCockpit } = useTripCockpit()
+  const { allTrips: tripCockpitRows, selectedTrip: selectedTripCockpit } = useTripCockpit()
   const tripExpenseBars = useTripExpenseBars(selectedTripCockpit)
   const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
   const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
@@ -2484,6 +2721,13 @@ export function Home() {
                   />
                 </div>
 
+                <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                  <EnvelopeShortcutTile
+                    slices={homeEnvelopeSlices}
+                    onClick={() => setShowAllEnvelopesModal(true)}
+                  />
+                </div>
+
                 {/* Recherche Rapide Tile — pleine largeur */}
                 <div style={{ gridColumn: 'span 2', marginTop: 12 }}>
                   <QuickSearchTile
@@ -2733,8 +2977,8 @@ export function Home() {
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
-              {'\u25b8'} Revenus encaissés
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)', paddingLeft: 18 }}>
+              Revenus encaissés
             </span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', whiteSpace: 'nowrap' }}>
               {`+${formatCurrencyFloored(revenueAmountDisplay)}`}
@@ -2743,31 +2987,93 @@ export function Home() {
 
           <div style={{ height: 2 }} />
 
-          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
-            {'\u25b8'} Montants protégés
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setProtectedAmountsExpanded((current) => !current)}
+              aria-expanded={protectedAmountsExpanded}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 8,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ChevronRight
+                  size={12}
+                  aria-hidden="true"
+                  style={{
+                    flexShrink: 0,
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    transform: protectedAmountsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 160ms ease',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
+                  Montants protégés
+                </span>
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+                {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
+              </span>
+            </button>
+            {protectedAmountsExpanded ? (
+              <div style={{ display: 'grid', gap: 8, paddingLeft: 18 }}>
+                <DetailModalRow glass label="− Socle fixe prévu" value={formatCurrencyFloored(fixedBudgetAmountDisplay)} />
+                <DetailModalRow glass label="− Provisions prévues" value={formatCurrencyFloored(provisionBudgetAmountDisplay)} />
+                <DetailModalRow glass label="− Épargne prévue" value={formatCurrencyFloored(plannedSavingsAmountDisplay)} />
+              </div>
+            ) : null}
           </div>
-          <DetailModalRow glass label="− Socle fixe prévu" value={formatCurrencyFloored(fixedBudgetAmountDisplay)} />
-          <DetailModalRow glass label="− Provisions prévues" value={formatCurrencyFloored(provisionBudgetAmountDisplay)} />
-          <DetailModalRow glass label="− Épargne prévue" value={formatCurrencyFloored(plannedSavingsAmountDisplay)} />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, paddingLeft: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255, 255, 255, 0.52)' }}>Total protégé</span>
-            <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
-              {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
-            </span>
-          </div>
-
-          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)', marginTop: 4 }}>
-            {'\u25b8'} Déjà consommé
-          </div>
-          <DetailModalRow glass label="− Variable essentielle consommée" value={formatCurrencyFloored(variableEssentialConsumedDisplay)} />
-          <DetailModalRow glass label="− Discrétionnaire consommé" value={formatCurrencyFloored(discretionaryConsumedDisplay)} />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, paddingLeft: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255, 255, 255, 0.52)' }}>Total consommé</span>
-            <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
-              {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
-            </span>
+          <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setConsumedAmountsExpanded((current) => !current)}
+              aria-expanded={consumedAmountsExpanded}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 8,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ChevronRight
+                  size={12}
+                  aria-hidden="true"
+                  style={{
+                    flexShrink: 0,
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    transform: consumedAmountsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 160ms ease',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)' }}>
+                  Déjà consommé
+                </span>
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+                {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
+              </span>
+            </button>
+            {consumedAmountsExpanded ? (
+              <div style={{ display: 'grid', gap: 8, paddingLeft: 18 }}>
+                <DetailModalRow glass label="− Variable essentielle consommée" value={formatCurrencyFloored(variableEssentialConsumedDisplay)} />
+                <DetailModalRow glass label="− Discrétionnaire consommé" value={formatCurrencyFloored(discretionaryConsumedDisplay)} />
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -2821,6 +3127,26 @@ export function Home() {
         onBlockClick={(blockId) => {
           setShowProgressModal(false)
           navigate(`/budgets?block=${blockId}`)
+        }}
+      />
+
+      <AllEnvelopesModal
+        open={showAllEnvelopesModal}
+        onClose={() => setShowAllEnvelopesModal(false)}
+        displayMonthLabel={homeEnvelopeMonthLabel}
+        parentCategoryRows={allEnvelopeParentRowsWithoutSavings}
+        subCategoryRows={allEnvelopeCategoryRows}
+        categoryById={categoryById}
+        tripsForMonth={tripsForMonth}
+        onTripClick={() => {
+          setShowAllEnvelopesModal(false)
+          navigate('/budgets', {
+            state: {
+              categoryId: voyagesRootCategoryId,
+              year,
+              month,
+            },
+          })
         }}
       />
 
@@ -2881,11 +3207,95 @@ export function Home() {
         const filterMap = { j3: upcomingOpsWindows.j3.items, j7: upcomingOpsWindows.j7.items, j15: upcomingOpsWindows.j15.items, mois: upcomingOpsWindows.eom.items } as const
         const filterLabels = { j3: 'J+3', j7: 'J+7', j15: 'J+15', mois: 'Mois' } as const
         const activeItems = filterMap[echeancesFilter]
-        const total = activeItems.reduce((sum, item) => {
+        const knownTripNames = new Set(tripCockpitRows.map((trip) => normalizeLabel(trip.name ?? '')))
+        const aggregatedVoyages = new Map<string, {
+          key: string
+          label: string
+          flowType: PlannedOperationItem['flow_type']
+          amount: number
+          dates: string[]
+        }>()
+        const displayItems: Array<{
+          key: string
+          label: string
+          flowType: PlannedOperationItem['flow_type']
+          amount: number
+          sortDate: string
+          dateLabel: string
+        }> = []
+
+        for (const item of activeItems) {
           const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-          const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
-          return sum + (isOutflow ? amount : -amount)
-        }, 0)
+          const normalizedLabel = normalizeLabel(item.label)
+          const isVoyageExpense =
+            item.flow_type === 'expense'
+            && (
+              knownTripNames.has(normalizedLabel)
+              || (
+              item.budget_bucket === 'voyage'
+              || normalizeLabel(item.parent_category_name ?? '') === 'voyages'
+              )
+            )
+
+          if (!isVoyageExpense) {
+            displayItems.push({
+              key: item.id,
+              label: item.label,
+              flowType: item.flow_type,
+              amount,
+              sortDate: item.planned_date,
+              dateLabel: new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+            })
+            continue
+          }
+
+          const voyageKey = normalizedLabel
+          const current = aggregatedVoyages.get(voyageKey)
+          if (current) {
+            current.amount += amount
+            current.dates.push(item.planned_date)
+          } else {
+            aggregatedVoyages.set(voyageKey, {
+              key: `voyage-${voyageKey}`,
+              label: item.label,
+              flowType: item.flow_type,
+              amount,
+              dates: [item.planned_date],
+            })
+          }
+        }
+
+        for (const voyage of aggregatedVoyages.values()) {
+          const sortedDates = [...voyage.dates].sort()
+          const firstDate = sortedDates[0]
+          const lastDate = sortedDates[sortedDates.length - 1]
+          const firstLabel = new Date(firstDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+          const lastLabel = new Date(lastDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+
+          displayItems.push({
+            key: voyage.key,
+            label: voyage.label,
+            flowType: voyage.flowType,
+            amount: voyage.amount,
+            sortDate: firstDate,
+            dateLabel: firstDate === lastDate ? firstLabel : `${firstLabel} → ${lastLabel}`,
+          })
+        }
+
+        displayItems.sort((a, b) => {
+          const aDate = a.sortDate
+          const bDate = b.sortDate
+          if (aDate !== bDate) return aDate.localeCompare(bDate, 'fr')
+          return a.label.localeCompare(b.label, 'fr')
+        })
+
+        const totalRevenus = displayItems.reduce((sum, item) => (
+          item.flowType === 'income' ? sum + item.amount : sum
+        ), 0)
+        const totalDepensesPlanifiees = displayItems.reduce((sum, item) => (
+          item.flowType === 'expense' || item.flowType === 'savings' ? sum + item.amount : sum
+        ), 0)
+        const balance = totalRevenus - totalDepensesPlanifiees
         const { glassBackground, glassBorder } = getGlassColors('#5B57F5')
         return (
           <BottomSheet
@@ -2957,36 +3367,116 @@ export function Home() {
             }
           >
             <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10, maxHeight: 'min(68dvh, 520px)', overflowY: 'auto' }}>
-              {activeItems.length === 0 ? (
+              {displayItems.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
                   Aucune opération sur cette période.
                 </p>
               ) : (
                 <>
-                  {activeItems.map((item) => {
-                    const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-                    const isIncome = item.flow_type === 'income'
-                    const isSavings = item.flow_type === 'savings'
+                  {displayItems.map((item) => {
+                    const isIncome = item.flowType === 'income'
+                    const isSavings = item.flowType === 'savings'
                     const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
-                    const dateLabel = new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
                     return (
-                      <DetailModalRow
-                        glass
-                        key={item.id}
-                        label={`${item.label} (${flowLabel}, ${dateLabel})`}
-                        value={`${isIncome ? '+' : '-'}${formatCurrencyFloored(amount)}`}
-                      />
+                      <div
+                        key={item.key}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          gap: 8,
+                          paddingLeft: isIncome ? 2 : 0,
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          {isIncome ? (
+                            <ArrowDownToLine
+                              size={13}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                              style={{ flexShrink: 0, color: 'rgba(46, 212, 122, 0.72)' }}
+                            />
+                          ) : null}
+                          <span style={{ fontSize: 11, color: isIncome ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
+                            {`${item.label} (${flowLabel}, ${item.dateLabel})`}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            fontFamily: 'var(--font-mono)',
+                            color: isIncome ? 'rgba(240, 255, 246, 0.94)' : '#FFFFFF',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {`${isIncome ? '+' : '-'}${formatCurrencyFloored(item.amount)}`}
+                        </span>
+                      </div>
                     )
                   })}
-                  {activeItems.length > 1 && (
+                  {displayItems.length > 0 && (
                     <>
                       <DetailModalSeparator glass />
-                      <DetailModalRow
-                        glass
-                        label={`Total ${filterLabels[echeancesFilter]}`}
-                        value={`${total >= 0 ? '-' : '+'}${formatCurrencyFloored(Math.abs(total))}`}
-                        variant="total"
-                      />
+                      <div
+                        style={{
+                          display: 'grid',
+                          gap: 10,
+                          paddingTop: 2,
+                        }}
+                      >
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.82)', letterSpacing: '-0.01em' }}>
+                              Total revenus
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
+                              {`+${formatCurrencyFloored(totalRevenus)}`}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.82)', letterSpacing: '-0.01em' }}>
+                              Total dépenses planifiées
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
+                              {`-${formatCurrencyFloored(totalDepensesPlanifiees)}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                            gap: 8,
+                            paddingTop: 10,
+                            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: 'rgba(255, 255, 255, 0.82)',
+                              letterSpacing: '-0.01em',
+                            }}
+                          >
+                            Balance
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 800,
+                              fontFamily: 'var(--font-mono)',
+                              color: '#FFFFFF',
+                              whiteSpace: 'nowrap',
+                              letterSpacing: '-0.02em',
+                            }}
+                          >
+                            {`${balance >= 0 ? '+' : '-'}${formatCurrencyFloored(Math.abs(balance))}`}
+                          </span>
+                        </div>
+                      </div>
                     </>
                   )}
                 </>
@@ -3457,19 +3947,7 @@ export function Home() {
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
         zIndex={1200}
         header={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
-            {/* Gauche : titre + subtitle */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'rgba(255,255,255,0.88)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-                {getSelectionName()}
-              </p>
-              {!quickSearchCompareMode && (
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.48)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {getPeriodName()}
-                </p>
-              )}
-            </div>
-            {/* Centre : bouton versus */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
             <button
               type="button"
               onClick={() => {
@@ -3494,19 +3972,21 @@ export function Home() {
                 cursor: 'pointer', transition: 'all 220ms ease',
               }}
             >versus</button>
-            {/* Droite : bouton fermer */}
-            <button
-              type="button"
-              onClick={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
-              aria-label="Fermer"
-              style={{
-                flexShrink: 0,
-                border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
-                color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
-                borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', padding: 0,
-              }}
-            ><X size={11} /></button>
+            <div />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
+                aria-label="Fermer"
+                style={{
+                  flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
+                  color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
+                  borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0,
+                }}
+              ><X size={11} /></button>
+            </div>
           </div>
         }
       >
@@ -3519,46 +3999,41 @@ export function Home() {
             </div>
           ) : searchMetrics ? (
             <>
-              {/* ── Labels A (2 cadres, visible en mode versus) ── */}
-              <AnimatePresence>
-                {quickSearchCompareMode && (
-                  <motion.div
-                    key="vs-label-a"
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}
-                  >
-                    {/* Cadre catégorie A */}
-                    <div style={{
-                      background: 'rgba(255, 171, 46, 0.13)', border: '1px solid rgba(255, 171, 46, 0.32)',
-                      borderRadius: 'var(--radius-md)', padding: '9px 10px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 0,
-                    }}>
-                      <span style={{
-                        width: 19, height: 19, borderRadius: '50%', flexShrink: 0,
-                        border: '1.5px solid rgba(255, 171, 46, 0.85)',
-                        color: 'rgba(255, 210, 110, 0.95)', fontSize: 9, fontWeight: 900,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      }}>A</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255, 210, 110, 0.95)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {getSelectionName()}
-                      </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                {quickSearchCompareMode ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchCatModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(255, 224, 130, 0.94)' }}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255, 224, 130, 0.52)', flexShrink: 0 }}>A</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getSelectionName()}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSearchPeriodModal(true)}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(255, 224, 130, 0.94)' }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getPeriodName()}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
+                      </button>
                     </div>
-                    {/* Cadre période A */}
-                    <div style={{
-                      background: 'rgba(255, 171, 46, 0.08)', border: '1px solid rgba(255, 171, 46, 0.2)',
-                      borderRadius: 'var(--radius-md)', padding: '9px 10px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255, 195, 70, 0.85)' }}>
-                        {getPeriodName()}
-                      </span>
-                    </div>
-                  </motion.div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>
+                      {getSelectionName()}
+                    </p>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.34)' }}>•</span>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.52)', letterSpacing: '0.01em' }}>
+                      {getPeriodName()}
+                    </p>
+                  </div>
                 )}
-              </AnimatePresence>
+              </div>
 
               {/* ── Grille KPI principale ── */}
               <div
@@ -3626,57 +4101,25 @@ export function Home() {
                     transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
                     style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}
                   >
-                    {/* ── Ligne de démarcation ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.18), rgba(255,255,255,0.08))' }} />
-                      <span style={{ fontSize: 9, fontWeight: 900, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', textTransform: 'uppercase', flexShrink: 0 }}>vs</span>
-                      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.18), rgba(255,255,255,0.08))' }} />
-                    </div>
-
-                    {/* ── Labels B (2 cadres cliquables = label + sélecteur) ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      {/* Cadre catégorie B */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center' }}>
                       <button
                         type="button"
                         onClick={() => setShowCompareCatModal(true)}
-                        style={{
-                          background: 'rgba(91, 87, 245, 0.13)', border: '1px solid rgba(91, 87, 245, 0.32)',
-                          borderRadius: 'var(--radius-md)', padding: '9px 10px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                          cursor: 'pointer', transition: 'all 180ms ease', minWidth: 0,
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.22)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.13)' }}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, cursor: 'pointer', color: 'rgba(195, 190, 255, 0.94)' }}
                       >
-                        <span style={{
-                          width: 19, height: 19, borderRadius: '50%', flexShrink: 0,
-                          border: '1.5px solid rgba(91, 87, 245, 0.85)',
-                          color: 'rgba(195, 190, 255, 0.95)', fontSize: 9, fontWeight: 900,
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        }}>B</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(195, 190, 255, 0.95)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {compareSelection ? getCompareName() : '+ Catégorie'}
-                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(195, 190, 255, 0.52)', flexShrink: 0 }}>B</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{compareSelection ? getCompareName() : 'Catégorie'}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
                       </button>
-                      {/* Cadre période B */}
                       <button
                         type="button"
                         onClick={() => setShowComparePeriodModal(true)}
-                        style={{
-                          background: 'rgba(91, 87, 245, 0.08)', border: '1px solid rgba(91, 87, 245, 0.2)',
-                          borderRadius: 'var(--radius-md)', padding: '9px 10px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          cursor: 'pointer', transition: 'all 180ms ease',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.17)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.08)' }}
+                        style={{ border: 'none', background: 'transparent', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, minWidth: 0, cursor: 'pointer', color: comparePeriod ? 'rgba(195, 190, 255, 0.94)' : 'rgba(195, 190, 255, 0.58)' }}
                       >
-                        <span style={{ fontSize: 13, fontWeight: 700, color: comparePeriod ? 'rgba(160, 155, 255, 0.9)' : 'rgba(130, 125, 255, 0.5)' }}>
-                          {comparePeriod ? getComparePeriodLabel() : '+ Période'}
-                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comparePeriod ? getComparePeriodLabel() : 'Période'}</span>
+                        <ChevronDown size={12} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.75 }} />
                       </button>
                     </div>
-
                     {/* Cartes B avec données réelles + écart % */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                       {/* Consommé B */}

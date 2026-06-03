@@ -563,7 +563,7 @@ interface AllEnvelopesModalProps {
   onTripClick?: (tripId: string) => void
 }
 
-function AllEnvelopesModal({
+export function AllEnvelopesModal({
   open,
   onClose,
   displayMonthLabel,
@@ -574,6 +574,7 @@ function AllEnvelopesModal({
   onTripClick,
 }: AllEnvelopesModalProps) {
   const [expandedParentId, setExpandedParentId] = useState<string | null>(null)
+  void displayMonthLabel
 
   const sortedParents = useMemo(() => {
     return [...parentCategoryRows]
@@ -633,63 +634,60 @@ function AllEnvelopesModal({
               transition={{ type: 'spring', damping: 30, stiffness: 330 }}
               style={{
                 width: 'min(520px, 100%)',
-                background: 'var(--neutral-0)',
+                background: 'linear-gradient(180deg, rgba(20, 23, 52, 0.96) 0%, rgba(14, 17, 39, 0.96) 100%)',
                 borderRadius: 'var(--radius-2xl)',
                 maxHeight: '100%',
                 overflow: 'hidden',
-                boxShadow: 'var(--shadow-lg)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 24px 70px rgba(4, 6, 20, 0.34)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 pointerEvents: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
               }}
             >
-              {/* Header */}
               <div
                 style={{
-                  padding: 'var(--space-4) var(--space-5)',
-                  background: 'linear-gradient(135deg, #4845d4 0%, var(--primary-500) 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-3)',
+                  padding: '12px var(--space-5) 10px',
+                  display: 'grid',
+                  gap: 4,
                   flexShrink: 0,
-                  borderBottom: '1px solid rgba(255,255,255,0.12)',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  background: 'linear-gradient(180deg, rgba(91, 87, 245, 0.14) 0%, rgba(91, 87, 245, 0.03) 100%)',
                 }}
               >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: 'var(--font-size-base)',
-                    fontWeight: 800,
-                    color: 'var(--neutral-0)',
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  {`Toutes les enveloppes - ${displayMonthLabel}`}
-                </h2>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{
-                    border: 'none',
-                    background: 'rgba(255,255,255,0.22)',
-                    borderRadius: 'var(--radius-full)',
-                    width: 32,
-                    height: 32,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: 'var(--neutral-0)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', minHeight: 28 }}>
+                  <div style={{ display: 'grid', minWidth: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(195,190,255,0.68)', lineHeight: 1.1 }}>
+                      Pilotage budgétaire
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Fermer"
+                    style={{
+                      flexShrink: 0,
+                      border: '1px solid rgba(255,255,255,0.14)',
+                      background: 'rgba(255,255,255,0.07)',
+                      color: 'rgba(255,255,255,0.62)',
+                      width: 28,
+                      height: 28,
+                      borderRadius: 'var(--radius-full)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
 
-              {/* Body */}
-              <div style={{ overflowY: 'auto', flex: 1 }}>
+              <div style={{ overflowY: 'auto', flex: 1, padding: 'var(--space-2) 0 var(--space-3)' }}>
                 {sortedParents.map((parent) => {
                   const isExpanded = expandedParentId === parent.parent_category_id
                   const cat = categoryById.get(parent.parent_category_id)
@@ -699,185 +697,249 @@ function AllEnvelopesModal({
                   const subs = subsByParentId.get(parent.parent_category_id) ?? []
 
                   return (
-                    <div key={parent.parent_category_id} style={{ borderBottom: '1px solid var(--neutral-100)' }}>
-                      {/* Parent row */}
+                    <div key={parent.parent_category_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       <button
                         type="button"
                         onClick={() => handleToggle(parent.parent_category_id)}
                         style={{
                           width: '100%',
                           border: 'none',
-                          padding: '13px var(--space-5)',
+                          padding: '8px var(--space-5)',
                           display: 'grid',
-                          gridTemplateColumns: '28px minmax(0,1fr) auto',
+                          gridTemplateColumns: '32px minmax(0,1fr) auto auto',
                           alignItems: 'center',
-                          gap: 'var(--space-3)',
-                          background: isExpanded ? 'color-mix(in oklab, var(--primary-500) 6%, var(--neutral-0) 94%)' : 'transparent',
+                          gap: 9,
+                          background: isExpanded ? 'rgba(255,255,255,0.05)' : 'transparent',
                           textAlign: 'left',
                           cursor: 'pointer',
                           transition: 'background-color var(--transition-fast)',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <CategoryIcon iconKey={iconKey} label={parent.parent_category_name} size={24} />
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0) 42%, rgba(5,7,18,0.42) 100%), rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        >
+                          <CategoryIcon
+                            iconKey={iconKey}
+                            label={parent.parent_category_name}
+                            size={25}
+                            style={{ transform: 'scale(1.14)' }}
+                          />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: 'rgba(255,255,255,0.9)',
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {parent.parent_category_name}
+                          </span>
                         </div>
                         <span
                           style={{
                             fontSize: 14,
-                            fontWeight: 700,
-                            color: 'var(--neutral-900)',
-                            minWidth: 0,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {parent.parent_category_name}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 14,
                             fontWeight: 800,
-                            color: 'var(--primary-600)',
+                            color: 'rgba(255,255,255,0.96)',
                             fontFamily: 'var(--font-mono)',
                             whiteSpace: 'nowrap',
                           }}
                         >
                           {formatCurrencyFloored(Number(parent.budget_amount))}
                         </span>
+                        <ChevronRight
+                          size={14}
+                          aria-hidden="true"
+                          style={{
+                            flexShrink: 0,
+                            color: 'rgba(255,255,255,0.42)',
+                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 160ms ease',
+                          }}
+                        />
                       </button>
 
-                      {/* Sub-categories */}
-                      {isExpanded && isVoyagesParent && (
-                        <div style={{ background: 'var(--neutral-50)' }}>
-                          {tripsForMonth.length === 0 ? (
+                      <AnimatePresence initial={false}>
+                        {isExpanded ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                            style={{ overflow: 'hidden' }}
+                          >
                             <div
                               style={{
-                                padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
-                                display: 'grid',
-                                gridTemplateColumns: '22px minmax(0,1fr) auto',
-                                alignItems: 'center',
-                                gap: 'var(--space-2)',
-                                borderTop: '1px solid var(--neutral-150)',
+                                padding: '2px 0 8px',
+                                marginLeft: 'calc(var(--space-5) + 17px)',
+                                borderLeft: '1px solid rgba(255,255,255,0.08)',
                               }}
                             >
-                              <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
-                              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--neutral-600)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                aucun voyage ce mois-ci
-                              </span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                                -
-                              </span>
+                              {isVoyagesParent ? (
+                                tripsForMonth.length === 0 ? (
+                                  <div
+                                    style={{
+                                      padding: '8px var(--space-5) 8px var(--space-4)',
+                                      display: 'grid',
+                                      gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                      alignItems: 'center',
+                                      gap: 'var(--space-2)',
+                                    }}
+                                  >
+                                    <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)' }} />
+                                    <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.46)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      aucun voyage ce mois-ci
+                                    </span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.34)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                                      -
+                                    </span>
+                                  </div>
+                                ) : (
+                                  tripsForMonth.map((trip) => (
+                                    <button
+                                      key={trip.id}
+                                      type="button"
+                                      onClick={() => onTripClick?.(trip.id)}
+                                      style={{
+                                        width: '100%',
+                                        border: 'none',
+                                        padding: '8px var(--space-5) 8px var(--space-4)',
+                                        display: 'grid',
+                                        gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                        alignItems: 'center',
+                                        gap: 'var(--space-2)',
+                                        background: 'transparent',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                                      aria-label={`Ouvrir le voyage ${trip.name}`}
+                                    >
+                                      <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
+                                        {trip.emoji ?? '✈'}
+                                      </div>
+                                      <span
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 500,
+                                          color: 'rgba(255,255,255,0.68)',
+                                          minWidth: 0,
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {trip.name}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 700,
+                                          color: 'rgba(255,255,255,0.84)',
+                                          fontFamily: 'var(--font-mono)',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {formatCurrencyFloored(Number(trip.planned_budget ?? 0))}
+                                      </span>
+                                    </button>
+                                  ))
+                                )
+                              ) : subs.length > 0 ? (
+                                subs.map((sub) => {
+                                  const subCat = categoryById.get(sub.category_id)
+                                  const subIconKey = subCat?.icon_key ?? null
+                                  return (
+                                    <div
+                                      key={sub.category_id}
+                                      style={{
+                                        padding: '8px var(--space-5) 8px var(--space-4)',
+                                        display: 'grid',
+                                        gridTemplateColumns: '22px minmax(0,1fr) auto',
+                                        alignItems: 'center',
+                                        gap: 'var(--space-2)',
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: 18,
+                                          height: 18,
+                                          borderRadius: '50%',
+                                          overflow: 'hidden',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          flexShrink: 0,
+                                          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0) 38%, rgba(5,7,18,0.38) 100%), rgba(255,255,255,0.07)',
+                                          border: '1px solid rgba(255,255,255,0.06)',
+                                        }}
+                                      >
+                                        {subIconKey ? (
+                                          <CategoryIcon iconKey={subIconKey} label={sub.category_name} size={16} style={{ transform: 'scale(1.18)' }} />
+                                        ) : (
+                                          <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)' }} />
+                                        )}
+                                      </div>
+                                      <span
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 500,
+                                          color: 'rgba(255,255,255,0.68)',
+                                          minWidth: 0,
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {sub.category_name}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 700,
+                                          color: 'rgba(255,255,255,0.84)',
+                                          fontFamily: 'var(--font-mono)',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {formatCurrencyFloored(Number(sub.budget_amount))}
+                                      </span>
+                                    </div>
+                                  )
+                                })
+                              ) : (
+                                <div
+                                  style={{
+                                    padding: '10px var(--space-5) 10px var(--space-4)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.42)' }}>
+                                    Aucun détail disponible.
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            tripsForMonth.map((trip) => (
-                              <button
-                                key={trip.id}
-                                type="button"
-                                onClick={() => onTripClick?.(trip.id)}
-                                style={{
-                                  width: '100%',
-                                  border: 'none',
-                                  padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
-                                  display: 'grid',
-                                  gridTemplateColumns: '22px minmax(0,1fr) auto',
-                                  alignItems: 'center',
-                                  gap: 'var(--space-2)',
-                                  borderTop: '1px solid var(--neutral-150)',
-                                  background: 'transparent',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neutral-0)' }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                                aria-label={`Ouvrir le voyage ${trip.name}`}
-                              >
-                                <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
-                                  {trip.emoji ?? '✈'}
-                                </div>
-                                <span
-                                  style={{
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    color: 'var(--neutral-600)',
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {trip.name}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    color: 'var(--primary-400)',
-                                    fontFamily: 'var(--font-mono)',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {formatCurrencyFloored(Number(trip.planned_budget ?? 0))}
-                                </span>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      )}
-
-                      {isExpanded && !isVoyagesParent && subs.length > 0 && (
-                        <div style={{ background: 'var(--neutral-50)' }}>
-                          {subs.map((sub) => {
-                            const subCat = categoryById.get(sub.category_id)
-                            const subIconKey = subCat?.icon_key ?? null
-                            return (
-                              <div
-                                key={sub.category_id}
-                                style={{
-                                  padding: '10px var(--space-5) 10px calc(var(--space-5) + 28px + var(--space-3))',
-                                  display: 'grid',
-                                  gridTemplateColumns: '22px minmax(0,1fr) auto',
-                                  alignItems: 'center',
-                                  gap: 'var(--space-2)',
-                                  borderTop: '1px solid var(--neutral-150)',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                  {subIconKey ? (
-                                    <CategoryIcon iconKey={subIconKey} label={sub.category_name} size={18} />
-                                  ) : (
-                                    <div style={{ width: 16, height: 16, borderRadius: 'var(--radius-full)', background: 'var(--neutral-200)' }} />
-                                  )}
-                                </div>
-                                <span
-                                  style={{
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    color: 'var(--neutral-600)',
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {sub.category_name}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    color: 'var(--primary-400)',
-                                    fontFamily: 'var(--font-mono)',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {formatCurrencyFloored(Number(sub.budget_amount))}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
                     </div>
                   )
                 })}
