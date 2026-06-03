@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ArrowLeft, ArrowDown, ArrowUp, LayoutGrid, CalendarDays, RotateCw } from 'lucide-react'
-import { useSearchParams, useLocation } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
   BarChart,
   Bar,
@@ -734,6 +734,11 @@ export function Budgets() {
   const defaultPeriodMonth = isGracePeriod ? (nowMonth === 0 ? 12 : nowMonth) : nowMonth + 1
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // Stocke le contexte quick search reçu depuis Home pour le retour
+  type QuickSearchOrigin = { quickSearchSelection?: unknown; quickSearchPeriod?: unknown; quickSearchCompareMode?: boolean; quickSearchCompareSelection?: unknown; quickSearchComparePeriod?: unknown }
+  const quickSearchOriginRef = useRef<QuickSearchOrigin | null>(null)
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mois')
   const [selectedPeriodYear, setSelectedPeriodYear] = useState(defaultPeriodYear)
@@ -912,7 +917,17 @@ export function Budgets() {
     }
 
     // Apply navigation state from quick-search navigation
-    type NavState = { categoryId?: string | null; year?: number; month?: number } | null
+    type NavState = {
+      categoryId?: string | null
+      year?: number
+      month?: number
+      fromQuickSearch?: boolean
+      quickSearchSelection?: unknown
+      quickSearchPeriod?: unknown
+      quickSearchCompareMode?: boolean
+      quickSearchCompareSelection?: unknown
+      quickSearchComparePeriod?: unknown
+    } | null
     const navState = (location.state as NavState) ?? null
     if (navState) {
       if (typeof navState.year === 'number') setSelectedPeriodYear(navState.year)
@@ -924,6 +939,15 @@ export function Budgets() {
         // setSelectedCat is not yet defined here; delay one tick so it's stable
         const catId = navState.categoryId
         setTimeout(() => setSelectedCat(catId), 0)
+      }
+      if (navState.fromQuickSearch) {
+        quickSearchOriginRef.current = {
+          quickSearchSelection: navState.quickSearchSelection,
+          quickSearchPeriod: navState.quickSearchPeriod,
+          quickSearchCompareMode: navState.quickSearchCompareMode,
+          quickSearchCompareSelection: navState.quickSearchCompareSelection,
+          quickSearchComparePeriod: navState.quickSearchComparePeriod,
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2493,7 +2517,21 @@ export function Budgets() {
             type="button"
             aria-label="Retour"
             onClick={() => {
-              handleHeaderTitleReset?.()
+              const origin = quickSearchOriginRef.current
+              if (origin !== null) {
+                navigate('/', {
+                  state: {
+                    fromQuickSearch: true,
+                    quickSearchSelection: origin.quickSearchSelection,
+                    quickSearchPeriod: origin.quickSearchPeriod,
+                    quickSearchCompareMode: origin.quickSearchCompareMode,
+                    quickSearchCompareSelection: origin.quickSearchCompareSelection,
+                    quickSearchComparePeriod: origin.quickSearchComparePeriod,
+                  },
+                })
+              } else {
+                handleHeaderTitleReset?.()
+              }
             }}
             style={{
               width: 30,

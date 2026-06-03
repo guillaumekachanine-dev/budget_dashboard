@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUp, Bell, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
 import { TripBudgetOverlay } from '@/features/voyages/components/TripBudgetOverlay'
@@ -309,91 +309,6 @@ function DriftCategoryTransactionsModal({
           )
         })
       )}
-    </BottomSheet>
-  )
-}
-
-function PlannedOpsModal({
-  open,
-  onClose,
-  title,
-  dotColor,
-  items,
-  maxHeight,
-  contentMaxHeight,
-}: {
-  open: boolean
-  onClose: () => void
-  title: string
-  dotColor: string
-  items: PlannedOperationItem[]
-  maxHeight?: string
-  contentMaxHeight?: string
-}) {
-  const total = items.reduce((sum, item) => {
-    const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-    const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
-    return sum + (isOutflow ? amount : -amount)
-  }, 0)
-
-  const { glassBackground, glassBorder } = getGlassColors(dotColor)
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title={title}
-      variant="center"
-      maxHeight={maxHeight}
-      glass
-      glassBackground={glassBackground}
-      glassBorder={glassBorder}
-      zIndex={1200}
-    >
-      <div
-        style={{
-          padding: 'var(--space-4) var(--space-5) var(--space-5)',
-          display: 'grid',
-          gap: 10,
-          maxHeight: contentMaxHeight,
-          overflowY: contentMaxHeight ? 'auto' : undefined,
-        }}
-      >
-        {items.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', fontStyle: 'italic' }}>
-            Aucune opération planifiée.
-          </p>
-        ) : (
-          <>
-            {items.map((item) => {
-              const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
-              const isIncome = item.flow_type === 'income'
-              const isSavings = item.flow_type === 'savings'
-              const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
-              const dateLabel = new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-              return (
-                <DetailModalRow
-                  glass
-                  key={item.id}
-                  label={`${item.label} (${flowLabel}, ${dateLabel})`}
-                  value={`${isIncome ? '+' : '-'}${formatCurrencyFloored(amount)}`}
-                />
-              )
-            })}
-            {items.length > 1 ? (
-              <>
-                <DetailModalSeparator glass />
-                <DetailModalRow
-                  glass
-                  label="Total"
-                  value={`${total >= 0 ? '-' : '+'}${formatCurrencyFloored(Math.abs(total))}`}
-                  variant="total"
-                />
-              </>
-            ) : null}
-          </>
-        )}
-      </div>
     </BottomSheet>
   )
 }
@@ -1058,6 +973,9 @@ function SearchResultKpiCard({
   valueColor,
   onClick,
   ariaLabel,
+  diffPct,
+  accentColor,
+  compact,
 }: {
   title: string
   value: string
@@ -1065,21 +983,36 @@ function SearchResultKpiCard({
   valueColor?: string
   onClick?: () => void
   ariaLabel?: string
+  diffPct?: number | null
+  accentColor?: string
+  compact?: boolean
 }) {
   const Tag = onClick ? 'button' : 'div'
+  const accent = accentColor ?? 'rgba(255, 171, 46, 0.6)'
+  const accentBg = accentColor
+    ? `linear-gradient(135deg, ${accentColor.replace('0.6)', '0.13)')} 0%, ${accentColor.replace('0.6)', '0.05)')} 100%)`
+    : 'linear-gradient(135deg, rgba(255, 236, 179, 0.16) 0%, rgba(255, 171, 46, 0.08) 100%)'
+  const accentBorder = accentColor ? accentColor.replace('0.6)', '0.22)') : 'rgba(255, 204, 128, 0.25)'
+  const accentLabel = accentColor ? accentColor.replace('0.6)', '0.75)') : 'rgba(255, 236, 179, 0.8)'
+
+  const diffColor = diffPct == null ? undefined
+    : diffPct > 0 ? 'rgba(252, 90, 90, 0.9)'
+    : diffPct < 0 ? 'rgba(46, 212, 122, 0.9)'
+    : 'rgba(255,255,255,0.5)'
+
   return (
     <Tag
       {...(onClick ? { type: 'button' as const, onClick, 'aria-label': ariaLabel } : {})}
       style={{
         position: 'relative',
-        background: 'linear-gradient(135deg, rgba(255, 236, 179, 0.16) 0%, rgba(255, 171, 46, 0.08) 100%)',
-        border: '1px solid rgba(255, 204, 128, 0.25)',
+        background: accentBg,
+        border: `1px solid ${accentBorder}`,
         borderRadius: 'var(--radius-lg)',
-        padding: '16px 14px',
+        padding: compact ? '10px 12px' : '16px 14px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        minHeight: 120,
+        minHeight: compact ? 88 : 120,
         boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
         width: '100%',
@@ -1088,54 +1021,23 @@ function SearchResultKpiCard({
       }}
     >
       {/* Accent Strip */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          background: 'rgba(255, 171, 46, 0.6)',
-        }}
-      />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: accent }} />
 
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: 'rgba(255, 236, 179, 0.8)',
-          marginBottom: 8,
-        }}
-      >
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accentLabel, marginBottom: compact ? 4 : 8 }}>
         {title}
       </span>
 
-      <p
-        style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 24,
-          fontWeight: 600,
-          color: valueColor ?? '#ffffff',
-          lineHeight: 1,
-          letterSpacing: '-0.02em',
-          marginBottom: 6,
-        }}
-      >
+      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: compact ? 19 : 24, fontWeight: 600, color: valueColor ?? '#ffffff', lineHeight: 1, letterSpacing: '-0.02em', marginBottom: diffPct != null ? 3 : (compact ? 3 : 6) }}>
         {value}
       </p>
 
-      <p
-        style={{
-          margin: 0,
-          fontSize: 10,
-          fontWeight: 500,
-          color: 'rgba(255, 255, 255, 0.5)',
-          lineHeight: 1.2,
-        }}
-      >
+      {diffPct != null && (
+        <span style={{ fontSize: 9, fontWeight: 800, color: diffColor, letterSpacing: '0.04em', marginBottom: compact ? 2 : 4, display: 'block' }}>
+          {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}% vs A
+        </span>
+      )}
+
+      <p style={{ margin: 0, fontSize: compact ? 9 : 10, fontWeight: 500, color: 'rgba(255, 255, 255, 0.5)', lineHeight: 1.2 }}>
         {subtitle}
       </p>
     </Tag>
@@ -1151,6 +1053,7 @@ function toLocalIsoDate(date: Date): string {
 
 export function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { year, month } = getCurrentPeriod()
   const now = new Date()
   useAuth()
@@ -1172,11 +1075,46 @@ export function Home() {
   const [showSearchResultsModal, setShowSearchResultsModal] = useState(false)
   const [quickSearchCompareMode, setQuickSearchCompareMode] = useState(false)
   const [searchPickerYear, setSearchPickerYear] = useState(2026)
+  // Compare (section versus)
+  const [compareSelection, setCompareSelection] = useState<QuickSearchSelection | null>(null)
+  const [comparePeriod, setComparePeriod] = useState<QuickSearchPeriod | null>(null)
+  const [showCompareCatModal, setShowCompareCatModal] = useState(false)
+  const [showComparePeriodModal, setShowComparePeriodModal] = useState(false)
+  const [comparePickerYear, setComparePickerYear] = useState(2026)
+
+  // Restaure la modale au retour depuis Budgets (navigation back depuis une carte KPI)
+  useEffect(() => {
+    type ReturnState = {
+      fromQuickSearch?: boolean
+      quickSearchSelection?: QuickSearchSelection
+      quickSearchPeriod?: QuickSearchPeriod
+      quickSearchCompareMode?: boolean
+      quickSearchCompareSelection?: QuickSearchSelection
+      quickSearchComparePeriod?: QuickSearchPeriod
+    } | null
+    const state = (location.state as ReturnState) ?? null
+    if (state?.fromQuickSearch) {
+      if (state.quickSearchSelection) setSearchSelection(state.quickSearchSelection)
+      if (state.quickSearchPeriod) setSearchPeriod(state.quickSearchPeriod)
+      setQuickSearchCompareMode(state.quickSearchCompareMode ?? false)
+      if (state.quickSearchCompareSelection) setCompareSelection(state.quickSearchCompareSelection)
+      if (state.quickSearchComparePeriod) setComparePeriod(state.quickSearchComparePeriod)
+      setShowSearchResultsModal(true)
+      window.history.replaceState(null, '', window.location.href)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: searchMetrics, isPending: searchPending } = useQuickSearchMetrics(
     searchSelection,
     searchPeriod,
     showSearchResultsModal
+  )
+  const compareEnabled = quickSearchCompareMode && showSearchResultsModal && !!compareSelection && !!comparePeriod
+  const { data: compareMetrics, isPending: comparePending } = useQuickSearchMetrics(
+    compareSelection,
+    comparePeriod,
+    compareEnabled
   )
   const parentCategories = useMemo(() => {
     return categories.filter((c) => c.parent_id === null && c.is_active === true)
@@ -1239,6 +1177,32 @@ export function Home() {
     return isGood ? '#2ED47A' : '#FC5A5A'
   }
 
+  const getCompareName = (): string => {
+    if (!compareSelection) return 'Choisir catégorie'
+    if (compareSelection.kind === 'all') return 'Toutes catégories'
+    if (compareSelection.kind === 'socle') {
+      const socleNames: Record<string, string> = {
+        socle_fixe: 'Socle fixe', variable_essentielle: 'Variable essentielle',
+        provision: 'Provisions', voyage: 'Voyage', discretionnaire: 'Discrétionnaire', revenu: 'Revenus',
+      }
+      return socleNames[compareSelection.id] ?? compareSelection.id
+    }
+    const cat = categories.find((c) => c.id === compareSelection.id)
+    return cat ? cat.name : 'Catégorie'
+  }
+
+  const getComparePeriodLabel = (): string => {
+    if (!comparePeriod) return 'Choisir période'
+    if (comparePeriod.month === undefined) return `Année ${comparePeriod.year}`
+    const monthLabel = MONTHS_FR_FULL[comparePeriod.month - 1] ?? 'Mois'
+    return `${monthLabel} ${comparePeriod.year}`
+  }
+
+  const calcVsDiffPct = (compareVal: number | null | undefined, baseVal: number | null | undefined): number | null => {
+    if (compareVal == null || baseVal == null || baseVal === 0) return null
+    return ((compareVal - baseVal) / Math.abs(baseVal)) * 100
+  }
+
   const handleNavigateToBudgetsCategory = (anchor: 'donuts' | 'categories') => {
     void anchor
     setShowSearchResultsModal(false)
@@ -1248,6 +1212,32 @@ export function Home() {
         categoryId,
         year: searchPeriod?.year,
         month: searchPeriod?.month,
+        fromQuickSearch: true,
+        quickSearchSelection: searchSelection,
+        quickSearchPeriod: searchPeriod,
+        quickSearchCompareMode,
+        quickSearchCompareSelection: compareSelection,
+        quickSearchComparePeriod: comparePeriod,
+      },
+    })
+  }
+
+  const handleNavigateToCompareBudgetsCategory = (anchor: 'donuts' | 'categories') => {
+    void anchor
+    if (!compareSelection || !comparePeriod) return
+    setShowSearchResultsModal(false)
+    const categoryId = compareSelection.kind === 'category' ? compareSelection.id : null
+    navigate('/budgets', {
+      state: {
+        categoryId,
+        year: comparePeriod.year,
+        month: comparePeriod.month,
+        fromQuickSearch: true,
+        quickSearchSelection: searchSelection,
+        quickSearchPeriod: searchPeriod,
+        quickSearchCompareMode,
+        quickSearchCompareSelection: compareSelection,
+        quickSearchComparePeriod: comparePeriod,
       },
     })
   }
@@ -1267,46 +1257,38 @@ export function Home() {
   const sectionHorizontalPadding = '0 calc(var(--space-6) + 6px)'
 
   const upcomingOpsWindows = useMemo(() => {
-    const items = upcomingOps ?? []
-    const plus3Date = new Date(now)
-    plus3Date.setDate(now.getDate() + 3)
-    const end3 = toLocalIsoDate(plus3Date)
+    const allItems = upcomingOps ?? []
     const localToday = toLocalIsoDate(now)
 
-    let count3 = 0
-    let amount3 = 0
-    let countEom = 0
-    let amountEom = 0
-    const items3: PlannedOperationItem[] = []
-    const itemsEom: PlannedOperationItem[] = []
+    const endDate = (daysAhead: number) => {
+      const d = new Date(now)
+      d.setDate(now.getDate() + daysAhead)
+      return toLocalIsoDate(d)
+    }
+    const end3 = endDate(3)
+    const end7 = endDate(7)
+    const end15 = endDate(15)
 
-    for (const item of items) {
+    const makeWindow = () => ({ count: 0, amount: 0, items: [] as PlannedOperationItem[] })
+    const j3 = makeWindow()
+    const j7 = makeWindow()
+    const j15 = makeWindow()
+    const eom = makeWindow()
+
+    for (const item of allItems) {
       const date = String(item.planned_date ?? '').slice(0, 10)
-      if (!date) continue
-      if (date < localToday) continue
-
+      if (!date || date < localToday) continue
       const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
       const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
+      const sign = isOutflow ? 1 : -1
 
-      if (date <= end3) {
-        count3 += 1
-        if (isOutflow) amount3 += amount
-        else amount3 -= amount
-        items3.push(item)
-      }
-
-      if (date <= eomDateStr) {
-        countEom += 1
-        if (isOutflow) amountEom += amount
-        else amountEom -= amount
-        itemsEom.push(item)
-      }
+      if (date <= end3) { j3.count++; j3.amount += sign * amount; j3.items.push(item) }
+      if (date <= end7) { j7.count++; j7.amount += sign * amount; j7.items.push(item) }
+      if (date <= end15) { j15.count++; j15.amount += sign * amount; j15.items.push(item) }
+      if (date <= eomDateStr) { eom.count++; eom.amount += sign * amount; eom.items.push(item) }
     }
 
-    return {
-      j3: { count: count3, amount: amount3, items: items3 },
-      eom: { count: countEom, amount: amountEom, items: itemsEom },
-    }
+    return { j3, j7, j15, eom }
   }, [upcomingOps, now, eomDateStr])
 
   const driftCategories = useMemo(() => {
@@ -1389,8 +1371,8 @@ export function Home() {
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
-  const [showPlannedOpsModal, setShowPlannedOpsModal] = useState(false)
-  const [showPlannedOpsEomModal, setShowPlannedOpsEomModal] = useState(false)
+  const [showEcheancesModal, setShowEcheancesModal] = useState(false)
+  const [echeancesFilter, setEcheancesFilter] = useState<'j3' | 'j7' | 'j15' | 'mois'>('mois')
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
@@ -1412,25 +1394,24 @@ export function Home() {
   }, [accountEntries])
 
   useEffect(() => {
-    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showDriftCategoryModal && !showDriftsModal && !showResteUtileModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal) return
     return lockDocumentScroll()
-  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showDriftCategoryModal, showDriftsModal, showResteUtileModal, showHeroBalanceModal, showProgressModal, showEcheancesModal])
 
   useEffect(() => {
-    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showPlannedOpsModal && !showPlannedOpsEomModal) return
+    if (!showResteUtileModal && !showDriftsModal && !showHeroBalanceModal && !showProgressModal && !showEcheancesModal) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setShowResteUtileModal(false)
         setShowDriftsModal(false)
         setShowHeroBalanceModal(false)
         setShowProgressModal(false)
-        setShowPlannedOpsModal(false)
-        setShowPlannedOpsEomModal(false)
+        setShowEcheancesModal(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showPlannedOpsModal, showPlannedOpsEomModal])
+  }, [showResteUtileModal, showDriftsModal, showHeroBalanceModal, showProgressModal, showEcheancesModal])
 
   const selectedAccountEntry = useMemo<HomeAccountEntry | null>(() => {
     if (!accountEntries.length) return null
@@ -2490,28 +2471,15 @@ export function Home() {
                   paddingRight: 16,
                 }}
               >
-                {/* Échéances J+3 — pleine largeur */}
-                <div style={{ gridColumn: 'span 2', minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                {/* Échéances — tuile fusionnée, colonne gauche */}
+                <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
                   <TimelineRow
-                    label="J+3"
-                    sublabel="échéances"
-                    value={renderOperationSummary(upcomingOpsWindows.j3.count)}
-                    dotColor={HOME_HERO_ACCENT_DOT}
-                    shadowColor={HOME_HERO_ACCENT_SHADOW}
-                    onClick={() => setShowPlannedOpsModal(true)}
-                    hasOps={false}
-                  />
-                </div>
-
-                {/* Échéances fin de mois — pleine largeur */}
-                <div style={{ gridColumn: 'span 2', minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
-                  <TimelineRow
-                    label={`J+${daysRemaining}`}
-                    sublabel="fin de mois"
+                    label="Échéances"
+                    sublabel={upcomingOpsWindows.j3.count > 0 ? `${upcomingOpsWindows.j3.count} dans 3j` : `fin de mois`}
                     value={renderOperationSummary(upcomingOpsWindows.eom.count)}
                     dotColor={HOME_HERO_ACCENT_DOT}
                     shadowColor={HOME_HERO_ACCENT_SHADOW}
-                    onClick={() => setShowPlannedOpsEomModal(true)}
+                    onClick={() => { setEcheancesFilter('mois'); setShowEcheancesModal(true) }}
                     hasOps={false}
                   />
                 </div>
@@ -2908,22 +2876,125 @@ export function Home() {
         glassBorder={getGlassColors('#38BDF8').glassBorder}
       />
 
-      <PlannedOpsModal
-        open={showPlannedOpsModal}
-        onClose={() => setShowPlannedOpsModal(false)}
-        title="Échéances J+3"
-        dotColor="var(--primary-500)"
-        items={upcomingOpsWindows.j3.items}
-      />
-      <PlannedOpsModal
-        open={showPlannedOpsEomModal}
-        onClose={() => setShowPlannedOpsEomModal(false)}
-        title="Échéances fin de mois"
-        dotColor="#FFAB2E"
-        items={upcomingOpsWindows.eom.items}
-        maxHeight="min(78dvh, 576px)"
-        contentMaxHeight="min(56dvh, 336px)"
-      />
+      {/* ── Modale Échéances unifiée ── */}
+      {(() => {
+        const filterMap = { j3: upcomingOpsWindows.j3.items, j7: upcomingOpsWindows.j7.items, j15: upcomingOpsWindows.j15.items, mois: upcomingOpsWindows.eom.items } as const
+        const filterLabels = { j3: 'J+3', j7: 'J+7', j15: 'J+15', mois: 'Mois' } as const
+        const activeItems = filterMap[echeancesFilter]
+        const total = activeItems.reduce((sum, item) => {
+          const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+          const isOutflow = item.flow_type === 'expense' || item.flow_type === 'savings'
+          return sum + (isOutflow ? amount : -amount)
+        }, 0)
+        const { glassBackground, glassBorder } = getGlassColors('#5B57F5')
+        return (
+          <BottomSheet
+            open={showEcheancesModal}
+            onClose={() => setShowEcheancesModal(false)}
+            variant="center"
+            glass
+            glassBackground={glassBackground}
+            glassBorder={glassBorder}
+            maxHeight="min(90dvh, 700px)"
+            zIndex={1200}
+            header={
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', minWidth: 0 }}>
+                {/* Ligne 1 : titre + croix */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'rgba(255,255,255,0.90)', letterSpacing: '-0.01em' }}>
+                    Échéances
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowEcheancesModal(false)}
+                    aria-label="Fermer"
+                    style={{
+                      flexShrink: 0, border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
+                      color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
+                      borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
+                    }}
+                  ><X size={11} /></button>
+                </div>
+                {/* Ligne 2 : pastilles filtres */}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['j3', 'j7', 'j15', 'mois'] as const).map((f) => {
+                    const isActive = echeancesFilter === f
+                    const cnt = filterMap[f].length
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setEcheancesFilter(f)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px',
+                          borderRadius: 'var(--radius-full)',
+                          border: isActive ? '1px solid rgba(91,87,245,0.75)' : '1px solid rgba(255,255,255,0.14)',
+                          background: isActive ? 'rgba(91,87,245,0.28)' : 'rgba(255,255,255,0.07)',
+                          color: isActive ? 'rgba(195,190,255,0.98)' : 'rgba(255,255,255,0.45)',
+                          fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                          transition: 'all 140ms ease',
+                          letterSpacing: '0.02em',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {filterLabels[f]}
+                        {cnt > 0 && (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            minWidth: 15, height: 15, padding: '0 3px',
+                            borderRadius: 'var(--radius-full)',
+                            background: isActive ? 'rgba(91,87,245,0.5)' : 'rgba(255,255,255,0.1)',
+                            color: isActive ? '#fff' : 'rgba(255,255,255,0.4)',
+                            fontSize: 9, fontWeight: 900, lineHeight: 1,
+                          }}>{cnt}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            }
+          >
+            <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10, maxHeight: 'min(68dvh, 520px)', overflowY: 'auto' }}>
+              {activeItems.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+                  Aucune opération sur cette période.
+                </p>
+              ) : (
+                <>
+                  {activeItems.map((item) => {
+                    const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
+                    const isIncome = item.flow_type === 'income'
+                    const isSavings = item.flow_type === 'savings'
+                    const flowLabel = isIncome ? 'Revenu' : isSavings ? 'Épargne' : 'Dépense'
+                    const dateLabel = new Date(item.planned_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+                    return (
+                      <DetailModalRow
+                        glass
+                        key={item.id}
+                        label={`${item.label} (${flowLabel}, ${dateLabel})`}
+                        value={`${isIncome ? '+' : '-'}${formatCurrencyFloored(amount)}`}
+                      />
+                    )
+                  })}
+                  {activeItems.length > 1 && (
+                    <>
+                      <DetailModalSeparator glass />
+                      <DetailModalRow
+                        glass
+                        label={`Total ${filterLabels[echeancesFilter]}`}
+                        value={`${total >= 0 ? '-' : '+'}${formatCurrencyFloored(Math.abs(total))}`}
+                        variant="total"
+                      />
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </BottomSheet>
+        )
+      })()}
 
       {/* Mini Modale de sélection de la Catégorie / Socle */}
       <BottomSheet
@@ -2934,7 +3005,7 @@ export function Home() {
         glass
         glassBackground={getGlassColors('#5B57F5').glassBackground}
         glassBorder={getGlassColors('#5B57F5').glassBorder}
-        zIndex={1200}
+        zIndex={1300}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Toutes catégories banner */}
@@ -3123,7 +3194,7 @@ export function Home() {
         glass
         glassBackground={getGlassColors('#FFAB2E').glassBackground}
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
-        zIndex={1200}
+        zIndex={1300}
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Year Buttons */}
@@ -3240,17 +3311,204 @@ export function Home() {
         </div>
       </BottomSheet>
 
+      {/* Modale sélection catégorie — section Compare (B) */}
+      <BottomSheet
+        open={showCompareCatModal}
+        onClose={() => setShowCompareCatModal(false)}
+        title="Catégorie B"
+        variant="center"
+        glass
+        glassBackground={getGlassColors('#5B57F5').glassBackground}
+        glassBorder={getGlassColors('#5B57F5').glassBorder}
+        zIndex={1300}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <button
+            type="button"
+            onClick={() => { setCompareSelection({ kind: 'all', id: 'all_categories' }); setShowCompareCatModal(false) }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
+              border: compareSelection?.kind === 'all' ? '2px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.12)',
+              background: compareSelection?.kind === 'all' ? 'rgba(91,87,245,0.25)' : 'rgba(255,255,255,0.05)',
+              cursor: 'pointer', color: '#ffffff', fontWeight: 700, fontSize: 14, transition: 'all 0.2s',
+            }}
+          >
+            <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', overflow: 'hidden', flexShrink: 0 }}>
+              <CategoryIcon iconKey="toutes_categories" size={22} style={{ transform: 'scale(1.15)', display: 'block' }} />
+            </div>
+            Toutes catégories
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {parentCategories.map((cat) => {
+              const isSel = compareSelection?.kind === 'category' && compareSelection.id === cat.id
+              return (
+                <button key={cat.id} type="button"
+                  onClick={() => { setCompareSelection({ kind: 'category', id: cat.id }); setShowCompareCatModal(false) }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '6px 2px',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1px solid rgba(255,255,255,0.08)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'transparent',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', overflow: 'hidden', flexShrink: 0 }}>
+                    <CategoryIcon iconKey={cat.icon_key} size={26} style={{ transform: 'scale(1.12)', display: 'block' }} />
+                  </div>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: isSel ? '#ffffff' : 'rgba(255,255,255,0.7)', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1.15 }}>
+                    {cat.name}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {soclesList.map((socle) => {
+              const isSel = compareSelection?.kind === 'socle' && compareSelection.id === socle.id
+              return (
+                <button key={socle.id} type="button"
+                  onClick={() => { setCompareSelection({ kind: 'socle', id: socle.id }); setShowCompareCatModal(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.05)',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >
+                  <img src={socle.icon} alt={socle.label} style={{ width: 18, height: 18, borderRadius: 4 }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isSel ? '#ffffff' : 'rgba(255,255,255,0.85)' }}>{socle.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Modale sélection période — section Compare (B) */}
+      <BottomSheet
+        open={showComparePeriodModal}
+        onClose={() => setShowComparePeriodModal(false)}
+        title="Période B"
+        variant="center"
+        glass
+        glassBackground={getGlassColors('#FFAB2E').glassBackground}
+        glassBorder={getGlassColors('#FFAB2E').glassBorder}
+        zIndex={1300}
+      >
+        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[2025, 2026].map((y) => {
+              const isSel = comparePickerYear === y
+              return (
+                <button key={y} type="button" onClick={() => setComparePickerYear(y)}
+                  style={{
+                    padding: '10px 0', borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.05)',
+                    color: isSel ? '#ffffff' : 'rgba(255,255,255,0.7)',
+                    fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >{y}</button>
+              )
+            })}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+            {MONTHS_FR_SHORT.map((mName, idx) => {
+              const monthNum = idx + 1
+              const isFuture = isMonthFuture(comparePickerYear, monthNum)
+              const isSel = comparePeriod?.year === comparePickerYear && comparePeriod?.month === monthNum
+              return (
+                <button key={monthNum} type="button"
+                  onClick={() => { setComparePeriod({ year: comparePickerYear, month: monthNum }); setShowComparePeriodModal(false) }}
+                  style={{
+                    padding: '12px 0', borderRadius: 'var(--radius-md)',
+                    border: isSel ? '1.5px solid var(--primary-500)' : isFuture ? '1px dashed rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.08)',
+                    background: isSel ? 'rgba(91,87,245,0.2)' : isFuture ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.04)',
+                    color: isSel ? '#ffffff' : isFuture ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.8)',
+                    fontWeight: isSel ? 700 : 500, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >{mName}</button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setComparePeriod({ year: comparePickerYear, month: undefined }); setShowComparePeriodModal(false) }}
+            style={{
+              marginTop: 4, padding: '10px 0', width: '100%', borderRadius: 'var(--radius-md)',
+              border: comparePeriod?.year === comparePickerYear && comparePeriod?.month === undefined ? '1.5px solid var(--primary-500)' : '1.5px solid rgba(255,255,255,0.1)',
+              background: comparePeriod?.year === comparePickerYear && comparePeriod?.month === undefined ? 'rgba(91,87,245,0.2)' : 'rgba(255,255,255,0.04)',
+              color: '#ffffff', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+          >Année entière {comparePickerYear}</button>
+        </div>
+      </BottomSheet>
+
       {/* Modale des Résultats de Recherche Rapide */}
       <BottomSheet
         open={showSearchResultsModal}
         onClose={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
-        title={getSelectionName()}
-        subtitle={getPeriodName()}
         variant="center"
         glass
         glassBackground={getGlassColors('#FFAB2E').glassBackground}
         glassBorder={getGlassColors('#FFAB2E').glassBorder}
         zIndex={1200}
+        header={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
+            {/* Gauche : titre + subtitle */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: 'rgba(255,255,255,0.88)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                {getSelectionName()}
+              </p>
+              {!quickSearchCompareMode && (
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.48)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {getPeriodName()}
+                </p>
+              )}
+            </div>
+            {/* Centre : bouton versus */}
+            <button
+              type="button"
+              onClick={() => {
+                setQuickSearchCompareMode((c) => {
+                  if (c) { setCompareSelection(null); setComparePeriod(null) }
+                  return !c
+                })
+              }}
+              aria-label={quickSearchCompareMode ? 'Désactiver le mode comparaison' : 'Activer le mode comparaison'}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                height: 28, padding: '0 14px',
+                borderRadius: 'var(--radius-full)',
+                border: quickSearchCompareMode ? '1.5px solid rgba(255,171,46,0.7)' : '1.5px solid rgba(91,87,245,0.75)',
+                background: quickSearchCompareMode
+                  ? 'linear-gradient(135deg, rgba(255,171,46,0.28) 0%, rgba(255,204,100,0.15) 100%)'
+                  : 'linear-gradient(135deg, rgba(91,87,245,0.28) 0%, rgba(130,120,255,0.16) 100%)',
+                boxShadow: quickSearchCompareMode ? '0 2px 12px rgba(255,171,46,0.28)' : '0 2px 12px rgba(91,87,245,0.35)',
+                color: quickSearchCompareMode ? 'rgba(255,224,130,0.98)' : 'rgba(195,190,255,0.98)',
+                fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
+                cursor: 'pointer', transition: 'all 220ms ease',
+              }}
+            >versus</button>
+            {/* Droite : bouton fermer */}
+            <button
+              type="button"
+              onClick={() => { setShowSearchResultsModal(false); setQuickSearchCompareMode(false) }}
+              aria-label="Fermer"
+              style={{
+                flexShrink: 0,
+                border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.09)',
+                color: 'rgba(255,255,255,0.6)', width: 26, height: 26, minWidth: 26, minHeight: 26,
+                borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', padding: 0,
+              }}
+            ><X size={11} /></button>
+          </div>
+        }
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {searchPending ? (
@@ -3261,11 +3519,49 @@ export function Home() {
             </div>
           ) : searchMetrics ? (
             <>
+              {/* ── Labels A (2 cadres, visible en mode versus) ── */}
+              <AnimatePresence>
+                {quickSearchCompareMode && (
+                  <motion.div
+                    key="vs-label-a"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}
+                  >
+                    {/* Cadre catégorie A */}
+                    <div style={{
+                      background: 'rgba(255, 171, 46, 0.13)', border: '1px solid rgba(255, 171, 46, 0.32)',
+                      borderRadius: 'var(--radius-md)', padding: '9px 10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 0,
+                    }}>
+                      <span style={{
+                        width: 19, height: 19, borderRadius: '50%', flexShrink: 0,
+                        border: '1.5px solid rgba(255, 171, 46, 0.85)',
+                        color: 'rgba(255, 210, 110, 0.95)', fontSize: 9, fontWeight: 900,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>A</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255, 210, 110, 0.95)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {getSelectionName()}
+                      </span>
+                    </div>
+                    {/* Cadre période A */}
+                    <div style={{
+                      background: 'rgba(255, 171, 46, 0.08)', border: '1px solid rgba(255, 171, 46, 0.2)',
+                      borderRadius: 'var(--radius-md)', padding: '9px 10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255, 195, 70, 0.85)' }}>
+                        {getPeriodName()}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* ── Grille KPI principale ── */}
-              <motion.div
-                layout
-                animate={quickSearchCompareMode ? { y: -6 } : { y: 0 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
@@ -3284,6 +3580,7 @@ export function Home() {
                   }
                   onClick={() => handleNavigateToBudgetsCategory('donuts')}
                   ariaLabel="Voir le consommé dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
                 />
                 <SearchResultKpiCard
                   title="Budget"
@@ -3291,6 +3588,7 @@ export function Home() {
                   subtitle={searchPeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
                   onClick={() => handleNavigateToBudgetsCategory('donuts')}
                   ariaLabel="Voir le budget dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
                 />
                 <SearchResultKpiCard
                   title="Moyenne 6M"
@@ -3298,6 +3596,7 @@ export function Home() {
                   subtitle="Moyenne mobile 6 mois"
                   onClick={() => handleNavigateToBudgetsCategory('categories')}
                   ariaLabel="Voir la catégorie dans les enveloppes Budgets"
+                  compact={quickSearchCompareMode}
                 />
                 <SearchResultKpiCard
                   title="Évolution 3M"
@@ -3312,54 +3611,8 @@ export function Home() {
                       : '—'
                   }
                   valueColor={getEvolution3mColor()}
+                  compact={quickSearchCompareMode}
                 />
-              </motion.div>
-
-              {/* ── Bouton VS ── */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, marginBottom: quickSearchCompareMode ? 4 : 0 }}>
-                <button
-                  type="button"
-                  onClick={() => setQuickSearchCompareMode((c) => !c)}
-                  aria-label={quickSearchCompareMode ? 'Désactiver le mode comparaison' : 'Activer le mode comparaison'}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 5,
-                    height: 28,
-                    padding: '0 14px',
-                    borderRadius: 'var(--radius-full)',
-                    border: quickSearchCompareMode
-                      ? '1px solid rgba(255, 171, 46, 0.55)'
-                      : '1px solid rgba(255, 255, 255, 0.18)',
-                    background: quickSearchCompareMode
-                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.22) 0%, rgba(255, 204, 100, 0.12) 100%)'
-                      : 'rgba(255, 255, 255, 0.08)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    boxShadow: quickSearchCompareMode
-                      ? '0 2px 12px rgba(255, 171, 46, 0.18)'
-                      : '0 1px 6px rgba(0,0,0,0.18)',
-                    color: quickSearchCompareMode ? 'rgba(255, 220, 120, 0.95)' : 'rgba(255, 255, 255, 0.65)',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    letterSpacing: '0.08em',
-                    cursor: 'pointer',
-                    transition: 'all 200ms ease',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = quickSearchCompareMode
-                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.32) 0%, rgba(255, 204, 100, 0.18) 100%)'
-                      : 'rgba(255, 255, 255, 0.13)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = quickSearchCompareMode
-                      ? 'linear-gradient(135deg, rgba(255, 171, 46, 0.22) 0%, rgba(255, 204, 100, 0.12) 100%)'
-                      : 'rgba(255, 255, 255, 0.08)'
-                  }}
-                >
-                  VS
-                </button>
               </div>
 
               {/* ── Section comparative ── */}
@@ -3367,74 +3620,118 @@ export function Home() {
                 {quickSearchCompareMode ? (
                   <motion.div
                     key="compare-section"
-                    initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                    initial={{ opacity: 0, y: 32, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}
+                    exit={{ opacity: 0, y: 14, scale: 0.97 }}
+                    transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}
                   >
-                    {/* Sélecteurs */}
+                    {/* ── Ligne de démarcation ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.18), rgba(255,255,255,0.08))' }} />
+                      <span style={{ fontSize: 9, fontWeight: 900, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', textTransform: 'uppercase', flexShrink: 0 }}>vs</span>
+                      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.18), rgba(255,255,255,0.08))' }} />
+                    </div>
+
+                    {/* ── Labels B (2 cadres cliquables = label + sélecteur) ── */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {/* Cadre catégorie B */}
                       <button
                         type="button"
-                        onClick={() => setShowSearchCatModal(true)}
+                        onClick={() => setShowCompareCatModal(true)}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 5,
-                          height: 34,
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid rgba(255, 255, 255, 0.14)',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          color: 'rgba(255, 255, 255, 0.55)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          transition: 'background 150ms ease',
+                          background: 'rgba(91, 87, 245, 0.13)', border: '1px solid rgba(91, 87, 245, 0.32)',
+                          borderRadius: 'var(--radius-md)', padding: '9px 10px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                          cursor: 'pointer', transition: 'all 180ms ease', minWidth: 0,
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.22)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.13)' }}
                       >
-                        Choisir catégorie
+                        <span style={{
+                          width: 19, height: 19, borderRadius: '50%', flexShrink: 0,
+                          border: '1.5px solid rgba(91, 87, 245, 0.85)',
+                          color: 'rgba(195, 190, 255, 0.95)', fontSize: 9, fontWeight: 900,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        }}>B</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(195, 190, 255, 0.95)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {compareSelection ? getCompareName() : '+ Catégorie'}
+                        </span>
                       </button>
+                      {/* Cadre période B */}
                       <button
                         type="button"
-                        onClick={() => setShowSearchPeriodModal(true)}
+                        onClick={() => setShowComparePeriodModal(true)}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 5,
-                          height: 34,
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid rgba(255, 255, 255, 0.14)',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          color: 'rgba(255, 255, 255, 0.55)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          transition: 'background 150ms ease',
+                          background: 'rgba(91, 87, 245, 0.08)', border: '1px solid rgba(91, 87, 245, 0.2)',
+                          borderRadius: 'var(--radius-md)', padding: '9px 10px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer', transition: 'all 180ms ease',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.17)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(91,87,245,0.08)' }}
                       >
-                        Choisir période
+                        <span style={{ fontSize: 13, fontWeight: 700, color: comparePeriod ? 'rgba(160, 155, 255, 0.9)' : 'rgba(130, 125, 255, 0.5)' }}>
+                          {comparePeriod ? getComparePeriodLabel() : '+ Période'}
+                        </span>
                       </button>
                     </div>
 
-                    {/* Cartes placeholder avec stagger */}
+                    {/* Cartes B avec données réelles + écart % */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                      {(['Consommé', 'Budget', 'Moyenne 6M', 'Évolution 3M'] as const).map((title, i) => (
-                        <motion.div
-                          key={title}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: i * 0.06 }}
-                        >
-                          <SearchResultKpiCard title={title} value="—" subtitle="—" />
-                        </motion.div>
-                      ))}
+                      {/* Consommé B */}
+                      <motion.div key="cmp-consomme" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.22 }}>
+                        <SearchResultKpiCard
+                          title="Consommé"
+                          value={comparePending ? '…' : compareMetrics ? (compareMetrics.isFuturePeriod ? '—' : formatCurrencyFloored(compareMetrics.consomme ?? 0)) : '—'}
+                          subtitle={compareMetrics?.isFuturePeriod ? 'Période future' : comparePeriod?.month === undefined ? 'Cumul constaté (YTD)' : 'Réel constaté'}
+                          diffPct={compareMetrics && !compareMetrics.isFuturePeriod && searchMetrics && !searchMetrics.isFuturePeriod ? calcVsDiffPct(compareMetrics.consomme, searchMetrics.consomme) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('donuts')}
+                          ariaLabel="Voir le consommé dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Budget B */}
+                      <motion.div key="cmp-budget" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}>
+                        <SearchResultKpiCard
+                          title="Budget"
+                          value={comparePending ? '…' : compareMetrics ? formatCurrencyFloored(compareMetrics.budget) : '—'}
+                          subtitle={comparePeriod?.month === undefined ? 'Budget annuel' : 'Budget mensuel'}
+                          diffPct={compareMetrics && searchMetrics ? calcVsDiffPct(compareMetrics.budget, searchMetrics.budget) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('donuts')}
+                          ariaLabel="Voir le budget dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Moyenne 6M B */}
+                      <motion.div key="cmp-avg" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.42 }}>
+                        <SearchResultKpiCard
+                          title="Moyenne 6M"
+                          value={comparePending ? '…' : compareMetrics?.average6m != null ? formatCurrencyFloored(compareMetrics.average6m) : '—'}
+                          subtitle="Moyenne mobile 6 mois"
+                          diffPct={compareMetrics?.average6m != null && searchMetrics?.average6m != null ? calcVsDiffPct(compareMetrics.average6m, searchMetrics.average6m) : null}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                          onClick={() => handleNavigateToCompareBudgetsCategory('categories')}
+                          ariaLabel="Voir la catégorie dans les enveloppes Budgets"
+                        />
+                      </motion.div>
+                      {/* Évolution 3M B */}
+                      <motion.div key="cmp-evo" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.52 }}>
+                        <SearchResultKpiCard
+                          title="Évolution 3M"
+                          value={comparePending ? '…' : compareMetrics?.evolution3mPct != null
+                            ? `${compareMetrics.evolution3mPct >= 0 ? '+' : ''}${compareMetrics.evolution3mPct.toFixed(1)}%`
+                            : '—'}
+                          subtitle={compareMetrics?.evolution3mAmount != null
+                            ? `${compareMetrics.evolution3mAmount >= 0 ? '+' : ''}${formatCurrencyFloored(compareMetrics.evolution3mAmount)} vs 3M préc.`
+                            : '—'}
+                          accentColor="rgba(91, 87, 245, 0.6)"
+                          compact
+                        />
+                      </motion.div>
                     </div>
                   </motion.div>
                 ) : null}
