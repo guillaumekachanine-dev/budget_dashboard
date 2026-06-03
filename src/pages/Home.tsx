@@ -94,8 +94,6 @@ const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 // Swipe constants (module-level pour stabilité des dépendances)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
-const HOME_HERO_ACCENT_DOT = 'var(--primary-500)'
-const HOME_HERO_ACCENT_SHADOW = 'rgba(91, 87, 245, 0.2)'
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -139,11 +137,6 @@ function formatDateShort(isoDate: string): string {
 function formatSignedCurrency(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
   return `${sign}${formatCurrencyFloored(Math.abs(value))}`
-}
-
-function renderOperationSummary(count: number): string {
-  if (count <= 0) return 'Aucune'
-  return `${count} opé.`
 }
 
 
@@ -438,102 +431,6 @@ function DriftsModal({
   )
 }
 
-
-function TimelineRow({
-  label,
-  sublabel,
-  value,
-  dotColor,
-  shadowColor,
-  onClick,
-  hasOps,
-}: {
-  label: string
-  sublabel: string
-  value: ReactNode
-  dotColor: string
-  shadowColor: string
-  onClick: () => void
-  hasOps: boolean
-}) {
-  void sublabel
-  const [hovered, setHovered] = useState(false)
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        background: hovered ? 'rgba(91, 87, 245, 0.05)' : 'transparent',
-        border: 'none',
-        padding: '12px 16px',
-        marginLeft: -16,
-        marginRight: -16,
-        width: 'calc(100% + 32px)',
-        borderRadius: 'var(--radius-lg)',
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'background 0.2s ease, transform 0.2s ease',
-        transform: hovered ? 'translateX(2px)' : 'translateX(0)',
-        outline: 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, width: '100%' }}>
-        {/* Dot — vertically centered */}
-        <div style={{ width: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-          <div
-            style={{
-              display: 'block',
-              width: 12,
-              height: 12,
-              minWidth: 12,
-              minHeight: 12,
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 0 4px ${shadowColor}`,
-              transition: 'transform 0.2s ease',
-              transform: hovered ? 'scale(1.25)' : 'scale(1)',
-            }}
-          />
-        </div>
-
-        {/* Text Area — single line */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'var(--neutral-900)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {label}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--neutral-300)', lineHeight: 1, flexShrink: 0 }}>–</span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: hasOps ? 700 : 400,
-              color: hasOps ? 'var(--neutral-800)' : 'var(--neutral-400)',
-              fontFamily: 'var(--font-mono)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-            }}
-          >
-            {value}
-          </span>
-        </div>
-      </div>
-    </button>
-  )
-}
 
 
 // ─── EcheancesTimelineTile — Phase Arc design ────────────────────────────────
