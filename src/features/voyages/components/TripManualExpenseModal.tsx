@@ -274,8 +274,8 @@ export function TripManualExpenseModal({
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '3px 10px 3px 10px',
                   borderRadius: 'var(--radius-full)',
-                  border: glass ? '1px solid rgba(255,255,255,0.22)' : '1px solid var(--neutral-200)',
-                  background: glass ? 'rgba(255,255,255,0.10)' : 'var(--neutral-50)',
+                  border: glass ? `1px solid ${isLight ? 'rgba(185,155,80,0.35)' : 'rgba(255,255,255,0.22)'}` : '1px solid var(--neutral-200)',
+                  background: glass ? (isLight ? 'rgba(220,200,155,0.32)' : 'rgba(255,255,255,0.10)') : 'var(--neutral-50)',
                   cursor: 'pointer', flex: 1, minWidth: 0,
                   transition: 'background 120ms ease',
                   textAlign: 'left',
@@ -283,7 +283,7 @@ export function TripManualExpenseModal({
               >
                 <span style={{
                   fontSize: 'var(--font-size-md)', fontWeight: 800,
-                  color: glass ? 'rgba(255,255,255,0.90)' : 'var(--neutral-900)',
+                  color: glass ? glassText : 'var(--neutral-900)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   letterSpacing: '-0.01em', flex: 1,
                 }}>
@@ -291,7 +291,7 @@ export function TripManualExpenseModal({
                     ? formatTripNameWithMonthYear(selectedTripObject.name, selectedTripObject.start_date || selectedTripObject.end_date)
                     : '— Choisir un voyage —'}
                 </span>
-                <ChevronDown size={12} style={{ color: glass ? 'rgba(255,255,255,0.55)' : 'var(--neutral-400)', flexShrink: 0 }} />
+                <ChevronDown size={12} style={{ color: glass ? glassMuted : 'var(--neutral-400)', flexShrink: 0 }} />
               </button>
             )}
             {/* Bouton fermer */}
@@ -301,9 +301,9 @@ export function TripManualExpenseModal({
               aria-label="Fermer"
               style={{
                 flexShrink: 0,
-                border: glass ? '1px solid rgba(255,255,255,0.35)' : '1px solid var(--neutral-300)',
-                background: glass ? 'rgba(255,255,255,0.20)' : 'var(--neutral-100)',
-                color: glass ? 'rgba(255,255,255,0.92)' : 'var(--neutral-700)',
+                border: glass ? `1px solid ${glassCloseBdr}` : '1px solid var(--neutral-300)',
+                background: glass ? glassCloseBg : 'var(--neutral-100)',
+                color: glass ? glassCloseClr : 'var(--neutral-700)',
                 width: 26, height: 26, minWidth: 26, minHeight: 26,
                 borderRadius: 'var(--radius-full)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

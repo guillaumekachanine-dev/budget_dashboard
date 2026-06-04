@@ -628,10 +628,10 @@ export function AllEnvelopesModal({
             }}
           >
             <motion.div
-              initial={{ y: 20, opacity: 0, scale: 0.97 }}
+              initial={{ y: 30, opacity: 0, scale: 0.98 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 20, opacity: 0, scale: 0.97 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 330 }}
+              exit={{ y: 20, opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
               style={{
                 width: 'min(520px, 100%)',
                 background: 'linear-gradient(180deg, rgba(20, 23, 52, 0.96) 0%, rgba(14, 17, 39, 0.96) 100%)',
@@ -647,7 +647,10 @@ export function AllEnvelopesModal({
                 flexDirection: 'column',
               }}
             >
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}
                 style={{
                   padding: '12px var(--space-5) 10px',
                   display: 'grid',
@@ -685,10 +688,10 @@ export function AllEnvelopesModal({
                     <X size={12} />
                   </button>
                 </div>
-              </div>
+              </motion.div>
 
               <div style={{ overflowY: 'auto', flex: 1, padding: 'var(--space-2) 0 var(--space-3)' }}>
-                {sortedParents.map((parent) => {
+                {sortedParents.map((parent, idx) => {
                   const isExpanded = expandedParentId === parent.parent_category_id
                   const cat = categoryById.get(parent.parent_category_id)
                   const normalizedName = normalizeCategoryLabel(parent.parent_category_name)
@@ -697,7 +700,13 @@ export function AllEnvelopesModal({
                   const subs = subsByParentId.get(parent.parent_category_id) ?? []
 
                   return (
-                    <div key={parent.parent_category_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <motion.div
+                      key={parent.parent_category_id}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1], delay: 0.12 + idx * 0.04 }}
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                    >
                       <button
                         type="button"
                         onClick={() => handleToggle(parent.parent_category_id)}
@@ -940,7 +949,7 @@ export function AllEnvelopesModal({
                           </motion.div>
                         ) : null}
                       </AnimatePresence>
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>

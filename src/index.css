@@ -523,6 +523,18 @@
   animation: qs-gradient-flow 3s linear infinite, qs-pulse 1.5s ease-in-out infinite;
 }
 
+.qs-btn-animating {
+  overflow: hidden !important;
+  background: linear-gradient(
+    135deg,
+    #5b57f5, #7c4fff, #b84dff, #ff004d,
+    #ff7a00, #ffb700, #33d17a, #00c2ff,
+    #4f6bff, #5b57f5, #b84dff, #5b57f5
+  ) !important;
+  background-size: 400% 400% !important;
+  animation: qs-gradient-flow 1.2s linear infinite !important;
+}
+
 .qs-btn-ready::after {
   content: '';
   position: absolute;
