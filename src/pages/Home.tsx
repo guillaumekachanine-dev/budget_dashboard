@@ -3317,6 +3317,7 @@ export function Home() {
                               marginLeft: searchTileExpanded ? -12 : 0,
                               marginRight: searchTileExpanded ? -12 : 0,
                               borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
+                              y: searchTileExpanded ? 0 : 20,
                             }}
                             style={{
                               flexShrink: 0,
@@ -3330,8 +3331,8 @@ export function Home() {
                               cursor: 'pointer',
                               zIndex: 10,
                               padding: 0,
-                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
-                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
+                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
+                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
                             }}
                             transition={{
                               type: 'tween',
@@ -3396,7 +3397,7 @@ export function Home() {
                               transition={{ duration: 0.2 }}
                               style={{
                                 position: 'absolute',
-                                top: 72,
+                                top: 82,
                                 left: 0,
                                 right: 0,
                                 textAlign: 'center',
