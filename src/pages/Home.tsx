@@ -1136,7 +1136,7 @@ function UpdateOptionCard({
       <span style={{
         fontSize: 10,
         fontWeight: 800,
-        color: 'var(--neutral-400)',
+        color: 'var(--neutral-200)',
         fontFamily: 'var(--font-mono)',
         letterSpacing: '0.10em',
         textTransform: 'uppercase',
