@@ -3719,7 +3719,7 @@ export function Home() {
                   }
 
                   const buttonClass = searchTileExpanded
-                    ? (canSearch ? 'qs-btn-ready' : 'qs-btn-animating')
+                    ? (canSearch ? 'qs-btn-ready' : 'qs-btn-cross')
                     : 'qs-btn-idle'
 
                   return (
@@ -3869,13 +3869,13 @@ export function Home() {
                                     marginRight: searchTileExpanded ? -12 : 0,
                                     borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
                                     y: searchTileExpanded ? 0 : 6,
-                                    background: searchTileExpanded
-                                      ? [
+                                    background: (!searchTileExpanded || !canSearch)
+                                      ? 'transparent'
+                                      : [
                                           'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
                                           'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
                                           'linear-gradient(135deg, #5b57f5, #7c4fff, #b84dff, #ff004d, #ff7a00, #ffb700, #33d17a, #00c2ff, #4f6bff, #5b57f5, #b84dff, #5b57f5)'
-                                        ]
-                                      : 'transparent',
+                                        ],
                                   }}
                                   style={{
                                     width: searchTileExpanded ? 44 : 88,
@@ -3905,14 +3905,10 @@ export function Home() {
                                     ease: [0.25, 0.1, 0.25, 1],
                                   }}
                                 >
-                                  {searchTileExpanded ? (
-                                    canSearch ? (
-                                      <ArrowUp size="100%" strokeWidth={3} style={{ width: '100%', height: '100%' }} />
-                                    ) : (
-                                      <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
-                                    )
+                                  {(searchTileExpanded && canSearch) ? (
+                                    <ArrowUp size="100%" strokeWidth={3} style={{ width: '100%', height: '100%' }} />
                                   ) : (
-                                    <RainbowSearchArrowIcon />
+                                    <RainbowSearchArrowIcon size={searchTileExpanded ? 28 : 64} />
                                   )}
                                 </motion.button>
 

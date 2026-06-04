@@ -557,6 +557,34 @@
   animation: none !important;
 }
 
+/* Expanded + no selection: halo ring identique à idle, sans masque ni clip */
+.qs-btn-cross {
+  position: relative;
+  overflow: visible !important;
+  animation: qs-breathe 4s ease-in-out infinite;
+  isolation: isolate;
+}
+
+.qs-btn-cross > svg {
+  position: relative;
+  z-index: 1;
+  color: var(--neutral-500) !important;
+}
+
+.qs-btn-cross::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.52;
+  filter: blur(7px);
+  background:
+    radial-gradient(circle at center, rgba(248, 248, 252, 0) 44%, rgba(248, 248, 252, 0.65) 56%, rgba(248, 248, 252, 0) 68%),
+    conic-gradient(from 215deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff, #ff3366);
+}
+
 .qs-btn-ready::after {
   content: '';
   position: absolute;
