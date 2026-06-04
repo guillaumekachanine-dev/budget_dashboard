@@ -23,7 +23,7 @@ import {
 } from '@/lib/utils'
 import { RadialEnvelopeChart, type CombinedDatum } from '@/features/budget/components/RadialEnvelopeChart'
 import { getBudgetBucketColor } from '@/lib/budgetBuckets'
-import type { AccountWithBalance, Category } from '@/lib/types'
+import type { AccountWithBalance } from '@/lib/types'
 import type { PlannedOperationItem } from '@/features/home/types'
 import { useTransactions } from '@/hooks/useTransactions'
 import { lockDocumentScroll } from '@/lib/scrollLock'
@@ -42,8 +42,6 @@ import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import updateExchangeReferenceIcon from '@/assets/icons/app/update_exchange_reference.png'
-import transactionsUpdateIcon from '@/assets/icons/app/transactions_update.png'
-import soldeUpdateIcon from '@/assets/icons/app/solde_update.png'
 
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
@@ -1084,65 +1082,6 @@ const MONTHS_FR_SHORT = [
   'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'
 ]
 
-function UpdateOptionCard({
-  src,
-  label,
-  delay,
-  onClick,
-  xOffset = 0,
-}: {
-  src: string
-  label: string
-  delay: number
-  onClick: () => void
-  xOffset?: number
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      initial={{ opacity: 0, scale: 0.80, x: xOffset }}
-      animate={{ opacity: 1, scale: 1, x: 0 }}
-      exit={{ opacity: 0, scale: 0.88, x: xOffset, transition: { duration: 0.15, delay: 0, ease: 'easeIn' } }}
-      transition={{ duration: 0.36, delay, ease: [0.22, 1, 0.36, 1] }}
-      whileTap={{ scale: 0.93 }}
-      style={{
-        background: 'transparent',
-        border: 'none',
-        padding: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        cursor: 'pointer',
-        gap: 5,
-        flex: 1,
-        minWidth: 0,
-      }}
-      aria-label={label}
-    >
-      <div style={{ position: 'relative', width: 52, height: 42, display: 'flex', justifyContent: 'center', marginTop: 10 }}>
-        <img
-          src={src}
-          alt=""
-          aria-hidden
-          style={{ width: 52, height: 42, objectFit: 'contain', display: 'block' }}
-        />
-      </div>
-      <span style={{
-        fontSize: 11,
-        fontWeight: 800,
-        color: '#ffffff',
-        fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        whiteSpace: 'nowrap',
-      }}>
-        {label}
-      </span>
-    </motion.button>
-  )
-}
-
 function UpdateExpandableTile({
   expanded,
   onToggle,
@@ -1556,155 +1495,6 @@ function VoyageAddExpenseMirrorTile({
 // ─── Recherche rapide animée (remplace QuickSearchTile en état déplié) ───────
 
 const CONIC_GRAD = 'conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg)'
-
-function AnimatedQuickSearchExpanded({
-  selection,
-  period,
-  onCollapse,
-  onSelectCategory,
-  onSelectPeriod,
-  onSearch,
-  categories,
-}: {
-  selection: QuickSearchSelection | null
-  period: QuickSearchPeriod | null
-  onCollapse: () => void
-  onSelectCategory: () => void
-  onSelectPeriod: () => void
-  onSearch: () => void
-  categories: Category[]
-}) {
-  const hasSelection = !!selection
-  const hasPeriod = !!period
-  const canSearch = hasSelection && hasPeriod
-
-  const getSelectionText = () => {
-    if (!selection) return 'Catégorie'
-    if (selection.kind === 'all') return 'Toutes'
-    if (selection.kind === 'socle') {
-      const names: Record<string, string> = {
-        socle_fixe: 'Fixe', variable_essentielle: 'Variable',
-        provision: 'Provision', voyage: 'Voyage',
-        discretionnaire: 'Discrétionn.', revenu: 'Revenus',
-      }
-      return names[selection.id] ?? selection.id
-    }
-    const cat = categories.find((c) => c.id === selection.id)
-    return cat ? cat.name : 'Catégorie'
-  }
-
-  const getPeriodText = () => {
-    if (!period) return 'Période'
-    if (period.month === undefined) return `${period.year}`
-    return `${MONTHS_FR_SHORT[period.month - 1]} ${period.year}`
-  }
-
-  const renderSelectionIcon = () => {
-    if (!selection) return null
-    if (selection.kind === 'all') return <CategoryIcon iconKey="toutes_categories" size={18} style={{ marginRight: 6 }} />
-    if (selection.kind === 'socle') {
-      const blockIcons: Record<string, string> = {
-        socle_fixe: blockFixeIcon, variable_essentielle: blockVariableIcon,
-        provision: blockProvisionsIcon, voyage: blockVoyagesIcon,
-        discretionnaire: blockDiscretionnaireIcon, revenu: blockRevenusIcon,
-      }
-      const src = blockIcons[selection.id]
-      if (src) return <img src={src} alt={selection.id} style={{ width: 18, height: 18, marginRight: 6, borderRadius: 4 }} />
-      return null
-    }
-    const cat = categories.find((c) => c.id === selection.id)
-    if (cat) return <CategoryIcon iconKey={cat.icon_key} size={18} style={{ marginRight: 6 }} />
-    return null
-  }
-
-  const wingBg = `linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, ${CONIC_GRAD} border-box`
-  const wingHoverBg = `linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, ${CONIC_GRAD} border-box`
-
-  const wingStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0 var(--space-3)',
-    borderRadius: 'var(--radius-xl)',
-    border: '2px solid transparent',
-    background: wingBg,
-    cursor: 'pointer',
-    height: '100%',
-    minWidth: 0,
-    fontFamily: 'inherit',
-  }
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      height: 52,
-      width: 'calc(100% + 32px)',
-      marginLeft: -16,
-      marginRight: -16,
-      position: 'relative',
-    }}>
-
-      {/* ── Aile gauche : Catégorie ── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}>
-        <button
-          type="button"
-          onClick={onSelectCategory}
-          style={wingStyle}
-          onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
-          onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
-            {renderSelectionIcon()}
-            <span style={{ fontSize: 13, fontWeight: 800, color: hasSelection ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {getSelectionText()}
-            </span>
-          </div>
-        </button>
-      </div>
-
-      <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
-
-      {/* ── Centre : bouton action ── */}
-      <button
-        type="button"
-        onClick={canSearch ? onSearch : onCollapse}
-        className={canSearch ? 'qs-btn-ready' : 'qs-btn-idle'}
-        aria-label={canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide'}
-        style={{
-          width: 44,
-          height: 44,
-          flexShrink: 0,
-          borderRadius: 'var(--radius-full)',
-          border: canSearch ? '3px solid var(--neutral-0)' : '3px solid transparent',
-          color: '#ffffff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', zIndex: 10, overflow: 'hidden',
-        }}
-      >
-        <ArrowUp size={18} strokeWidth={canSearch ? 3 : 2.5} />
-      </button>
-
-      <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
-
-      {/* ── Aile droite : Période ── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}>
-        <button
-          type="button"
-          onClick={onSelectPeriod}
-          style={wingStyle}
-          onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
-          onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 800, color: hasPeriod ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {getPeriodText()}
-          </span>
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function SearchResultKpiCard({
   title,
@@ -2169,7 +1959,7 @@ export function Home() {
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
-  const [updateModalMode, setUpdateModalMode] = useState<'transactions' | 'balances'>('transactions')
+  const [updateModalMode] = useState<'transactions' | 'balances'>('transactions')
   const [updateExpanded, setUpdateExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
