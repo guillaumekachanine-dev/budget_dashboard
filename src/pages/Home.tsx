@@ -42,6 +42,8 @@ import blockProvisionsIcon from '@/assets/icons/blocks/provisions.webp'
 import blockVoyagesIcon from '@/assets/icons/blocks/voyages.webp'
 import blockRevenusIcon from '@/assets/icons/blocks/revenus.webp'
 import updateExchangeReferenceIcon from '@/assets/icons/app/update_exchange_reference.png'
+import transactionsUpdateIcon from '@/assets/icons/app/transactions_update.png'
+import soldeUpdateIcon from '@/assets/icons/app/solde_update.png'
 
 import { useCountUp } from '@/hooks/useCountUp'
 import { useHomeDailyBudgetPayload } from '@/features/home/hooks/useHomeDailyBudgetPayload'
@@ -1082,6 +1084,71 @@ const MONTHS_FR_SHORT = [
   'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'
 ]
 
+function UpdateOptionCard({
+  src,
+  label,
+  delay,
+  onClick,
+  xOffset = 0,
+}: {
+  src: string
+  label: string
+  delay: number
+  onClick: () => void
+  xOffset?: number
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      initial={{ opacity: 0, scale: 0.80, x: xOffset }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.88, x: xOffset, transition: { duration: 0.15, delay: 0, ease: 'easeIn' } }}
+      transition={{ duration: 0.36, delay, ease: [0.22, 1, 0.36, 1] }}
+      whileTap={{ scale: 0.93 }}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        cursor: 'pointer',
+        gap: 5,
+        flex: 1,
+        minWidth: 0,
+      }}
+      aria-label={label}
+    >
+      <div style={{ position: 'relative', width: 52, height: 42, display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+        <img
+          src={src}
+          alt=""
+          aria-hidden
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 10,
+          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
+          pointerEvents: 'none',
+        }} />
+      </div>
+      <span style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: 'var(--neutral-400)',
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.10em',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+        marginTop: 6,
+      }}>
+        {label}
+      </span>
+    </motion.button>
+  )
+}
+
 function UpdateExpandableTile({
   expanded,
   onToggle,
@@ -1933,7 +2000,7 @@ export function Home() {
   const [showRepartitionModal, setShowRepartitionModal] = useState(false)
   const [infosExpanded, setInfosExpanded] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
-  const [updateModalMode] = useState<'transactions' | 'balances'>('transactions')
+  const [updateModalMode, setUpdateModalMode] = useState<'transactions' | 'balances'>('transactions')
   const [updateExpanded, setUpdateExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
@@ -3248,183 +3315,246 @@ export function Home() {
                         }}
                         transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
                       >
-                        {/* Conteneur horizontal pour les ailes et le bouton */}
-                        <motion.div
-                          layout
-                          style={{
-                            position: 'absolute',
-                            top: searchTileExpanded ? 6 : 0,
-                            left: 0,
-                            right: 0,
-                            height: searchTileExpanded ? 52 : 64,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                          transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
-                        >
-                          {/* Aile gauche : Catégorie */}
-                          <motion.div
-                            initial={false}
-                            animate={{
-                              width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
-                              opacity: searchTileExpanded ? 1 : 0,
-                            }}
-                            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
-                            style={{
-                              overflow: 'hidden',
-                              display: 'flex',
-                              alignItems: 'stretch',
-                              height: '100%',
-                              pointerEvents: searchTileExpanded ? 'auto' : 'none',
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setShowSearchCatModal(true)}
+                        <AnimatePresence initial={false} mode="sync">
+                          {!updateExpanded ? (
+                            <motion.div
+                              key="search-controls"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                              transition={{ duration: 0.35 }}
                               style={{
-                                ...wingStyle,
-                                borderTopLeftRadius: 'var(--radius-xl)',
-                                borderBottomLeftRadius: 'var(--radius-xl)',
-                                borderTopRightRadius: 'var(--radius-sm)',
-                                borderBottomRightRadius: 'var(--radius-sm)',
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                position: 'relative',
                               }}
-                              onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
-                              onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
-                                {renderSelectionIcon()}
-                                <span style={{ fontSize: 13, fontWeight: 800, color: searchSelection ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {getSelectionText()}
-                                </span>
-                              </div>
-                            </button>
-                          </motion.div>
+                              {/* Conteneur horizontal pour les ailes et le bouton */}
+                              <motion.div
+                                layout
+                                style={{
+                                  position: 'absolute',
+                                  top: searchTileExpanded ? 6 : 0,
+                                  left: 0,
+                                  right: 0,
+                                  height: searchTileExpanded ? 52 : 64,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                                transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
+                              >
+                                {/* Aile gauche : Catégorie */}
+                                <motion.div
+                                  initial={false}
+                                  animate={{
+                                    width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
+                                    opacity: searchTileExpanded ? 1 : 0,
+                                  }}
+                                  transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                                  style={{
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    alignItems: 'stretch',
+                                    height: '100%',
+                                    pointerEvents: searchTileExpanded ? 'auto' : 'none',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSearchCatModal(true)}
+                                    style={{
+                                      ...wingStyle,
+                                      borderTopLeftRadius: 'var(--radius-xl)',
+                                      borderBottomLeftRadius: 'var(--radius-xl)',
+                                      borderTopRightRadius: 'var(--radius-sm)',
+                                      borderBottomRightRadius: 'var(--radius-sm)',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
+                                      {renderSelectionIcon()}
+                                      <span style={{ fontSize: 13, fontWeight: 800, color: searchSelection ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {getSelectionText()}
+                                      </span>
+                                    </div>
+                                  </button>
+                                </motion.div>
 
-                          {/* Bouton central de Recherche */}
-                          <motion.button
-                            type="button"
-                            onClick={
-                              searchTileExpanded
-                                ? (canSearch ? () => { setShowSearchResultsModal(true); setSearchTileExpanded(false) } : () => setSearchTileExpanded(false))
-                                : () => { setUpdateExpanded(false); setSearchTileExpanded(true); }
-                            }
-                            className={buttonClass}
-                            aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
-                            animate={{
-                              width: searchTileExpanded ? 44 : 96,
-                              height: searchTileExpanded ? 44 : 96,
-                              marginLeft: searchTileExpanded ? -12 : 0,
-                              marginRight: searchTileExpanded ? -12 : 0,
-                              borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
-                              y: searchTileExpanded ? 0 : 20,
-                              background: searchTileExpanded
-                                ? [
-                                    'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
-                                    'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
-                                    'linear-gradient(135deg, #5b57f5, #7c4fff, #b84dff, #ff004d, #ff7a00, #ffb700, #33d17a, #00c2ff, #4f6bff, #5b57f5, #b84dff, #5b57f5)'
-                                  ]
-                                : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
-                            }}
-                            style={{
-                              width: searchTileExpanded ? 44 : 96,
-                              height: searchTileExpanded ? 44 : 96,
-                              minWidth: searchTileExpanded ? 44 : 96,
-                              minHeight: searchTileExpanded ? 44 : 96,
-                              flexShrink: 0,
-                              borderRadius: '50%',
-                              borderWidth: 3,
-                              borderStyle: 'solid',
-                              color: '#ffffff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              zIndex: 10,
-                              padding: 0,
-                              overflow: 'hidden',
-                              backgroundSize: searchTileExpanded ? '400% 400%' : '100% 100%',
-                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
-                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
-                            }}
-                            transition={{
-                              type: 'tween',
-                              duration: 0.6,
-                              ease: [0.25, 0.1, 0.25, 1],
-                            }}
-                          >
-                            {searchTileExpanded ? (
-                              canSearch ? (
-                                <ArrowUp size="100%" strokeWidth={3} style={{ width: '100%', height: '100%' }} />
-                              ) : (
-                                <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
-                              )
-                            ) : (
-                              <ArrowUp size="100%" strokeWidth={2.5} style={{ width: 110, height: 110, flexShrink: 0 }} />
-                            )}
-                          </motion.button>
+                                {/* Bouton central de Recherche */}
+                                <motion.button
+                                  type="button"
+                                  onClick={
+                                    searchTileExpanded
+                                      ? (canSearch ? () => { setShowSearchResultsModal(true); setSearchTileExpanded(false) } : () => setSearchTileExpanded(false))
+                                      : () => { setUpdateExpanded(false); setSearchTileExpanded(true); }
+                                  }
+                                  className={buttonClass}
+                                  aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
+                                  animate={{
+                                    width: searchTileExpanded ? 44 : 96,
+                                    height: searchTileExpanded ? 44 : 96,
+                                    marginLeft: searchTileExpanded ? -12 : 0,
+                                    marginRight: searchTileExpanded ? -12 : 0,
+                                    borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
+                                    y: searchTileExpanded ? 0 : 20,
+                                    background: searchTileExpanded
+                                      ? [
+                                          'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
+                                          'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
+                                          'linear-gradient(135deg, #5b57f5, #7c4fff, #b84dff, #ff004d, #ff7a00, #ffb700, #33d17a, #00c2ff, #4f6bff, #5b57f5, #b84dff, #5b57f5)'
+                                        ]
+                                      : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
+                                  }}
+                                  style={{
+                                    width: searchTileExpanded ? 44 : 96,
+                                    height: searchTileExpanded ? 44 : 96,
+                                    minWidth: searchTileExpanded ? 44 : 96,
+                                    minHeight: searchTileExpanded ? 44 : 96,
+                                    flexShrink: 0,
+                                    borderRadius: '50%',
+                                    borderWidth: 3,
+                                    borderStyle: 'solid',
+                                    color: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    zIndex: 10,
+                                    padding: 0,
+                                    overflow: 'hidden',
+                                    backgroundSize: searchTileExpanded ? '400% 400%' : '100% 100%',
+                                    WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
+                                    maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
+                                  }}
+                                  transition={{
+                                    type: 'tween',
+                                    duration: 0.6,
+                                    ease: [0.25, 0.1, 0.25, 1],
+                                  }}
+                                >
+                                  {searchTileExpanded ? (
+                                    canSearch ? (
+                                      <ArrowUp size="100%" strokeWidth={3} style={{ width: '100%', height: '100%' }} />
+                                    ) : (
+                                      <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
+                                    )
+                                  ) : (
+                                    <ArrowUp size="100%" strokeWidth={2.5} style={{ width: 110, height: 110, flexShrink: 0 }} />
+                                  )}
+                                </motion.button>
 
-                          {/* Aile droite : Période */}
-                          <motion.div
-                            initial={false}
-                            animate={{
-                              width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
-                              opacity: searchTileExpanded ? 1 : 0,
-                            }}
-                            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
-                            style={{
-                              overflow: 'hidden',
-                              display: 'flex',
-                              alignItems: 'stretch',
-                              height: '100%',
-                              pointerEvents: searchTileExpanded ? 'auto' : 'none',
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setShowSearchPeriodModal(true)}
+                                {/* Aile droite : Période */}
+                                <motion.div
+                                  initial={false}
+                                  animate={{
+                                    width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
+                                    opacity: searchTileExpanded ? 1 : 0,
+                                  }}
+                                  transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                                  style={{
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    alignItems: 'stretch',
+                                    height: '100%',
+                                    pointerEvents: searchTileExpanded ? 'auto' : 'none',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSearchPeriodModal(true)}
+                                    style={{
+                                      ...wingStyle,
+                                      borderTopRightRadius: 'var(--radius-xl)',
+                                      borderBottomRightRadius: 'var(--radius-xl)',
+                                      borderTopLeftRadius: 'var(--radius-sm)',
+                                      borderBottomLeftRadius: 'var(--radius-sm)',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
+                                  >
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: searchPeriod ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {getPeriodText()}
+                                    </span>
+                                  </button>
+                                </motion.div>
+                              </motion.div>
+
+                              {/* Label sous le bouton en mode compact */}
+                              <AnimatePresence>
+                                {!searchTileExpanded && (
+                                  <motion.span
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    transition={{ duration: 0.2 }}
+                                    style={{
+                                      position: 'absolute',
+                                      top: 82,
+                                      left: 0,
+                                      right: 0,
+                                      textAlign: 'center',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      color: 'var(--neutral-400)',
+                                      fontFamily: 'var(--font-mono)',
+                                      letterSpacing: '0.13em',
+                                      textTransform: 'uppercase',
+                                      pointerEvents: 'none',
+                                    }}
+                                  >
+                                    Recherche
+                                  </motion.span>
+                                )}
+                              </AnimatePresence>
+                            </motion.div>
+                          ) : (
+                            /* Options de mise à jour */
+                            <motion.div
+                              key="options-row"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                              transition={{ duration: 0.35 }}
                               style={{
-                                ...wingStyle,
-                                borderTopRightRadius: 'var(--radius-xl)',
-                                borderBottomRightRadius: 'var(--radius-xl)',
-                                borderTopLeftRadius: 'var(--radius-sm)',
-                                borderBottomLeftRadius: 'var(--radius-sm)',
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
-                              onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
-                            >
-                              <span style={{ fontSize: 13, fontWeight: 800, color: searchPeriod ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {getPeriodText()}
-                              </span>
-                            </button>
-                          </motion.div>
-                        </motion.div>
-
-                        {/* Label sous le bouton en mode compact */}
-                        <AnimatePresence>
-                          {!searchTileExpanded && (
-                            <motion.span
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 10 }}
-                              transition={{ duration: 0.2 }}
-                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                justifyContent: 'center',
+                                gap: 20,
+                                width: '100%',
                                 position: 'absolute',
-                                top: 82,
+                                top: 0,
                                 left: 0,
                                 right: 0,
-                                textAlign: 'center',
-                                fontSize: 11,
-                                fontWeight: 800,
-                                color: 'var(--neutral-400)',
-                                fontFamily: 'var(--font-mono)',
-                                letterSpacing: '0.13em',
-                                textTransform: 'uppercase',
-                                pointerEvents: 'none',
                               }}
                             >
-                              Recherche
-                            </motion.span>
+                              <UpdateOptionCard
+                                src={transactionsUpdateIcon}
+                                label="Transactions"
+                                delay={0.08}
+                                xOffset={-40}
+                                onClick={() => {
+                                  setUpdateExpanded(false)
+                                  setUpdateModalMode('transactions')
+                                  setShowUpdateModal(true)
+                                }}
+                              />
+                              <UpdateOptionCard
+                                src={soldeUpdateIcon}
+                                label="Solde"
+                                delay={0.16}
+                                xOffset={-80}
+                                onClick={() => {
+                                  setUpdateExpanded(false)
+                                  setUpdateModalMode('balances')
+                                  setShowUpdateModal(true)
+                                }}
+                              />
+                            </motion.div>
                           )}
                         </AnimatePresence>
                       </motion.div>
