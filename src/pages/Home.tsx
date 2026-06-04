@@ -3327,6 +3327,10 @@ export function Home() {
                                 : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
                             }}
                             style={{
+                              width: searchTileExpanded ? 44 : 96,
+                              height: searchTileExpanded ? 44 : 96,
+                              minWidth: searchTileExpanded ? 44 : 96,
+                              minHeight: searchTileExpanded ? 44 : 96,
                               flexShrink: 0,
                               borderRadius: '50%',
                               borderWidth: 3,
