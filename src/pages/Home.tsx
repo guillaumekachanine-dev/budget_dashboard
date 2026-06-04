@@ -3312,8 +3312,8 @@ export function Home() {
                             className={buttonClass}
                             aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
                             animate={{
-                              width: searchTileExpanded ? 44 : 64,
-                              height: searchTileExpanded ? 44 : 64,
+                              width: searchTileExpanded ? 44 : 110,
+                              height: searchTileExpanded ? 44 : 110,
                               marginLeft: searchTileExpanded ? -12 : 0,
                               marginRight: searchTileExpanded ? -12 : 0,
                               borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
@@ -3329,6 +3329,9 @@ export function Home() {
                               justifyContent: 'center',
                               cursor: 'pointer',
                               zIndex: 10,
+                              padding: 0,
+                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
+                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
                             }}
                             transition={{
                               type: 'tween',
@@ -3337,9 +3340,13 @@ export function Home() {
                             }}
                           >
                             {searchTileExpanded ? (
-                              canSearch ? <ArrowUp size={18} strokeWidth={3} /> : <X size={18} strokeWidth={2.5} />
+                              canSearch ? (
+                                <ArrowUp size="100%" strokeWidth={3} style={{ width: '100%', height: '100%' }} />
+                              ) : (
+                                <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
+                              )
                             ) : (
-                              <ArrowUp size={20} strokeWidth={2.5} />
+                              <ArrowUp size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
                             )}
                           </motion.button>
 
@@ -3390,6 +3397,9 @@ export function Home() {
                               style={{
                                 position: 'absolute',
                                 top: 72,
+                                left: 0,
+                                right: 0,
+                                textAlign: 'center',
                                 fontSize: 11,
                                 fontWeight: 800,
                                 color: 'var(--neutral-400)',
