@@ -34,7 +34,7 @@ export function BudgetBar({ summary, index }: BudgetBarProps) {
             <div className="budget-item-name">{category.name}</div>
             <div
               className="budget-item-sub"
-              style={isNearLimit ? { color: 'var(--color-negative)' } : undefined}
+              style={isNearLimit ? { color: 'var(--color-negative-text)' } : undefined}
             >
               {remaining >= 0
                 ? `Reste ${formatCurrency(remaining)}`

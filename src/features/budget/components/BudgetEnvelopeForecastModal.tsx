@@ -121,7 +121,7 @@ export function BudgetEnvelopeForecastModal({ forecast, onClose }: BudgetEnvelop
                           fontSize: 13,
                           fontWeight: 800,
                           fontFamily: 'var(--font-mono)',
-                          color: (estimatedRemaining ?? 0) < 0 ? 'var(--color-error)' : 'var(--color-success)',
+                          color: (estimatedRemaining ?? 0) < 0 ? 'var(--color-error-text)' : 'var(--color-success-text)',
                         }}
                       >
                         {formatCurrencyFloored(estimatedRemaining ?? 0)}

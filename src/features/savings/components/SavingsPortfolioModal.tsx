@@ -405,7 +405,7 @@ export function SavingsPortfolioModal({
                     fontSize: 'var(--font-size-lg)',
                     fontWeight: 'var(--font-weight-extrabold)',
                     fontFamily: 'var(--font-mono)',
-                    color: 'var(--color-positive)',
+                    color: 'var(--color-positive-text)',
                     lineHeight: 1.1,
                   }}
                 >
@@ -426,7 +426,7 @@ export function SavingsPortfolioModal({
             overscrollBehavior: 'contain',
             scrollbarGutter: 'stable both-edges',
             background: 'var(--neutral-50)',
-            padding: 'var(--space-4)',
+            paddingTop: 'var(--space-4)', paddingRight: 'var(--space-4)', paddingLeft: 'var(--space-4)',
             paddingBottom: 'max(var(--space-4), var(--safe-bottom))',
           }}
         >
@@ -2007,7 +2007,7 @@ function IndexEvolutionSection({
                             padding: '7px 12px',
                             boxShadow: '0 8px 24px rgba(0,0,0,0.32)',
                           }}>
-                            <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, marginBottom: 4 }}>{fmtEtfDate(label as string)}</p>
+                            <p style={{ marginTop: 0, marginRight: 0, marginLeft: 0, fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, marginBottom: 4 }}>{fmtEtfDate(label as string)}</p>
                             <p style={{ margin: 0, fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#fff' }}>{fmtTooltipVal(val)}</p>
                             <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: delta >= 0 ? '#2ED47A' : '#FC5A5A' }}>
                               {delta >= 0 ? '+' : ''}{delta.toFixed(1)} % vs départ
@@ -2088,8 +2088,8 @@ function KpiBulletRow({
               positive === undefined
                 ? 'var(--neutral-900)'
                 : positive
-                  ? 'var(--color-positive)'
-                  : 'var(--color-negative)',
+                  ? 'var(--color-positive-text)'
+                  : 'var(--color-negative-text)',
             whiteSpace: 'normal',
             overflowWrap: 'anywhere',
           }}

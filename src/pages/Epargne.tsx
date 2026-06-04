@@ -159,9 +159,9 @@ function KpiTilesRow({ items }: { items: KpiTileItem[] }) {
                   fontWeight: 700,
                   lineHeight: 1.2,
                   color: item.detailTone === 'positive'
-                    ? 'var(--color-positive)'
+                    ? 'var(--color-positive-text)'
                     : item.detailTone === 'negative'
-                      ? 'var(--color-negative)'
+                      ? 'var(--color-negative-text)'
                       : 'var(--neutral-500)',
                 }}
               >
@@ -231,7 +231,7 @@ function SavingsBreakdownBar({ currentSummary }: { currentSummary: SavingsCurren
             <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)' }}>
               {formatKpiCurrency(currentSummary?.livrets_total)}
             </p>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-positive) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-positive-text) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
               {livretsSharePct > 0 ? `${Math.round(livretsSharePct)}%` : '—'}
             </p>
           </div>
@@ -250,7 +250,7 @@ function SavingsBreakdownBar({ currentSummary }: { currentSummary: SavingsCurren
             <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)' }}>
               {formatKpiCurrency(currentSummary?.placements_total)}
             </p>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-warning) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: 'color-mix(in oklab, var(--color-warning-text) 80%, var(--neutral-700) 20%)', fontFamily: 'var(--font-mono)' }}>
               {placementsSharePct > 0 ? `${Math.round(placementsSharePct)}%` : '—'}
             </p>
           </div>

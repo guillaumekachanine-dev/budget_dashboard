@@ -398,7 +398,7 @@ export function TripExpenseMatchingSheet({
 
         {/* Erreur globale */}
         {(error ?? actionError) ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)' }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error-text)' }}>
             {actionError ?? (error instanceof Error ? error.message : 'Erreur de chargement.')}
           </p>
         ) : null}
@@ -411,7 +411,7 @@ export function TripExpenseMatchingSheet({
         ) : groups.length === 0 ? (
           /* État vide */
           <div style={{ textAlign: 'center', padding: 'var(--space-8) 0', display: 'grid', gap: 'var(--space-3)' }}>
-            <CheckCircle2 size={36} color="var(--color-success)" style={{ margin: '0 auto' }} />
+            <CheckCircle2 size={36} color="var(--color-success-text)" style={{ margin: '0 auto' }} />
             <div>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: glass ? '#FFFFFF' : 'var(--neutral-800)' }}>
                 Tout est à jour !

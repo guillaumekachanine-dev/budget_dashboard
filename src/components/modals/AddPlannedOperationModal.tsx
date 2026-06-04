@@ -150,7 +150,7 @@ function FieldError({ message }: { message?: string }) {
       style={{
         lineHeight: 'var(--line-height-snug)',
         fontSize: 'var(--font-size-xs)',
-        color: 'var(--color-error)',
+        color: 'var(--color-error-text)',
       }}
       role="alert"
     >
@@ -1109,7 +1109,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                           isMobileViewport={isMobileViewport}
                         />
                         {errors.recurrenceEndDate ? (
-                          <p style={{ margin: 0, padding: '0 var(--space-3) var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }} role="alert">
+                          <p style={{ margin: 0, padding: '0 var(--space-3) var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--color-error-text)' }} role="alert">
                             {errors.recurrenceEndDate}
                           </p>
                         ) : null}
@@ -1141,7 +1141,7 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                         className="m-0 mt-[var(--space-2)]"
                         style={{
                           fontSize: 'var(--font-size-xs)',
-                          color: 'var(--color-error)',
+                          color: 'var(--color-error-text)',
                         }}
                         role="alert"
                       >

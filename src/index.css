@@ -22,6 +22,17 @@
   --color-error:    #FC5A5A;
   --color-negative: #FC5A5A;
   --color-info:     #5B57F5;
+
+  /* TEXT-ON-LIGHT variants — versions assombries des couleurs sémantiques,
+     réservées au TEXTE sur fond clair pour atteindre WCAG AA (≥ 4.5:1).
+     Les remplissages (pastilles, barres, donuts, pills) gardent les
+     couleurs vives ci-dessus. */
+  --color-positive-text: #0A8049;  /* vs blanc 5.00:1 · vs neutral-50 4.72:1 */
+  --color-success-text:  #0A8049;
+  --color-negative-text: #D12E33;  /* vs blanc 5.06:1 · vs neutral-50 4.78:1 */
+  --color-error-text:    #D12E33;
+  --color-warning-text:  #A05E00;  /* vs blanc 5.13:1 · vs neutral-50 4.84:1 */
+
   --color-bordeaux: #7C2130;
   --color-petrol: #1A5C74;
   --color-cyan-insight: #0097B2;

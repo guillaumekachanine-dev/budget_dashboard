@@ -675,7 +675,7 @@ function PlanningModal({
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
           <SectionLabel>Flux mensuels</SectionLabel>
           {revenus > 0 && (
-            <FluxRow label="Revenus" value={formatMoney(revenus)} valueColor="var(--color-positive)" />
+            <FluxRow label="Revenus" value={formatMoney(revenus)} valueColor="var(--color-positive-text)" />
           )}
           <FluxRow label="Budget dépenses" value={formatMoney(budgetDepenses)} valueColor="var(--neutral-600)" />
           {forwardAmount > 0 && (
@@ -685,14 +685,14 @@ function PlanningModal({
                   key={commitment.id}
                   label={commitment.label}
                   value={`+ ${formatMoney(commitment.amount)}`}
-                  valueColor="var(--color-warning)"
+                  valueColor="var(--color-warning-text)"
                 />
               ))
             ) : (
               <FluxRow
                 label="Engagement"
                 value={`+ ${formatMoney(forwardAmount)}`}
-                valueColor="var(--color-warning)"
+                valueColor="var(--color-warning-text)"
               />
             )
           )}
@@ -702,7 +702,7 @@ function PlanningModal({
               value={formatMoney(depensesReelles)}
               valueColor={
                 depensesReelles > budgetDepenses
-                  ? 'var(--color-negative)'
+                  ? 'var(--color-negative-text)'
                   : 'var(--neutral-700)'
               }
             />
@@ -747,7 +747,7 @@ function PlanningModal({
             <FluxRow
               label="Balance"
               value={formatMoney(monthlyBalance)}
-              valueColor={monthlyBalance >= 0 ? 'var(--primary-700)' : 'var(--color-negative)'}
+              valueColor={monthlyBalance >= 0 ? 'var(--primary-700)' : 'var(--color-negative-text)'}
             />
           </div>
         </div>
@@ -1161,7 +1161,7 @@ export function SavingsPlanning2026Section() {
             style={{
               position: 'relative',
               maxWidth: 560,
-              margin: '0 auto',
+              marginRight: 'auto', marginBottom: 0, marginLeft: 'auto',
               display: 'grid',
               rowGap: 7,
               padding: 'var(--space-2) 0',

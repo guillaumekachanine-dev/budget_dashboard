@@ -615,8 +615,8 @@ export function Voyages() {
                 gap:          'var(--space-2)',
               }}
             >
-              <AlertCircle size={14} color="var(--color-error)" style={{ flexShrink: 0 }} />
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)' }}>
+              <AlertCircle size={14} color="var(--color-error-text)" style={{ flexShrink: 0 }} />
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error-text)' }}>
                 Voyage introuvable — affichage du voyage par défaut.
               </p>
             </div>
@@ -893,7 +893,7 @@ export function Voyages() {
                           <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-400)', letterSpacing: '0.05em', marginBottom: 2 }}>
                             Reste
                           </span>
-                          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: isRemainingKpiNegative ? 'var(--color-error)' : 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: isRemainingKpiNegative ? 'var(--color-error-text)' : 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
                             {remainingKpi}
                           </span>
                         </div>
@@ -931,7 +931,7 @@ export function Voyages() {
                               style={{
                                 fontSize:   11,
                                 fontWeight: 800,
-                                color:      (selectedTrip.consumed_pct ?? 0) > 100 ? 'var(--color-error)' : 'var(--neutral-700)',
+                                color:      (selectedTrip.consumed_pct ?? 0) > 100 ? 'var(--color-error-text)' : 'var(--neutral-700)',
                                 fontFamily: 'var(--font-mono)',
                               }}
                             >

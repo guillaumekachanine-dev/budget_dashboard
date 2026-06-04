@@ -485,7 +485,7 @@ export function TripManualExpenseModal({
 
           {/* ── Erreur ──────────────────────────────────────────────────────── */}
           {submitError ? (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', lineHeight: 1.4 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error-text)', lineHeight: 1.4 }}>
               {submitError}
             </p>
           ) : null}

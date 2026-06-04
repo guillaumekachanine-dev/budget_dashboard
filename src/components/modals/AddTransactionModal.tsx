@@ -219,7 +219,7 @@ function FieldError({ message }: { message?: string }) {
       style={{
         lineHeight: 'var(--line-height-snug)',
         fontSize: 'var(--font-size-xs)',
-        color: 'var(--color-error)',
+        color: 'var(--color-error-text)',
       }}
       role="alert"
     >

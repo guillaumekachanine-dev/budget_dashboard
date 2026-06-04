@@ -1126,7 +1126,7 @@ function MonthlyTrajectoryOperationsModal({
     <div style={{ display: 'grid', gap: 4 }}>
       <p style={sectionTitleStyle}>{title}</p>
       {items.map((op) => {
-        const amountColor = op.flowType === 'income' ? 'var(--color-success)' : 'var(--neutral-800)'
+        const amountColor = op.flowType === 'income' ? 'var(--color-success-text)' : 'var(--neutral-800)'
         return (
           <div key={`${title}-${op.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, padding: '6px 0', borderTop: '1px solid var(--neutral-150)' }}>
             <div style={{ minWidth: 0, display: 'grid', gap: 1 }}>
@@ -1176,7 +1176,7 @@ function MonthlyTrajectoryOperationsModal({
                   {`Opérations du ${dayLabel}`}
                 </h3>
                 <p style={{ margin: 0, fontSize: 11, color: 'var(--neutral-600)' }}>
-                  Total net du jour : <strong style={{ fontFamily: 'var(--font-mono)', color: netDayAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>{fmt(netDayAmount)}</strong>
+                  Total net du jour : <strong style={{ fontFamily: 'var(--font-mono)', color: netDayAmount >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)' }}>{fmt(netDayAmount)}</strong>
                 </p>
               </div>
               <button
@@ -1229,8 +1229,8 @@ function ExpenseSection2026({
   const gapColor = gapYtdPct == null
     ? 'var(--neutral-600)'
     : gapYtdPct > 0
-      ? 'var(--color-negative)'
-      : 'var(--color-positive)'
+      ? 'var(--color-negative-text)'
+      : 'var(--color-positive-text)'
   const historyBudgetPerMonth = completedMonths > 0 ? ytdBudgetClosedMonths / completedMonths : 0
   const expenseHistoryRows = useMemo<ExpenseHistoryPoint[]>(() => {
     const monthCount = Math.max(1, completedMonths)
@@ -2276,7 +2276,7 @@ export function ProjectionsTabContent() {
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: 'var(--neutral-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Liquidité disponible
                 </span>
-                <span style={{ margin: 0, fontSize: 16, fontWeight: 800, color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                <span style={{ margin: 0, fontSize: 16, fontWeight: 800, color: monthlyAvailableLiquidityAmount >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
                   {fmt(monthlyAvailableLiquidityAmount)}
                 </span>
               </button>
@@ -2287,7 +2287,7 @@ export function ProjectionsTabContent() {
                   <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--neutral-600)' }}>
                     Trajectoire mensuelle
                   </p>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-success-text)', fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
                     <ArrowDownToLine size={13} />
                     <span>{fmt(monthlyScenario2ProjectedIncomeAmount)}</span>
                   </div>
@@ -2359,13 +2359,13 @@ export function ProjectionsTabContent() {
                                 Dépenses : <strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_expenses) : '—'}</strong>
                               </p>
                               <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
-                                Cashflow : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.daily_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_cashflow) : '—'}</strong>
+                                Cashflow : <strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.daily_cashflow >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.daily_cashflow) : '—'}</strong>
                               </p>
                               <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
                                 Dép.cum :<strong style={{ color: '#B86A00', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_expenses) : '—'}</strong>
                               </p>
                               <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
-                                Cash.cum :<strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_cashflow) : '—'}</strong>
+                                Cash.cum :<strong style={{ color: selectedTrajectoryChartRow ? (selectedTrajectoryChartRow.cumulative_cashflow >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)') : 'var(--neutral-600)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartRow ? fmt(selectedTrajectoryChartRow.cumulative_cashflow) : '—'}</strong>
                               </p>
                               {(selectedTrajectoryChartRow?.daily_savings ?? 0) > 0 ? (
                                 <p style={{ margin: 0, fontSize: 10, color: 'var(--neutral-700)' }}>
@@ -2376,7 +2376,7 @@ export function ProjectionsTabContent() {
                                 Opérations : <strong style={{ color: 'var(--neutral-900)', fontFamily: 'var(--font-mono)' }}>{selectedTrajectoryChartOperationsCount}</strong>
                               </p>
                               {selectedTrajectoryChartHasProjectedIncome ? (
-                                <p style={{ margin: 0, fontSize: 10, color: 'var(--color-success)', fontWeight: 700 }}>
+                                <p style={{ margin: 0, fontSize: 10, color: 'var(--color-success-text)', fontWeight: 700 }}>
                                   Revenu projeté
                                 </p>
                               ) : null}
@@ -2488,7 +2488,7 @@ export function ProjectionsTabContent() {
                             <td style={{ padding: '7px 8px', fontSize: 10, color: '#FFAB2E', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.daily_expenses)}</td>
                             <td style={{ padding: '7px 8px', fontSize: 10, borderTop: '1px solid var(--neutral-150)', textAlign: 'right' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <span style={{ color: row.daily_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                <span style={{ color: row.daily_cashflow >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                                   {fmt(row.daily_cashflow)}
                                 </span>
                                 {monthlyTrajectorySavingsDays.includes(row.day_of_month) ? (
@@ -2499,7 +2499,7 @@ export function ProjectionsTabContent() {
                               </div>
                             </td>
                             <td style={{ padding: '7px 8px', fontSize: 10, color: '#FFAB2E', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.cumulative_expenses)}</td>
-                            <td style={{ padding: '7px 8px', fontSize: 10, color: row.cumulative_cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.cumulative_cashflow)}</td>
+                            <td style={{ padding: '7px 8px', fontSize: 10, color: row.cumulative_cashflow >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{fmt(row.cumulative_cashflow)}</td>
                             <td style={{ padding: '7px 8px', borderTop: '1px solid var(--neutral-150)', textAlign: 'right' }}>
                               {monthlyTrajectoryOperationsCountByDay[row.day_of_month] > 0 ? (
                                 <button

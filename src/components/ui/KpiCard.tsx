@@ -35,9 +35,9 @@ const formatters = {
 
 const valueColorClassNames: Record<KpiColor, string> = {
   default: 'text-[var(--neutral-900)]',
-  positive: 'text-[var(--color-positive)]',
-  negative: 'text-[var(--color-negative)]',
-  warning: 'text-[var(--color-warning)]',
+  positive: 'text-[var(--color-positive-text)]',
+  negative: 'text-[var(--color-negative-text)]',
+  warning: 'text-[var(--color-warning-text)]',
 }
 
 const deltaClassNames = {

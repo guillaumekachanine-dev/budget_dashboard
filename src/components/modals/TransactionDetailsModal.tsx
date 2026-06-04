@@ -562,7 +562,7 @@ export function TransactionDetailsModal({
                             margin: 0,
                             fontSize: 'var(--font-size-4xl)',
                             fontWeight: 'var(--font-weight-extrabold)',
-                            color: details.amount >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                            color: details.amount >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)',
                             fontFamily: 'var(--font-mono)',
                           }}
                         >
@@ -613,7 +613,7 @@ export function TransactionDetailsModal({
                             fontSize: 'var(--font-size-4xl)',
                             fontWeight: 'var(--font-weight-extrabold)',
                             lineHeight: 'var(--line-height-tight)',
-                            color: details.amount >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                            color: details.amount >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)',
                             fontFamily: 'var(--font-mono)',
                           }}
                         >
@@ -834,7 +834,7 @@ export function TransactionDetailsModal({
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'var(--color-error)',
+                            color: 'var(--color-error-text)',
                             fontSize: 11,
                             fontWeight: 'var(--font-weight-bold)',
                             cursor: 'pointer',
@@ -1135,7 +1135,7 @@ export function TransactionDetailsModal({
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-error-light, #fee2e2)', display: 'grid', placeItems: 'center', color: 'var(--color-error)' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-error-light, #fee2e2)', display: 'grid', placeItems: 'center', color: 'var(--color-error-text)' }}>
                   <AlertCircle size={24} />
                 </div>
               </div>

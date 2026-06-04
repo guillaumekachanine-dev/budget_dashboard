@@ -222,7 +222,7 @@ export function TripTransactionRattachementModal({
 
         {/* Mutation/Fetch errors */}
         {(errorMessage) && (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <AlertTriangle size={14} />
             {errorMessage}
           </p>
@@ -293,7 +293,7 @@ export function TripTransactionRattachementModal({
                             <span style={{ color: 'var(--neutral-200)' }}> · </span>
                             <span
                               style={{
-                                color: isLinkedToCurrent ? 'var(--color-success)' : 'var(--color-warning)',
+                                color: isLinkedToCurrent ? 'var(--color-success-text)' : 'var(--color-warning-text)',
                                 fontWeight: 700,
                                 display: 'inline-flex',
                                 alignItems: 'center',

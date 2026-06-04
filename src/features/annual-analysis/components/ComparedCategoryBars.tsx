@@ -508,8 +508,8 @@ export function ComparedCategoryBars({ metrics, categoryRows, donutOnly = false 
                 const subDeltaColor = row.deltaPct == null
                   ? 'var(--neutral-300)'
                   : row.deltaPct > 0
-                    ? 'var(--color-error)'
-                    : 'var(--color-success)'
+                    ? 'var(--color-error-text)'
+                    : 'var(--color-success-text)'
 
                 return (
                   <div
@@ -1019,7 +1019,7 @@ function CategoryRow({
   const isUp      = delta_eur > 0
   const deltaColor = delta_eur === 0
     ? 'var(--neutral-400)'
-    : isUp ? 'var(--color-error)' : 'var(--color-success)'    // dépenses : hausse = mauvais
+    : isUp ? 'var(--color-error-text)' : 'var(--color-success-text)'    // dépenses : hausse = mauvais
 
   const rowHeader = (
     <>
@@ -1113,8 +1113,8 @@ function CategoryRow({
             const subDeltaColor = row.deltaPct == null
               ? 'var(--neutral-300)'
               : row.deltaPct > 0
-                ? 'var(--color-error)'
-                : 'var(--color-success)'
+                ? 'var(--color-error-text)'
+                : 'var(--color-success-text)'
             const has2025 = row.amount2025 > 0
             const has2026 = row.amount2026 > 0
 

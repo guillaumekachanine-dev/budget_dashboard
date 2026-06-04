@@ -397,7 +397,7 @@ export function SavingsPortfoliosListSection() {
               </span>
               <span style={{
                 fontSize: 11,
-                color: row.totalPlusValueSinceOpening >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                color: row.totalPlusValueSinceOpening >= 0 ? 'var(--color-positive-text)' : 'var(--color-negative-text)',
                 fontWeight: 700,
                 fontFamily: 'var(--font-mono)',
                 textAlign: 'center',

@@ -20,19 +20,19 @@ const toneTokens: Record<Tone, { text: string; subtleBg: string; subtleBorder: s
     heroGradient: 'linear-gradient(135deg, color-mix(in oklab, var(--primary-700) 86%, var(--neutral-900) 14%) 0%, color-mix(in oklab, var(--primary-500) 80%, var(--neutral-900) 20%) 100%)',
   },
   positive: {
-    text: 'var(--color-positive)',
+    text: 'var(--color-positive-text)',
     subtleBg: 'color-mix(in oklab, var(--color-positive) 10%, var(--neutral-0) 90%)',
     subtleBorder: 'color-mix(in oklab, var(--color-positive) 24%, var(--neutral-0) 76%)',
     heroGradient: 'linear-gradient(135deg, color-mix(in oklab, var(--color-positive) 82%, var(--primary-700) 18%) 0%, color-mix(in oklab, var(--color-positive) 88%, var(--primary-600) 12%) 100%)',
   },
   warning: {
-    text: 'var(--color-warning)',
+    text: 'var(--color-warning-text)',
     subtleBg: 'color-mix(in oklab, var(--color-warning) 12%, var(--neutral-0) 88%)',
     subtleBorder: 'color-mix(in oklab, var(--color-warning) 26%, var(--neutral-0) 74%)',
     heroGradient: 'linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 84%, var(--neutral-900) 16%) 0%, color-mix(in oklab, #f09a1a 86%, var(--neutral-900) 14%) 100%)',
   },
   danger: {
-    text: 'var(--color-negative)',
+    text: 'var(--color-negative-text)',
     subtleBg: 'color-mix(in oklab, var(--color-negative) 10%, var(--neutral-0) 90%)',
     subtleBorder: 'color-mix(in oklab, var(--color-negative) 24%, var(--neutral-0) 76%)',
     heroGradient: 'linear-gradient(135deg, color-mix(in oklab, var(--color-negative) 84%, var(--neutral-900) 16%) 0%, color-mix(in oklab, #ea4e4e 86%, var(--neutral-900) 14%) 100%)',

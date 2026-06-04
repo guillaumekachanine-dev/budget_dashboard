@@ -318,7 +318,7 @@ export function TripDetailsModal({ tripId, isOpen, onClose }: TripDetailsModalPr
                     <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--neutral-400)', letterSpacing: '0.05em', marginBottom: 2 }}>
                       Reste
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: isRemainingKpiNegative ? 'var(--color-error)' : 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: isRemainingKpiNegative ? 'var(--color-error-text)' : 'var(--neutral-800)', whiteSpace: 'nowrap' }}>
                       {remainingKpi}
                     </span>
                   </div>
@@ -356,7 +356,7 @@ export function TripDetailsModal({ tripId, isOpen, onClose }: TripDetailsModalPr
                         style={{
                           fontSize:   11,
                           fontWeight: 800,
-                          color:      (selectedTrip.consumed_pct ?? 0) > 100 ? 'var(--color-error)' : 'var(--neutral-700)',
+                          color:      (selectedTrip.consumed_pct ?? 0) > 100 ? 'var(--color-error-text)' : 'var(--neutral-700)',
                           fontFamily: 'var(--font-mono)',
                         }}
                       >

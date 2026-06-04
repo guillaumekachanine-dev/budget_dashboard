@@ -144,7 +144,7 @@ function CustomTooltip({
       {cashflow ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ color: 'var(--neutral-600)' }}>Cashflow</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: cashflowValue >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: cashflowValue >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)' }}>
             {formatCurrency(cashflowValue)}
           </span>
         </div>
@@ -172,7 +172,7 @@ function CustomTooltip({
             style={{
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
-              color: (theoreticalBalance ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+              color: (theoreticalBalance ?? 0) >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)',
             }}
           >
             {formatCurrency(theoreticalBalance ?? 0)}
@@ -258,7 +258,7 @@ export function TrajectoireChart() {
   }, [displayMode, endCashflow, endExpenses])
   const metricColor = useMemo(() => {
     if (displayMode === 'depenses') return SERIES_COLORS.depenses
-    if (displayMode === 'cashflow') return isCashflowPositive ? 'var(--color-success)' : 'var(--color-error)'
+    if (displayMode === 'cashflow') return isCashflowPositive ? 'var(--color-success-text)' : 'var(--color-error-text)'
     return SERIES_COLORS.cashflow
   }, [displayMode, isCashflowPositive])
   const metricSubtitle = useMemo(() => {
@@ -804,7 +804,7 @@ export function TrajectoireChart() {
                       <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--neutral-700)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                         {formatCurrency(row.dailyExpenses)}
                       </td>
-                      <td style={{ padding: '8px 10px', fontSize: 11, color: row.cashflow >= 0 ? 'var(--color-success)' : 'var(--color-error)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      <td style={{ padding: '8px 10px', fontSize: 11, color: row.cashflow >= 0 ? 'var(--color-success-text)' : 'var(--color-error-text)', borderTop: '1px solid var(--neutral-150)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                         {formatCurrency(row.cashflow)}
                       </td>
                       <td style={{ padding: '8px 10px', borderTop: '1px solid var(--neutral-150)', textAlign: 'right' }}>

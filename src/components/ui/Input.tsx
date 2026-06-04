@@ -69,7 +69,7 @@ const InputBase = forwardRef<HTMLInputElement, InputProps>(function Input(
     'focus:outline-none',
     disabled ? 'bg-[var(--neutral-100)] opacity-60 cursor-not-allowed' : '',
     error
-      ? 'border-[var(--color-error)] text-[var(--color-error)]'
+      ? 'border-[var(--color-error)] text-[var(--color-error-text)]'
       : 'border-[var(--neutral-200)] text-[var(--neutral-700)] focus:border-[var(--primary-500)]',
     className ?? '',
   ]
@@ -140,7 +140,7 @@ const InputBase = forwardRef<HTMLInputElement, InputProps>(function Input(
       </div>
 
       {error && errorMessage ? (
-        <p className="mt-1 text-[11px] text-[var(--color-error)] [font-family:var(--font-sans)]">{errorMessage}</p>
+        <p className="mt-1 text-[11px] text-[var(--color-error-text)] [font-family:var(--font-sans)]">{errorMessage}</p>
       ) : null}
     </div>
   )

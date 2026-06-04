@@ -663,7 +663,7 @@ export function Flux() {
     const isJoint = operation.account_name?.toLowerCase().includes('joint') ?? false
     const amountColor = (operation.flow_type === 'transfer' || operation.flow_type === 'savings')
       ? 'var(--neutral-700)'
-      : amount > 0 ? 'var(--color-success)' : amount < 0 ? 'var(--color-error)' : 'var(--neutral-700)'
+      : amount > 0 ? 'var(--color-success-text)' : amount < 0 ? 'var(--color-error-text)' : 'var(--neutral-700)'
     const formattedAmount = operation.operation_kind === 'planned_occurrence'
       ? formatCurrency(Math.abs(amount))
       : formatCurrency(amount)
@@ -943,7 +943,7 @@ export function Flux() {
                   fontSize: 14,
                   fontWeight: 800,
                   fontFamily: 'var(--font-mono)',
-                  color: listHeaderAmount > 0 ? 'var(--color-success)' : listHeaderAmount < 0 ? 'var(--color-error)' : 'var(--neutral-700)',
+                  color: listHeaderAmount > 0 ? 'var(--color-success-text)' : listHeaderAmount < 0 ? 'var(--color-error-text)' : 'var(--neutral-700)',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -1323,7 +1323,7 @@ export function Flux() {
                     border: '1px solid color-mix(in oklab, var(--color-warning) 36%, var(--neutral-200) 64%)',
                     borderRadius: 'var(--radius-md)',
                     background: 'color-mix(in oklab, var(--color-warning) 12%, var(--neutral-0) 88%)',
-                    color: 'color-mix(in oklab, var(--color-warning) 52%, #5a2700 48%)',
+                    color: 'color-mix(in oklab, var(--color-warning-text) 52%, #5a2700 48%)',
                     fontSize: 11,
                     fontWeight: 700,
                     width: '100%',

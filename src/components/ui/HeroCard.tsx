@@ -18,7 +18,7 @@ export function HeroCard({ account, totalSpent, totalBudget }: HeroCardProps) {
   const daysLeft = getDaysRemainingInMonth()
   const totalDailyTarget = daysInMonth > 0 ? totalBudget / daysInMonth : 0
   const variableDailyTarget = daysLeft > 0 ? remaining / daysLeft : remaining
-  const variableColor = variableDailyTarget < 0 ? 'var(--color-negative)' : 'rgba(255,255,255,0.95)'
+  const variableColor = variableDailyTarget < 0 ? 'var(--color-negative-text)' : 'rgba(255,255,255,0.95)'
 
   return (
     <motion.div

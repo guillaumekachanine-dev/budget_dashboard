@@ -888,7 +888,7 @@ export function UpdateModal({ open, onClose, pickerPlacement = 'bottom', default
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: 'var(--space-4)',
+                    paddingTop: 'var(--space-4)', paddingBottom: 'var(--space-4)',
                   }
                 : {
                     left: 0,

@@ -13,9 +13,9 @@ export interface BadgeProps {
 }
 
 const variantClassNames: Record<BadgeVariant, string> = {
-  success: 'bg-[#E8F5E9] text-[var(--color-success)]',
-  error: 'bg-[#FDECEA] text-[var(--color-error)]',
-  warning: 'bg-[#FFF3E0] text-[var(--color-warning)]',
+  success: 'bg-[#E8F5E9] text-[var(--color-success-text)]',
+  error: 'bg-[#FDECEA] text-[var(--color-error-text)]',
+  warning: 'bg-[#FFF3E0] text-[var(--color-warning-text)]',
   neutral: 'bg-[var(--neutral-100)] text-[var(--neutral-700)]',
   primary: 'bg-[var(--primary-50)] text-[var(--primary-700)]',
   info: 'bg-[var(--primary-50)] text-[var(--primary-600)]',

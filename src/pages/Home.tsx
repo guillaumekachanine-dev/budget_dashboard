@@ -395,7 +395,7 @@ function DriftsModal({
       {totalOverrunAmount > 0 && (
         <>
           <span>{' '}</span>
-          <span style={{ color: 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>
+          <span style={{ color: 'var(--color-error-text)', fontFamily: 'var(--font-mono)' }}>
             {`+${formatCurrencyFloored(totalOverrunAmount)}`}
           </span>
         </>
@@ -452,7 +452,7 @@ function DriftsModal({
                 <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
                   {top5ExpenseRows.map((row, idx) => {
                     const drift = Number(row.driftPct ?? 0)
-                    const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'rgba(255, 255, 255, 0.4)'
+                    const driftColor = drift > 0 ? 'var(--color-error-text)' : drift < 0 ? 'var(--color-success-text)' : 'rgba(255, 255, 255, 0.4)'
                     return (
                       <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                         <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.3 }}>
@@ -563,7 +563,7 @@ function EcheancesTimelineTile({
       const amount = Math.abs(Number(item.planned_personal_amount ?? item.planned_amount ?? 0))
       const t = (day - 1) / Math.max(daysInMonth - 1, 1)
       const [x, y] = parcPoint(t)
-      const color = item.flow_type === 'income'  ? 'var(--color-success)'
+      const color = item.flow_type === 'income'  ? 'var(--color-success-text)'
                   : item.flow_type === 'savings' ? 'var(--color-warning)'
                   : 'var(--primary-500)'
       const r = 2.5 + 2.5 * (amount / maxAmt)
@@ -1765,7 +1765,7 @@ function SearchResultKpiCard({
         {title}
       </span>
 
-      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: compact ? 19 : 24, fontWeight: 600, color: valueColor ?? '#ffffff', lineHeight: 1, letterSpacing: '-0.02em', marginBottom: diffPct != null ? 3 : (compact ? 3 : 6) }}>
+      <p style={{ marginTop: 0, marginRight: 0, marginLeft: 0, fontFamily: 'var(--font-mono)', fontSize: compact ? 19 : 24, fontWeight: 600, color: valueColor ?? '#ffffff', lineHeight: 1, letterSpacing: '-0.02em', marginBottom: diffPct != null ? 3 : (compact ? 3 : 6) }}>
         {value}
       </p>
 
@@ -2722,7 +2722,7 @@ export function Home() {
           ceiling: SAVINGS_BOOKLET_CEILINGS.livret_a,
           ceilingPct: livretACeilingPct,
           txns: livretATxns ?? [],
-          color: 'var(--color-success)',
+          color: 'var(--color-success-text)',
           metrics: [
             { key: 'statut-livret_a', label: 'Statut', value: livretACeilingPct >= 99.5 ? 'Plafond atteint' : `${livretACeilingPct.toFixed(0)}%` },
             { key: 'liquidite-livret_a', label: 'Liquidite', value: 'Disponible' },
@@ -2737,7 +2737,7 @@ export function Home() {
           ceiling: SAVINGS_BOOKLET_CEILINGS.ldds,
           ceilingPct: lddsCeilingPct,
           txns: lddsTxns ?? [],
-          color: 'var(--color-success)',
+          color: 'var(--color-success-text)',
           metrics: [
             { key: 'statut-ldds', label: 'Statut', value: lddsCeilingPct >= 99.5 ? 'Plafond atteint' : `${lddsCeilingPct.toFixed(0)}%` },
             { key: 'liquidite-ldds', label: 'Liquidite', value: 'Disponible' },
@@ -2752,7 +2752,7 @@ export function Home() {
           ceiling: null,
           ceilingPct: null,
           txns: [],
-          color: 'var(--color-success)',
+          color: 'var(--color-success-text)',
           metrics: [
             { key: 'solde-per', label: 'Solde', value: formatCurrencyFloored(perBalance) },
             { key: 'liquidite-per', label: 'Liquidite', value: 'Bloque' },
@@ -2771,7 +2771,7 @@ export function Home() {
           ceiling: null,
           ceilingPct: null,
           txns: [],
-          color: 'var(--color-warning)',
+          color: 'var(--color-warning-text)',
           metrics: [
             { key: 'solde-pea', label: 'Solde', value: formatCurrencyFloored(peaBalance) },
             { key: 'liquidite-pea', label: 'Liquidite', value: 'Disponible' },
@@ -2786,7 +2786,7 @@ export function Home() {
           ceiling: null,
           ceilingPct: null,
           txns: [],
-          color: 'var(--color-warning)',
+          color: 'var(--color-warning-text)',
           metrics: [
             { key: 'solde-percol', label: 'Solde', value: formatCurrencyFloored(percolBalance) },
             { key: 'liquidite-percol', label: 'Liquidite', value: 'Bloque' },
@@ -2801,7 +2801,7 @@ export function Home() {
           ceiling: null,
           ceilingPct: null,
           txns: [],
-          color: 'var(--color-warning)',
+          color: 'var(--color-warning-text)',
           metrics: [
             { key: 'solde-crypto', label: 'Solde', value: formatCurrencyFloored(cryptoBalance) },
             { key: 'liquidite-crypto', label: 'Liquidite', value: 'Disponible' },
@@ -3375,7 +3375,7 @@ export function Home() {
             {isBudgetVoyageTab ? (
               <section
                 style={{
-                  padding: sectionHorizontalPadding,
+                  paddingRight: 'sectionHorizontalPadding', paddingLeft: 'sectionHorizontalPadding',
                   paddingTop: 'var(--space-4)',
                   paddingBottom: 'var(--space-4)',
                   display: 'flex',
@@ -3615,7 +3615,7 @@ export function Home() {
 
           {isMainCheckingAccount ? (
             <section
-              style={{ padding: sectionHorizontalPadding, paddingTop: 'var(--space-8)' }}
+              style={{ paddingRight: 'sectionHorizontalPadding', paddingBottom: 'sectionHorizontalPadding', paddingLeft: 'sectionHorizontalPadding', paddingTop: 'var(--space-8)' }}
             >
               <div
                 style={{
@@ -3734,7 +3734,7 @@ export function Home() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         maxWidth: 600,
-                        margin: 'var(--space-10) auto 0',
+                        marginRight: 'auto', marginBottom: 0, marginLeft: 'auto',
                         width: '100%',
                         overflow: 'visible',
                         zIndex: (updateExpanded || searchTileExpanded) ? 50 : 1,
@@ -3869,8 +3869,8 @@ export function Home() {
                                     marginRight: searchTileExpanded ? -12 : 0,
                                     borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
                                     y: searchTileExpanded ? 0 : 6,
-                                    background: (!searchTileExpanded || !canSearch)
-                                      ? 'transparent'
+                                    backgroundImage: (!searchTileExpanded || !canSearch)
+                                      ? 'none'
                                       : [
                                           'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
                                           'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
@@ -4058,7 +4058,7 @@ export function Home() {
             </HeroActionModalItem>
           ) : hasMainAccountBalanceStatusError ? (
             <HeroActionModalItem>
-              <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
+              <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative-text)', fontSize: 12 }}>
                 Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
               </p>
             </HeroActionModalItem>
@@ -4152,7 +4152,7 @@ export function Home() {
             <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.9)', paddingLeft: 18 }}>
               Revenus encaissés
             </span>
-            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-positive-text)', whiteSpace: 'nowrap' }}>
               {`+${formatCurrencyFloored(revenueAmountDisplay)}`}
             </span>
           </div>
@@ -4191,7 +4191,7 @@ export function Home() {
                   Montants protégés
                 </span>
               </span>
-              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative-text)', whiteSpace: 'nowrap', opacity: 0.8 }}>
                 {`-${formatCurrencyFloored(protectedAmountsTotalDisplay)}`}
               </span>
             </button>
@@ -4236,7 +4236,7 @@ export function Home() {
                   Déjà consommé
                 </span>
               </span>
-              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--color-negative-text)', whiteSpace: 'nowrap', opacity: 0.8 }}>
                 {`-${formatCurrencyFloored(variableEssentialConsumedDisplay + discretionaryConsumedDisplay)}`}
               </span>
             </button>

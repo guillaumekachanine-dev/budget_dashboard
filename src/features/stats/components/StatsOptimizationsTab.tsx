@@ -166,7 +166,7 @@ function PlanningPotentialProgressBar({ annualHorizon }: { annualHorizon: Annual
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Potentiel :{' '}
-            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 850, color: 'var(--color-positive)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 850, color: 'var(--color-positive-text)' }}>
               +{formatEuro(annualHorizon.potentialAnnual)}
             </span>
           </span>
@@ -218,7 +218,7 @@ function LeverCard({
               fontSize: 10,
               fontWeight: 800,
               fontFamily: 'var(--font-mono)',
-              color: objectiveReached ? 'var(--color-positive)' : isOver ? 'var(--color-negative)' : 'var(--neutral-700)',
+              color: objectiveReached ? 'var(--color-positive-text)' : isOver ? 'var(--color-negative-text)' : 'var(--neutral-700)',
               display: 'flex',
               alignItems: 'center',
               gap: 4,
@@ -290,7 +290,7 @@ function LeverCard({
               <p style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--neutral-900)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lever.category_name ?? '—'}
               </p>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--color-positive)', fontFamily: 'var(--font-mono)', lineHeight: 1.2 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--color-positive-text)', fontFamily: 'var(--font-mono)', lineHeight: 1.2 }}>
                 +{formatEuro(monthlyGain)}/mois
               </p>
             </div>

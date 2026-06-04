@@ -533,7 +533,7 @@ function InsightCard({
           {isExpanded ? <ChevronDown size={16} strokeWidth={2.4} color={INSIGHT_DARK.chevronOpenIcon} /> : <ChevronDown size={16} strokeWidth={2.4} color={INSIGHT_DARK.muted} />}
         </button>
       </div>
-      <p style={{ margin: 0, marginBottom: 8, lineHeight: 0.95, fontSize: 'clamp(36px, 10vw, 44px)', fontWeight: 600, color: INSIGHT_DARK.text, fontFamily: 'var(--font-mono)', letterSpacing: '-0.03em' }}>
+      <p style={{ marginTop: 0, marginRight: 0, marginLeft: 0, marginBottom: 8, lineHeight: 0.95, fontSize: 'clamp(36px, 10vw, 44px)', fontWeight: 600, color: INSIGHT_DARK.text, fontFamily: 'var(--font-mono)', letterSpacing: '-0.03em' }}>
         {titleValue}
       </p>
       <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: INSIGHT_DARK.muted, lineHeight: 1.32 }}>
@@ -1327,7 +1327,7 @@ function RepartitionComparisonSection() {
                 background: 'color-mix(in oklab, var(--color-error) 6%, var(--neutral-0) 94%)',
                 border: '1px solid color-mix(in oklab, var(--color-error) 20%, transparent 80%)',
               }}>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-error)' }}>
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-error-text)' }}>
                   Erreur de chargement
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)' }}>
@@ -1630,7 +1630,7 @@ function KpiTile({
       {headlineBadge ? (
         <p
           style={{
-          margin: 0,
+          marginRight: 0, marginBottom: 0, marginLeft: 0,
           marginTop: 0,
           fontSize: 18,
           fontWeight: 800,
@@ -1645,7 +1645,7 @@ function KpiTile({
       ) : null}
       <p
         style={{
-          margin: 0,
+          marginRight: 0, marginBottom: 0, marginLeft: 0,
           marginTop: 2,
           fontSize: valueFontSize ?? 'var(--font-size-lg)',
           fontWeight: 'var(--font-weight-extrabold)',

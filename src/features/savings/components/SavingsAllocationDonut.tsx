@@ -63,12 +63,12 @@ function resolveRateStyle(ratePct: number | null): { color: string; background: 
   }
   if (ratePct > 3) {
     return {
-      color: 'var(--color-positive)',
+      color: 'var(--color-positive-text)',
       background: 'color-mix(in oklab, var(--color-positive) 14%, var(--neutral-0) 86%)',
     }
   }
   return {
-    color: 'var(--color-warning)',
+    color: 'var(--color-warning-text)',
     background: 'color-mix(in oklab, var(--color-warning) 18%, var(--neutral-0) 82%)',
   }
 }
@@ -101,7 +101,7 @@ function SavingsDonutTooltip({ active, payload }: DonutTooltipProps) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--neutral-400)' }}>Famille</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: slice.family === 'livrets' ? 'var(--color-positive)' : 'var(--color-warning)' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: slice.family === 'livrets' ? 'var(--color-positive-text)' : 'var(--color-warning-text)' }}>
           {slice.family}
         </span>
       </div>

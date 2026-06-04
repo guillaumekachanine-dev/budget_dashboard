@@ -1655,7 +1655,7 @@ export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overview
                             {natureLabel}
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', textAlign: 'left', color: 'var(--neutral-900)', whiteSpace: 'nowrap', lineHeight: 1, display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, justifyContent: 'start', alignItems: 'center', justifySelf: 'center' }}>
-                            <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>
+                            <span style={{ color: amountSign === '+' ? 'var(--color-positive-text)' : amountSign === '-' ? 'var(--color-negative-text)' : 'transparent', textAlign: 'center' }}>
                               {amountSign || '+'}
                             </span>
                             <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
@@ -1819,7 +1819,7 @@ export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overview
                           <span style={{ fontSize: 10, color: 'var(--neutral-600)', textAlign: 'right', paddingRight: 10 }}>
                             {event.nature}
                           </span>
-                          <span style={{ fontSize: 11, color: event.amount >= 0 ? 'var(--neutral-900)' : 'var(--color-negative)', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 11, color: event.amount >= 0 ? 'var(--neutral-900)' : 'var(--color-negative-text)', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
                             {formatSignedCurrency(event.amount)}
                           </span>
                         </div>
@@ -1910,7 +1910,7 @@ export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overview
                                     {natureLabel}
                                   </span>
                                   <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, alignItems: 'center', justifySelf: 'center' }}>
-                                    <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>{amountSign || '+'}</span>
+                                    <span style={{ color: amountSign === '+' ? 'var(--color-positive-text)' : amountSign === '-' ? 'var(--color-negative-text)' : 'transparent', textAlign: 'center' }}>{amountSign || '+'}</span>
                                     <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
                                   </span>
                                   <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', textAlign: 'right', justifySelf: 'end' }}>{formatCurrency(cumulativeTotal)}</span>
@@ -1940,7 +1940,7 @@ export function SavingsEvolutionFiveYearsChart({ overviewKpis = [] }: { overview
                                 {natureLabel}
                               </span>
                               <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', display: 'inline-grid', gridTemplateColumns: '9px auto', columnGap: 4, alignItems: 'center', justifySelf: 'center' }}>
-                                <span style={{ color: amountSign === '+' ? 'var(--color-positive)' : amountSign === '-' ? 'var(--color-negative)' : 'transparent', textAlign: 'center' }}>{amountSign || '+'}</span>
+                                <span style={{ color: amountSign === '+' ? 'var(--color-positive-text)' : amountSign === '-' ? 'var(--color-negative-text)' : 'transparent', textAlign: 'center' }}>{amountSign || '+'}</span>
                                 <span style={{ color: 'var(--neutral-900)' }}>{amountAbs}</span>
                               </span>
                               <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--neutral-900)', textAlign: 'right', justifySelf: 'end' }}>{formatCurrency(cumulativeTotal)}</span>

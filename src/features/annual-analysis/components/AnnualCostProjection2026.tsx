@@ -1392,7 +1392,7 @@ function ProjectionListModal({
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: 'var(--color-warning)',
+              color: 'var(--color-warning-text)',
               flexShrink: 0,
             }}
           >
@@ -1487,9 +1487,9 @@ function ProjectionListModal({
                           {row.parentName}
                         </span>
                         {overBudget && !isBudgetMode ? (
-                          <AlertTriangle size={statusIconSize} color="var(--color-warning)" aria-label="Attention risque de dépassement" />
+                          <AlertTriangle size={statusIconSize} color="var(--color-warning-text)" aria-label="Attention risque de dépassement" />
                         ) : (
-                          <CheckCircle2 size={statusIconSize} color="var(--color-success)" aria-label="Sous contrôle" />
+                          <CheckCircle2 size={statusIconSize} color="var(--color-success-text)" aria-label="Sous contrôle" />
                         )}
                       </div>
                     </div>
@@ -1623,7 +1623,7 @@ function BlockProjectionListModal({
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: 'var(--color-warning)',
+              color: 'var(--color-warning-text)',
               flexShrink: 0,
             }}
           >

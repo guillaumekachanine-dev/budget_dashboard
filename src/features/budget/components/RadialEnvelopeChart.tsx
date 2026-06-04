@@ -118,9 +118,9 @@ export function RadialEnvelopeChart({
         fontSize: 8,
         fontWeight: 700,
         color: overallPct > 100
-          ? 'var(--color-error)'
+          ? 'var(--color-error-text)'
           : overallPct > 85
-            ? 'var(--color-warning)'
+            ? 'var(--color-warning-text)'
             : 'var(--neutral-400)',
         textTransform: 'uppercase',
         letterSpacing: '0.06em',

@@ -101,7 +101,7 @@ export function Annual2026Optimization({ scenarios, totalMonthlyBudget, totalSav
                         <CompactStatGrid minItemWidth={120}>
                           <div>
                             <p style={{ margin: 0, fontSize: '10px', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mensuel</p>
-                            <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', color: 'var(--color-positive)', fontWeight: 'var(--font-weight-bold)' }}>
+                            <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', color: 'var(--color-positive-text)', fontWeight: 'var(--font-weight-bold)' }}>
                               +{formatEuro(scenario.monthlySaving)}
                             </p>
                           </div>

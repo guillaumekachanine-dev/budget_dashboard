@@ -669,7 +669,7 @@ export function TripCockpitCard({ onViewDetail, onMatch, onRepartition }: TripCo
           textAlign: 'center',
         }}
       >
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)' }}>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error-text)' }}>
           Erreur lors du chargement des voyages.
         </p>
       </div>

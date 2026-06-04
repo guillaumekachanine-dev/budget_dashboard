@@ -89,13 +89,13 @@ export function BudgetCategoryList({ lines, actualCategoryMetrics, hasActuals, o
             const displayIconKey = normalizedCategoryName === 'epargne' ? 'epargne' : resolvedIconKey
             const isSavingsCategory = normalizedCategoryName === 'epargne'
             const isSavingsPositive = isSavingsCategory && actualAmount > 0
-            const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+            const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning-text) 72%, var(--neutral-900) 28%)'
             const leftMetricLabel = isSavingsCategory ? 'Épargné' : 'Consommé'
-            const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
-            const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+            const leftMetricColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-700)'
+            const leftMetricPctColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-500)'
             const rightMetricColor = isSavingsCategory
               ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
-              : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+              : (isOverBudget ? 'var(--color-error-text)' : 'var(--color-success-text)')
             const rightMetricText = hasActuals
               ? (isSavingsCategory
                 ? `Reste ${formatCurrencyFloored(variance)}`

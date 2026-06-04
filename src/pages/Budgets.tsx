@@ -531,7 +531,7 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ v
         {formatCurrencyFloored(amount)}
       </span>
       {gapPct != null ? (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: gapPct > 0 ? 'var(--color-error)' : 'var(--color-success)', textAlign: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: gapPct > 0 ? 'var(--color-error-text)' : 'var(--color-success-text)', textAlign: 'center' }}>
           {formatPercentSigned(gapPct)}
         </span>
       ) : null}
@@ -2129,7 +2129,7 @@ export function Budgets() {
     'Dernières opérations YTD',
   ] as const
   const revenueActiveSlideTitle = revenueSlideTitles[revenueGraphSlide] ?? revenueSlideTitles[0]
-  const revenuePageColor = 'var(--color-success)'
+  const revenuePageColor = 'var(--color-success-text)'
   const revenueTableHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
   const revenueListHeaderBackground = `color-mix(in oklab, ${revenuePageColor} 30%, var(--neutral-0) 70%)`
   const categoryListHeaderBackground = `color-mix(in oklab, ${categoryColorFromName(selectedCatInfo?.name)} 22%, var(--neutral-0) 78%)`
@@ -2868,7 +2868,7 @@ export function Budgets() {
                   fontSize: 'var(--font-size-xs)',
                   fontWeight: 700,
                   fontFamily: 'var(--font-mono)',
-                  color: totalMonthlyBudget > 0 && selectedPeriodSpent <= totalMonthlyBudget ? 'var(--color-success)' : 'var(--color-error)'
+                  color: totalMonthlyBudget > 0 && selectedPeriodSpent <= totalMonthlyBudget ? 'var(--color-success-text)' : 'var(--color-error-text)'
                 }}>
                   {totalMonthlyBudget > 0 ? `${((selectedPeriodSpent / totalMonthlyBudget) * 100).toFixed(0)}%` : '0%'}
                 </span>
@@ -3156,7 +3156,7 @@ export function Budgets() {
       ) : null}
 
       {isExpenseBlockPage && selectedBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, marginRight: 'auto', marginBottom: 0, marginLeft: 'auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
           <div style={{ ...buildQuickSearchChartStage(selectedBlockPage.color), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Tempo</span>
@@ -3343,7 +3343,7 @@ export function Budgets() {
       ) : null}
 
       {isRevenueBlockPage ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-5)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, marginRight: 'auto', marginBottom: 0, marginLeft: 'auto', marginTop: 'var(--space-5)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
           <div style={{ ...buildQuickSearchChartStage(revenuePageColor), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--neutral-900)', fontWeight: 700 }}>
@@ -3617,7 +3617,7 @@ export function Budgets() {
                   Chargement des revenus…
                 </div>
               ) : revenueAnalyticsError ? (
-                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--color-error-text)', fontSize: 'var(--font-size-sm)' }}>
                   {revenueAnalyticsError.message}
                 </div>
               ) : !(revenueAnalytics?.bySource.length) ? (
@@ -3832,7 +3832,7 @@ export function Budgets() {
       ) : null}
 
       {isCategoryMode && !isVoyagesCategoryMode ? (
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, margin: '0 auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} style={{ width: '100%', maxWidth: QUICK_SEARCH_CONTENT_MAX_WIDTH, marginRight: 'auto', marginBottom: 0, marginLeft: 'auto', marginTop: 'var(--space-4)', padding: '0 var(--space-4)', display: 'grid', gap: QUICK_SEARCH_OUTER_GAP }}>
           <div style={{ ...buildQuickSearchChartStage(categoryColorFromName(selectedCatInfo?.name)), padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--neutral-500)', fontWeight: 800 }}>Cadence</span>
@@ -4245,7 +4245,7 @@ export function Budgets() {
                     <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Pourcentage moyen d&apos;écart
                     </span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: sixMonthAverageGapPct == null ? 'var(--neutral-500)' : sixMonthAverageGapPct > 0 ? 'var(--color-error-text)' : 'var(--color-success-text)' }}>
                       {sixMonthAverageGapPct == null ? '—' : `${sixMonthAverageGapPct > 0 ? '+' : ''}${sixMonthAverageGapPct.toFixed(1)}%`}
                     </span>
                   </div>
@@ -4452,13 +4452,13 @@ export function Budgets() {
 		                const isOverBudget = variance < 0
                   const isSavingsBlock = row.id === 'epargne'
                   const isSavingsPositive = isSavingsBlock && actualAmount > 0
-                  const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+                  const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning-text) 72%, var(--neutral-900) 28%)'
                   const leftMetricLabel = isSavingsBlock ? 'Épargné' : 'Consommé'
-                  const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
-                  const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+                  const leftMetricColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-700)'
+                  const leftMetricPctColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-500)'
                   const rightMetricColor = isSavingsBlock
                     ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
-                    : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+                    : (isOverBudget ? 'var(--color-error-text)' : 'var(--color-success-text)')
                   const rightMetricText = isSavingsBlock
                     ? `Reste ${formatCurrencyFloored(variance)}`
                     : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
@@ -4589,7 +4589,7 @@ export function Budgets() {
                           style={{
                             margin: 0,
                             fontSize: 'var(--font-size-xs)',
-                            color: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--neutral-500)',
+                            color: isRevenueAboveTarget ? 'var(--color-success-text)' : 'var(--neutral-500)',
                             fontFamily: 'var(--font-mono)',
                             fontWeight: isRevenueAboveTarget ? 700 : 400,
                             flexShrink: 0,

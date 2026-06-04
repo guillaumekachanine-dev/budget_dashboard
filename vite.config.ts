@@ -7,6 +7,12 @@ import { visualizer } from 'rollup-plugin-visualizer'
 const analyzeBundle = process.env.ANALYZE === 'true'
 
 export default defineConfig({
+  // Drop debug logs from production bundles (minify removes these pure, unused
+  // calls). Kept in dev because dev builds aren't minified. console.error /
+  // console.warn are preserved on purpose.
+  esbuild: {
+    pure: ['console.log', 'console.info', 'console.debug'],
+  },
   plugins: [
     react(),
     splitVendorChunkPlugin(),

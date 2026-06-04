@@ -367,7 +367,7 @@ function SubModal({
                     type="button"
                     onClick={onSwitchMode}
                     aria-label={isBudgetMode ? 'Afficher la vue réel' : 'Afficher la vue budget'}
-                    style={{ border: '1px solid var(--color-warning)', background: 'rgba(255,255,255,0.22)', borderRadius: 'var(--radius-full)', width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-warning)', flexShrink: 0 }}
+                    style={{ border: '1px solid var(--color-warning)', background: 'rgba(255,255,255,0.22)', borderRadius: 'var(--radius-full)', width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-warning-text)', flexShrink: 0 }}
                   >
                     {isBudgetMode ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
                   </button>
@@ -465,7 +465,7 @@ function SubModal({
                               <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: 'var(--neutral-800)' }}>
                                 {line.name}
                               </span>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: isOverLineBudget ? 'var(--color-error)' : 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: isOverLineBudget ? 'var(--color-error-text)' : 'var(--primary-700)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                                 {formatCurrencyFloored(line.consumedAmount)}
                               </span>
                             </button>
@@ -1070,8 +1070,8 @@ function CategoryDetailsSection({ rows, categoryById, onCategoryClick, sectionRe
             ? (variance !== 0 ? `Reste ${formatCurrencyFloored(variance)}` : '—')
             : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
           const rightColor = isSavings
-            ? 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
-            : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+            ? 'color-mix(in oklab, var(--color-warning-text) 72%, var(--neutral-900) 28%)'
+            : (isOverBudget ? 'var(--color-error-text)' : 'var(--color-success-text)')
 
           return (
             <button
@@ -2195,13 +2195,13 @@ export function EnveloppesTab({
               const isOverBudget = variance < 0
               const isSavingsBlock = row.id === 'epargne'
               const isSavingsPositive = isSavingsBlock && row.actualAmount > 0
-              const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning) 72%, var(--neutral-900) 28%)'
+              const savingsRemainderColor = 'color-mix(in oklab, var(--color-warning-text) 72%, var(--neutral-900) 28%)'
               const leftMetricLabel = isSavingsBlock ? 'Épargné' : 'Consommé'
-              const leftMetricColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-700)'
-              const leftMetricPctColor = isSavingsPositive ? 'var(--color-success)' : 'var(--neutral-500)'
+              const leftMetricColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-700)'
+              const leftMetricPctColor = isSavingsPositive ? 'var(--color-success-text)' : 'var(--neutral-500)'
               const rightMetricColor = isSavingsBlock
                 ? (variance !== 0 ? savingsRemainderColor : 'var(--neutral-500)')
-                : (isOverBudget ? 'var(--color-error)' : 'var(--color-success)')
+                : (isOverBudget ? 'var(--color-error-text)' : 'var(--color-success-text)')
               const rightMetricText = isSavingsBlock
                 ? `Reste ${formatCurrencyFloored(variance)}`
                 : (isOverBudget ? `Dépass. ${formatCurrencyFloored(Math.abs(variance))}` : `Reste ${formatCurrencyFloored(variance)}`)
@@ -2333,7 +2333,7 @@ export function EnveloppesTab({
                     style={{
                       margin: 0,
                       fontSize: 'var(--font-size-xs)',
-                      color: isRevenueAboveTarget ? 'var(--color-success)' : 'var(--neutral-500)',
+                      color: isRevenueAboveTarget ? 'var(--color-success-text)' : 'var(--neutral-500)',
                       fontFamily: 'var(--font-mono)',
                       fontWeight: isRevenueAboveTarget ? 700 : 400,
                       flexShrink: 0,

@@ -333,7 +333,7 @@ export function TripPickerSection({ transaction, pickerOpen, setPickerOpen }: Tr
           style={{
             margin: 0,
             fontSize: 11,
-            color: 'var(--color-error)',
+            color: 'var(--color-error-text)',
             display: 'flex',
             alignItems: 'center',
             gap: 4,

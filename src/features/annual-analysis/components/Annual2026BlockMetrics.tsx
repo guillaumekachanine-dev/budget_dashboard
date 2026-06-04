@@ -1083,10 +1083,10 @@ export function Annual2026BlockMetrics({
   const isDeltaPositive = metricsState.deltaPct >= 0
   const deltaPercentTone = metricsState.deltaPctRaw == null
     ? 'var(--neutral-500)'
-    : (isDeltaPositive ? 'var(--color-success)' : 'var(--color-error)')
+    : (isDeltaPositive ? 'var(--color-success-text)' : 'var(--color-error-text)')
   const deltaAmountTone = metricsState.deltaPctRaw == null
     ? 'var(--neutral-500)'
-    : (isDeltaPositive ? 'var(--color-warning)' : 'var(--neutral-700)')
+    : (isDeltaPositive ? 'var(--color-warning-text)' : 'var(--neutral-700)')
   const deltaAmountSigned = metricsState.deltaPctRaw == null
     ? '—'
     : `${deltaAmount >= 0 ? '+' : '-'}${fmtCurrencyCompact(Math.abs(deltaAmount))}`
