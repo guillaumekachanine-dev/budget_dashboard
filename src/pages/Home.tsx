@@ -1155,6 +1155,248 @@ function UpdateMiniTile({ onClick }: { onClick: () => void }) {
   )
 }
 
+function VoyageTransactionsTile({
+  onClick,
+}: {
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Voir les transactions du voyage"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
+      }}
+    >
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+      >
+        <defs>
+          <linearGradient id="voyage-transactions-coin" x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%" stopColor="#FFD75A" />
+            <stop offset="100%" stopColor="#FFC12E" />
+          </linearGradient>
+          <linearGradient id="voyage-transactions-fade" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(248, 250, 255, 0)" />
+            <stop offset="68%" stopColor="rgba(248, 250, 255, 0.18)" />
+            <stop offset="100%" stopColor="var(--neutral-50)" />
+          </linearGradient>
+        </defs>
+
+        <motion.path
+          d="M 20 42 A 58 58 0 0 1 150 26"
+          fill="none"
+          stroke="#FDBA21"
+          strokeWidth="13"
+          strokeLinecap="round"
+          initial={{ pathLength: 0.8, opacity: 0.86 }}
+          animate={{ pathLength: hovered ? 1 : 0.92, opacity: hovered ? 1 : 0.9 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        />
+        <motion.path
+          d="M 143 20 L 175 39 L 146 55"
+          fill="none"
+          stroke="#FDBA21"
+          strokeWidth="13"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ opacity: 0.9 }}
+          animate={{ opacity: hovered ? 1 : 0.92, x: hovered ? 1 : 0 }}
+          transition={{ duration: 0.24 }}
+        />
+
+        <motion.path
+          d="M 180 76 A 58 58 0 0 1 50 93"
+          fill="none"
+          stroke="#4B87C8"
+          strokeWidth="13"
+          strokeLinecap="round"
+          initial={{ pathLength: 0.8, opacity: 0.86 }}
+          animate={{ pathLength: hovered ? 1 : 0.92, opacity: hovered ? 1 : 0.9 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        />
+        <motion.path
+          d="M 56 98 L 25 79 L 53 63"
+          fill="none"
+          stroke="#4B87C8"
+          strokeWidth="13"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ opacity: 0.9 }}
+          animate={{ opacity: hovered ? 1 : 0.92, x: hovered ? -1 : 0 }}
+          transition={{ duration: 0.24 }}
+        />
+
+        <motion.circle
+          cx="100"
+          cy="60"
+          r="28"
+          fill="url(#voyage-transactions-coin)"
+          initial={{ scale: 1 }}
+          animate={{ scale: hovered ? 1.04 : 1 }}
+          transition={{ duration: 0.24 }}
+        />
+        <text
+          x="100"
+          y="69"
+          textAnchor="middle"
+          fontSize="33"
+          fontWeight="700"
+          fill="#F0A51A"
+          fontFamily="var(--font-sans)"
+        >
+          $
+        </text>
+
+        <rect x="0" y="70" width="200" height="42" fill="url(#voyage-transactions-fade)" />
+
+        <text
+          x={100}
+          y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
+        >
+          TRANSACTIONS
+        </text>
+      </svg>
+    </button>
+  )
+}
+
+function VoyageAddExpenseMirrorTile({
+  onClick,
+}: {
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Ajouter une dépense voyage"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 96,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'opacity 0.2s ease',
+        opacity: hovered ? 0.68 : 1,
+      }}
+    >
+      <svg
+        viewBox="0 0 200 120"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+      >
+        <defs>
+          <radialGradient id="voyage-add-halo" cx="50%" cy="38%" r="52%">
+            <stop offset="0%" stopColor="rgba(255, 240, 196, 0.95)" />
+            <stop offset="38%" stopColor="rgba(255, 209, 101, 0.62)" />
+            <stop offset="72%" stopColor="rgba(243, 161, 28, 0.18)" />
+            <stop offset="100%" stopColor="rgba(243, 161, 28, 0)" />
+          </radialGradient>
+          <linearGradient id="voyage-add-plus" x1="50%" y1="6%" x2="50%" y2="100%">
+            <stop offset="0%" stopColor="#FFF8E1" />
+            <stop offset="30%" stopColor="#FFE08A" />
+            <stop offset="68%" stopColor="#FFBF32" />
+            <stop offset="100%" stopColor="#F09A16" />
+          </linearGradient>
+          <linearGradient id="voyage-add-plus-shine" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255, 255, 255, 0.88)" />
+            <stop offset="28%" stopColor="rgba(255, 255, 255, 0.32)" />
+            <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+          </linearGradient>
+          <linearGradient id="voyage-add-fade" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(248, 250, 255, 0)" />
+            <stop offset="70%" stopColor="rgba(248, 250, 255, 0.08)" />
+            <stop offset="86%" stopColor="rgba(248, 250, 255, 0.28)" />
+            <stop offset="100%" stopColor="var(--neutral-50)" />
+          </linearGradient>
+        </defs>
+
+        <motion.g
+          animate={{ y: hovered ? -2 : 0, scale: hovered ? 1.03 : 1 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          style={{ transformOrigin: '100px 46px' }}
+        >
+          <circle cx="100" cy="46" r="38" fill="url(#voyage-add-halo)" />
+          <circle cx="100" cy="46" r="26" fill="rgba(255, 246, 219, 0.3)" />
+          <rect
+            x="89"
+            y="14"
+            width="22"
+            height="64"
+            rx="11"
+            fill="url(#voyage-add-plus)"
+            style={{ filter: 'drop-shadow(0 12px 18px rgba(215, 149, 34, 0.18))' }}
+          />
+          <rect
+            x="68"
+            y="35"
+            width="64"
+            height="22"
+            rx="11"
+            fill="url(#voyage-add-plus)"
+            style={{ filter: 'drop-shadow(0 12px 18px rgba(215, 149, 34, 0.16))' }}
+          />
+          <rect x="94" y="18" width="8" height="52" rx="4" fill="url(#voyage-add-plus-shine)" opacity="0.9" />
+          <rect x="74" y="40" width="46" height="7" rx="3.5" fill="url(#voyage-add-plus-shine)" opacity="0.72" />
+        </motion.g>
+
+        <rect x="0" y="72" width="200" height="40" fill="url(#voyage-add-fade)" />
+
+        <text
+          x={100}
+          y={116}
+          textAnchor="middle"
+          fontSize={14}
+          fontWeight="800"
+          fill="var(--neutral-400)"
+          fontFamily="var(--font-mono)"
+          letterSpacing="0.13em"
+        >
+          + DÉPENSE
+        </text>
+      </svg>
+    </button>
+  )
+}
+
 // ─── Recherche rapide animée (remplace QuickSearchTile en état déplié) ───────
 
 const CONIC_GRAD = 'conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg)'
@@ -1802,6 +2044,11 @@ export function Home() {
   const [matchingTripId,      setMatchingTripId]      = useState<string | null>(null)
   const [matchingTripName,    setMatchingTripName]    = useState<string | null>(null)
 
+  const openTripExpenseModal = useCallback((tripId: string | null = null) => {
+    setTripExpenseInitialId(tripId)
+    setTripExpenseModalOpen(true)
+  }, [])
+
   useEffect(() => {
     if (!accountEntries.length) {
       setSelectedAccountPresetId(null)
@@ -1879,6 +2126,7 @@ export function Home() {
   })
   const { allTrips: tripCockpitRows, selectedTrip: selectedTripCockpit } = useTripCockpit()
   const tripExpenseBars = useTripExpenseBars(selectedTripCockpit)
+  const primaryTripExpenseTarget = selectedTripCockpit ?? tripCockpitRows[0] ?? null
   const { data: livretATxns } = useTransactions({ accountId: livretAAccount?.id ?? null, startDate: '2024-01-01' })
   const { data: lddsTxns } = useTransactions({ accountId: lddsAccount?.id ?? null, startDate: '2024-01-01' })
   const selectedPresetId = selectedAccountEntry?.preset.id ?? null
@@ -2549,10 +2797,6 @@ export function Home() {
                 {isBudgetVoyageTab ? (
                   <TripCockpitCard
                     onViewDetail={(tripId) => navigate(tripId ? `/voyages/${tripId}` : '/voyages')}
-                    onAddExpense={(tripId) => {
-                      setTripExpenseInitialId(tripId)
-                      setTripExpenseModalOpen(true)
-                    }}
                     onMatch={(tripId, tripName) => {
                       setMatchingTripId(tripId)
                       setMatchingTripName(tripName ?? null)
@@ -2818,6 +3062,38 @@ export function Home() {
                 )}
               </div>
             </section>
+
+            {isBudgetVoyageTab ? (
+              <section
+                style={{ padding: sectionHorizontalPadding, paddingTop: 'var(--space-8)' }}
+              >
+                <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      columnGap: 'var(--space-4)',
+                      rowGap: 'var(--space-2)',
+                      position: 'relative',
+                      paddingLeft: 16,
+                      paddingRight: 16,
+                    }}
+                  >
+                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                      <VoyageTransactionsTile
+                        onClick={() => navigate(primaryTripExpenseTarget ? `/voyages/${primaryTripExpenseTarget.trip_id}` : '/voyages')}
+                      />
+                    </div>
+
+                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                      <VoyageAddExpenseMirrorTile
+                        onClick={() => openTripExpenseModal(primaryTripExpenseTarget?.trip_id ?? null)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <TripBudgetOverlay
               open={showRepartitionModal}

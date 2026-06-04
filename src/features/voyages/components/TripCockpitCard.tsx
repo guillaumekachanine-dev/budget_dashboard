@@ -1,7 +1,5 @@
 import { useId, useMemo } from 'react'
-import { ArrowRightLeft, ArrowRight, Plane, ShoppingBag } from 'lucide-react'
-import { useTripExpenses } from '../hooks/useTripExpenses'
-import type { TripExpenseRow } from '../types'
+import { ArrowRightLeft, ArrowRight, Plane } from 'lucide-react'
 import { useTripCockpit } from '../hooks/useTripCockpit'
 import type { TripCockpitRow } from '@/lib/types'
 import { formatCurrencyFloored } from '@/lib/utils'
@@ -256,17 +254,18 @@ function TripProgressRing({
 function TripCard({
   trip,
   onViewDetail,
-  onAddExpense,
   onMatch,
+  onRepartition,
 }: {
   trip: TripCockpitRow
   onViewDetail?: () => void
-  onAddExpense?: () => void
   onMatch?: () => void
+  onRepartition?: () => void
 }) {
   const consumedPct = trip.consumed_pct ?? 0
   const hasPlannedBudget = trip.planned_budget != null && trip.planned_budget > 0
   const showMatch = trip.pending_match_count > 0
+  const shineId = useId().replace(/:/g, '')
 
   const dateRange = useMemo(() => {
     return `${fmtDateShort(trip.start_date)} → ${fmtDateShort(trip.end_date)}`
@@ -297,6 +296,42 @@ function TripCard({
         gap: 'var(--space-4)',
       }}
     >
+      <style>{`
+        @keyframes trip-cta-shine-a-${shineId} {
+          0%, 84%, 100% {
+            transform: translateX(-190%) skewX(-24deg);
+            opacity: 0;
+          }
+          85% {
+            opacity: 0.08;
+          }
+          95% {
+            transform: translateX(220%) skewX(-24deg);
+            opacity: 0.72;
+          }
+          96%, 100% {
+            opacity: 0;
+          }
+        }
+
+        @keyframes trip-cta-shine-b-${shineId} {
+          0%, 81%, 100% {
+            transform: translateX(-190%) skewX(-24deg);
+            opacity: 0;
+          }
+          82% {
+            opacity: 0.08;
+          }
+          92% {
+            transform: translateX(220%) skewX(-24deg);
+            opacity: 0.66;
+          }
+          93%, 100% {
+            opacity: 0;
+          }
+        }
+      `}</style>
+
       {/* ── Header: Nom + Dates ───────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
         {/* 1. Nom seul — sans émoji ni pastille statut */}
@@ -374,10 +409,10 @@ function TripCard({
 
       {/* ── 3. CTAs — mêmes dimensions, même ligne ──────────── */}
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-        {onAddExpense ? (
+        {onRepartition ? (
           <button
             type="button"
-            onClick={onAddExpense}
+            onClick={onRepartition}
             style={{
               flex: '1 1 0',
               display: 'inline-flex',
@@ -395,6 +430,8 @@ function TripCard({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               transition: 'background 120ms ease, border-color 120ms ease',
+              position: 'relative',
+              overflow: 'hidden',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255, 214, 130, 0.26) 100%)'
@@ -405,7 +442,22 @@ function TripCard({
               e.currentTarget.style.borderColor = 'rgba(193, 135, 40, 0.28)'
             }}
           >
-            + dépense
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: -10,
+                bottom: -10,
+                left: '-42%',
+                width: '38%',
+                pointerEvents: 'none',
+                background: 'linear-gradient(115deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 34%, rgba(255,255,255,0.62) 50%, rgba(255,248,223,0.22) 62%, rgba(255,255,255,0) 100%)',
+                mixBlendMode: 'screen',
+                filter: 'blur(0.5px)',
+                animation: `trip-cta-shine-a-${shineId} 7.3s linear infinite`,
+              }}
+            />
+            <span style={{ position: 'relative', zIndex: 1 }}>Répartition</span>
           </button>
         ) : null}
 
@@ -429,6 +481,8 @@ function TripCard({
             cursor: 'pointer',
             whiteSpace: 'nowrap',
             transition: 'background 120ms ease',
+            position: 'relative',
+            overflow: 'hidden',
           }}
           onMouseEnter={e => {
             e.currentTarget.style.background = 'rgba(255,255,255,0.24)'
@@ -437,8 +491,26 @@ function TripCard({
             e.currentTarget.style.background = 'rgba(255,255,255,0.16)'
           }}
         >
-          Voir détails
-          <ArrowRight size={12} />
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: -10,
+              bottom: -10,
+              left: '-42%',
+              width: '38%',
+              pointerEvents: 'none',
+              background: 'linear-gradient(115deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.07) 34%, rgba(255,255,255,0.54) 50%, rgba(255,255,255,0.18) 62%, rgba(255,255,255,0) 100%)',
+              mixBlendMode: 'screen',
+              filter: 'blur(0.5px)',
+              animation: `trip-cta-shine-b-${shineId} 7.9s linear infinite`,
+              animationDelay: '3.1s',
+            }}
+          />
+          <span style={{ position: 'relative', zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            Voir détails
+            <ArrowRight size={12} />
+          </span>
         </button>
 
         {showMatch && onMatch ? (
@@ -479,196 +551,6 @@ function TripCard({
   )
 }
 
-// ─── Composant interne : dernières transactions du voyage ─────────────────────
-
-function RecentTransactions({
-  expenses,
-  isLoading,
-  onRepartition,
-}: {
-  expenses: TripExpenseRow[]
-  isLoading: boolean
-  onRepartition?: () => void
-}) {
-  const recent = useMemo(() => expenses.slice(0, 5), [expenses])
-
-  return (
-    <div>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-3)',
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            color: 'var(--neutral-500)',
-          }}
-        >
-          Dernières transactions
-        </p>
-        {onRepartition ? (
-          <button
-            type="button"
-            onClick={onRepartition}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 30,
-              padding: '0 12px',
-              borderRadius: 'var(--radius-xl)',
-              border: '2px solid transparent',
-              background: 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box',
-              color: 'var(--neutral-600)',
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              letterSpacing: '0.01em',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.background = 'linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg) border-box'
-            }}
-          >
-            Répartition
-          </button>
-        ) : null}
-      </div>
-
-      {/* Body */}
-      {isLoading ? (
-        /* Skeleton */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          {[70, 90, 55].map((w, i) => (
-            <div
-              // eslint-disable-next-line react/no-array-index-key
-              key={i}
-              style={{
-                height: 44,
-                background: 'var(--neutral-100)',
-                borderRadius: 'var(--radius-md)',
-                width: `${w}%`,
-                animation: 'pulse 1.4s ease-in-out infinite',
-              }}
-            />
-          ))}
-        </div>
-      ) : recent.length === 0 ? (
-        /* Empty state */
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            padding: 'var(--space-5) var(--space-4)',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px dashed rgba(255,255,255,0.12)',
-            borderRadius: 'var(--radius-lg)',
-            textAlign: 'center',
-          }}
-        >
-          <ShoppingBag size={20} color="rgba(255,255,255,0.3)" />
-          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-            Aucune transaction pour ce voyage
-          </p>
-        </div>
-      ) : (
-        /* Transaction list */
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
-          }}
-        >
-          {recent.map((tx, idx) => {
-            const dateStr = new Date(`${tx.expense_date}T00:00:00`).toLocaleDateString('fr-FR', {
-              day: '2-digit',
-              month: 'short',
-            })
-            const isLast = idx === recent.length - 1
-            return (
-              <div
-                key={`${tx.source_type}-${tx.source_id}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-3)',
-                  padding: '10px var(--space-3)',
-                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.07)',
-                }}
-              >
-                {/* Date badge */}
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-mono)',
-                    color: 'rgba(255,255,255,0.45)',
-                    width: 38,
-                    textAlign: 'right',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {dateStr}
-                </span>
-
-                {/* Label */}
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.9)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {tx.label || tx.category_name || '—'}
-                </span>
-
-                {/* Amount */}
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 13,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-mono)',
-                    color: '#FB923C',
-                  }}
-                >
-                  {formatCurrencyFloored(tx.personal_amount)}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Composant interne : skeleton loading ─────────────────────────────────────
 
 function TripSkeleton() {
@@ -686,7 +568,6 @@ function TripSkeleton() {
       <div style={{ padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
         {[80, 50, 100, 60].map((w, i) => (
           <div
-            // eslint-disable-next-line react/no-array-index-key
             key={i}
             style={{
               height: i === 0 ? 20 : i === 2 ? 40 : 14,
@@ -763,11 +644,6 @@ export interface TripCockpitCardProps {
    */
   onViewDetail?: (tripId?: string) => void
   /**
-   * Ouvre la modale de saisie d'une dépense manuelle.
-   * Non affiché si non fourni (feature à venir).
-   */
-  onAddExpense?: (tripId: string) => void
-  /**
    * Ouvre le workflow de rapprochement manuel↔bancaire.
    * Non affiché si non fourni (feature à venir).
    */
@@ -776,11 +652,8 @@ export interface TripCockpitCardProps {
   onRepartition?: () => void
 }
 
-export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch, onRepartition }: TripCockpitCardProps) {
+export function TripCockpitCard({ onViewDetail, onMatch, onRepartition }: TripCockpitCardProps) {
   const { selectedTrip, isLoading, error } = useTripCockpit()
-  const { expenses: tripExpenses, isLoading: expensesLoading } = useTripExpenses(
-    selectedTrip?.trip_id ?? null
-  )
 
   if (isLoading) return <TripSkeleton />
 
@@ -811,12 +684,7 @@ export function TripCockpitCard({ onViewDetail, onAddExpense, onMatch, onReparti
       <TripCard
         trip={selectedTrip}
         onViewDetail={onViewDetail ? () => onViewDetail(selectedTrip.trip_id) : undefined}
-        onAddExpense={onAddExpense ? () => onAddExpense(selectedTrip.trip_id) : undefined}
         onMatch={onMatch ? () => onMatch(selectedTrip.trip_id, selectedTrip.name) : undefined}
-      />
-      <RecentTransactions
-        expenses={tripExpenses}
-        isLoading={expensesLoading}
         onRepartition={onRepartition}
       />
     </div>
