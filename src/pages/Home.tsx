@@ -465,6 +465,24 @@ function EcheancesTimelineTile({
 }) {
   const [hovered, setHovered] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const tileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!expanded) return
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (tileRef.current && !tileRef.current.contains(event.target as Node)) {
+        setExpanded(false)
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [expanded])
 
   const { dots } = useMemo(() => {
     const maxAmt = Math.max(
@@ -496,14 +514,17 @@ function EcheancesTimelineTile({
   const trackPath   = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${arcX1.toFixed(1)} ${arcY1.toFixed(1)}`
   const elapsedPath = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${todayX.toFixed(1)} ${todayY.toFixed(1)}`
 
-  const handleTileClick = () => {
+  const handleTileClick = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.stopPropagation()
+    }
     setExpanded(prev => !prev)
   }
 
   const shortcuts = [
-    { label: '+3', filter: 'j3' as const, t: 0 },
-    { label: '+7', filter: 'j7' as const, t: 0.30 },
-    { label: '+15', filter: 'j15' as const, t: 0.70 },
+    { label: '3', filter: 'j3' as const, t: 0 },
+    { label: '7', filter: 'j7' as const, t: 0.30 },
+    { label: '15', filter: 'j15' as const, t: 0.70 },
     { label: 'mois', filter: 'mois' as const, t: 1 }
   ]
 
@@ -537,6 +558,7 @@ function EcheancesTimelineTile({
 
   return (
     <div
+      ref={tileRef}
       role="button"
       tabIndex={0}
       aria-label={expanded ? 'Masquer les raccourcis d’échéances' : 'Afficher les raccourcis d’échéances'}
@@ -545,7 +567,7 @@ function EcheancesTimelineTile({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          handleTileClick()
+          handleTileClick(e)
         }
       }}
       onMouseEnter={() => setHovered(true)}
@@ -622,11 +644,7 @@ function EcheancesTimelineTile({
 
         {/* Pastilles Raccourcis */}
         {shortcuts.map((sc, idx) => {
-          const rad = ((PARC_A0 + sc.t * PARC_SPAN) * Math.PI) / 180
-          const textDist = 19
-          const dx = textDist * Math.cos(rad)
-          const dy = textDist * Math.sin(rad)
-
+          const isMonth = sc.label === 'mois'
           return (
             <motion.g
               key={sc.filter}
@@ -644,18 +662,18 @@ function EcheancesTimelineTile({
               <circle
                 cx={0}
                 cy={0}
-                r={8.5}
+                r={13}
                 fill="var(--neutral-150)"
                 stroke="var(--neutral-300)"
                 strokeWidth={1.5}
                 filter="url(#badge-shadow)"
               />
               <text
-                x={dx}
-                y={dy}
+                x={0}
+                y={0.5}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={9.5}
+                fontSize={isMonth ? 7.5 : 9.5}
                 fontWeight="800"
                 fill="var(--neutral-800)"
                 fontFamily="var(--font-mono)"
@@ -677,9 +695,9 @@ function EcheancesTimelineTile({
           fontFamily="var(--font-mono)"
           letterSpacing="0.13em"
           animate={expanded ? {
-            y: [116, 120, 112, 116]
+            attrY: [116, 120, 112, 116]
           } : {
-            y: 116
+            attrY: 116
           }}
           transition={expanded ? {
             times: [0, 0.25, 0.65, 1],
@@ -1317,7 +1335,7 @@ function VoyageTransactionsTile({
       }}
     >
       <svg
-        viewBox="0 0 200 120"
+        viewBox="0 0 200 126"
         preserveAspectRatio="xMidYMid meet"
         style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
@@ -1390,13 +1408,13 @@ function VoyageTransactionsTile({
         {/* Label */}
         <text
           x={100}
-          y={115}
+          y={122}
           textAnchor="middle"
-          fontSize={10}
+          fontSize={14}
           fontWeight="800"
           fill="var(--neutral-400)"
           fontFamily="var(--font-mono)"
-          letterSpacing="0.16em"
+          letterSpacing="0.13em"
         >
           TRANSACTIONS
         </text>
@@ -1450,7 +1468,7 @@ function VoyageAddExpenseMirrorTile({
       }}
     >
       <svg
-        viewBox="0 0 200 120"
+        viewBox="0 0 200 126"
         preserveAspectRatio="xMidYMid meet"
         style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
@@ -1519,7 +1537,7 @@ function VoyageAddExpenseMirrorTile({
         {/* Label */}
         <text
           x={100}
-          y={116}
+          y={122}
           textAnchor="middle"
           fontSize={14}
           fontWeight="800"
@@ -3203,13 +3221,13 @@ export function Home() {
                       alignItems: 'center',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
                       <VoyageTransactionsTile
                         onClick={() => setShowTripTransactionsModal(true)}
                       />
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
                       <VoyageAddExpenseMirrorTile
                         onClick={() => openTripExpenseModal(primaryTripExpenseTarget?.trip_id ?? null)}
                       />
@@ -3381,7 +3399,7 @@ export function Home() {
                         layoutId="qs-update"
                         layout
                         style={{
-                          flex: '0 0 calc(50% - 8px)',
+                          flex: updateExpanded ? '0 0 100px' : '0 0 calc(50% - 8px)',
                           display: 'flex',
                           justifyContent: 'center',
                           minWidth: 0,
@@ -3396,15 +3414,17 @@ export function Home() {
                       </motion.div>
 
                       {/* Colonne droite — Recherche (fermé) ou Options (ouvert) */}
-                      <div
+                      <motion.div
+                        layout
                         style={{
-                          flex: '0 0 calc(50% - 8px)',
+                          flex: updateExpanded ? '0 0 calc(100% - 116px)' : '0 0 calc(50% - 8px)',
                           position: 'relative',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
                           minWidth: 0,
                         }}
+                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
                       >
                         <AnimatePresence initial={false} mode="sync">
                           {!updateExpanded ? (
@@ -3471,6 +3491,8 @@ export function Home() {
                               style={{
                                 display: 'flex',
                                 alignItems: 'flex-start',
+                                justifyContent: 'center',
+                                gap: 20,
                                 width: '100%',
                                 position: 'absolute',
                                 top: 0,
@@ -3503,7 +3525,7 @@ export function Home() {
                             </motion.div>
                           )}
                         </AnimatePresence>
-                      </div>
+                      </motion.div>
                     </motion.div>
 
                   )}
