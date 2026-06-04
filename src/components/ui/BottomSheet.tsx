@@ -66,9 +66,7 @@ export function BottomSheet({
 
   const sheetStyle: React.CSSProperties = isCenter
     ? {
-        position: 'fixed',
-        left: '50%',
-        top: '50%',
+        position: 'relative',
         zIndex: zIndex + 1,
         width: 'calc(100% - 32px)',
         maxWidth: 480,
@@ -87,6 +85,7 @@ export function BottomSheet({
         flexDirection: 'column',
         overflow: 'hidden',
         touchAction: 'auto',
+        pointerEvents: 'auto',
       }
     : {
         position: 'fixed',
@@ -110,16 +109,13 @@ export function BottomSheet({
   const animProps = layoutId
     ? {
         layoutId,
-        initial: { x: '-50%', y: '-50%' },
-        animate: { x: '-50%', y: '-50%' },
-        exit: { x: '-50%', y: '-50%' },
         transition: { duration: 0.32, ease: [0.25, 0.1, 0.25, 1] },
       }
     : isCenter
     ? {
-        initial: { scale: 0.08, opacity: 0, x: '-50%', y: '-50%' },
-        animate: { scale: 1, opacity: 1, x: '-50%', y: '-50%' },
-        exit: { scale: 0.08, opacity: 0, x: '-50%', y: '-50%' },
+        initial: { scale: 0.08, opacity: 0 },
+        animate: { scale: 1, opacity: 1 },
+        exit: { scale: 0.08, opacity: 0 },
         transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
       }
     : {
@@ -145,148 +141,172 @@ export function BottomSheet({
           />
 
           {/* Sheet */}
-          <motion.div
-            key="bs-sheet"
-            ref={sheetRef}
-            role="dialog"
-            aria-modal="true"
-            drag={isCenter ? false : 'y'}
-            dragConstraints={isCenter ? undefined : { top: 0 }}
-            dragElastic={isCenter ? undefined : { top: 0, bottom: 0.15 }}
-            onDragEnd={isCenter ? undefined : handleDragEnd}
-            {...animProps}
-            style={sheetStyle}
-          >
-            {/* Drag handle */}
-            {!isCenter && (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  paddingTop: 10,
-                  paddingBottom: hasHeader ? 6 : 10,
-                  flexShrink: 0,
-                  cursor: 'grab',
-                }}
+          {(() => {
+            const sheetElement = (
+              <motion.div
+                key="bs-sheet"
+                ref={sheetRef}
+                role="dialog"
+                aria-modal="true"
+                drag={isCenter ? false : 'y'}
+                dragConstraints={isCenter ? undefined : { top: 0 }}
+                dragElastic={isCenter ? undefined : { top: 0, bottom: 0.15 }}
+                onDragEnd={isCenter ? undefined : handleDragEnd}
+                {...animProps}
+                style={sheetStyle}
               >
-                <div
-                  style={{
-                    width: 36,
-                    height: 4,
-                    background: 'var(--neutral-300)',
-                    borderRadius: 'var(--radius-full)',
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Header */}
-            {hasHeader ? (
-              <div
-                style={{
-                  padding: '8px var(--space-5)',
-                  borderBottom: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.08)'}` : '1px solid var(--neutral-150)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-3)',
-                  flexShrink: 0,
-                }}
-              >
-                {header ?? (
-                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                    <p style={{
-                      margin: 0,
-                      fontSize: 'var(--font-size-md)',
-                      fontWeight: 800,
-                      color: isGlass ? 'rgba(255,255,255,0.88)' : 'var(--neutral-900)',
-                      letterSpacing: isGlass ? '-0.01em' : undefined,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {title}
-                    </p>
-                    {subtitle && (
-                      <p style={{
-                        margin: '2px 0 0',
-                        fontSize: 'var(--font-size-xs)',
-                        color: isGlass ? 'rgba(255,255,255,0.48)' : 'var(--neutral-500)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {subtitle}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {!header ? (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Fermer"
+                {/* Drag handle */}
+                {!isCenter && (
+                  <div
                     style={{
-                      flexShrink: 0,
-                      border: isGlass ? '1px solid rgba(255,255,255,0.14)' : 'none',
-                      background: isGlass ? 'rgba(255,255,255,0.09)' : 'var(--neutral-100)',
-                      color: isGlass ? 'rgba(255,255,255,0.6)' : 'var(--neutral-600)',
-                      width: 32,
-                      height: 32,
-                      minWidth: 32,
-                      minHeight: 32,
-                      borderRadius: 'var(--radius-full)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
+                      display: 'flex',
                       justifyContent: 'center',
-                      cursor: 'pointer',
-                      padding: 0,
+                      paddingTop: 10,
+                      paddingBottom: hasHeader ? 6 : 10,
+                      flexShrink: 0,
+                      cursor: 'grab',
                     }}
                   >
-                    <X size={11} />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+                    <div
+                      style={{
+                        width: 36,
+                        height: 4,
+                        background: 'var(--neutral-300)',
+                        borderRadius: 'var(--radius-full)',
+                      }}
+                    />
+                  </div>
+                )}
 
-            {/* Close button for headless centered modals */}
-            {isCenter && !hasHeader && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0 0', flexShrink: 0 }}>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Fermer"
+                {/* Header */}
+                {hasHeader ? (
+                  <div
+                    style={{
+                      padding: '8px var(--space-5)',
+                      borderBottom: isGlass ? `1px solid ${glassBorder ?? 'rgba(255,255,255,0.08)'}` : '1px solid var(--neutral-150)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 'var(--space-3)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {header ?? (
+                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: 'var(--font-size-md)',
+                          fontWeight: 800,
+                          color: isGlass ? 'rgba(255,255,255,0.88)' : 'var(--neutral-900)',
+                          letterSpacing: isGlass ? '-0.01em' : undefined,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {title}
+                        </p>
+                        {subtitle && (
+                          <p style={{
+                            margin: '2px 0 0',
+                            fontSize: 'var(--font-size-xs)',
+                            color: isGlass ? 'rgba(255,255,255,0.48)' : 'var(--neutral-500)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {subtitle}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {!header ? (
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Fermer"
+                        style={{
+                          flexShrink: 0,
+                          border: isGlass ? '1px solid rgba(255,255,255,0.14)' : 'none',
+                          background: isGlass ? 'rgba(255,255,255,0.09)' : 'var(--neutral-100)',
+                          color: isGlass ? 'rgba(255,255,255,0.6)' : 'var(--neutral-600)',
+                          width: 32,
+                          height: 32,
+                          minWidth: 32,
+                          minHeight: 32,
+                          borderRadius: 'var(--radius-full)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                      >
+                        <X size={11} />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Close button for headless centered modals */}
+                {isCenter && !hasHeader && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0 0', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Fermer"
+                      style={{
+                        border: 'none',
+                        background: 'var(--neutral-100)',
+                        color: 'var(--neutral-600)',
+                        width: 32,
+                        height: 32,
+                        borderRadius: 'var(--radius-full)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Scrollable content */}
+                <div
                   style={{
-                    border: 'none',
-                    background: 'var(--neutral-100)',
-                    color: 'var(--neutral-600)',
-                    width: 32,
-                    height: 32,
-                    borderRadius: 'var(--radius-full)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
+                    flex: 1,
+                    overflowY: 'auto',
+                    overscrollBehavior: 'contain',
+                    WebkitOverflowScrolling: 'touch',
+                    touchAction: 'pan-y',
                   }}
                 >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
+                  {children}
+                </div>
+              </motion.div>
+            )
 
-            {/* Scrollable content */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                overscrollBehavior: 'contain',
-                WebkitOverflowScrolling: 'touch',
-                touchAction: 'pan-y',
-              }}
-            >
-              {children}
-            </div>
-          </motion.div>
+            if (isCenter) {
+              return (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: zIndex + 1,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {sheetElement}
+                </div>
+              )
+            }
+
+            return sheetElement
+          })()}
         </>
       ) : null}
     </AnimatePresence>

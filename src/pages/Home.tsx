@@ -2854,13 +2854,13 @@ export function Home() {
                             size={200}
                             centerContent={
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-                                <span style={{ display: 'block', fontSize: 'clamp(14px, 4vw, 18px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                                <span style={{ display: 'block', fontSize: 'clamp(18px, 5.2vw, 22px)', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
                                   {formatCurrencyFloored(animatedResteUtile)}
                                 </span>
                                 <span style={{ display: 'block', fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3, lineHeight: 1 }}>
                                   Reste utile
                                 </span>
-                                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#FFD550', fontFamily: 'var(--font-mono)', marginTop: 5, lineHeight: 1 }}>
+                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#FFD550', fontFamily: 'var(--font-mono)', marginTop: 5, lineHeight: 1 }}>
                                   {formatCurrencyFloored(animatedBudgetPerDay)}/jour
                                 </span>
                               </div>
@@ -4045,7 +4045,7 @@ export function Home() {
               <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255, 255, 255, 0.9)' }}>Reste utile</span>
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 15,
                   fontWeight: 800,
                   fontFamily: 'var(--font-mono)',
                   color: resteUtileDisplay >= 0 ? '#FFD550' : '#FC5A5A',
@@ -4059,7 +4059,7 @@ export function Home() {
               <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255, 255, 255, 0.9)' }}>Budget/jour</span>
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 15,
                   fontWeight: 800,
                   fontFamily: 'var(--font-mono)',
                   color: budgetPerDayDisplay >= 0 ? '#FFD550' : '#FC5A5A',
