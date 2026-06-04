@@ -1,0 +1,11 @@
+node_modules
+.git
+.agents
+.claude
+dist
+test-results
+/*.png
+/*.png.html
+/mockups-modales.html
+/dashboard.html
+/dashboard_budget_design_system
