@@ -43,6 +43,7 @@ export const QK = {
   TRIPS_FOR_MONTH: 'trips-for-month',
   VOYAGES: 'voyages',
   VOYAGES_ALL: 'voyages-all',
+  VOYAGES_PLANNED_BUDGET_CATEGORIES: 'voyages-planned-budget-categories',
   VOYAGES_TRANSACTIONS: 'voyages-transactions',
 } as const
 

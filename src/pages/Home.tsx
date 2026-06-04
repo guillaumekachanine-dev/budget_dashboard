@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDownToLine, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -99,7 +99,7 @@ const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 // Swipe constants (module-level pour stabilité des dépendances)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
-const HERO_ACTION_MODAL_OPEN_DELAY_MS = 120
+const HERO_ACTION_MODAL_OPEN_DELAY_MS = 220
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -178,6 +178,57 @@ function getGlassColors(accentColor: string | null | undefined) {
     glassBackground: `rgba(${bgR}, ${bgG}, ${bgB}, 0.54)`,
     glassBorder: `rgba(${r}, ${g}, ${b}, 0.15)`,
   }
+}
+
+function HeroActionModalContent({ children }: { children: ReactNode }) {
+  return (
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      variants={{
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: {
+            delayChildren: 0.08,
+            staggerChildren: 0.055,
+          },
+        },
+        exit: {
+          opacity: 0,
+          transition: { duration: 0.12 },
+        },
+      }}
+      style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function HeroActionModalItem({ children }: { children: ReactNode }) {
+  return (
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 8, filter: 'blur(4px)' },
+        visible: {
+          opacity: 1,
+          y: 0,
+          filter: 'blur(0px)',
+          transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] },
+        },
+        exit: {
+          opacity: 0,
+          y: 4,
+          filter: 'blur(3px)',
+          transition: { duration: 0.12 },
+        },
+      }}
+    >
+      {children}
+    </motion.div>
+  )
 }
 
 const SAVINGS_BOOKLET_IDS = ['livret_a', 'ldds'] as const
@@ -326,7 +377,7 @@ function DriftsModal({
   top5ExpenseRows,
   loadingSummaries,
   onCategoryClick,
-  layoutId,
+  onExitComplete,
 }: {
   open: boolean
   onClose: () => void
@@ -335,7 +386,7 @@ function DriftsModal({
   top5ExpenseRows: Top5RowShape[]
   loadingSummaries: boolean
   onCategoryClick: (id: string) => void
-  layoutId?: string
+  onExitComplete?: () => void
 }) {
   const [showTop5, setShowTop5] = useState(false)
   const titleWithTotal = (
@@ -364,83 +415,89 @@ function DriftsModal({
       glassBackground={glassBackground}
       glassBorder={glassBorder}
       zIndex={1200}
-      layoutId={layoutId}
+      motionPreset="heroAction"
+      onExitComplete={onExitComplete}
     >
-      <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
+      <HeroActionModalContent>
         {loadingSummaries ? (
-          <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'rgba(255, 255, 255, 0.4)' }}>
-            Chargement…
-          </p>
-        ) : driftRows.length === 0 ? (
-          <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)' }}>
-            <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.5 }}>
-              Budget sous contrôle. Rien à signaler pour le moment.
+          <HeroActionModalItem>
+            <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'rgba(255, 255, 255, 0.4)' }}>
+              Chargement…
             </p>
-            <button
-              type="button"
-              onClick={() => setShowTop5((c) => !c)}
-              style={{
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: 'var(--radius-full)',
-                minHeight: 30,
-                padding: '0 12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: 'rgba(255, 255, 255, 0.8)',
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              {showTop5 ? 'masquer' : 'voir le top 5 catégories (dépenses)'}
-            </button>
-            {showTop5 ? (
-              <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
-                {top5ExpenseRows.map((row, idx) => {
-                  const drift = Number(row.driftPct ?? 0)
-                  const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'rgba(255, 255, 255, 0.4)'
-                  return (
-                    <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.3 }}>
-                        {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)}`}
-                      </span>
-                      <span style={{ fontSize: 12, color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
+          </HeroActionModalItem>
+        ) : driftRows.length === 0 ? (
+          <HeroActionModalItem>
+            <div style={{ display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 'var(--space-3)' }}>
+              <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.5 }}>
+                Budget sous contrôle. Rien à signaler pour le moment.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowTop5((c) => !c)}
+                style={{
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: 'var(--radius-full)',
+                  minHeight: 30,
+                  padding: '0 12px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                {showTop5 ? 'masquer' : 'voir le top 5 catégories (dépenses)'}
+              </button>
+              {showTop5 ? (
+                <div style={{ width: '100%', display: 'grid', gap: 'var(--space-2)' }}>
+                  {top5ExpenseRows.map((row, idx) => {
+                    const drift = Number(row.driftPct ?? 0)
+                    const driftColor = drift > 0 ? 'var(--color-error)' : drift < 0 ? 'var(--color-success)' : 'rgba(255, 255, 255, 0.4)'
+                    return (
+                      <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.3 }}>
+                          {`#${idx + 1}. ${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                        </span>
+                        <span style={{ fontSize: 12, color: driftColor, fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {`${drift >= 0 ? '+' : ''}${drift.toFixed(0)}%`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </HeroActionModalItem>
         ) : (
           <div style={{ display: 'grid', gap: 6 }}>
             {driftRows.map((row) => {
               const overrunAmount = Math.max(0, Number(row.overrunAmount ?? 0))
               return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => onCategoryClick(row.id)}
-                  style={{
-                    border: 'none',
-                    padding: 0,
-                    width: '100%',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <DetailModalRow
-                    glass
-                    label={`${row.exceedDate ?? '--/--'} · ${row.name} — ${formatCurrencyFloored(row.spent)}`}
-                    value={`+${formatCurrencyFloored(overrunAmount)}`}
-                  />
-                </button>
+                <HeroActionModalItem key={row.id}>
+                  <button
+                    type="button"
+                    onClick={() => onCategoryClick(row.id)}
+                    style={{
+                      border: 'none',
+                      padding: 0,
+                      width: '100%',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <DetailModalRow
+                      glass
+                      label={`${row.exceedDate ?? '--/--'} · ${row.name} — ${formatCurrencyFloored(row.spent)}`}
+                      value={`+${formatCurrencyFloored(overrunAmount)}`}
+                    />
+                  </button>
+                </HeroActionModalItem>
               )
             })}
           </div>
         )}
-      </div>
+      </HeroActionModalContent>
     </BottomSheet>
   )
 }
@@ -1132,6 +1189,64 @@ function RainbowBellIcon({
       />
       <path
         d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .738-1.674C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+        stroke={`url(#${gradientId})`}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function RainbowSearchArrowIcon({
+  size = 64,
+  strokeWidth = 5.8,
+}: {
+  size?: number
+  strokeWidth?: number
+}) {
+  const gradientId = 'quick-search-arrow-rainbow'
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: 'block', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(91, 87, 245, 0.18))' }}
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="12" y1="52" x2="52" y2="12" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#ff3366" />
+          <stop offset="18%" stopColor="#ff9933" />
+          <stop offset="36%" stopColor="#ffff33" />
+          <stop offset="56%" stopColor="#33cc66" />
+          <stop offset="76%" stopColor="#3399ff" />
+          <stop offset="100%" stopColor="#9933ff" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M32 50V16"
+        stroke="rgba(94, 94, 111, 0.34)"
+        strokeWidth={strokeWidth + 1.6}
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 32L32 16L48 32"
+        stroke="rgba(94, 94, 111, 0.34)"
+        strokeWidth={strokeWidth + 1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M32 50V16"
+        stroke={`url(#${gradientId})`}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 32L32 16L48 32"
         stroke={`url(#${gradientId})`}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
@@ -2051,8 +2166,8 @@ export function Home() {
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
   const [cardFlipped, setCardFlipped] = useState(false)
   const [driftsCardFlipped, setDriftsCardFlipped] = useState(false)
-  const [balanceModalReturning, setBalanceModalReturning] = useState(false)
-  const [driftsModalReturning, setDriftsModalReturning] = useState(false)
+  const balanceModalOpenTimerRef = useRef<number | null>(null)
+  const driftsModalOpenTimerRef = useRef<number | null>(null)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showEcheancesModal, setShowEcheancesModal] = useState(false)
   const [showAllEnvelopesModal, setShowAllEnvelopesModal] = useState(false)
@@ -2072,22 +2187,51 @@ export function Home() {
   const [matchingTripName,    setMatchingTripName]    = useState<string | null>(null)
 
   useEffect(() => {
-    if (!balanceModalReturning) return
-    const id = window.setTimeout(() => {
-      setBalanceModalReturning(false)
-      setCardFlipped(false)
-    }, 900)
-    return () => window.clearTimeout(id)
-  }, [balanceModalReturning])
+    return () => {
+      if (balanceModalOpenTimerRef.current != null) {
+        window.clearTimeout(balanceModalOpenTimerRef.current)
+      }
+      if (driftsModalOpenTimerRef.current != null) {
+        window.clearTimeout(driftsModalOpenTimerRef.current)
+      }
+    }
+  }, [])
 
-  useEffect(() => {
-    if (!driftsModalReturning) return
-    const id = window.setTimeout(() => {
-      setDriftsModalReturning(false)
-      setDriftsCardFlipped(false)
-    }, 900)
-    return () => window.clearTimeout(id)
-  }, [driftsModalReturning])
+  const openHeroBalanceDetails = useCallback(() => {
+    if (balanceModalOpenTimerRef.current != null) {
+      window.clearTimeout(balanceModalOpenTimerRef.current)
+    }
+    if (driftsModalOpenTimerRef.current != null) {
+      window.clearTimeout(driftsModalOpenTimerRef.current)
+      driftsModalOpenTimerRef.current = null
+    }
+    setShowDriftsModal(false)
+    setDriftsCardFlipped(false)
+    setShowHeroBalanceModal(false)
+    setCardFlipped(true)
+    balanceModalOpenTimerRef.current = window.setTimeout(() => {
+      setShowHeroBalanceModal(true)
+      balanceModalOpenTimerRef.current = null
+    }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
+  }, [])
+
+  const openDriftsDetails = useCallback(() => {
+    if (driftsModalOpenTimerRef.current != null) {
+      window.clearTimeout(driftsModalOpenTimerRef.current)
+    }
+    if (balanceModalOpenTimerRef.current != null) {
+      window.clearTimeout(balanceModalOpenTimerRef.current)
+      balanceModalOpenTimerRef.current = null
+    }
+    setShowHeroBalanceModal(false)
+    setCardFlipped(false)
+    setShowDriftsModal(false)
+    setDriftsCardFlipped(true)
+    driftsModalOpenTimerRef.current = window.setTimeout(() => {
+      setShowDriftsModal(true)
+      driftsModalOpenTimerRef.current = null
+    }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
+  }, [])
 
   const openTripExpenseModal = useCallback((tripId: string | null = null) => {
     setTripExpenseInitialId(tripId)
@@ -2959,24 +3103,19 @@ export function Home() {
                            >
                              <motion.div
                                animate={{ rotateY: cardFlipped ? 180 : 0 }}
-                               transition={{ duration: 0.38, ease: [0.25, 0.1, 0.25, 1] }}
+                               transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
                                style={{
                                  width: '100%',
                                  height: '100%',
                                  position: 'relative',
                                  transformStyle: 'preserve-3d',
+                                 willChange: 'transform',
                                }}
                              >
                                {/* Recto : Bouton de solde estimé initial */}
                                <motion.button
                                  type="button"
-                                 onClick={() => {
-                                   setBalanceModalReturning(false)
-                                   setCardFlipped(true)
-                                   setTimeout(() => {
-                                     setShowHeroBalanceModal(true)
-                                   }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
-                                 }}
+                                 onClick={openHeroBalanceDetails}
                                  aria-label="Voir le détail du solde bancaire du compte principal"
                                  className="shine-btn shine-btn--1"
                                  style={{
@@ -3016,17 +3155,14 @@ export function Home() {
                                  </span>
                                </motion.button>
 
-                               {/* Verso : Conteneur morphant de même taille, qui se transformera en modale */}
-                               <AnimatePresence>
+                               {/* Verso : face de transition stable pendant l'apparition de la modale */}
+                               <AnimatePresence initial={false}>
                                  {!showHeroBalanceModal && cardFlipped && (
                                    <motion.div
-                                     layoutId="hero-balance-modal-sheet"
-                                     onLayoutAnimationComplete={() => {
-                                       if (!balanceModalReturning) return
-                                       setBalanceModalReturning(false)
-                                       setCardFlipped(false)
-                                     }}
-                                     transition={{ layout: { type: 'spring', stiffness: 260, damping: 32, mass: 0.92 } }}
+                                     initial={{ opacity: 0 }}
+                                     animate={{ opacity: 1 }}
+                                     exit={{ opacity: 0 }}
+                                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                                      style={{
                                        position: 'absolute',
                                        inset: 0,
@@ -3059,24 +3195,19 @@ export function Home() {
                            >
                              <motion.div
                                animate={{ rotateY: driftsCardFlipped ? 180 : 0 }}
-                               transition={{ duration: 0.38, ease: [0.25, 0.1, 0.25, 1] }}
+                               transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
                                style={{
                                  width: '100%',
                                  height: '100%',
                                  position: 'relative',
                                  transformStyle: 'preserve-3d',
+                                 willChange: 'transform',
                                }}
                              >
                                {/* Recto : Bouton de dérives initial */}
                                <motion.button
                                  type="button"
-                                 onClick={() => {
-                                   setDriftsModalReturning(false)
-                                   setDriftsCardFlipped(true)
-                                   setTimeout(() => {
-                                     setShowDriftsModal(true)
-                                   }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
-                                 }}
+                                 onClick={openDriftsDetails}
                                  aria-label="Voir les dérives budgétaires"
                                  className="shine-btn shine-btn--2"
                                  style={{
@@ -3116,17 +3247,14 @@ export function Home() {
                                  </span>
                                </motion.button>
 
-                               {/* Verso : Conteneur morphant de même taille, qui se transformera en modale dérives */}
-                               <AnimatePresence>
+                               {/* Verso : face de transition stable pendant l'apparition de la modale dérives */}
+                               <AnimatePresence initial={false}>
                                  {!showDriftsModal && driftsCardFlipped && (
                                    <motion.div
-                                     layoutId="drifts-modal-sheet"
-                                     onLayoutAnimationComplete={() => {
-                                       if (!driftsModalReturning) return
-                                       setDriftsModalReturning(false)
-                                       setDriftsCardFlipped(false)
-                                     }}
-                                     transition={{ layout: { type: 'spring', stiffness: 260, damping: 32, mass: 0.92 } }}
+                                     initial={{ opacity: 0 }}
+                                     animate={{ opacity: 1 }}
+                                     exit={{ opacity: 0 }}
+                                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                                      style={{
                                        position: 'absolute',
                                        inset: 0,
@@ -3747,7 +3875,7 @@ export function Home() {
                                           'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
                                           'linear-gradient(135deg, #5b57f5, #7c4fff, #b84dff, #ff004d, #ff7a00, #ffb700, #33d17a, #00c2ff, #4f6bff, #5b57f5, #b84dff, #5b57f5)'
                                         ]
-                                      : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
+                                      : 'transparent',
                                   }}
                                   style={{
                                     width: searchTileExpanded ? 44 : 88,
@@ -3767,8 +3895,9 @@ export function Home() {
                                     padding: 0,
                                     overflow: 'hidden',
                                     backgroundSize: searchTileExpanded ? '400% 400%' : '100% 100%',
-                                    WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
-                                    maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
+                                    WebkitMaskImage: 'none',
+                                    maskImage: 'none',
+                                    clipPath: searchTileExpanded ? 'none' : 'inset(0 0 22px 0)',
                                   }}
                                   transition={{
                                     type: 'tween',
@@ -3783,7 +3912,7 @@ export function Home() {
                                       <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
                                     )
                                   ) : (
-                                    <ArrowUp size="100%" strokeWidth={2.5} style={{ width: 110, height: 110, flexShrink: 0 }} />
+                                    <RainbowSearchArrowIcon />
                                   )}
                                 </motion.button>
 
@@ -3915,10 +4044,7 @@ export function Home() {
       <AnimatePresence>
       <BottomSheet
         open={showHeroBalanceModal}
-        onClose={() => {
-          setBalanceModalReturning(true)
-          setShowHeroBalanceModal(false)
-        }}
+        onClose={() => setShowHeroBalanceModal(false)}
         title="Solde compte courant"
         subtitle={`Sur la base du relevé du ${observedDateDayMonthLabel}`}
         variant="center"
@@ -3926,72 +4052,91 @@ export function Home() {
         glassBackground={getGlassColors('var(--primary-500)').glassBackground}
         glassBorder={getGlassColors('var(--primary-500)').glassBorder}
         zIndex={1200}
-        layoutId="hero-balance-modal-sheet"
+        motionPreset="heroAction"
+        onExitComplete={() => setCardFlipped(false)}
       >
-        <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
+        <HeroActionModalContent>
           {loadingMainAccountBalanceStatus ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: 12 }}>Chargement du détail du solde…</p>
+            <HeroActionModalItem>
+              <p style={{ margin: 0, textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: 12 }}>Chargement du détail du solde…</p>
+            </HeroActionModalItem>
           ) : hasMainAccountBalanceStatusError ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
-              Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
-            </p>
+            <HeroActionModalItem>
+              <p style={{ margin: 0, textAlign: 'center', color: 'var(--color-negative)', fontSize: 12 }}>
+                Impossible de charger le détail canonique du solde. Valeur affichée en fallback.
+              </p>
+            </HeroActionModalItem>
           ) : hasMissingSnapshot ? (
-            <p style={{ margin: 0, textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)', fontSize: 13 }}>
-              Aucun solde bancaire de référence disponible.
-            </p>
+            <HeroActionModalItem>
+              <p style={{ margin: 0, textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)', fontSize: 13 }}>
+                Aucun solde bancaire de référence disponible.
+              </p>
+            </HeroActionModalItem>
           ) : (
             <>
-              <DetailModalRow
-                glass
-                label="Solde opérationnel relevé"
-                value={formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
-              />
-              <DetailModalRow
-                glass
-                label="Mouvements depuis observation"
-                value={formatSignedCurrency(Number(actualDeltaSinceObservedDisplay ?? 0))}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
-                  {`Solde estimé le ${todayDayMonthLabel}`}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-mono)',
-                    color: '#D4AF37',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {formatCurrencyFloored(Number(mainAccountBalanceStatus?.estimated_balance_today ?? 0))}
-                </span>
-              </div>
-              <DetailModalSeparator glass />
-              <DetailModalRow
-                glass
-                label="Opérations prévues restantes"
-                value={formatCurrencyFloored(Number(plannedDeltaEomDisplay ?? 0))}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
-                  Solde projeté fin de mois
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-mono)',
-                    color: '#D4AF37',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {formatCurrencyFloored(Number(projectedBalanceEomDisplay ?? 0))}
-                </span>
-              </div>
+              <HeroActionModalItem>
+                <DetailModalRow
+                  glass
+                  label="Solde opérationnel relevé"
+                  value={formatCurrencyFloored(Number(observedOperationalBalanceDisplay ?? 0))}
+                />
+              </HeroActionModalItem>
+              <HeroActionModalItem>
+                <DetailModalRow
+                  glass
+                  label="Mouvements depuis observation"
+                  value={formatSignedCurrency(Number(actualDeltaSinceObservedDisplay ?? 0))}
+                />
+              </HeroActionModalItem>
+              <HeroActionModalItem>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
+                    {`Solde estimé le ${todayDayMonthLabel}`}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: '#D4AF37',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCurrencyFloored(Number(mainAccountBalanceStatus?.estimated_balance_today ?? 0))}
+                  </span>
+                </div>
+              </HeroActionModalItem>
+              <HeroActionModalItem>
+                <DetailModalSeparator glass />
+              </HeroActionModalItem>
+              <HeroActionModalItem>
+                <DetailModalRow
+                  glass
+                  label="Opérations prévues restantes"
+                  value={formatCurrencyFloored(Number(plannedDeltaEomDisplay ?? 0))}
+                />
+              </HeroActionModalItem>
+              <HeroActionModalItem>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.3 }}>
+                    Solde projeté fin de mois
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: '#D4AF37',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCurrencyFloored(Number(projectedBalanceEomDisplay ?? 0))}
+                  </span>
+                </div>
+              </HeroActionModalItem>
             </>
           )}
-        </div>
+        </HeroActionModalContent>
       </BottomSheet>
       </AnimatePresence>
 
@@ -4183,10 +4328,7 @@ export function Home() {
 
       <DriftsModal
         open={showDriftsModal}
-        onClose={() => {
-          setDriftsModalReturning(true)
-          setShowDriftsModal(false)
-        }}
+        onClose={() => setShowDriftsModal(false)}
         driftRows={driftRows}
         totalOverrunAmount={driftOverrunTotal}
         top5ExpenseRows={top5ExpenseRows}
@@ -4195,7 +4337,7 @@ export function Home() {
           setSelectedDriftCategoryId(id)
           setShowDriftCategoryModal(true)
         }}
-        layoutId="drifts-modal-sheet"
+        onExitComplete={() => setDriftsCardFlipped(false)}
       />
 
       <DriftCategoryTransactionsModal

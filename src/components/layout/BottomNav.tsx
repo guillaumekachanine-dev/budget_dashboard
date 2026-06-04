@@ -44,10 +44,10 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 1,
+            gap: 2,
             height: '100%',
-            minWidth: 64,
-            padding: '2px 8px 1px',
+            minWidth: 68,
+            padding: '4px 9px 3px',
             opacity: isActive ? 1 : 0.52,
             transition: 'opacity 200ms ease',
           }}
@@ -60,11 +60,11 @@ function NavItem({ to, icon: Icon, label, end = false }: NavItemProps) {
               transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
-            <Icon size={19} strokeWidth={isActive ? 2.4 : 1.9} />
+            <Icon size={21} strokeWidth={isActive ? 2.45 : 2} />
           </span>
           <span
             style={{
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: isActive ? 700 : 600,
               color: 'var(--neutral-0)',
               letterSpacing: '0.01em',
@@ -116,8 +116,8 @@ const fabBaseStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
   top: '50%',
-  width: 44,
-  height: 44,
+  height: 48,
+  width: 48,
   transform: 'translate(-50%, -50%)',
   borderRadius: 'var(--radius-full)',
   border: '1.5px solid color-mix(in oklab, var(--primary-500) 44%, var(--neutral-0))',
@@ -164,8 +164,8 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         }}
       >
         <Plus
-          size={20}
-          strokeWidth={2.4}
+          size={22}
+          strokeWidth={2.45}
         />
       </button>
     </div>

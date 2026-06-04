@@ -22,6 +22,8 @@ interface BottomSheetProps {
   glassBorder?: string
   /** layoutId for shared layout animations with Framer Motion */
   layoutId?: string
+  motionPreset?: 'default' | 'heroAction'
+  onExitComplete?: () => void
 }
 
 const SWIPE_CLOSE_THRESHOLD_Y = 72
@@ -41,6 +43,8 @@ export function BottomSheet({
   glassBackground,
   glassBorder,
   layoutId,
+  motionPreset = 'default',
+  onExitComplete,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const isCenter = variant === 'center'
@@ -106,18 +110,27 @@ export function BottomSheet({
         touchAction: 'none',
       }
 
+  const centerAnimProps = motionPreset === 'heroAction'
+    ? {
+        initial: { scale: 0.9, opacity: 0, y: 18, filter: 'blur(8px)' },
+        animate: { scale: 1, opacity: 1, y: 0, filter: 'blur(0px)' },
+        exit: { scale: 0.94, opacity: 0, y: 18, filter: 'blur(6px)' },
+        transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] },
+      }
+    : {
+        initial: { scale: 0.08, opacity: 0 },
+        animate: { scale: 1, opacity: 1 },
+        exit: { scale: 0.08, opacity: 0 },
+        transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+      }
+
   const animProps = layoutId
     ? {
         layoutId,
         transition: { type: 'spring' as const, stiffness: 280, damping: 34, mass: 0.9 },
       }
     : isCenter
-    ? {
-        initial: { scale: 0.08, opacity: 0 },
-        animate: { scale: 1, opacity: 1 },
-        exit: { scale: 0.08, opacity: 0 },
-        transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-      }
+    ? centerAnimProps
     : {
         initial: { y: '100%' },
         animate: { y: 0 },
@@ -126,7 +139,7 @@ export function BottomSheet({
       }
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExitComplete}>
       {open ? (
         <>
           {/* Backdrop */}

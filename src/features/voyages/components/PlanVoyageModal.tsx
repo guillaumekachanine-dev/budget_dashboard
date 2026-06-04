@@ -462,6 +462,7 @@ export function PlanVoyageModal({
         if (isPastTrip) {
           void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
           void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_TRANSACTIONS] })
+          void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_PLANNED_BUDGET_CATEGORIES] })
           resetForm()
           onClose()
           return
@@ -563,6 +564,7 @@ export function PlanVoyageModal({
         void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
         void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_TRANSACTIONS] })
         void queryClient.invalidateQueries({ queryKey: [QK.PLANNED_OPERATIONS] })
+        void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_PLANNED_BUDGET_CATEGORIES] })
 
         resetForm()
         onClose()
@@ -611,6 +613,7 @@ export function PlanVoyageModal({
 
       void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES] })
       void queryClient.invalidateQueries({ queryKey: [QK.PLANNED_OPERATIONS] })
+      void queryClient.invalidateQueries({ queryKey: [QK.VOYAGES_PLANNED_BUDGET_CATEGORIES] })
 
       resetForm()
       onClose()

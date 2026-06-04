@@ -175,7 +175,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   /* HEADER — hauteur totale du header sticky (safe-top + 44px contenu + 16px padding-bottom) */
   --header-height: 92px;
-  --bottom-nav-visual-height: 56px;
+  --bottom-nav-visual-height: 62px;
   --bottom-nav-safe-bottom: 0px;
   --bottom-nav-total-height: var(--bottom-nav-visual-height);
   --safe-top-offset: var(--safe-top);
@@ -489,10 +489,50 @@
 
 /* Bouton collapsed — repos, sans ombre ni jolt */
 .qs-btn-idle {
+  position: relative;
   overflow: hidden !important;
   background-size: 100% 100% !important;
+  background-clip: border-box !important;
   animation: qs-breathe 4s ease-in-out infinite;
   box-shadow: none !important;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+.qs-btn-idle > svg {
+  position: relative;
+  z-index: 1;
+}
+
+.qs-btn-idle::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.26;
+  filter: blur(5px);
+  background:
+    radial-gradient(circle at center, rgba(248, 248, 252, 0) 56%, rgba(248, 248, 252, 0.68) 64%, rgba(248, 248, 252, 0) 72%),
+    conic-gradient(from 215deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff, #ff3366);
+}
+
+.qs-btn-idle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 248, 252, 0) 0%,
+    rgba(248, 248, 252, 0) 36%,
+    rgba(248, 248, 252, 0.30) 56%,
+    rgba(248, 248, 252, 0.76) 78%,
+    var(--neutral-50) 100%
+  );
 }
 
 /* Shine streak from bottom to top, once per cycle */
