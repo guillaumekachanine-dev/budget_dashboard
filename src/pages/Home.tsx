@@ -3312,13 +3312,25 @@ export function Home() {
                             className={buttonClass}
                             aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
                             animate={{
-                              width: searchTileExpanded ? 44 : 110,
-                              height: searchTileExpanded ? 44 : 110,
+                              width: searchTileExpanded ? 44 : 96,
+                              height: searchTileExpanded ? 44 : 96,
                               marginLeft: searchTileExpanded ? -12 : 0,
                               marginRight: searchTileExpanded ? -12 : 0,
                               borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
+                              y: searchTileExpanded ? 0 : 20,
+                              background: searchTileExpanded
+                                ? [
+                                    'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
+                                    'linear-gradient(135deg, #00c2ff, #7c4fff, #ff004d, #ff7a00)',
+                                    'linear-gradient(135deg, #5b57f5, #7c4fff, #b84dff, #ff004d, #ff7a00, #ffb700, #33d17a, #00c2ff, #4f6bff, #5b57f5, #b84dff, #5b57f5)'
+                                  ]
+                                : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
                             }}
                             style={{
+                              width: searchTileExpanded ? 44 : 96,
+                              height: searchTileExpanded ? 44 : 96,
+                              minWidth: searchTileExpanded ? 44 : 96,
+                              minHeight: searchTileExpanded ? 44 : 96,
                               flexShrink: 0,
                               borderRadius: '50%',
                               borderWidth: 3,
@@ -3330,8 +3342,10 @@ export function Home() {
                               cursor: 'pointer',
                               zIndex: 10,
                               padding: 0,
-                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
-                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%)',
+                              overflow: 'hidden',
+                              backgroundSize: searchTileExpanded ? '400% 400%' : '100% 100%',
+                              WebkitMaskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
+                              maskImage: searchTileExpanded ? 'none' : 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 70%, rgba(0,0,0,0) 100%)',
                             }}
                             transition={{
                               type: 'tween',
@@ -3346,7 +3360,7 @@ export function Home() {
                                 <X size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
                               )
                             ) : (
-                              <ArrowUp size="100%" strokeWidth={2.5} style={{ width: '100%', height: '100%' }} />
+                              <ArrowUp size="100%" strokeWidth={2.5} style={{ width: 110, height: 110, flexShrink: 0 }} />
                             )}
                           </motion.button>
 
@@ -3396,7 +3410,7 @@ export function Home() {
                               transition={{ duration: 0.2 }}
                               style={{
                                 position: 'absolute',
-                                top: 72,
+                                top: 82,
                                 left: 0,
                                 right: 0,
                                 textAlign: 'center',
