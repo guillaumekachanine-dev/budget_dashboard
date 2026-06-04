@@ -146,8 +146,12 @@ function FieldError({ message }: { message?: string }) {
   if (!message) return null
   return (
     <p
-      className="m-0 mt-[var(--space-1)] text-[var(--font-size-xs)] text-[var(--color-error)]"
-      style={{ lineHeight: 'var(--line-height-snug)' }}
+      className="m-0 mt-[var(--space-1)]"
+      style={{
+        lineHeight: 'var(--line-height-snug)',
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--color-error)',
+      }}
       role="alert"
     >
       {message}
@@ -1133,7 +1137,14 @@ export function AddPlannedOperationModal({ open, onClose }: AddPlannedOperationM
                     <FieldError message={errors.personalShareRatio} />
                     <FieldError message={errors.date} />
                     {errors.submit ? (
-                      <p className="m-0 mt-[var(--space-2)] text-[var(--font-size-xs)] text-[var(--color-error)]" role="alert">
+                      <p
+                        className="m-0 mt-[var(--space-2)]"
+                        style={{
+                          fontSize: 'var(--font-size-xs)',
+                          color: 'var(--color-error)',
+                        }}
+                        role="alert"
+                      >
                         {errors.submit}
                       </p>
                     ) : null}

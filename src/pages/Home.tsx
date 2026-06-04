@@ -3352,60 +3352,114 @@ export function Home() {
                   />
                 </div>
 
-                {/* ── Rangée update + recherche (compacte ou dépliée, animée) ── */}
-                <AnimatePresence initial={false}>
-                  {searchTileExpanded ? (
+                {/* ── Rangée update + recherche unifiée ── */}
+                {(() => {
+                  const hasSelection = !!searchSelection
+                  const hasPeriod = !!searchPeriod
+                  const canSearch = hasSelection && hasPeriod
 
-                    /* ── ÉTAT DÉPLIÉ : recherche en pleine largeur ── */
+                  const getSelectionText = () => {
+                    if (!searchSelection) return 'Catégorie'
+                    if (searchSelection.kind === 'all') return 'Toutes'
+                    if (searchSelection.kind === 'socle') {
+                      const names: Record<string, string> = {
+                        socle_fixe: 'Fixe',
+                        variable_essentielle: 'Variable',
+                        provision: 'Provision',
+                        voyage: 'Voyage',
+                        discretionnaire: 'Discrétionn.',
+                        revenu: 'Revenus',
+                      }
+                      return names[searchSelection.id] ?? searchSelection.id
+                    }
+                    const cat = categories.find((c) => c.id === searchSelection.id)
+                    return cat ? cat.name : 'Catégorie'
+                  }
+
+                  const getPeriodText = () => {
+                    if (!searchPeriod) return 'Période'
+                    if (searchPeriod.month === undefined) return `${searchPeriod.year}`
+                    return `${MONTHS_FR_SHORT[searchPeriod.month - 1]} ${searchPeriod.year}`
+                  }
+
+                  const renderSelectionIcon = () => {
+                    if (!searchSelection) return null
+                    if (searchSelection.kind === 'all') return <CategoryIcon iconKey="toutes_categories" size={18} style={{ marginRight: 6 }} />
+                    if (searchSelection.kind === 'socle') {
+                      const blockIcons: Record<string, string> = {
+                        socle_fixe: blockFixeIcon,
+                        variable_essentielle: blockVariableIcon,
+                        provision: blockProvisionsIcon,
+                        voyage: blockVoyagesIcon,
+                        discretionnaire: blockDiscretionnaireIcon,
+                        revenu: blockRevenusIcon,
+                      }
+                      const src = blockIcons[searchSelection.id]
+                      if (src) return <img src={src} alt={searchSelection.id} style={{ width: 18, height: 18, marginRight: 6, borderRadius: 4 }} />
+                      return null
+                    }
+                    const cat = categories.find((c) => c.id === searchSelection.id)
+                    if (cat) return <CategoryIcon iconKey={cat.icon_key} size={18} style={{ marginRight: 6 }} />
+                    return null
+                  }
+
+                  const wingBg = `linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, ${CONIC_GRAD} border-box`
+                  const wingHoverBg = `linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, ${CONIC_GRAD} border-box`
+
+                  const wingStyle: React.CSSProperties = {
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 var(--space-3)',
+                    borderRadius: 'var(--radius-xl)',
+                    border: '2px solid transparent',
+                    background: wingBg,
+                    cursor: 'pointer',
+                    height: '100%',
+                    fontFamily: 'inherit',
+                  }
+
+                  const buttonClass = searchTileExpanded
+                    ? (canSearch ? 'qs-btn-ready' : 'qs-btn-animating')
+                    : 'qs-btn-idle'
+
+                  return (
                     <motion.div
-                      key="qs-expanded"
-                      style={{ gridColumn: 'span 2', marginTop: 'var(--space-6)' }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, transition: { duration: 0.20 } }}
-                      transition={{ duration: 0.28 }}
-                    >
-                      <AnimatedQuickSearchExpanded
-                        selection={searchSelection}
-                        period={searchPeriod}
-                        onCollapse={() => setSearchTileExpanded(false)}
-                        onSelectCategory={() => setShowSearchCatModal(true)}
-                        onSelectPeriod={() => setShowSearchPeriodModal(true)}
-                        onSearch={() => { setShowSearchResultsModal(true); setSearchTileExpanded(false) }}
-                        categories={categories}
-                      />
-                    </motion.div>
-
-                  ) : (
-
-                    /* ── ÉTAT COMPACT : update + bouton recherche ── */
-                    <motion.div
-                      key="compact-row"
+                      layout
                       style={{
                         gridColumn: 'span 2',
-                        marginTop: 'var(--space-10)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 'var(--space-4)',
+                        marginTop: searchTileExpanded ? 'var(--space-6)' : 'var(--space-10)',
                         position: 'relative',
-                        zIndex: updateExpanded ? 50 : 1,
+                        height: 86,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        maxWidth: 600,
+                        margin: '0 auto',
+                        width: '100%',
+                        overflow: 'visible',
                       }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, transition: { duration: 0.18 } }}
+                      transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
                     >
-                      {/* Update tile — layoutId pour animation de descente */}
+                      {/* Tuile "mise à jour" (fades out in place when search is expanded) */}
                       <motion.div
-                        layoutId="qs-update"
-                        layout
+                        animate={{
+                          opacity: searchTileExpanded ? 0 : 1,
+                        }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
                         style={{
-                          flex: updateExpanded ? '0 0 100px' : '0 0 calc(50% - 8px)',
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: updateExpanded ? 100 : 'calc(50% - 8px)',
+                          height: '100%',
                           display: 'flex',
+                          alignItems: 'flex-start',
                           justifyContent: 'center',
-                          minWidth: 0,
+                          pointerEvents: searchTileExpanded ? 'none' : 'auto',
                           overflow: 'hidden',
                         }}
-                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
                       >
                         <UpdateExpandableTile
                           expanded={updateExpanded}
@@ -3413,123 +3467,179 @@ export function Home() {
                         />
                       </motion.div>
 
-                      {/* Colonne droite — Recherche (fermé) ou Options (ouvert) */}
+                      {/* Tuile "recherche" (compacte ou dépliée) */}
                       <motion.div
                         layout
                         style={{
-                          flex: updateExpanded ? '0 0 calc(100% - 116px)' : '0 0 calc(50% - 8px)',
-                          position: 'relative',
+                          position: 'absolute',
+                          right: 0,
+                          left: searchTileExpanded ? -16 : (updateExpanded ? 116 : 'calc(50% + 8px)'),
+                          width: searchTileExpanded ? 'calc(100% + 32px)' : (updateExpanded ? 'calc(100% - 116px)' : 'calc(50% - 8px)'),
+                          height: '100%',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
-                          minWidth: 0,
+                          zIndex: searchTileExpanded ? 20 : 1,
                         }}
-                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
+                        transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
                       >
-                        <AnimatePresence initial={false} mode="sync">
-                          {!updateExpanded ? (
-                            /* Recherche */
-                            <motion.div
-                              key="search-tile"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0, transition: { duration: 0.20 } }}
-                              transition={{ duration: 0.75, ease: 'easeOut' }}
+                        {/* Conteneur horizontal pour les ailes et le bouton */}
+                        <motion.div
+                          layout
+                          style={{
+                            position: 'absolute',
+                            top: searchTileExpanded ? 6 : 0,
+                            left: 0,
+                            right: 0,
+                            height: searchTileExpanded ? 52 : 64,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
+                        >
+                          {/* Aile gauche : Catégorie */}
+                          <motion.div
+                            initial={false}
+                            animate={{
+                              width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
+                              opacity: searchTileExpanded ? 1 : 0,
+                            }}
+                            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                            style={{
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'stretch',
+                              height: '100%',
+                              pointerEvents: searchTileExpanded ? 'auto' : 'none',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setShowSearchCatModal(true)}
                               style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                width: '100%',
+                                ...wingStyle,
+                                borderTopLeftRadius: 'var(--radius-xl)',
+                                borderBottomLeftRadius: 'var(--radius-xl)',
+                                borderTopRightRadius: 'var(--radius-sm)',
+                                borderBottomRightRadius: 'var(--radius-sm)',
                               }}
+                              onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+                              onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
                             >
-                              <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setUpdateExpanded(false)
-                                    setSearchTileExpanded(true)
-                                  }}
-                                  className="qs-btn-idle"
-                                  aria-label="Ouvrir la recherche rapide"
-                                  style={{
-                                    width: 64,
-                                    height: 64,
-                                    borderRadius: 'var(--radius-full)',
-                                    border: 'none',
-                                    color: '#ffffff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  <ArrowUp size={20} strokeWidth={2.5} />
-                                </button>
+                              <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, justifyContent: 'center' }}>
+                                {renderSelectionIcon()}
+                                <span style={{ fontSize: 13, fontWeight: 800, color: searchSelection ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {getSelectionText()}
+                                </span>
                               </div>
-                              <span style={{
+                            </button>
+                          </motion.div>
+
+                          {/* Bouton central de Recherche */}
+                          <motion.button
+                            layoutId="qs-button"
+                            type="button"
+                            onClick={
+                              searchTileExpanded
+                                ? (canSearch ? () => { setShowSearchResultsModal(true); setSearchTileExpanded(false) } : () => setSearchTileExpanded(false))
+                                : () => { setUpdateExpanded(false); setSearchTileExpanded(true); }
+                            }
+                            className={buttonClass}
+                            aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
+                            style={{
+                              width: searchTileExpanded ? 44 : 64,
+                              height: searchTileExpanded ? 44 : 64,
+                              flexShrink: 0,
+                              borderRadius: 'var(--radius-full)',
+                              border: (searchTileExpanded && canSearch) ? '3px solid var(--neutral-0)' : '3px solid transparent',
+                              color: '#ffffff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              zIndex: 10,
+                              // Marges négatives pour que le bouton chevauche les ailes
+                              marginLeft: searchTileExpanded ? -12 : 0,
+                              marginRight: searchTileExpanded ? -12 : 0,
+                            }}
+                            transition={{
+                              type: 'tween',
+                              duration: 0.6,
+                              ease: [0.25, 0.1, 0.25, 1],
+                            }}
+                          >
+                            {searchTileExpanded ? (
+                              canSearch ? <ArrowUp size={18} strokeWidth={3} /> : <X size={18} strokeWidth={2.5} />
+                            ) : (
+                              <ArrowUp size={20} strokeWidth={2.5} />
+                            )}
+                          </motion.button>
+
+                          {/* Aile droite : Période */}
+                          <motion.div
+                            initial={false}
+                            animate={{
+                              width: searchTileExpanded ? 'calc(50% - 10px)' : '0%',
+                              opacity: searchTileExpanded ? 1 : 0,
+                            }}
+                            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                            style={{
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'stretch',
+                              height: '100%',
+                              pointerEvents: searchTileExpanded ? 'auto' : 'none',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setShowSearchPeriodModal(true)}
+                              style={{
+                                ...wingStyle,
+                                borderTopRightRadius: 'var(--radius-xl)',
+                                borderBottomRightRadius: 'var(--radius-xl)',
+                                borderTopLeftRadius: 'var(--radius-sm)',
+                                borderBottomLeftRadius: 'var(--radius-sm)',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = wingHoverBg }}
+                              onMouseLeave={e => { e.currentTarget.style.background = wingBg }}
+                            >
+                              <span style={{ fontSize: 13, fontWeight: 800, color: searchPeriod ? 'var(--primary-600)' : 'var(--neutral-600)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {getPeriodText()}
+                              </span>
+                            </button>
+                          </motion.div>
+                        </motion.div>
+
+                        {/* Label sous le bouton en mode compact */}
+                        <AnimatePresence>
+                          {!searchTileExpanded && (
+                            <motion.span
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 10 }}
+                              transition={{ duration: 0.2 }}
+                              style={{
+                                position: 'absolute',
+                                top: 72,
                                 fontSize: 11,
                                 fontWeight: 800,
                                 color: 'var(--neutral-400)',
                                 fontFamily: 'var(--font-mono)',
                                 letterSpacing: '0.13em',
                                 textTransform: 'uppercase',
-                                marginTop: 8,
-                                display: 'block',
-                              }}>
-                                Recherche
-                              </span>
-                            </motion.div>
-                          ) : (
-                            /* Options de mise à jour */
-                            <motion.div
-                              key="options-row"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0, transition: { duration: 0.15 } }}
-                              transition={{ duration: 0.35 }}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                justifyContent: 'center',
-                                gap: 20,
-                                width: '100%',
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
+                                pointerEvents: 'none',
                               }}
                             >
-                              <UpdateOptionCard
-                                src={transactionsUpdateIcon}
-                                label="Transactions"
-                                delay={0.08}
-                                xOffset={-40}
-                                onClick={() => {
-                                  setUpdateExpanded(false)
-                                  setUpdateModalMode('transactions')
-                                  setShowUpdateModal(true)
-                                }}
-                              />
-                              <UpdateOptionCard
-                                src={soldeUpdateIcon}
-                                label="Solde"
-                                delay={0.16}
-                                xOffset={-80}
-                                onClick={() => {
-                                  setUpdateExpanded(false)
-                                  setUpdateModalMode('balances')
-                                  setShowUpdateModal(true)
-                                }}
-                              />
-                            </motion.div>
+                              Recherche
+                            </motion.span>
                           )}
                         </AnimatePresence>
                       </motion.div>
                     </motion.div>
-
-                  )}
-                </AnimatePresence>
+                  )
+                })()}
               </div>
             </section>
           ) : null}
