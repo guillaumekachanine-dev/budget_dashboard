@@ -89,7 +89,7 @@ function TxRow({ row }: { row: TripExpenseRow }) {
             margin: 0,
             fontSize: 'var(--font-size-sm)',
             fontWeight: 600,
-            color: 'var(--neutral-800)',
+            color: 'rgba(255, 255, 255, 0.9)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -101,7 +101,7 @@ function TxRow({ row }: { row: TripExpenseRow }) {
           <span
             style={{
               fontSize: 11,
-              color: 'var(--neutral-400)',
+              color: 'rgba(255, 255, 255, 0.45)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -165,7 +165,7 @@ function DateGroup({ date, rows }: { date: string; rows: TripExpenseRow[] }) {
           style={{
             fontSize: 11,
             fontWeight: 800,
-            color: 'var(--neutral-400)',
+            color: 'rgba(255, 255, 255, 0.45)',
             textTransform: 'uppercase',
             letterSpacing: '0.10em',
             fontFamily: 'var(--font-mono)',
@@ -177,7 +177,7 @@ function DateGroup({ date, rows }: { date: string; rows: TripExpenseRow[] }) {
           style={{
             fontSize: 11,
             fontWeight: 700,
-            color: 'var(--neutral-400)',
+            color: 'rgba(255, 255, 255, 0.45)',
             fontFamily: 'var(--font-mono)',
           }}
         >
@@ -188,14 +188,14 @@ function DateGroup({ date, rows }: { date: string; rows: TripExpenseRow[] }) {
       {/* Rows */}
       <div
         style={{
-          borderTop: '1px solid var(--neutral-150)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
         }}
       >
         {rows.map((row, i) => (
           <div key={row.source_id}>
             <TxRow row={row} />
             {i < rows.length - 1 && (
-              <div style={{ height: 1, background: 'var(--neutral-100)', margin: '0 0 0 48px' }} />
+              <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.06)', margin: '0 0 0 48px' }} />
             )}
           </div>
         ))}
@@ -217,7 +217,7 @@ function TxSkeleton() {
             alignItems: 'center',
             gap: 12,
             padding: '10px 0',
-            borderBottom: i < 4 ? '1px solid var(--neutral-100)' : undefined,
+            borderBottom: i < 4 ? '1px solid rgba(255, 255, 255, 0.08)' : undefined,
           }}
         >
           <div
@@ -225,7 +225,7 @@ function TxSkeleton() {
               width: 36,
               height: 36,
               borderRadius: '50%',
-              background: 'var(--neutral-150)',
+              background: 'rgba(255, 255, 255, 0.12)',
               flexShrink: 0,
               animation: 'pulse 1.5s ease-in-out infinite',
             }}
@@ -236,7 +236,7 @@ function TxSkeleton() {
                 height: 12,
                 width: `${55 + (i % 3) * 15}%`,
                 borderRadius: 6,
-                background: 'var(--neutral-150)',
+                background: 'rgba(255, 255, 255, 0.12)',
                 animation: 'pulse 1.5s ease-in-out infinite',
               }}
             />
@@ -245,7 +245,7 @@ function TxSkeleton() {
                 height: 9,
                 width: '35%',
                 borderRadius: 6,
-                background: 'var(--neutral-100)',
+                background: 'rgba(255, 255, 255, 0.06)',
                 animation: 'pulse 1.5s ease-in-out infinite',
               }}
             />
@@ -255,7 +255,7 @@ function TxSkeleton() {
               height: 12,
               width: 48,
               borderRadius: 6,
-              background: 'var(--neutral-150)',
+              background: 'rgba(255, 255, 255, 0.12)',
               animation: 'pulse 1.5s ease-in-out infinite',
             }}
           />
@@ -305,13 +305,21 @@ export function TripTransactionsModal({
   const displayTotal = tripTotal ?? grandTotal
   const title = tripName ? `${tripEmoji ?? '✈️'} ${tripName}` : 'Transactions voyage'
 
+  const glassBackground = 'rgba(20, 14, 4, 0.54)'
+  const glassBorder = 'rgba(255, 171, 46, 0.15)'
+
   return (
     <BottomSheet
       open={open}
       onClose={onClose}
       title={title}
       subtitle={expenses.length > 0 ? `${expenses.length} dépenses · ${formatAmount(displayTotal)}` : undefined}
-      maxHeight="88dvh"
+      maxHeight="85dvh"
+      variant="center"
+      glass
+      glassBackground={glassBackground}
+      glassBorder={glassBorder}
+      zIndex={1200}
     >
       {isLoading ? (
         <TxSkeleton />
@@ -331,7 +339,7 @@ export function TripTransactionsModal({
             style={{
               margin: 0,
               fontSize: 'var(--font-size-sm)',
-              color: 'var(--neutral-400)',
+              color: 'rgba(255, 255, 255, 0.6)',
               textAlign: 'center',
             }}
           >
@@ -347,7 +355,7 @@ export function TripTransactionsModal({
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '14px 0 10px',
-              borderBottom: '2px solid var(--neutral-150)',
+              borderBottom: '2px solid rgba(255, 255, 255, 0.15)',
               marginBottom: 4,
             }}
           >
@@ -355,7 +363,7 @@ export function TripTransactionsModal({
               style={{
                 fontSize: 'var(--font-size-xs)',
                 fontWeight: 700,
-                color: 'var(--neutral-500)',
+                color: 'rgba(255, 255, 255, 0.6)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.10em',
                 fontFamily: 'var(--font-mono)',

@@ -1338,7 +1338,7 @@ function VoyageTransactionsTile({
         {cards.map((card, i) => (
           <motion.g
             key={i}
-            style={{ originX: '100px', originY: '62px' }}
+            style={{ transformOrigin: '100px 62px' }}
             animate={{
               rotate: clicked
                 ? card.clickRotate
@@ -1483,7 +1483,7 @@ function VoyageAddExpenseMirrorTile({
         <motion.g
           animate={{ scale: [0.97, 1.03, 0.97] }}
           transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
-          style={{ originX: '100px', originY: '58px' }}
+          style={{ transformOrigin: '100px 58px' }}
         >
           {/* hue-rotate animé au clic pour "changer l'emplacement des couleurs" */}
           <motion.g
@@ -1498,7 +1498,7 @@ function VoyageAddExpenseMirrorTile({
               filter: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
               default: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
             }}
-            style={{ originX: '100px', originY: '58px' }}
+            style={{ transformOrigin: '100px 58px' }}
           >
             {/* Halo doux */}
             <circle cx="100" cy="58" r="34" fill="url(#voyage-add-halo2)" />
