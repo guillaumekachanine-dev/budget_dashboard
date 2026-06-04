@@ -7,6 +7,7 @@ import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
 import { TripBudgetOverlay } from '@/features/voyages/components/TripBudgetOverlay'
 import { TripManualExpenseModal } from '@/features/voyages/components/TripManualExpenseModal'
 import { TripExpenseMatchingSheet } from '@/features/voyages/components/TripExpenseMatchingSheet'
+import { TripTransactionsModal } from '@/features/voyages/components/TripTransactionsModal'
 import { useTripCockpit } from '@/features/voyages/hooks/useTripCockpit'
 import { useTripExpenseBars } from '@/features/voyages/hooks/useTripExpenseBars'
 import { useBudgetSummaries } from '@/hooks/useBudgets'
@@ -455,16 +456,17 @@ function EcheancesTimelineTile({
   items,
   daysElapsed,
   daysInMonth,
-  onClick,
+  onSelectShortcut,
 }: {
   items: PlannedOperationItem[]
   daysElapsed: number
   daysInMonth: number
-  onClick: () => void
+  onSelectShortcut: (filter: 'j3' | 'j7' | 'j15' | 'mois') => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
-  const { dots, totalCount } = useMemo(() => {
+  const { dots } = useMemo(() => {
     const maxAmt = Math.max(
       ...items.map(i => Math.abs(Number(i.planned_personal_amount ?? i.planned_amount ?? 0))),
       1
@@ -494,28 +496,60 @@ function EcheancesTimelineTile({
   const trackPath   = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${arcX1.toFixed(1)} ${arcY1.toFixed(1)}`
   const elapsedPath = `M ${arcX0.toFixed(1)} ${arcY0.toFixed(1)} A ${PARC_R} ${PARC_R} 0 0 1 ${todayX.toFixed(1)} ${todayY.toFixed(1)}`
 
+  const handleTileClick = () => {
+    setExpanded(prev => !prev)
+  }
+
+  const shortcuts = [
+    { label: '+3', filter: 'j3' as const, t: 0 },
+    { label: '+7', filter: 'j7' as const, t: 0.30 },
+    { label: '+15', filter: 'j15' as const, t: 0.70 },
+    { label: 'mois', filter: 'mois' as const, t: 1 }
+  ]
+
+  const badgeVariants = {
+    collapsed: {
+      x: 100,
+      y: 110,
+      scale: 0,
+      opacity: 0,
+      transition: {
+        duration: 0.25,
+        ease: 'easeIn',
+      }
+    },
+    expanded: (idx: number) => {
+      const [tx, ty] = parcPoint(shortcuts[idx].t)
+      return {
+        x: tx,
+        y: ty,
+        scale: 1,
+        opacity: 1,
+        transition: {
+          type: 'spring',
+          stiffness: 90,
+          damping: 14,
+          delay: 0.15 + idx * 0.12,
+        }
+      }
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
+      onClick={handleTileClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      aria-label={`${totalCount} échéances ce mois`}
       style={{
         width: '100%',
         height: '100%',
         minHeight: 96,
-        border: 'none',
-        borderRadius: 0,
-        background: 'transparent',
-        boxShadow: 'none',
-        padding: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         transition: 'opacity 0.2s ease',
-        opacity: hovered ? 0.68 : 1,
+        opacity: hovered && !expanded ? 0.78 : 1,
       }}
     >
       <svg
@@ -523,6 +557,12 @@ function EcheancesTimelineTile({
         preserveAspectRatio="xMidYMid meet"
         style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
+        <defs>
+          <filter id="badge-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#000000" floodOpacity="0.22" />
+          </filter>
+        </defs>
+
         {/* Piste complète du mois */}
         <path
           d={trackPath}
@@ -570,8 +610,54 @@ function EcheancesTimelineTile({
           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
         />
 
-        {/* Cartouche bas — label gauche, compteur droit */}
-        <text
+        {/* Pastilles Raccourcis */}
+        {shortcuts.map((sc, idx) => {
+          const rad = ((PARC_A0 + sc.t * PARC_SPAN) * Math.PI) / 180
+          const textDist = 19
+          const dx = textDist * Math.cos(rad)
+          const dy = textDist * Math.sin(rad)
+
+          return (
+            <motion.g
+              key={sc.filter}
+              custom={idx}
+              variants={badgeVariants}
+              initial="collapsed"
+              animate={expanded ? "expanded" : "collapsed"}
+              whileHover={{ scale: 1.15 }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectShortcut(sc.filter)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <circle
+                cx={0}
+                cy={0}
+                r={8.5}
+                fill="var(--neutral-150)"
+                stroke="var(--neutral-300)"
+                strokeWidth={1.5}
+                filter="url(#badge-shadow)"
+              />
+              <text
+                x={dx}
+                y={dy}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={9.5}
+                fontWeight="800"
+                fill="var(--neutral-800)"
+                fontFamily="var(--font-mono)"
+              >
+                {sc.label}
+              </text>
+            </motion.g>
+          )
+        })}
+
+        {/* Cartouche bas — label gauche, compteur droit (animé) */}
+        <motion.text
           x={100}
           y={116}
           textAnchor="middle"
@@ -580,11 +666,23 @@ function EcheancesTimelineTile({
           fill="var(--neutral-400)"
           fontFamily="var(--font-mono)"
           letterSpacing="0.13em"
+          animate={expanded ? {
+            y: [116, 120, 112, 116]
+          } : {
+            y: 116
+          }}
+          transition={expanded ? {
+            times: [0, 0.25, 0.65, 1],
+            duration: 0.45,
+            ease: "easeInOut"
+          } : {
+            duration: 0.2
+          }}
         >
           ÉCHÉANCES
-        </text>
+        </motion.text>
       </svg>
-    </button>
+    </div>
   )
 }
 
@@ -963,19 +1061,21 @@ function UpdateOptionCard({
   label,
   delay,
   onClick,
+  xOffset = 0,
 }: {
   src: string
   label: string
   delay: number
   onClick: () => void
+  xOffset?: number
 }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      initial={{ opacity: 0, scale: 0.80 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.15, delay: 0, ease: 'easeIn' } }}
+      initial={{ opacity: 0, scale: 0.80, x: xOffset }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.88, x: xOffset, transition: { duration: 0.15, delay: 0, ease: 'easeIn' } }}
       transition={{ duration: 0.36, delay, ease: [0.22, 1, 0.36, 1] }}
       whileTap={{ scale: 0.93 }}
       style={{
@@ -992,23 +1092,18 @@ function UpdateOptionCard({
       }}
       aria-label={label}
     >
-      <div style={{ position: 'relative', width: 40, height: 32, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', width: 52, height: 42, display: 'flex', justifyContent: 'center', marginTop: 10 }}>
         <img
           src={src}
           alt=""
           aria-hidden
-          style={{ width: 40, height: 32, objectFit: 'contain', display: 'block' }}
+          style={{ width: 52, height: 42, objectFit: 'contain', display: 'block' }}
         />
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, height: 10,
-          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
-          pointerEvents: 'none',
-        }} />
       </div>
       <span style={{
-        fontSize: 9,
+        fontSize: 11,
         fontWeight: 800,
-        color: 'var(--neutral-400)',
+        color: '#ffffff',
         fontFamily: 'var(--font-mono)',
         letterSpacing: '0.10em',
         textTransform: 'uppercase',
@@ -1023,28 +1118,23 @@ function UpdateOptionCard({
 function UpdateExpandableTile({
   expanded,
   onToggle,
-  onSelectMode,
 }: {
   expanded: boolean
   onToggle: () => void
-  onSelectMode: (mode: 'transactions' | 'balances') => void
 }) {
   return (
     <div style={{
       display: 'flex',
       alignItems: 'flex-start',
       width: '100%',
-      gap: 6,
-      justifyContent: expanded ? 'flex-start' : 'center',
+      justifyContent: 'center',
     }}>
-      {/* Trigger — compact quand ouvert, pleine taille + centré quand fermé */}
+      {/* Trigger — taille fixe de 86px, rotation à l'expansion */}
       <motion.button
         type="button"
         onClick={onToggle}
         aria-label={expanded ? 'Réduire la mise à jour' : 'Ouvrir la mise à jour'}
         aria-expanded={expanded}
-        animate={{ width: expanded ? 38 : 86 }}
-        transition={{ duration: 0.45, ease: [0.25, 0.1, 0.25, 1] }}
         style={{
           border: 'none',
           background: 'transparent',
@@ -1054,10 +1144,11 @@ function UpdateExpandableTile({
           alignItems: 'center',
           cursor: 'pointer',
           flexShrink: 0,
-          overflow: 'hidden',
+          overflow: 'visible',
+          width: 86,
         }}
       >
-        <div style={{ position: 'relative', width: '100%', height: 64, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ position: 'relative', width: 86, height: 64, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <motion.img
             src={updateExchangeReferenceIcon}
             alt=""
@@ -1073,19 +1164,13 @@ function UpdateExpandableTile({
               transformOrigin: 'center center',
             }}
           />
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0, height: 20,
-            background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
-            pointerEvents: 'none',
-          }} />
         </div>
         <motion.span
-          animate={{ opacity: expanded ? 0 : 1 }}
-          transition={{ duration: 0.18 }}
+          animate={{ color: expanded ? '#ffffff' : 'var(--neutral-400)' }}
+          transition={{ duration: 0.25 }}
           style={{
             fontSize: 11,
             fontWeight: 800,
-            color: 'var(--neutral-400)',
             fontFamily: 'var(--font-mono)',
             letterSpacing: '0.13em',
             textTransform: 'uppercase',
@@ -1097,32 +1182,6 @@ function UpdateExpandableTile({
           Mise à jour
         </motion.span>
       </motion.button>
-
-      {/* Options — prennent l'espace restant */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            key="options-row"
-            style={{ display: 'flex', flex: 1, alignItems: 'flex-start', minWidth: 0 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          >
-            <UpdateOptionCard
-              src={transactionsUpdateIcon}
-              label="Trans."
-              delay={0.30}
-              onClick={() => onSelectMode('transactions')}
-            />
-            <UpdateOptionCard
-              src={soldeUpdateIcon}
-              label="Solde"
-              delay={0.44}
-              onClick={() => onSelectMode('balances')}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -1155,17 +1214,79 @@ function UpdateMiniTile({ onClick }: { onClick: () => void }) {
   )
 }
 
+
+// ─── VoyageTransactionsTile — Stacked cards fintech pictogram ─────────────────
+
+/**
+ * Pictogramme : 3 cartes fintech empilées en éventail.
+ * Au hover : légère rotation. Au clic : explosion fan → repli → callback.
+ */
 function VoyageTransactionsTile({
   onClick,
 }: {
   onClick: () => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [clicked, setClicked] = useState(false)
+
+  const handleClick = () => {
+    if (clicked) return
+    setClicked(true)
+    // Fan explosion : 280ms → callback
+    setTimeout(() => {
+      onClick()
+    }, 320)
+    // Reset après animation
+    setTimeout(() => setClicked(false), 620)
+  }
+
+  // Cartes : [fond (orange), milieu (vert), devant (violet)]
+  const cards = [
+    {
+      // Carte arrière — orange
+      fill: '#FFAB2E',
+      fillOpacity: 0.15,
+      stroke: '#FFAB2E',
+      strokeOpacity: 0.55,
+      defaultRotate: -14,
+      defaultX: -10,
+      clickRotate: -42,
+      clickX: -36,
+      clickY: -6,
+      dotColor: '#FFAB2E',
+    },
+    {
+      // Carte milieu — vert
+      fill: '#2ED47A',
+      fillOpacity: 0.13,
+      stroke: '#2ED47A',
+      strokeOpacity: 0.50,
+      defaultRotate: -5,
+      defaultX: -3,
+      clickRotate: -18,
+      clickX: -12,
+      clickY: -10,
+      dotColor: '#2ED47A',
+    },
+    {
+      // Carte devant — violet
+      fill: '#5B57F5',
+      fillOpacity: 0.12,
+      stroke: '#5B57F5',
+      strokeOpacity: 0.60,
+      defaultRotate: 0,
+      defaultX: 0,
+      clickRotate: 0,
+      clickX: 0,
+      clickY: 0,
+      dotColor: '#5B57F5',
+    },
+  ]
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       aria-label="Voir les transactions du voyage"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1179,11 +1300,10 @@ function VoyageTransactionsTile({
         boxShadow: 'none',
         padding: 0,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        transition: 'opacity 0.2s ease',
-        opacity: hovered ? 0.68 : 1,
       }}
     >
       <svg
@@ -1192,93 +1312,81 @@ function VoyageTransactionsTile({
         style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
         <defs>
-          <linearGradient id="voyage-transactions-coin" x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor="#FFD75A" />
-            <stop offset="100%" stopColor="#FFC12E" />
-          </linearGradient>
-          <linearGradient id="voyage-transactions-fade" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(248, 250, 255, 0)" />
-            <stop offset="68%" stopColor="rgba(248, 250, 255, 0.18)" />
-            <stop offset="100%" stopColor="var(--neutral-50)" />
+          <linearGradient id="vtx2-fade" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(248,250,255,0)" />
+            <stop offset="100%" stopColor="rgba(248,250,255,0.92)" />
           </linearGradient>
         </defs>
 
-        <motion.path
-          d="M 20 42 A 58 58 0 0 1 150 26"
-          fill="none"
-          stroke="#FDBA21"
-          strokeWidth="13"
-          strokeLinecap="round"
-          initial={{ pathLength: 0.8, opacity: 0.86 }}
-          animate={{ pathLength: hovered ? 1 : 0.92, opacity: hovered ? 1 : 0.9 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        />
-        <motion.path
-          d="M 143 20 L 175 39 L 146 55"
-          fill="none"
-          stroke="#FDBA21"
-          strokeWidth="13"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          initial={{ opacity: 0.9 }}
-          animate={{ opacity: hovered ? 1 : 0.92, x: hovered ? 1 : 0 }}
-          transition={{ duration: 0.24 }}
-        />
+        {/* Cartes empilées — du fond vers la surface */}
+        {cards.map((card, i) => (
+          <motion.g
+            key={i}
+            style={{ originX: '100px', originY: '62px' }}
+            animate={{
+              rotate: clicked
+                ? card.clickRotate
+                : hovered
+                  ? card.defaultRotate - 2
+                  : card.defaultRotate,
+              x: clicked ? card.clickX : hovered ? card.defaultX - 2 : card.defaultX,
+              y: clicked ? card.clickY : 0,
+              scale: clicked && i === 2 ? 1.04 : hovered && i === 2 ? 1.02 : 1,
+            }}
+            transition={{
+              duration: clicked ? 0.28 : 0.34,
+              ease: clicked ? [0.34, 1.56, 0.64, 1] : [0.22, 1, 0.36, 1],
+              delay: clicked ? i * 0.035 : (2 - i) * 0.04,
+            }}
+          >
+            {/* Corps de la carte */}
+            <rect
+              x="50"
+              y="22"
+              width="100"
+              height="68"
+              rx="9"
+              fill={card.fill}
+              fillOpacity={card.fillOpacity}
+              stroke={card.stroke}
+              strokeOpacity={card.strokeOpacity}
+              strokeWidth="1.5"
+            />
+            {/* Pastille haut-gauche */}
+            <circle cx="65" cy="37" r="6" fill={card.dotColor} opacity={0.8} />
+            {/* Ligne libellé 1 */}
+            <rect x="76" y="32" width="36" height="5" rx="2.5" fill={card.dotColor} opacity={0.25} />
+            {/* Ligne libellé 2 */}
+            <rect x="76" y="40" width="22" height="4" rx="2" fill={card.dotColor} opacity={0.15} />
+            {/* Séparateur */}
+            <line x1="56" y1="53" x2="144" y2="53" stroke={card.stroke} strokeOpacity={0.15} strokeWidth="1" />
+            {/* Montant fictif */}
+            <rect x="56" y="60" width="48" height="7" rx="3.5" fill={card.dotColor} opacity={0.18} />
+            <rect x="108" y="62" width="28" height="5" rx="2.5" fill={card.dotColor} opacity={0.12} />
+            {/* Puce carte (carte devant seulement) */}
+            {i === 2 && (
+              <>
+                <rect x="109" y="75" width="22" height="6" rx="2" fill="#5B57F5" opacity={0.35} />
+                <line x1="115" y1="75" x2="115" y2="81" stroke="#5B57F5" strokeOpacity={0.4} strokeWidth="0.8" />
+                <line x1="121" y1="75" x2="121" y2="81" stroke="#5B57F5" strokeOpacity={0.4} strokeWidth="0.8" />
+              </>
+            )}
+          </motion.g>
+        ))}
 
-        <motion.path
-          d="M 180 76 A 58 58 0 0 1 50 93"
-          fill="none"
-          stroke="#4B87C8"
-          strokeWidth="13"
-          strokeLinecap="round"
-          initial={{ pathLength: 0.8, opacity: 0.86 }}
-          animate={{ pathLength: hovered ? 1 : 0.92, opacity: hovered ? 1 : 0.9 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        />
-        <motion.path
-          d="M 56 98 L 25 79 L 53 63"
-          fill="none"
-          stroke="#4B87C8"
-          strokeWidth="13"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          initial={{ opacity: 0.9 }}
-          animate={{ opacity: hovered ? 1 : 0.92, x: hovered ? -1 : 0 }}
-          transition={{ duration: 0.24 }}
-        />
+        {/* Dégradé bas */}
+        <rect x="0" y="78" width="200" height="42" fill="url(#vtx2-fade)" />
 
-        <motion.circle
-          cx="100"
-          cy="60"
-          r="28"
-          fill="url(#voyage-transactions-coin)"
-          initial={{ scale: 1 }}
-          animate={{ scale: hovered ? 1.04 : 1 }}
-          transition={{ duration: 0.24 }}
-        />
-        <text
-          x="100"
-          y="69"
-          textAnchor="middle"
-          fontSize="33"
-          fontWeight="700"
-          fill="#F0A51A"
-          fontFamily="var(--font-sans)"
-        >
-          $
-        </text>
-
-        <rect x="0" y="70" width="200" height="42" fill="url(#voyage-transactions-fade)" />
-
+        {/* Label */}
         <text
           x={100}
-          y={116}
+          y={115}
           textAnchor="middle"
-          fontSize={14}
+          fontSize={10}
           fontWeight="800"
           fill="var(--neutral-400)"
           fontFamily="var(--font-mono)"
-          letterSpacing="0.13em"
+          letterSpacing="0.16em"
         >
           TRANSACTIONS
         </text>
@@ -1287,17 +1395,30 @@ function VoyageTransactionsTile({
   )
 }
 
+
+
 function VoyageAddExpenseMirrorTile({
   onClick,
 }: {
   onClick: () => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [rotation, setRotation] = useState(0)
+  // hueRotate : se décale de 120° à chaque clic pour changer l'emplacement des couleurs
+  const [hueShift, setHueShift] = useState(0)
+
+  const handleClick = () => {
+    setRotation(r => r + 90)
+    setHueShift(h => h + 120)
+    setTimeout(() => {
+      onClick()
+    }, 320)
+  }
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       aria-label="Ajouter une dépense voyage"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1315,7 +1436,7 @@ function VoyageAddExpenseMirrorTile({
         justifyContent: 'center',
         cursor: 'pointer',
         transition: 'opacity 0.2s ease',
-        opacity: hovered ? 0.68 : 1,
+        opacity: hovered ? 1 : 0.92,
       }}
     >
       <svg
@@ -1324,62 +1445,68 @@ function VoyageAddExpenseMirrorTile({
         style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
       >
         <defs>
-          <radialGradient id="voyage-add-halo" cx="50%" cy="38%" r="52%">
-            <stop offset="0%" stopColor="rgba(255, 240, 196, 0.95)" />
-            <stop offset="38%" stopColor="rgba(255, 209, 101, 0.62)" />
-            <stop offset="72%" stopColor="rgba(243, 161, 28, 0.18)" />
-            <stop offset="100%" stopColor="rgba(243, 161, 28, 0)" />
+          {/* Gradient arc-en-ciel — palette identique au bouton QS idle */}
+          <linearGradient id="voyage-add-rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"    stopColor="#5B57F5" />
+            <stop offset="14%"   stopColor="#7C4FFF" />
+            <stop offset="28%"   stopColor="#B84DFF" />
+            <stop offset="42%"   stopColor="#FF004D" />
+            <stop offset="57%"   stopColor="#FF7A00" />
+            <stop offset="71%"   stopColor="#FFD500" />
+            <stop offset="85%"   stopColor="#33D17A" />
+            <stop offset="100%"  stopColor="#00C2FF" />
+          </linearGradient>
+          {/* Halo très subtil */}
+          <radialGradient id="voyage-add-halo2" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="rgba(91,87,245,0.13)" />
+            <stop offset="100%" stopColor="rgba(91,87,245,0)" />
           </radialGradient>
-          <linearGradient id="voyage-add-plus" x1="50%" y1="6%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor="#FFF8E1" />
-            <stop offset="30%" stopColor="#FFE08A" />
-            <stop offset="68%" stopColor="#FFBF32" />
-            <stop offset="100%" stopColor="#F09A16" />
-          </linearGradient>
-          <linearGradient id="voyage-add-plus-shine" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="rgba(255, 255, 255, 0.88)" />
-            <stop offset="28%" stopColor="rgba(255, 255, 255, 0.32)" />
-            <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
-          </linearGradient>
-          <linearGradient id="voyage-add-fade" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(248, 250, 255, 0)" />
-            <stop offset="70%" stopColor="rgba(248, 250, 255, 0.08)" />
-            <stop offset="86%" stopColor="rgba(248, 250, 255, 0.28)" />
-            <stop offset="100%" stopColor="var(--neutral-50)" />
-          </linearGradient>
         </defs>
 
+        {/* Pulse lent continu */}
         <motion.g
-          animate={{ y: hovered ? -2 : 0, scale: hovered ? 1.03 : 1 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          style={{ transformOrigin: '100px 46px' }}
+          animate={{ scale: [0.97, 1.03, 0.97] }}
+          transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+          style={{ originX: '100px', originY: '58px' }}
         >
-          <circle cx="100" cy="46" r="38" fill="url(#voyage-add-halo)" />
-          <circle cx="100" cy="46" r="26" fill="rgba(255, 246, 219, 0.3)" />
-          <rect
-            x="89"
-            y="14"
-            width="22"
-            height="64"
-            rx="11"
-            fill="url(#voyage-add-plus)"
-            style={{ filter: 'drop-shadow(0 12px 18px rgba(215, 149, 34, 0.18))' }}
-          />
-          <rect
-            x="68"
-            y="35"
-            width="64"
-            height="22"
-            rx="11"
-            fill="url(#voyage-add-plus)"
-            style={{ filter: 'drop-shadow(0 12px 18px rgba(215, 149, 34, 0.16))' }}
-          />
-          <rect x="94" y="18" width="8" height="52" rx="4" fill="url(#voyage-add-plus-shine)" opacity="0.9" />
-          <rect x="74" y="40" width="46" height="7" rx="3.5" fill="url(#voyage-add-plus-shine)" opacity="0.72" />
+          {/* hue-rotate animé au clic pour "changer l'emplacement des couleurs" */}
+          <motion.g
+            animate={{
+              rotate: rotation,
+              y: hovered ? -2 : 0,
+              scale: hovered ? 1.05 : 1,
+              filter: `hue-rotate(${hueShift}deg)`,
+            }}
+            transition={{
+              rotate: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+              filter: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+              default: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+            }}
+            style={{ originX: '100px', originY: '58px' }}
+          >
+            {/* Halo doux */}
+            <circle cx="100" cy="58" r="34" fill="url(#voyage-add-halo2)" />
+
+            {/* Cockpit dots aux extrémités */}
+            <circle cx="100" cy="12" r="2.5" fill="url(#voyage-add-rainbow)" />
+            <circle cx="47"  cy="58" r="2.5" fill="url(#voyage-add-rainbow)" />
+            <circle cx="153" cy="58" r="2.5" fill="url(#voyage-add-rainbow)" />
+
+            {/* Bras du signe + — légèrement réduits vs version précédente */}
+            {/* Haut */}
+            <rect x="91" y="14"  width="18" height="34" rx="9" fill="url(#voyage-add-rainbow)" />
+            {/* Gauche */}
+            <rect x="59" y="49"  width="34" height="18" rx="9" fill="url(#voyage-add-rainbow)" />
+            {/* Centre */}
+            <circle cx="100" cy="58" r="8" fill="url(#voyage-add-rainbow)" />
+            {/* Droite */}
+            <rect x="107" y="49"  width="34" height="18" rx="9" fill="url(#voyage-add-rainbow)" />
+            {/* Bas — s'arrête à y=102, pas de fondu */}
+            <rect x="91" y="67"  width="18" height="34" rx="9" fill="url(#voyage-add-rainbow)" />
+          </motion.g>
         </motion.g>
 
-        <rect x="0" y="72" width="200" height="40" fill="url(#voyage-add-fade)" />
-
+        {/* Label */}
         <text
           x={100}
           y={116}
@@ -1397,11 +1524,10 @@ function VoyageAddExpenseMirrorTile({
   )
 }
 
+
 // ─── Recherche rapide animée (remplace QuickSearchTile en état déplié) ───────
 
 const CONIC_GRAD = 'conic-gradient(from 180deg, #ff004d 0deg, #ff7a00 55deg, #ffd500 110deg, #33d17a 165deg, #00c2ff 220deg, #4f6bff 275deg, #b84dff 330deg, #ff004d 360deg)'
-const EASE_SPRING: [number, number, number, number] = [0.22, 1, 0.36, 1]
-const EASE_IN_SWIFT: [number, number, number, number] = [0.4, 0, 0.8, 0.2]
 
 function AnimatedQuickSearchExpanded({
   selection,
@@ -1465,7 +1591,6 @@ function AnimatedQuickSearchExpanded({
 
   const wingBg = `linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-100) 100%) padding-box, ${CONIC_GRAD} border-box`
   const wingHoverBg = `linear-gradient(135deg, var(--neutral-150) 0%, var(--neutral-150) 100%) padding-box, ${CONIC_GRAD} border-box`
-  const circleBgIdle = `linear-gradient(135deg, rgba(214,214,219,0.96) 0%, rgba(196,196,204,0.96) 100%) padding-box, ${CONIC_GRAD} border-box`
 
   const wingStyle: React.CSSProperties = {
     flex: 1,
@@ -1494,16 +1619,7 @@ function AnimatedQuickSearchExpanded({
     }}>
 
       {/* ── Aile gauche : Catégorie ── */}
-      <motion.div
-        style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}
-        initial={{ maxWidth: 0, opacity: 0 }}
-        animate={{ maxWidth: 2000, opacity: 1 }}
-        exit={{ maxWidth: 0, opacity: 0, transition: { duration: 0.30, ease: EASE_IN_SWIFT } }}
-        transition={{
-          maxWidth: { duration: 0.62, delay: 0.20, ease: EASE_SPRING },
-          opacity: { duration: 0.28, delay: 0.24 },
-        }}
-      >
+      <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}>
         <button
           type="button"
           onClick={onSelectCategory}
@@ -1518,45 +1634,34 @@ function AnimatedQuickSearchExpanded({
             </span>
           </div>
         </button>
-      </motion.div>
+      </div>
 
       <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
 
-      {/* ── Centre : bouton action (position animée par layoutId) ── */}
-      <motion.button
-        layoutId="qs-circle"
+      {/* ── Centre : bouton action ── */}
+      <button
         type="button"
         onClick={canSearch ? onSearch : onCollapse}
-        className={canSearch ? 'qs-btn-ready' : ''}
-        animate={{ width: 44, height: 44 }}
-        transition={{ duration: 0.58, ease: EASE_SPRING }}
+        className={canSearch ? 'qs-btn-ready' : 'qs-btn-idle'}
         aria-label={canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide'}
         style={{
+          width: 44,
+          height: 44,
           flexShrink: 0,
           borderRadius: 'var(--radius-full)',
           border: canSearch ? '3px solid var(--neutral-0)' : '3px solid transparent',
           color: '#ffffff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', zIndex: 10, overflow: 'hidden',
-          ...(!canSearch ? { background: circleBgIdle } : {}),
         }}
       >
         <ArrowUp size={18} strokeWidth={canSearch ? 3 : 2.5} />
-      </motion.button>
+      </button>
 
       <div style={{ width: 'var(--space-3)', flexShrink: 0 }} />
 
       {/* ── Aile droite : Période ── */}
-      <motion.div
-        style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}
-        initial={{ maxWidth: 0, opacity: 0 }}
-        animate={{ maxWidth: 2000, opacity: 1 }}
-        exit={{ maxWidth: 0, opacity: 0, transition: { duration: 0.30, ease: EASE_IN_SWIFT } }}
-        transition={{
-          maxWidth: { duration: 0.62, delay: 0.28, ease: EASE_SPRING },
-          opacity: { duration: 0.28, delay: 0.32 },
-        }}
-      >
+      <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', height: '100%', minWidth: 0 }}>
         <button
           type="button"
           onClick={onSelectPeriod}
@@ -1568,7 +1673,7 @@ function AnimatedQuickSearchExpanded({
             {getPeriodText()}
           </span>
         </button>
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -2040,6 +2145,7 @@ export function Home() {
   const [updateExpanded, setUpdateExpanded] = useState(false)
   const [tripExpenseModalOpen, setTripExpenseModalOpen] = useState(false)
   const [tripExpenseInitialId, setTripExpenseInitialId] = useState<string | null>(null)
+  const [showTripTransactionsModal, setShowTripTransactionsModal] = useState(false)
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
   const [matchingTripId,      setMatchingTripId]      = useState<string | null>(null)
   const [matchingTripName,    setMatchingTripName]    = useState<string | null>(null)
@@ -3065,9 +3171,16 @@ export function Home() {
 
             {isBudgetVoyageTab ? (
               <section
-                style={{ padding: sectionHorizontalPadding, paddingTop: 'var(--space-8)' }}
+                style={{
+                  padding: sectionHorizontalPadding,
+                  paddingTop: 'var(--space-4)',
+                  paddingBottom: 'var(--space-4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  minHeight: 140,
+                }}
               >
-                <div style={{ maxWidth: 600, margin: '0 auto' }}>
+                <div style={{ maxWidth: 600, margin: '0 auto', width: '100%' }}>
                   <div
                     style={{
                       display: 'grid',
@@ -3077,15 +3190,16 @@ export function Home() {
                       position: 'relative',
                       paddingLeft: 16,
                       paddingRight: 16,
+                      alignItems: 'center',
                     }}
                   >
-                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <VoyageTransactionsTile
-                        onClick={() => navigate(primaryTripExpenseTarget ? `/voyages/${primaryTripExpenseTarget.trip_id}` : '/voyages')}
+                        onClick={() => setShowTripTransactionsModal(true)}
                       />
                     </div>
 
-                    <div style={{ minHeight: 64, display: 'flex', alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <VoyageAddExpenseMirrorTile
                         onClick={() => openTripExpenseModal(primaryTripExpenseTarget?.trip_id ?? null)}
                       />
@@ -3095,12 +3209,21 @@ export function Home() {
               </section>
             ) : null}
 
+
             <TripBudgetOverlay
               open={showRepartitionModal}
               onClose={() => setShowRepartitionModal(false)}
               mode={tripExpenseBars.mode}
               rows={tripExpenseBars.rows}
               tripName={selectedTripCockpit?.name ?? null}
+            />
+
+            <TripTransactionsModal
+              open={showTripTransactionsModal}
+              onClose={() => setShowTripTransactionsModal(false)}
+              tripId={primaryTripExpenseTarget?.trip_id ?? null}
+              tripName={primaryTripExpenseTarget?.name ?? null}
+              tripEmoji={primaryTripExpenseTarget?.emoji ?? null}
             />
 
       {!isCombinedSavingsPage && !isBudgetVoyageTab ? (
@@ -3187,7 +3310,10 @@ export function Home() {
                     items={upcomingOpsWindows.eom.items}
                     daysElapsed={daysElapsed}
                     daysInMonth={daysInMonth}
-                    onClick={() => { setEcheancesFilter('mois'); setShowEcheancesModal(true) }}
+                    onSelectShortcut={(filter) => {
+                      setEcheancesFilter(filter)
+                      setShowEcheancesModal(true)
+                    }}
                   />
                 </div>
 
@@ -3233,6 +3359,8 @@ export function Home() {
                         display: 'flex',
                         alignItems: 'flex-start',
                         gap: 'var(--space-4)',
+                        position: 'relative',
+                        zIndex: updateExpanded ? 50 : 1,
                       }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -3243,8 +3371,9 @@ export function Home() {
                         layoutId="qs-update"
                         layout
                         style={{
-                          flex: updateExpanded ? 1 : '0 0 calc(50% - 8px)',
+                          flex: '0 0 calc(50% - 8px)',
                           display: 'flex',
+                          justifyContent: 'center',
                           minWidth: 0,
                           overflow: 'hidden',
                         }}
@@ -3253,72 +3382,118 @@ export function Home() {
                         <UpdateExpandableTile
                           expanded={updateExpanded}
                           onToggle={() => setUpdateExpanded((v) => !v)}
-                          onSelectMode={(mode) => {
-                            setUpdateExpanded(false)
-                            setUpdateModalMode(mode)
-                            setShowUpdateModal(true)
-                          }}
                         />
                       </motion.div>
 
-                      {/* Search tile — colonne droite */}
-                      <motion.div
-                        layout
+                      {/* Colonne droite — Recherche (fermé) ou Options (ouvert) */}
+                      <div
                         style={{
-                          flex: updateExpanded ? '0 0 auto' : '0 0 calc(50% - 8px)',
+                          flex: '0 0 calc(50% - 8px)',
+                          position: 'relative',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
+                          minWidth: 0,
                         }}
-                        transition={{ layout: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] } }}
                       >
-                        <div style={{ position: 'relative', width: 80, height: 64, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
-                          {/* Cercle recherche — layoutId pour animation de centrage */}
-                          <motion.button
-                            layoutId="qs-circle"
-                            type="button"
-                            onClick={() => {
-                              setUpdateExpanded(false)
-                              setSearchTileExpanded(true)
-                            }}
-                            className="qs-btn-idle"
-                            aria-label="Ouvrir la recherche rapide"
-                            animate={{
-                              width: updateExpanded ? 56 : 80,
-                              height: updateExpanded ? 56 : 80,
-                            }}
-                            transition={{ duration: 0.52, ease: [0.25, 0.1, 0.25, 1] }}
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              borderRadius: 'var(--radius-full)',
-                              border: 'none',
-                              color: '#ffffff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              overflow: 'hidden',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <ArrowUp size={updateExpanded ? 15 : 20} strokeWidth={2.5} />
-                          </motion.button>
-                          <div style={{
-                            position: 'absolute',
-                            bottom: 0, left: 0, right: 0, height: 36,
-                            background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
-                            pointerEvents: 'none',
-                          }} />
-                        </div>
-                        <span style={{
-                          fontSize: 11, fontWeight: 800, color: 'var(--neutral-400)',
-                          fontFamily: 'var(--font-mono)', letterSpacing: '0.13em',
-                          textTransform: 'uppercase', marginTop: 8, display: 'block',
-                        }}>
-                          Recherche
-                        </span>
-                      </motion.div>
+                        <AnimatePresence initial={false} mode="sync">
+                          {!updateExpanded ? (
+                            /* Recherche */
+                            <motion.div
+                              key="search-tile"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0, transition: { duration: 0.20 } }}
+                              transition={{ duration: 0.75, ease: 'easeOut' }}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                width: '100%',
+                              }}
+                            >
+                              <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUpdateExpanded(false)
+                                    setSearchTileExpanded(true)
+                                  }}
+                                  className="qs-btn-idle"
+                                  aria-label="Ouvrir la recherche rapide"
+                                  style={{
+                                    width: 64,
+                                    height: 64,
+                                    borderRadius: 'var(--radius-full)',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <ArrowUp size={20} strokeWidth={2.5} />
+                                </button>
+                              </div>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                color: 'var(--neutral-400)',
+                                fontFamily: 'var(--font-mono)',
+                                letterSpacing: '0.13em',
+                                textTransform: 'uppercase',
+                                marginTop: 8,
+                                display: 'block',
+                              }}>
+                                Recherche
+                              </span>
+                            </motion.div>
+                          ) : (
+                            /* Options de mise à jour */
+                            <motion.div
+                              key="options-row"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                              transition={{ duration: 0.35 }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                width: '100%',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                              }}
+                            >
+                              <UpdateOptionCard
+                                src={transactionsUpdateIcon}
+                                label="Transactions"
+                                delay={0.08}
+                                xOffset={-40}
+                                onClick={() => {
+                                  setUpdateExpanded(false)
+                                  setUpdateModalMode('transactions')
+                                  setShowUpdateModal(true)
+                                }}
+                              />
+                              <UpdateOptionCard
+                                src={soldeUpdateIcon}
+                                label="Solde"
+                                delay={0.16}
+                                xOffset={-80}
+                                onClick={() => {
+                                  setUpdateExpanded(false)
+                                  setUpdateModalMode('balances')
+                                  setShowUpdateModal(true)
+                                }}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </motion.div>
 
                   )}
@@ -3802,6 +3977,30 @@ export function Home() {
         glassBackground={getGlassColors('#38BDF8').glassBackground}
         glassBorder={getGlassColors('#38BDF8').glassBorder}
       />
+
+      <AnimatePresence>
+        {updateExpanded && (
+          <motion.div
+            key="spotlight-mask"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setUpdateExpanded(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(28, 28, 58, 0.38)',
+              backdropFilter: 'blur(3px)',
+              WebkitBackdropFilter: 'blur(3px)',
+              zIndex: 40,
+              pointerEvents: 'auto',
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <UpdateModal
         open={showUpdateModal}

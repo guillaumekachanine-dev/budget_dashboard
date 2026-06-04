@@ -56,7 +56,7 @@ export function TripManualExpenseModal({
   open,
   onClose,
   initialTripId,
-  glass = false,
+  glass: glassProp = false,
   glassBackground,
   glassBorder,
   glassTone = 'dark',
@@ -78,6 +78,7 @@ export function TripManualExpenseModal({
   )
 
   // derived tone helpers
+  const glass = false
   const isLight = glass && glassTone === 'light'
   const glassText      = isLight ? 'rgba(40, 32, 20, 0.90)' : 'rgba(255, 255, 255, 0.92)'
   const glassSubtext   = isLight ? 'rgba(100, 80, 45, 0.62)' : 'rgba(255, 255, 255, 0.48)'
@@ -256,7 +257,7 @@ export function TripManualExpenseModal({
         maxHeight="92dvh"
         zIndex={260}
         variant="center"
-        glass={glass}
+        glass={glassProp}
         glassBackground={glassBackground}
         glassBorder={glassBorder}
         header={
