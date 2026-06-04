@@ -325,6 +325,7 @@ function DriftsModal({
   top5ExpenseRows,
   loadingSummaries,
   onCategoryClick,
+  layoutId,
 }: {
   open: boolean
   onClose: () => void
@@ -333,14 +334,20 @@ function DriftsModal({
   top5ExpenseRows: Top5RowShape[]
   loadingSummaries: boolean
   onCategoryClick: (id: string) => void
+  layoutId?: string
 }) {
   const [showTop5, setShowTop5] = useState(false)
   const titleWithTotal = (
     <span>
-      <span>{'Catégories en dérive '}</span>
-      <span style={{ color: 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>
-        {`+${formatCurrencyFloored(totalOverrunAmount)}`}
-      </span>
+      <span>{'Catégories en dérive'}</span>
+      {totalOverrunAmount > 0 && (
+        <>
+          <span>{' '}</span>
+          <span style={{ color: 'var(--color-error)', fontFamily: 'var(--font-mono)' }}>
+            {`+${formatCurrencyFloored(totalOverrunAmount)}`}
+          </span>
+        </>
+      )}
     </span>
   ) as unknown as string
 
@@ -356,6 +363,7 @@ function DriftsModal({
       glassBackground={glassBackground}
       glassBorder={glassBorder}
       zIndex={1200}
+      layoutId={layoutId}
     >
       <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
         {loadingSummaries ? (
@@ -1991,6 +1999,8 @@ export function Home() {
   const [showDriftsModal, setShowDriftsModal] = useState(false)
   const [showResteUtileModal, setShowResteUtileModal] = useState(false)
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
+  const [cardFlipped, setCardFlipped] = useState(false)
+  const [driftsCardFlipped, setDriftsCardFlipped] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showEcheancesModal, setShowEcheancesModal] = useState(false)
   const [showAllEnvelopesModal, setShowAllEnvelopesModal] = useState(false)
@@ -2860,77 +2870,191 @@ export function Home() {
 
                         {/* ── CTAs ──────────────────────────────────────────────── */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setShowHeroBalanceModal(true)}
-                            aria-label="Voir le détail du solde bancaire du compte principal"
-                            className="shine-btn shine-btn--1"
-                            style={{
-                              width: '100%',
-                              display: 'inline-flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 1,
-                              border: '1px solid rgba(255,255,255,0.25)',
-                              background: 'rgba(255,255,255,0.1)',
-                              color: '#FFFFFF',
-                              borderRadius: 'var(--radius-button)',
-                              padding: '4px var(--space-3)',
-                              minHeight: 48,
-                              cursor: 'pointer',
-                              transition: 'background 120ms ease',
-                              position: 'relative',
-                              overflow: 'hidden',
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-                            }}
-                          >
-                            <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                              Solde estimé
-                            </span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
-                              {formatCurrencyFloored(animatedBalance)}
-                            </span>
-                          </button>
+                           {/* Conteneur 3D pour l'animation de retournement (Flip) */}
+                           <div
+                             style={{
+                               perspective: '1000px',
+                               width: '100%',
+                               height: 48,
+                               position: 'relative',
+                             }}
+                           >
+                             <motion.div
+                               animate={{ rotateY: cardFlipped ? 180 : 0 }}
+                               transition={{ duration: 0.38, ease: [0.25, 0.1, 0.25, 1] }}
+                               style={{
+                                 width: '100%',
+                                 height: '100%',
+                                 position: 'relative',
+                                 transformStyle: 'preserve-3d',
+                               }}
+                             >
+                               {/* Recto : Bouton de solde estimé initial */}
+                               <motion.button
+                                 type="button"
+                                 onClick={() => {
+                                   setCardFlipped(true)
+                                   setTimeout(() => {
+                                     setShowHeroBalanceModal(true)
+                                   }, 280) // Seuil optimal pour déclencher la modale durant le flip
+                                 }}
+                                 aria-label="Voir le détail du solde bancaire du compte principal"
+                                 className="shine-btn shine-btn--1"
+                                 style={{
+                                   position: 'absolute',
+                                   inset: 0,
+                                   width: '100%',
+                                   height: '100%',
+                                   backfaceVisibility: 'hidden',
+                                   WebkitBackfaceVisibility: 'hidden',
+                                   display: 'inline-flex',
+                                   flexDirection: 'column',
+                                   alignItems: 'center',
+                                   justifyContent: 'center',
+                                   gap: 1,
+                                   border: '1px solid rgba(255,255,255,0.25)',
+                                   background: 'rgba(255,255,255,0.1)',
+                                   color: '#FFFFFF',
+                                   borderRadius: 'var(--radius-button)',
+                                   padding: '4px var(--space-3)',
+                                   cursor: 'pointer',
+                                   transition: 'background 120ms ease',
+                                   overflow: 'hidden',
+                                   pointerEvents: cardFlipped ? 'none' : 'auto',
+                                 }}
+                                 onMouseEnter={e => {
+                                   if (!cardFlipped) e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+                                 }}
+                                 onMouseLeave={e => {
+                                   if (!cardFlipped) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                                 }}
+                               >
+                                 <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                   Solde estimé
+                                 </span>
+                                 <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                                   {formatCurrencyFloored(animatedBalance)}
+                                 </span>
+                               </motion.button>
 
-                          <button
-                            type="button"
-                            onClick={() => setShowDriftsModal(true)}
-                            aria-label="Voir les dérives budgétaires"
-                            className="shine-btn shine-btn--2"
-                            style={{
-                              width: '100%',
-                              display: 'inline-flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 1,
-                              border: '1px solid rgba(255,255,255,0.25)',
-                              background: 'rgba(255,255,255,0.1)',
-                              color: '#FFFFFF',
-                              borderRadius: 'var(--radius-button)',
-                              padding: '4px var(--space-3)',
-                              minHeight: 48,
-                              cursor: 'pointer',
-                              transition: 'background 120ms ease',
-                              position: 'relative',
-                              overflow: 'hidden',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
-                          >
-                            <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                              Dérives
-                            </span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: driftOverrunTotal > 0 ? '#FC5A5A' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
-                              {formatCurrencyFloored(driftOverrunTotal)}
-                            </span>
-                          </button>
+                               {/* Verso : Conteneur morphant de même taille, qui se transformera en modale */}
+                               <AnimatePresence>
+                                 {!showHeroBalanceModal && cardFlipped && (
+                                   <motion.div
+                                     layoutId="hero-balance-modal-sheet"
+                                     style={{
+                                       position: 'absolute',
+                                       inset: 0,
+                                       transform: 'rotateY(180deg)',
+                                       backfaceVisibility: 'hidden',
+                                       WebkitBackfaceVisibility: 'hidden',
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       justifyContent: 'center',
+                                       background: getGlassColors('var(--primary-500)').glassBackground ?? 'rgba(10, 12, 30, 0.72)',
+                                       borderRadius: 'var(--radius-button)',
+                                       border: `1px solid ${getGlassColors('var(--primary-500)').glassBorder ?? 'rgba(255,255,255,0.15)'}`,
+                                       boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                                       pointerEvents: 'none',
+                                     }}
+                                   />
+                                 )}
+                               </AnimatePresence>
+                             </motion.div>
+                           </div>
+
+                           {/* Conteneur 3D pour l'animation de retournement (Flip) des dérives */}
+                           <div
+                             style={{
+                               perspective: '1000px',
+                               width: '100%',
+                               height: 48,
+                               position: 'relative',
+                             }}
+                           >
+                             <motion.div
+                               animate={{ rotateY: driftsCardFlipped ? 180 : 0 }}
+                               transition={{ duration: 0.38, ease: [0.25, 0.1, 0.25, 1] }}
+                               style={{
+                                 width: '100%',
+                                 height: '100%',
+                                 position: 'relative',
+                                 transformStyle: 'preserve-3d',
+                               }}
+                             >
+                               {/* Recto : Bouton de dérives initial */}
+                               <motion.button
+                                 type="button"
+                                 onClick={() => {
+                                   setDriftsCardFlipped(true)
+                                   setTimeout(() => {
+                                     setShowDriftsModal(true)
+                                   }, 280) // Seuil optimal pour déclencher la modale durant le flip
+                                 }}
+                                 aria-label="Voir les dérives budgétaires"
+                                 className="shine-btn shine-btn--2"
+                                 style={{
+                                   position: 'absolute',
+                                   inset: 0,
+                                   width: '100%',
+                                   height: '100%',
+                                   backfaceVisibility: 'hidden',
+                                   WebkitBackfaceVisibility: 'hidden',
+                                   display: 'inline-flex',
+                                   flexDirection: 'column',
+                                   alignItems: 'center',
+                                   justifyContent: 'center',
+                                   gap: 1,
+                                   border: '1px solid rgba(255,255,255,0.25)',
+                                   background: 'rgba(255,255,255,0.1)',
+                                   color: '#FFFFFF',
+                                   borderRadius: 'var(--radius-button)',
+                                   padding: '4px var(--space-3)',
+                                   cursor: 'pointer',
+                                   transition: 'background 120ms ease',
+                                   overflow: 'hidden',
+                                   pointerEvents: driftsCardFlipped ? 'none' : 'auto',
+                                 }}
+                                 onMouseEnter={e => {
+                                   if (!driftsCardFlipped) e.currentTarget.style.background = 'rgba(255,255,255,0.18)'
+                                 }}
+                                 onMouseLeave={e => {
+                                   if (!driftsCardFlipped) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                                 }}
+                               >
+                                 <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                   Dérives
+                                 </span>
+                                 <span style={{ fontSize: 13, fontWeight: 800, color: driftOverrunTotal > 0 ? '#FC5A5A' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                                   {formatCurrencyFloored(driftOverrunTotal)}
+                                 </span>
+                               </motion.button>
+
+                               {/* Verso : Conteneur morphant de même taille, qui se transformera en modale dérives */}
+                               <AnimatePresence>
+                                 {!showDriftsModal && driftsCardFlipped && (
+                                   <motion.div
+                                     layoutId="drifts-modal-sheet"
+                                     style={{
+                                       position: 'absolute',
+                                       inset: 0,
+                                       transform: 'rotateY(180deg)',
+                                       backfaceVisibility: 'hidden',
+                                       WebkitBackfaceVisibility: 'hidden',
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       justifyContent: 'center',
+                                       background: getGlassColors('var(--color-warning)').glassBackground ?? 'rgba(10, 12, 30, 0.72)',
+                                       borderRadius: 'var(--radius-button)',
+                                       border: `1px solid ${getGlassColors('var(--color-warning)').glassBorder ?? 'rgba(255,255,255,0.15)'}`,
+                                       boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                                       pointerEvents: 'none',
+                                     }}
+                                   />
+                                 )}
+                               </AnimatePresence>
+                             </motion.div>
+                           </div>
                         </div>
                       </div>
                     ) : (
@@ -3712,7 +3836,12 @@ export function Home() {
       <AnimatePresence>
       <BottomSheet
         open={showHeroBalanceModal}
-        onClose={() => setShowHeroBalanceModal(false)}
+        onClose={() => {
+          setShowHeroBalanceModal(false)
+          setTimeout(() => {
+            setCardFlipped(false)
+          }, 320) // Seuil optimal pour synchroniser le retournement avec la fin du morphing exit
+        }}
         title="Solde compte courant"
         subtitle={`Sur la base du relevé du ${observedDateDayMonthLabel}`}
         variant="center"
@@ -3720,6 +3849,7 @@ export function Home() {
         glassBackground={getGlassColors('var(--primary-500)').glassBackground}
         glassBorder={getGlassColors('var(--primary-500)').glassBorder}
         zIndex={1200}
+        layoutId="hero-balance-modal-sheet"
       >
         <div style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)', display: 'grid', gap: 10 }}>
           {loadingMainAccountBalanceStatus ? (
@@ -3976,7 +4106,12 @@ export function Home() {
 
       <DriftsModal
         open={showDriftsModal}
-        onClose={() => setShowDriftsModal(false)}
+        onClose={() => {
+          setShowDriftsModal(false)
+          setTimeout(() => {
+            setDriftsCardFlipped(false)
+          }, 320) // Seuil optimal pour synchroniser le retournement avec la fin du morphing exit
+        }}
         driftRows={driftRows}
         totalOverrunAmount={driftOverrunTotal}
         top5ExpenseRows={top5ExpenseRows}
@@ -3985,6 +4120,7 @@ export function Home() {
           setSelectedDriftCategoryId(id)
           setShowDriftCategoryModal(true)
         }}
+        layoutId="drifts-modal-sheet"
       />
 
       <DriftCategoryTransactionsModal

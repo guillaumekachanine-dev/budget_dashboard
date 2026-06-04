@@ -20,6 +20,8 @@ interface BottomSheetProps {
   glassBackground?: string
   /** Override glass border color — e.g. 'rgba(255,171,46,0.14)' for amber accent */
   glassBorder?: string
+  /** layoutId for shared layout animations with Framer Motion */
+  layoutId?: string
 }
 
 const SWIPE_CLOSE_THRESHOLD_Y = 72
@@ -38,6 +40,7 @@ export function BottomSheet({
   glass = false,
   glassBackground,
   glassBorder,
+  layoutId,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const isCenter = variant === 'center'
@@ -104,7 +107,15 @@ export function BottomSheet({
         touchAction: 'none',
       }
 
-  const animProps = isCenter
+  const animProps = layoutId
+    ? {
+        layoutId,
+        initial: { x: '-50%', y: '-50%' },
+        animate: { x: '-50%', y: '-50%' },
+        exit: { x: '-50%', y: '-50%' },
+        transition: { duration: 0.32, ease: [0.25, 0.1, 0.25, 1] },
+      }
+    : isCenter
     ? {
         initial: { scale: 0.08, opacity: 0, x: '-50%', y: '-50%' },
         animate: { scale: 1, opacity: 1, x: '-50%', y: '-50%' },
