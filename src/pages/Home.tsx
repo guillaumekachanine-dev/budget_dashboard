@@ -537,7 +537,17 @@ function EcheancesTimelineTile({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={expanded ? 'Masquer les raccourcis d’échéances' : 'Afficher les raccourcis d’échéances'}
+      aria-expanded={expanded}
       onClick={handleTileClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleTileClick()
+        }
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

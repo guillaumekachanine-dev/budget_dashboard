@@ -6,3 +6,12 @@ dist/
 *.tsbuildinfo
 .vercel
 supabase/.temp/
+
+# macOS/iCloud duplicate copies ("File 2.ts")
+* 2.ts
+* 2.tsx
+* 2.js
+* 2.jsx
+
+# Local screenshots / scratch artifacts
+screenshot_*.png

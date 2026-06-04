@@ -28,9 +28,7 @@ function RouteFallback() {
 }
 
 export default function App() {
-  const { user: realUser } = useAuth()
-  const user = realUser || { id: 'da1d9874-4cf9-4607-b09d-34336e69126b', email: 'guillaume.kachanine@gmail.com' }
-  const loading = false
+  const { user, loading } = useAuth()
   const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false)
   const [addTransactionModalOpen, setAddTransactionModalOpen] = useState(false)
   const [updateModalOpen, setUpdateModalOpen] = useState(false)
