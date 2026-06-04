@@ -1153,33 +1153,7 @@ function UpdateExpandableTile({
   )
 }
 
-// ─── Tuile Mise à jour miniature (pour la ligne infos quand recherche dépliée) ──
 
-function UpdateMiniTile({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Mise à jour"
-      style={{
-        border: 'none', background: 'transparent', padding: 0,
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        cursor: 'pointer', gap: 4, flexShrink: 0,
-      }}
-    >
-      <div style={{ width: 36, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <img src={updateExchangeReferenceIcon} alt="" aria-hidden style={{ width: 36, height: 28, objectFit: 'contain' }} />
-      </div>
-      <span style={{
-        fontSize: 9, fontWeight: 800, color: 'var(--neutral-400)',
-        fontFamily: 'var(--font-mono)', letterSpacing: '0.10em', textTransform: 'uppercase',
-        whiteSpace: 'nowrap',
-      }}>
-        Màj
-      </span>
-    </button>
-  )
-}
 
 
 // ─── VoyageTransactionsTile — Stacked cards fintech pictogram ─────────────────
@@ -3229,6 +3203,7 @@ export function Home() {
                         margin: '0 auto',
                         width: '100%',
                         overflow: 'visible',
+                        zIndex: (updateExpanded || searchTileExpanded) ? 50 : 1,
                       }}
                       transition={{ layout: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] } }}
                     >
@@ -3328,7 +3303,6 @@ export function Home() {
 
                           {/* Bouton central de Recherche */}
                           <motion.button
-                            layoutId="qs-button"
                             type="button"
                             onClick={
                               searchTileExpanded
@@ -3337,21 +3311,24 @@ export function Home() {
                             }
                             className={buttonClass}
                             aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
-                            style={{
+                            animate={{
                               width: searchTileExpanded ? 44 : 64,
                               height: searchTileExpanded ? 44 : 64,
+                              marginLeft: searchTileExpanded ? -12 : 0,
+                              marginRight: searchTileExpanded ? -12 : 0,
+                              borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
+                            }}
+                            style={{
                               flexShrink: 0,
-                              borderRadius: 'var(--radius-full)',
-                              border: (searchTileExpanded && canSearch) ? '3px solid var(--neutral-0)' : '3px solid transparent',
+                              borderRadius: '50%',
+                              borderWidth: 3,
+                              borderStyle: 'solid',
                               color: '#ffffff',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: 'pointer',
                               zIndex: 10,
-                              // Marges négatives pour que le bouton chevauche les ailes
-                              marginLeft: searchTileExpanded ? -12 : 0,
-                              marginRight: searchTileExpanded ? -12 : 0,
                             }}
                             transition={{
                               type: 'tween',
@@ -3440,22 +3417,7 @@ export function Home() {
           >
             <div style={{ maxWidth: 600, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
 
-              {/* Mini update tile — apparaît à gauche quand la recherche est dépliée */}
-              <AnimatePresence>
-                {isMainCheckingAccount && searchTileExpanded && (
-                  <motion.div
-                    layoutId="qs-update"
-                    key="update-in-infos"
-                    style={{ position: 'absolute', left: 16, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}
-                    initial={{ opacity: 0, scale: 0.82 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.82, transition: { duration: 0.22 } }}
-                    transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <UpdateMiniTile onClick={() => setSearchTileExpanded(false)} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+
               <button
                 id="infos-bell-btn"
                 type="button"
@@ -3911,13 +3873,16 @@ export function Home() {
       />
 
       <AnimatePresence>
-        {updateExpanded && (
+        {(updateExpanded || searchTileExpanded) && (
           <motion.div
             key="spotlight-mask"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setUpdateExpanded(false)}
+            onClick={() => {
+              setUpdateExpanded(false)
+              setSearchTileExpanded(false)
+            }}
             style={{
               position: 'fixed',
               top: 0,
