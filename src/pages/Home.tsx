@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowDownToLine, ArrowUp, Bell, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import { TripCockpitCard } from '@/features/voyages/components/TripCockpitCard'
@@ -99,6 +99,7 @@ const BUDGET_VOYAGE_TAB_ID = 'budget_voyage'
 // Swipe constants (module-level pour stabilité des dépendances)
 const SWIPE_MIN_DELTA_X = 50
 const SWIPE_RATIO = 1.5
+const HERO_ACTION_MODAL_OPEN_DELAY_MS = 120
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -533,7 +534,7 @@ function EcheancesTimelineTile({
     { label: '3', filter: 'j3' as const, t: 0 },
     { label: '7', filter: 'j7' as const, t: 0.30 },
     { label: '15', filter: 'j15' as const, t: 0.70 },
-    { label: 'mois', filter: 'mois' as const, t: 1 }
+    { label: 'M', filter: 'mois' as const, t: 1 }
   ]
 
   const badgeVariants = {
@@ -652,7 +653,7 @@ function EcheancesTimelineTile({
 
         {/* Pastilles Raccourcis */}
         {shortcuts.map((sc, idx) => {
-          const isMonth = sc.label === 'mois'
+          const isMonth = sc.filter === 'mois'
           return (
             <motion.g
               key={sc.filter}
@@ -871,9 +872,11 @@ function EnvelopeShortcutTile({
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const BASELINE = 87
-  const MAX_BAR_H = 66
-  const BAR_W = 14
-  const PAD_X = 15
+  const MAX_BAR_H = 72
+  const BAR_W = 16
+  const PAD_X = 30
+  const CLICK_FILL_DURATION = 0.46
+  const CLICK_FILL_DELAY = 0.07
 
   const n = slices.length
   const usableW = 200 - 2 * PAD_X - BAR_W
@@ -887,7 +890,7 @@ function EnvelopeShortcutTile({
     setAnimating(false)
     requestAnimationFrame(() => {
       setAnimating(true)
-      const totalMs = (n > 1 ? (n - 1) * 80 : 0) + 520
+      const totalMs = (n > 1 ? (n - 1) * CLICK_FILL_DELAY * 1000 : 0) + CLICK_FILL_DURATION * 1000 + 20
       animTimerRef.current = setTimeout(() => {
         setAnimating(false)
         onClick()
@@ -973,8 +976,8 @@ function EnvelopeShortcutTile({
                     height: [0, trackH, 0],
                   }}
                   transition={{
-                    duration: 0.5,
-                    delay: i * 0.08,
+                    duration: CLICK_FILL_DURATION,
+                    delay: i * CLICK_FILL_DELAY,
                     ease: 'easeInOut',
                     times: [0, 0.5, 1],
                   }}
@@ -1092,6 +1095,52 @@ const MONTHS_FR_SHORT = [
   'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'
 ]
 
+function RainbowBellIcon({
+  size = 18,
+  strokeWidth = 2.2,
+}: {
+  size?: number
+  strokeWidth?: number
+}) {
+  const gradientId = `infos-bell-rainbow-${size}`
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: 'block', filter: 'drop-shadow(0 2px 6px rgba(91, 87, 245, 0.24))' }}
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#ff3366" />
+          <stop offset="20%" stopColor="#ff9933" />
+          <stop offset="38%" stopColor="#ffff33" />
+          <stop offset="56%" stopColor="#33cc66" />
+          <stop offset="74%" stopColor="#3399ff" />
+          <stop offset="100%" stopColor="#9933ff" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M10.268 21a2 2 0 0 0 3.464 0"
+        stroke={`url(#${gradientId})`}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .738-1.674C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+        stroke={`url(#${gradientId})`}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function UpdateOptionCard({
   src,
   label,
@@ -1135,11 +1184,6 @@ function UpdateOptionCard({
           aria-hidden
           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, height: 10,
-          background: 'linear-gradient(to bottom, transparent, var(--neutral-50))',
-          pointerEvents: 'none',
-        }} />
       </div>
       <span style={{
         fontSize: 10,
@@ -1985,7 +2029,13 @@ export function Home() {
     })
   }, [accounts])
 
-  const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(null)
+  const [selectedAccountPresetId, setSelectedAccountPresetId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('home_active_tab') ?? null
+    } catch {
+      return null
+    }
+  })
   const prevTabRef = useRef<string | null>(null)
   const currentTab = selectedAccountPresetId ?? 'compte_principal'
   const direction = prevTabRef.current === 'compte_principal' && currentTab === 'budget_voyage' ? 1 : -1
@@ -2001,6 +2051,8 @@ export function Home() {
   const [showHeroBalanceModal, setShowHeroBalanceModal] = useState(false)
   const [cardFlipped, setCardFlipped] = useState(false)
   const [driftsCardFlipped, setDriftsCardFlipped] = useState(false)
+  const [balanceModalReturning, setBalanceModalReturning] = useState(false)
+  const [driftsModalReturning, setDriftsModalReturning] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showEcheancesModal, setShowEcheancesModal] = useState(false)
   const [showAllEnvelopesModal, setShowAllEnvelopesModal] = useState(false)
@@ -2018,6 +2070,24 @@ export function Home() {
   const [matchingSheetOpen,   setMatchingSheetOpen]   = useState(false)
   const [matchingTripId,      setMatchingTripId]      = useState<string | null>(null)
   const [matchingTripName,    setMatchingTripName]    = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!balanceModalReturning) return
+    const id = window.setTimeout(() => {
+      setBalanceModalReturning(false)
+      setCardFlipped(false)
+    }, 900)
+    return () => window.clearTimeout(id)
+  }, [balanceModalReturning])
+
+  useEffect(() => {
+    if (!driftsModalReturning) return
+    const id = window.setTimeout(() => {
+      setDriftsModalReturning(false)
+      setDriftsCardFlipped(false)
+    }, 900)
+    return () => window.clearTimeout(id)
+  }, [driftsModalReturning])
 
   const openTripExpenseModal = useCallback((tripId: string | null = null) => {
     setTripExpenseInitialId(tripId)
@@ -2241,6 +2311,11 @@ export function Home() {
   const handleSelectAccountPreset = useCallback((presetId: string) => {
     const normalized = presetId === 'ldds' ? 'livret_a' : mapPresetIdToDisplayed(presetId)
     setSelectedAccountPresetId(normalized)
+    try {
+      sessionStorage.setItem('home_active_tab', normalized)
+    } catch {
+      // ignore
+    }
   }, [])
 
   // ─── Swipe horizontal pour changer d'onglet ────────────────────────────────
@@ -2771,13 +2846,16 @@ export function Home() {
 
                 {isBudgetVoyageTab ? (
                   <TripCockpitCard
-                    onViewDetail={(tripId) => navigate(tripId ? `/voyages/${tripId}` : '/voyages')}
+                    onViewDetail={(tripId) => {
+                      try { sessionStorage.setItem('home_active_tab', 'budget_voyage') } catch { /* ignore */ }
+                      navigate(tripId ? `/voyages/${tripId}` : '/voyages')
+                    }}
                     onMatch={(tripId, tripName) => {
                       setMatchingTripId(tripId)
                       setMatchingTripName(tripName ?? null)
                       setMatchingSheetOpen(true)
                     }}
-                    onRepartition={tripExpenseBars.rows.length > 0 ? () => setShowRepartitionModal(true) : undefined}
+                    onRepartition={selectedTripCockpit ? () => setShowRepartitionModal(true) : undefined}
                   />
                 ) : isCombinedSavingsPage ? (
                   <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
@@ -2893,10 +2971,11 @@ export function Home() {
                                <motion.button
                                  type="button"
                                  onClick={() => {
+                                   setBalanceModalReturning(false)
                                    setCardFlipped(true)
                                    setTimeout(() => {
                                      setShowHeroBalanceModal(true)
-                                   }, 280) // Seuil optimal pour déclencher la modale durant le flip
+                                   }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
                                  }}
                                  aria-label="Voir le détail du solde bancaire du compte principal"
                                  className="shine-btn shine-btn--1"
@@ -2930,7 +3009,7 @@ export function Home() {
                                  }}
                                >
                                  <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                                   Solde estimé
+                                  Solde
                                  </span>
                                  <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
                                    {formatCurrencyFloored(animatedBalance)}
@@ -2942,6 +3021,12 @@ export function Home() {
                                  {!showHeroBalanceModal && cardFlipped && (
                                    <motion.div
                                      layoutId="hero-balance-modal-sheet"
+                                     onLayoutAnimationComplete={() => {
+                                       if (!balanceModalReturning) return
+                                       setBalanceModalReturning(false)
+                                       setCardFlipped(false)
+                                     }}
+                                     transition={{ layout: { type: 'spring', stiffness: 260, damping: 32, mass: 0.92 } }}
                                      style={{
                                        position: 'absolute',
                                        inset: 0,
@@ -2986,10 +3071,11 @@ export function Home() {
                                <motion.button
                                  type="button"
                                  onClick={() => {
+                                   setDriftsModalReturning(false)
                                    setDriftsCardFlipped(true)
                                    setTimeout(() => {
                                      setShowDriftsModal(true)
-                                   }, 280) // Seuil optimal pour déclencher la modale durant le flip
+                                   }, HERO_ACTION_MODAL_OPEN_DELAY_MS)
                                  }}
                                  aria-label="Voir les dérives budgétaires"
                                  className="shine-btn shine-btn--2"
@@ -3026,7 +3112,7 @@ export function Home() {
                                    Dérives
                                  </span>
                                  <span style={{ fontSize: 13, fontWeight: 800, color: driftOverrunTotal > 0 ? '#FC5A5A' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
-                                   {formatCurrencyFloored(driftOverrunTotal)}
+                                  {driftOverrunTotal > 0 ? formatCurrencyFloored(driftOverrunTotal) : '-'}
                                  </span>
                                </motion.button>
 
@@ -3035,6 +3121,12 @@ export function Home() {
                                  {!showDriftsModal && driftsCardFlipped && (
                                    <motion.div
                                      layoutId="drifts-modal-sheet"
+                                     onLayoutAnimationComplete={() => {
+                                       if (!driftsModalReturning) return
+                                       setDriftsModalReturning(false)
+                                       setDriftsCardFlipped(false)
+                                     }}
+                                     transition={{ layout: { type: 'spring', stiffness: 260, damping: 32, mass: 0.92 } }}
                                      style={{
                                        position: 'absolute',
                                        inset: 0,
@@ -3186,6 +3278,129 @@ export function Home() {
                       <VoyageAddExpenseMirrorTile
                         onClick={() => openTripExpenseModal(primaryTripExpenseTarget?.trip_id ?? null)}
                       />
+                    </div>
+
+                    {/* ── Tuile infos cloche ── */}
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--space-12)' }}>
+                      <button
+                        id="infos-bell-btn"
+                        type="button"
+                        onClick={() => setInfosExpanded(prev => !prev)}
+                        aria-label={showSnapshotReminder ? 'Voir les informations disponibles' : 'Aucune information'}
+                        style={{
+                          width: infosExpanded ? 'min(100%, 420px)' : '48px',
+                          height: 40,
+                          borderRadius: 'var(--radius-xl)',
+                          border: showSnapshotReminder
+                            ? '1.5px solid rgba(212, 160, 23, 0.45)'
+                            : '1.5px solid rgba(212, 160, 23, 0.18)',
+                          background: showSnapshotReminder
+                            ? 'linear-gradient(135deg, rgba(212, 160, 23, 0.18) 0%, rgba(184, 115, 10, 0.08) 100%)'
+                            : 'rgba(212, 160, 23, 0.06)',
+                          boxShadow: 'var(--shadow-card)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: infosExpanded ? 'space-between' : 'center',
+                          cursor: 'pointer',
+                          transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 150ms ease',
+                          flexShrink: 0,
+                          position: 'relative',
+                          padding: infosExpanded ? '0 var(--space-3)' : 0,
+                          overflow: 'hidden',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-1px)'
+                          e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = 'var(--shadow-card)'
+                        }}
+                      >
+                        {!infosExpanded ? (
+                          <>
+                            <RainbowBellIcon size={18} strokeWidth={2.2} />
+                            {showSnapshotReminder && (
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  top: 9,
+                                  right: 10,
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: '50%',
+                                  background: CONIC_GRAD,
+                                  border: '2px solid var(--neutral-0)',
+                                }}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-2)', minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                              <RainbowBellIcon size={16} strokeWidth={2.2} />
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: 'var(--neutral-800)',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {showSnapshotReminder
+                                  ? 'Snapshot fin de mois : valide tes catégories.'
+                                  : 'Aucune info pour le moment.'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', flexShrink: 0 }}>
+                              {showSnapshotReminder && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate('/budgets');
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: '#D4A017',
+                                    color: '#fff',
+                                    borderRadius: 'var(--radius-md)',
+                                    height: '26px',
+                                    padding: '0 var(--space-2)',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Vérifier
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInfosExpanded(false);
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: 'var(--neutral-500)',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 3,
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -3391,7 +3606,7 @@ export function Home() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         maxWidth: 600,
-                        margin: '0 auto',
+                        margin: 'var(--space-10) auto 0',
                         width: '100%',
                         overflow: 'visible',
                         zIndex: (updateExpanded || searchTileExpanded) ? 50 : 1,
@@ -3520,12 +3735,12 @@ export function Home() {
                                   className={buttonClass}
                                   aria-label={searchTileExpanded ? (canSearch ? 'Lancer la recherche' : 'Fermer la recherche rapide') : 'Ouvrir la recherche rapide'}
                                   animate={{
-                                    width: searchTileExpanded ? 44 : 96,
-                                    height: searchTileExpanded ? 44 : 96,
+                                    width: searchTileExpanded ? 44 : 88,
+                                    height: searchTileExpanded ? 44 : 88,
                                     marginLeft: searchTileExpanded ? -12 : 0,
                                     marginRight: searchTileExpanded ? -12 : 0,
                                     borderColor: (searchTileExpanded && canSearch) ? 'var(--neutral-0)' : 'rgba(255, 255, 255, 0)',
-                                    y: searchTileExpanded ? 0 : 20,
+                                    y: searchTileExpanded ? 0 : 6,
                                     background: searchTileExpanded
                                       ? [
                                           'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
@@ -3535,10 +3750,10 @@ export function Home() {
                                       : 'linear-gradient(135deg, #ff3366, #ff9933, #ffff33, #33cc66, #3399ff, #9933ff)',
                                   }}
                                   style={{
-                                    width: searchTileExpanded ? 44 : 96,
-                                    height: searchTileExpanded ? 44 : 96,
-                                    minWidth: searchTileExpanded ? 44 : 96,
-                                    minHeight: searchTileExpanded ? 44 : 96,
+                                    width: searchTileExpanded ? 44 : 88,
+                                    height: searchTileExpanded ? 44 : 88,
+                                    minWidth: searchTileExpanded ? 44 : 88,
+                                    minHeight: searchTileExpanded ? 44 : 88,
                                     flexShrink: 0,
                                     borderRadius: '50%',
                                     borderWidth: 3,
@@ -3618,7 +3833,7 @@ export function Home() {
                                     transition={{ duration: 0.2 }}
                                     style={{
                                       position: 'absolute',
-                                      top: 82,
+                                      top: 72,
                                       left: 0,
                                       right: 0,
                                       textAlign: 'center',
@@ -3629,6 +3844,7 @@ export function Home() {
                                       letterSpacing: '0.13em',
                                       textTransform: 'uppercase',
                                       pointerEvents: 'none',
+                                      zIndex: 12,
                                     }}
                                   >
                                     Recherche
@@ -3689,144 +3905,7 @@ export function Home() {
             </section>
           ) : null}
 
-          {/* ── Module libre Infos — tuile cloche dépliable ── */}
-          <section
-            style={{ padding: sectionHorizontalPadding }}
-          >
-            <div style={{ maxWidth: 600, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
 
-
-              <button
-                id="infos-bell-btn"
-                type="button"
-                onClick={() => setInfosExpanded(prev => !prev)}
-                aria-label={showSnapshotReminder ? 'Voir les informations disponibles' : 'Aucune information'}
-                style={{
-                  width: infosExpanded ? '100%' : '48px',
-                  height: 48,
-                  borderRadius: 'var(--radius-xl)',
-                  border: showSnapshotReminder
-                    ? '1.5px solid rgba(91, 87, 245, 0.35)'
-                    : '1.5px solid rgba(91, 87, 245, 0.12)',
-                  background: showSnapshotReminder
-                    ? 'linear-gradient(135deg, rgba(91, 87, 245, 0.12) 0%, rgba(139, 92, 246, 0.06) 100%)'
-                    : 'rgba(91, 87, 245, 0.03)',
-                  boxShadow: 'var(--shadow-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: infosExpanded ? 'space-between' : 'center',
-                  cursor: 'pointer',
-                  transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 150ms ease, box-shadow 150ms ease, transform 150ms ease',
-                  flexShrink: 0,
-                  position: 'relative',
-                  padding: infosExpanded ? '0 var(--space-4)' : 0,
-                  overflow: 'hidden',
-                  transformOrigin: 'center center',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                  e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-                }}
-              >
-                {!infosExpanded ? (
-                  <>
-                    <Bell
-                      size={20}
-                      color={showSnapshotReminder ? '#5B57F5' : 'rgba(91, 87, 245, 0.5)'}
-                      strokeWidth={2.2}
-                      aria-hidden="true"
-                    />
-                    {showSnapshotReminder && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          top: 12,
-                          right: 12,
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: '#5B57F5',
-                          border: '2px solid var(--neutral-0)',
-                        }}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 'var(--space-3)', minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
-                      <Bell
-                        size={20}
-                        color={showSnapshotReminder ? '#5B57F5' : 'rgba(91, 87, 245, 0.5)'}
-                        strokeWidth={2.2}
-                      />
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'var(--neutral-800)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {showSnapshotReminder
-                          ? 'Snapshot fin de mois prêt : valide tes catégories.'
-                          : 'Aucune info pour le moment.'}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
-                      {showSnapshotReminder && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate('/budgets');
-                          }}
-                          style={{
-                            border: 'none',
-                            background: '#5B57F5',
-                            color: '#fff',
-                            borderRadius: 'var(--radius-md)',
-                            height: '28px',
-                            padding: '0 var(--space-3)',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Vérifier
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setInfosExpanded(false);
-                        }}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          color: 'var(--neutral-500)',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: 4,
-                        }}
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </button>
-            </div>
-          </section>
         </>
       ) : null}
     </motion.div>
@@ -3837,10 +3916,8 @@ export function Home() {
       <BottomSheet
         open={showHeroBalanceModal}
         onClose={() => {
+          setBalanceModalReturning(true)
           setShowHeroBalanceModal(false)
-          setTimeout(() => {
-            setCardFlipped(false)
-          }, 320) // Seuil optimal pour synchroniser le retournement avec la fin du morphing exit
         }}
         title="Solde compte courant"
         subtitle={`Sur la base du relevé du ${observedDateDayMonthLabel}`}
@@ -4107,10 +4184,8 @@ export function Home() {
       <DriftsModal
         open={showDriftsModal}
         onClose={() => {
+          setDriftsModalReturning(true)
           setShowDriftsModal(false)
-          setTimeout(() => {
-            setDriftsCardFlipped(false)
-          }, 320) // Seuil optimal pour synchroniser le retournement avec la fin du morphing exit
         }}
         driftRows={driftRows}
         totalOverrunAmount={driftOverrunTotal}
@@ -4142,6 +4217,8 @@ export function Home() {
           setTripExpenseInitialId(null)
         }}
         initialTripId={tripExpenseInitialId}
+        lockTripSelector={isBudgetVoyageTab}
+        lockedTripName={isBudgetVoyageTab ? (primaryTripExpenseTarget?.name ?? null) : null}
         glass
         glassBackground="rgba(250, 246, 238, 0.82)"
         glassBorder="rgba(210, 185, 140, 0.35)"

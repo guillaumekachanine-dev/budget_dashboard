@@ -109,7 +109,7 @@ export function BottomSheet({
   const animProps = layoutId
     ? {
         layoutId,
-        transition: { duration: 0.32, ease: [0.25, 0.1, 0.25, 1] },
+        transition: { type: 'spring' as const, stiffness: 280, damping: 34, mass: 0.9 },
       }
     : isCenter
     ? {

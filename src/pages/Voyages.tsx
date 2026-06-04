@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { budgetDb } from '@/lib/supabaseBudget'
 import { TransactionDetailsModal } from '@/components/modals/TransactionDetailsModal'
 import { TripTransactionRattachementModal } from '@/features/voyages/components/TripTransactionRattachementModal'
+import { RomanianBucarestTitle } from '@/features/voyages/components/RomanianBucarestTitle'
 
 // ─── constantes ───────────────────────────────────────────────────────────────
 
@@ -789,7 +790,7 @@ export function Voyages() {
                         
                         <div style={{ minWidth: 0 }}>
                           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedTrip.name}
+                            <RomanianBucarestTitle name={selectedTrip.name} />
                           </h3>
                           <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.2 }}>
                             {fmtDateRange(selectedTrip.start_date, selectedTrip.end_date)}

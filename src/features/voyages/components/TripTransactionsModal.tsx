@@ -273,7 +273,6 @@ interface TripTransactionsModalProps {
   tripId: string | null
   tripName: string | null
   tripEmoji?: string | null
-  tripTotal?: number | null
 }
 
 export function TripTransactionsModal({
@@ -282,7 +281,6 @@ export function TripTransactionsModal({
   tripId,
   tripName,
   tripEmoji,
-  tripTotal,
 }: TripTransactionsModalProps) {
   const { expenses, isLoading } = useTripExpenses(open ? tripId : null)
 
@@ -302,7 +300,6 @@ export function TripTransactionsModal({
     [expenses],
   )
 
-  const displayTotal = tripTotal ?? grandTotal
   const title = tripName ? `${tripEmoji ?? '✈️'} ${tripName}` : 'Transactions voyage'
 
   const glassBackground = 'rgba(20, 14, 4, 0.54)'
@@ -313,7 +310,6 @@ export function TripTransactionsModal({
       open={open}
       onClose={onClose}
       title={title}
-      subtitle={expenses.length > 0 ? `${expenses.length} dépenses · ${formatAmount(displayTotal)}` : undefined}
       maxHeight="85dvh"
       variant="center"
       glass

@@ -2,8 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { QuickAddMenuModal } from '@/components/modals/QuickAddMenuModal'
-import { UpdateModal } from '@/components/modals/UpdateModal'
 import { prefetchPrimaryRoutes } from '@/lib/routePrefetch'
 import { forceUnlockDocumentScroll } from '@/lib/scrollLock'
 
@@ -29,14 +27,11 @@ function RouteFallback() {
 
 export default function App() {
   const { user, loading } = useAuth()
-  const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false)
   const [addTransactionModalOpen, setAddTransactionModalOpen] = useState(false)
-  const [updateModalOpen, setUpdateModalOpen] = useState(false)
   const location = useLocation()
 
   useEffect(() => {
     forceUnlockDocumentScroll()
-    setQuickAddMenuOpen(false)
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search])
 
@@ -67,23 +62,7 @@ export default function App() {
 
   const handleCenterActionClick = useCallback(() => {
     void loadAddTransactionModal()
-    setQuickAddMenuOpen((current) => !current)
-  }, [])
-
-  const handleCloseQuickAddMenu = useCallback(() => {
-    setQuickAddMenuOpen(false)
-  }, [])
-
-  const handleOpenAddTransaction = useCallback(() => {
-    setQuickAddMenuOpen(false)
-    setUpdateModalOpen(false)
     setAddTransactionModalOpen(true)
-  }, [])
-
-  const handleOpenUpdateModal = useCallback(() => {
-    setQuickAddMenuOpen(false)
-    setAddTransactionModalOpen(false)
-    setTimeout(() => setUpdateModalOpen(true), 160)
   }, [])
 
   if (loading) {
@@ -119,15 +98,8 @@ export default function App() {
         </Suspense>
       </main>
 
-      <BottomNav onAddClick={handleCenterActionClick} isAddMenuOpen={quickAddMenuOpen} />
-      <QuickAddMenuModal
-        open={quickAddMenuOpen}
-        onClose={handleCloseQuickAddMenu}
-        onAddTransaction={handleOpenAddTransaction}
-        onOpenUpdate={handleOpenUpdateModal}
-      />
+      <BottomNav onAddClick={handleCenterActionClick} />
       <AddTransactionModal open={addTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} />
-      <UpdateModal open={updateModalOpen} onClose={() => setUpdateModalOpen(false)} />
     </div>
   )
 }

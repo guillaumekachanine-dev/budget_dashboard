@@ -48,6 +48,9 @@ interface TripManualExpenseModalProps {
   glassBorder?: string
   /** 'dark' (défaut) = textes blancs sur fond sombre | 'light' = textes graphite sur fond crème/champagne */
   glassTone?: 'dark' | 'light'
+  /** Remplace le sélecteur voyage par un titre fixe quand l'appelant impose le voyage courant. */
+  lockTripSelector?: boolean
+  lockedTripName?: string | null
 }
 
 // ─── composant ────────────────────────────────────────────────────────────────
@@ -60,6 +63,8 @@ export function TripManualExpenseModal({
   glassBackground,
   glassBorder,
   glassTone = 'dark',
+  lockTripSelector = false,
+  lockedTripName,
 }: TripManualExpenseModalProps) {
   // ── données de référence ────────────────────────────────────────────────────
   const { trips } = useAllTrips()
@@ -182,6 +187,13 @@ export function TripManualExpenseModal({
     if (categoryId === voyagesRootCategory?.id) return voyagesRootCategory
     return voyageCategories.find(c => c.id === categoryId) || null
   }, [voyageCategories, voyagesRootCategory, categoryId])
+  const lockedTripHeaderLabel = useMemo(() => {
+    if (lockedTripName?.trim()) return lockedTripName.trim()
+    if (selectedTripObject) {
+      return formatTripNameWithMonthYear(selectedTripObject.name, selectedTripObject.start_date || selectedTripObject.end_date)
+    }
+    return 'Voyage en cours'
+  }, [lockedTripName, selectedTripObject])
 
   // Réinitialise le formulaire à chaque ouverture
   useEffect(() => {
@@ -260,9 +272,30 @@ export function TripManualExpenseModal({
         glassBackground={glassBackground}
         glassBorder={glassBorder}
         header={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', minHeight: lockTripSelector ? 42 : undefined }}>
             {/* Sélecteur voyage en position titre */}
-            {trips.length === 0 ? (
+            {lockTripSelector ? (
+              <>
+                <span aria-hidden="true" style={{ width: 26, minWidth: 26 }} />
+                <p
+                  style={{
+                    margin: 0,
+                    flex: 1,
+                    minWidth: 0,
+                    textAlign: 'center',
+                    fontSize: 'var(--font-size-md)',
+                    fontWeight: 800,
+                    color: glass ? glassText : 'var(--neutral-900)',
+                    letterSpacing: '-0.01em',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {lockedTripHeaderLabel}
+                </p>
+              </>
+            ) : trips.length === 0 ? (
               <p style={{ margin: 0, fontSize: 'var(--font-size-md)', fontWeight: 800, color: glass ? 'rgba(255,255,255,0.90)' : 'var(--neutral-900)', letterSpacing: '-0.01em' }}>
                 Dépense voyage
               </p>

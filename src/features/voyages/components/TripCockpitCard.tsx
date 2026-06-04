@@ -3,6 +3,7 @@ import { ArrowRightLeft, ArrowRight, Plane } from 'lucide-react'
 import { useTripCockpit } from '../hooks/useTripCockpit'
 import type { TripCockpitRow } from '@/lib/types'
 import { formatCurrencyFloored } from '@/lib/utils'
+import { RomanianBucarestTitle } from './RomanianBucarestTitle'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ function TripCard({
   const contextLine = useMemo(() => {
     if (trip.trip_status === 'ongoing') {
       const elapsed = daysElapsed(trip.start_date)
-      return `Jour ${elapsed + 1} / ${trip.days_total}`
+      return `Jour ${elapsed + 1}/${trip.days_total}`
     }
     return null
   }, [trip.trip_status, trip.start_date, trip.days_total])
@@ -337,7 +338,7 @@ function TripCard({
         {/* 1. Nom seul — sans émoji ni pastille statut */}
         <div style={{ minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFDF8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 1px 6px rgba(92, 62, 8, 0.16)' }}>
-            {trip.name}
+            <RomanianBucarestTitle name={trip.name} />
           </h3>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -345,7 +346,7 @@ function TripCard({
             {dateRange}
           </span>
           {contextLine && (
-            <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: 'rgba(255, 225, 170, 0.78)' }}>
+            <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 800, color: 'rgba(255, 252, 244, 0.96)', textShadow: '0 1px 5px rgba(92, 62, 8, 0.2)' }}>
               {contextLine}
             </p>
           )}
@@ -457,7 +458,7 @@ function TripCard({
                 animation: `trip-cta-shine-a-${shineId} 7.3s linear infinite`,
               }}
             />
-            <span style={{ position: 'relative', zIndex: 1 }}>Répartition</span>
+            <span style={{ position: 'relative', zIndex: 1 }}>Enveloppes</span>
           </button>
         ) : null}
 

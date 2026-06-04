@@ -514,7 +514,7 @@
 .qs-btn-animating {
   overflow: hidden !important;
   background-size: 400% 400% !important;
-  animation: qs-gradient-flow 1.2s linear infinite !important;
+  animation: none !important;
 }
 
 .qs-btn-ready::after {

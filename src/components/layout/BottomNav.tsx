@@ -5,7 +5,6 @@ import { prefetchRoute, type RoutePath } from '@/lib/routePrefetch'
 
 interface BottomNavProps {
   onAddClick: () => void
-  isAddMenuOpen?: boolean
 }
 
 const LEFT_ITEMS = [
@@ -133,7 +132,7 @@ const fabBaseStyle: CSSProperties = {
   zIndex: 51,
 }
 
-export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps) {
+export function BottomNav({ onAddClick }: BottomNavProps) {
   const [fabHovered, setFabHovered] = useState(false)
 
   return (
@@ -159,7 +158,7 @@ export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps)
         onMouseLeave={() => setFabHovered(false)}
         style={{
           ...fabBaseStyle,
-          transform: fabHovered || isAddMenuOpen
+          transform: fabHovered
             ? 'translate(-50%, -50%) scale(1.07)'
             : 'translate(-50%, -50%) scale(1)',
         }}
@@ -167,10 +166,6 @@ export function BottomNav({ onAddClick, isAddMenuOpen = false }: BottomNavProps)
         <Plus
           size={20}
           strokeWidth={2.4}
-          style={{
-            transform: isAddMenuOpen ? 'rotate(45deg)' : 'rotate(0deg)',
-            transition: 'transform 180ms ease-out',
-          }}
         />
       </button>
     </div>

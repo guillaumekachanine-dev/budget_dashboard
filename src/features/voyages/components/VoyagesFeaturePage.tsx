@@ -362,7 +362,7 @@ export function VoyagesFeaturePage({ onBack }: Props) {
 
           <button
             type="button"
-            onClick={() => navigate('/voyages')}
+            onClick={() => { try { sessionStorage.setItem('home_active_tab', 'budget_voyage') } catch { /* ignore */ }; navigate('/voyages') }}
             aria-label="Ouvrir la page voyages"
             style={{
               display: 'inline-flex',

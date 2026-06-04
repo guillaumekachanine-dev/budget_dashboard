@@ -1059,10 +1059,9 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
                 : { bottom: 0 }),
               zIndex: 101,
               display: 'flex',
-              // Clavier ouvert / fermé → toujours ancré en bas sur mobile
-              alignItems: isMobileViewport ? 'flex-end' : 'center',
+              alignItems: 'center',
               justifyContent: 'center',
-              padding: isMobileViewport ? '0' : 'var(--space-6)',
+              padding: isMobileViewport ? 'var(--space-4)' : 'var(--space-6)',
               pointerEvents: 'none',
             }}
           >
@@ -1070,9 +1069,9 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-modal-title"
-            initial={{ opacity: 0, y: isMobileViewport ? '100%' : 8, scale: isMobileViewport ? 1 : 0.96 }}
+            initial={{ opacity: 0, y: 10, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: isMobileViewport ? '100%' : 8, scale: isMobileViewport ? 1 : 0.96 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ type: 'spring', damping: 30, stiffness: 330 }}
             className="w-[min(500px,100%)] overflow-hidden bg-[var(--neutral-0)] shadow-[var(--shadow-lg)]"
             style={{
@@ -1088,8 +1087,8 @@ export function AddTransactionModal({ open, onClose }: AddTransactionModalProps)
               pointerEvents: 'auto',
               borderTopLeftRadius: 'var(--radius-xl)',
               borderTopRightRadius: 'var(--radius-xl)',
-              borderBottomLeftRadius: isMobileViewport ? 0 : 'var(--radius-xl)',
-              borderBottomRightRadius: isMobileViewport ? 0 : 'var(--radius-xl)',
+              borderBottomLeftRadius: 'var(--radius-xl)',
+              borderBottomRightRadius: 'var(--radius-xl)',
             }}
             onClick={(event) => event.stopPropagation()}
           >
